@@ -1,8 +1,10 @@
 @page "/"
+@implements IDisposable
 @inject HemordnaApiClient Api
 @inject HemordnaSession Session
 @inject NavigationManager Navigation
 @inject TimeProvider TimeProvider
+@inject HouseholdRealtimeClient Realtime
 
 <PageTitle>Min dag – Hemordna</PageTitle>
 
@@ -223,7 +225,22 @@ else
         await Session.EnsureLoadedAsync();
 
         await LoadDayAsync();
+
+        if (Session.Me is { HouseholdId: { } householdId })
+        {
+            Realtime.OccurrencesChanged += OnOccurrencesChanged;
+            await Realtime.ConnectAsync(householdId);
+        }
     }
+
+    /// <summary>Someone else in the household changed something - refresh rather than guess what.</summary>
+    private void OnOccurrencesChanged() => InvokeAsync(async () =>
+    {
+        await LoadDayAsync();
+        StateHasChanged();
+    });
+
+    public void Dispose() => Realtime.OccurrencesChanged -= OnOccurrencesChanged;
 
     /// <summary>Called after creating a household, when membership has changed.</summary>
     private async Task ReloadAsync()

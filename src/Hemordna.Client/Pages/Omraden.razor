@@ -1,0 +1,127 @@
+@page "/omraden"
+@inject HemordnaApiClient Api
+@inject HemordnaSession Session
+
+<PageTitle>Områden – Hemordna</PageTitle>
+
+@if (!Session.IsLoaded)
+{
+    <p class="muted">Hämtar...</p>
+}
+else if (!Session.IsSignedIn)
+{
+    <Redirect To="logga-in" />
+}
+else if (Session.NeedsHousehold)
+{
+    <SkapaHushall OnCreated="LoadAsync" />
+}
+else
+{
+    <h1>Områden</h1>
+    <p class="muted">Delar av hemmet, eller andra grupperingar hushållet väljer. En uppgift behöver inte höra till ett rum.</p>
+
+    <div class="card">
+        <EditForm Model="_form" OnValidSubmit="CreateAsync">
+            <label class="field">
+                <span>Nytt område</span>
+                <InputText @bind-Value="_form.Name" placeholder="T.ex. Kök, Hund, Garage" />
+            </label>
+
+            @if (_message is { } message)
+            {
+                <div class="notice notice-problem" role="alert">@message</div>
+            }
+
+            <button type="submit" class="btn btn-primary" disabled="@_busy">
+                @(_busy ? "Lägger till..." : "Lägg till område")
+            </button>
+        </EditForm>
+    </div>
+
+    @if (_areas is null)
+    {
+        <p class="muted">Hämtar områden...</p>
+    }
+    else if (_areas.Count == 0)
+    {
+        <div class="notice">Inga områden ännu.</div>
+    }
+    else
+    {
+        <ul class="list" aria-label="Områden">
+            @foreach (var area in _areas)
+            {
+                <li class="list-item">
+                    <span class="list-name">@area.Name</span>
+                </li>
+            }
+        </ul>
+    }
+}
+
+@code {
+    private sealed class Form
+    {
+        public string Name { get; set; } = string.Empty;
+    }
+
+    private readonly Form _form = new();
+    private IReadOnlyList<AreaResponse>? _areas;
+    private string? _message;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Session.EnsureLoadedAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Session.Me is not { HouseholdId: { } householdId })
+        {
+            return;
+        }
+
+        var household = await Api.GetHouseholdAsync(householdId);
+        _areas = household?.Areas.Where(area => area.IsActive).ToList() ?? [];
+    }
+
+    private async Task CreateAsync()
+    {
+        if (Session.Me is not { HouseholdId: { } householdId })
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_form.Name))
+        {
+            _message = "Området behöver ett namn.";
+            return;
+        }
+
+        _busy = true;
+        _message = null;
+
+        try
+        {
+            if (await Api.AddAreaAsync(householdId, _form.Name) is null)
+            {
+                _message = "Det gick inte att lägga till området. Försök igen.";
+                return;
+            }
+
+            _form.Name = string.Empty;
+            await LoadAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _message = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

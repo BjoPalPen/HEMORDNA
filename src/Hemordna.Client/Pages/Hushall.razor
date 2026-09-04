@@ -1,0 +1,176 @@
+@page "/hushall"
+@inject HemordnaApiClient Api
+@inject HemordnaSession Session
+@inject TimeProvider TimeProvider
+
+<PageTitle>Hushåll – Hemordna</PageTitle>
+
+@if (!Session.IsLoaded)
+{
+    <p class="muted">Hämtar...</p>
+}
+else if (!Session.IsSignedIn)
+{
+    <Redirect To="logga-in" />
+}
+else if (Session.NeedsHousehold)
+{
+    <SkapaHushall OnCreated="LoadAsync" />
+}
+else if (_household is null)
+{
+    <p class="muted">Hämtar hushållet...</p>
+}
+else
+{
+    <h1>@_household.Name</h1>
+    <p class="muted">@_household.Members.Count(m => m.IsActive) medlemmar · @_household.Areas.Count(a => a.IsActive) områden</p>
+
+    <ul class="list" aria-label="Medlemmar">
+        @foreach (var member in _household.Members.Where(m => m.IsActive))
+        {
+            <li class="list-item">
+                <span class="avatar" aria-hidden="true">@Initial(member.DisplayName)</span>
+                <span class="list-name">
+                    @member.DisplayName
+                    <span class="muted small">@WeeklyTotal(member) min/vecka normalt</span>
+                </span>
+                <span class="list-meta muted">
+                    @if (_todayMinutes.TryGetValue(member.Id, out var today))
+                    {
+                        @($"{today.Planned} av {today.Available} min idag")
+                    }
+                </span>
+            </li>
+        }
+    </ul>
+
+    <div class="card">
+        <h2>Lägg till medlem</h2>
+        <EditForm Model="_form" OnValidSubmit="AddMemberAsync">
+            <label class="field">
+                <span>Namn</span>
+                <InputText @bind-Value="_form.DisplayName" placeholder="T.ex. Bjorn" />
+            </label>
+
+            <label class="field">
+                <span>Normal tid per dag (minuter, samma varje veckodag)</span>
+                <input type="number" min="0" max="600" @bind="_form.MinutesPerDay" />
+            </label>
+
+            @if (_message is { } message)
+            {
+                <div class="notice notice-problem" role="alert">@message</div>
+            }
+
+            <button type="submit" class="btn btn-primary" disabled="@_busy">
+                @(_busy ? "Lägger till..." : "Lägg till medlem")
+            </button>
+        </EditForm>
+    </div>
+}
+
+@code {
+    private sealed record TodayMinutes(int Available, int Planned);
+
+    private sealed class Form
+    {
+        public string DisplayName { get; set; } = string.Empty;
+        public int MinutesPerDay { get; set; }
+    }
+
+    private readonly Form _form = new();
+    private HouseholdResponse? _household;
+    private readonly Dictionary<Guid, TodayMinutes> _todayMinutes = [];
+    private string? _message;
+    private bool _busy;
+
+    private DateOnly Today => DateOnly.FromDateTime(TimeProvider.GetLocalNow().DateTime);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Session.EnsureLoadedAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Session.Me is not { HouseholdId: { } householdId })
+        {
+            return;
+        }
+
+        _household = await Api.GetHouseholdAsync(householdId);
+
+        if (_household is null)
+        {
+            return;
+        }
+
+        _todayMinutes.Clear();
+
+        foreach (var member in _household.Members.Where(m => m.IsActive))
+        {
+            var day = await Api.GetDailyPlanAsync(householdId, member.Id, Today);
+
+            if (day is not null)
+            {
+                _todayMinutes[member.Id] = new TodayMinutes(day.AvailableMinutes, day.PlannedMinutes);
+            }
+        }
+    }
+
+    private static string Initial(string name)
+        => string.IsNullOrWhiteSpace(name) ? "?" : name.Trim()[..1].ToUpperInvariant();
+
+    private static int WeeklyTotal(HouseholdMemberResponse member)
+    {
+        var budget = member.WeeklyTimeBudgetMinutes;
+        return budget.Monday + budget.Tuesday + budget.Wednesday + budget.Thursday
+            + budget.Friday + budget.Saturday + budget.Sunday;
+    }
+
+    private async Task AddMemberAsync()
+    {
+        if (Session.Me is not { HouseholdId: { } householdId })
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_form.DisplayName))
+        {
+            _message = "Medlemmen behöver ett namn.";
+            return;
+        }
+
+        _busy = true;
+        _message = null;
+
+        try
+        {
+            var budget = _form.MinutesPerDay > 0
+                ? new WeeklyTimeBudgetContract(
+                    _form.MinutesPerDay, _form.MinutesPerDay, _form.MinutesPerDay, _form.MinutesPerDay,
+                    _form.MinutesPerDay, _form.MinutesPerDay, _form.MinutesPerDay)
+                : null;
+
+            if (await Api.AddMemberAsync(householdId, _form.DisplayName.Trim(), budget) is null)
+            {
+                _message = "Det gick inte att lägga till medlemmen. Försök igen.";
+                return;
+            }
+
+            _form.DisplayName = string.Empty;
+            _form.MinutesPerDay = 0;
+            await LoadAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _message = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

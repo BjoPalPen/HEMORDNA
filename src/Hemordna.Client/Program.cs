@@ -28,5 +28,6 @@ builder.Services.AddScoped(_ => new HttpClient { BaseAddress = new Uri(apiBaseAd
 builder.Services.AddScoped<TokenStore>();
 builder.Services.AddScoped<HemordnaApiClient>();
 builder.Services.AddScoped<HemordnaSession>();
+builder.Services.AddScoped(sp => new HouseholdRealtimeClient(apiBaseAddress, sp.GetRequiredService<TokenStore>()));
 
 await builder.Build().RunAsync();

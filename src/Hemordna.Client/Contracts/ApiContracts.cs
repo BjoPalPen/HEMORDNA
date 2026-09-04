@@ -71,3 +71,46 @@ public sealed record WeeklyTimeBudgetContract(
     int Friday,
     int Saturday,
     int Sunday);
+
+public sealed record AddAreaRequest(string Name);
+
+public sealed record AddMemberRequest(string DisplayName, WeeklyTimeBudgetContract? WeeklyTimeBudgetMinutes);
+
+public sealed record CreateTaskRequest(
+    string Name,
+    int EstimatedMinutes,
+    string? Description,
+    Guid? AreaId,
+    string Priority,
+    Guid? DefaultResponsibleMemberId,
+    string? PreferredWeekday,
+    bool CanBeDeferred,
+    bool HasRotatingResponsibility,
+    bool RequiresMultiplePeople,
+    RecurrenceRuleContract? Recurrence);
+
+public sealed record TaskDefinitionResponse(
+    Guid Id,
+    string Name,
+    string? Description,
+    Guid? AreaId,
+    int EstimatedMinutes,
+    string Priority,
+    Guid? DefaultResponsibleMemberId,
+    string? PreferredWeekday,
+    bool CanBeDeferred,
+    bool HasRotatingResponsibility,
+    bool RequiresMultiplePeople,
+    bool IsActive,
+    RecurrenceRuleContract? Recurrence);
+
+/// <summary>
+/// How a task repeats. Enum-shaped fields travel as plain strings - see the file header for
+/// why the client keeps its own primitive-only copy of the wire contract.
+/// </summary>
+public sealed record RecurrenceRuleContract(
+    string Frequency,
+    int Interval,
+    DateOnly StartDate,
+    string? Weekday,
+    string? MonthlyWeek);

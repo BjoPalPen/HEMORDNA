@@ -1,0 +1,251 @@
+@page "/uppgifter"
+@inject HemordnaApiClient Api
+@inject HemordnaSession Session
+@inject TimeProvider TimeProvider
+
+<PageTitle>Uppgifter – Hemordna</PageTitle>
+
+@if (!Session.IsLoaded)
+{
+    <p class="muted">Hämtar...</p>
+}
+else if (!Session.IsSignedIn)
+{
+    <Redirect To="logga-in" />
+}
+else if (Session.NeedsHousehold)
+{
+    <SkapaHushall OnCreated="LoadAsync" />
+}
+else
+{
+    <h1>Uppgifter</h1>
+    <p class="muted">Hushållets stående uppgifter - normen som dagens planering utgår från.</p>
+
+    <div class="card">
+        <EditForm Model="_form" OnValidSubmit="CreateAsync">
+            <label class="field">
+                <span>Namn</span>
+                <InputText @bind-Value="_form.Name" placeholder="T.ex. Dammsug vardagsrum" />
+            </label>
+
+            <label class="field">
+                <span>Uppskattad tid (minuter)</span>
+                <input type="number" min="1" max="600" @bind="_form.EstimatedMinutes" />
+            </label>
+
+            <label class="field">
+                <span>Område</span>
+                <select @bind="_form.AreaId">
+                    <option value="">Inget särskilt</option>
+                    @foreach (var area in _areas)
+                    {
+                        <option value="@area.Id">@area.Name</option>
+                    }
+                </select>
+            </label>
+
+            <label class="field">
+                <span>Normal ansvarig</span>
+                <select @bind="_form.DefaultResponsibleMemberId">
+                    <option value="">Ingen bestämd</option>
+                    @foreach (var member in _members)
+                    {
+                        <option value="@member.Id">@member.DisplayName</option>
+                    }
+                </select>
+            </label>
+
+            <label class="field">
+                <span>Prioritet</span>
+                <select @bind="_form.Priority">
+                    <option value="Low">Låg</option>
+                    <option value="Normal">Normal</option>
+                    <option value="High">Hög</option>
+                </select>
+            </label>
+
+            <label class="field">
+                <span>Upprepning</span>
+                <select @bind="_form.Recurrence">
+                    <option value="">Ingen - schemaläggs för hand</option>
+                    <option value="Daily">Varje dag</option>
+                    <option value="Weekly">Varje vecka</option>
+                    <option value="Monthly">Varje månad</option>
+                </select>
+            </label>
+
+            <label class="field field-check">
+                <input type="checkbox" @bind="_form.HasRotatingResponsibility" />
+                <span>Ansvaret roterar mellan hushållets medlemmar</span>
+            </label>
+
+            <label class="field field-check">
+                <input type="checkbox" @bind="_form.RequiresMultiplePeople" />
+                <span>Kräver flera personer</span>
+            </label>
+
+            <label class="field field-check">
+                <input type="checkbox" @bind="_form.CanBeDeferred" />
+                <span>Kan skjutas upp</span>
+            </label>
+
+            @if (_message is { } message)
+            {
+                <div class="notice notice-problem" role="alert">@message</div>
+            }
+
+            <button type="submit" class="btn btn-primary" disabled="@_busy">
+                @(_busy ? "Skapar..." : "Skapa uppgift")
+            </button>
+        </EditForm>
+    </div>
+
+    @if (_tasks is null)
+    {
+        <p class="muted">Hämtar uppgifter...</p>
+    }
+    else if (_tasks.Count == 0)
+    {
+        <div class="notice">Inga uppgifter ännu.</div>
+    }
+    else
+    {
+        <ul class="list" aria-label="Hushållets uppgifter">
+            @foreach (var task in _tasks)
+            {
+                <li class="list-item">
+                    <span class="list-name">
+                        @task.Name
+                        @if (task.Recurrence is { } recurrence)
+                        {
+                            <span class="muted small">@RecurrenceLabel(recurrence)</span>
+                        }
+                        @if (task.HasRotatingResponsibility)
+                        {
+                            <span class="muted small">roterar</span>
+                        }
+                    </span>
+                    <span class="list-meta muted">@task.EstimatedMinutes min</span>
+                </li>
+            }
+        </ul>
+    }
+}
+
+@code {
+    private sealed class Form
+    {
+        public string Name { get; set; } = string.Empty;
+        public int EstimatedMinutes { get; set; } = 10;
+        public string AreaId { get; set; } = string.Empty;
+        public string DefaultResponsibleMemberId { get; set; } = string.Empty;
+        public string Priority { get; set; } = "Normal";
+        public string Recurrence { get; set; } = string.Empty;
+        public bool HasRotatingResponsibility { get; set; }
+        public bool RequiresMultiplePeople { get; set; }
+        public bool CanBeDeferred { get; set; } = true;
+    }
+
+    private readonly Form _form = new();
+    private IReadOnlyList<TaskDefinitionResponse>? _tasks;
+    private IReadOnlyList<AreaResponse> _areas = [];
+    private IReadOnlyList<HouseholdMemberResponse> _members = [];
+    private string? _message;
+    private bool _busy;
+
+    private DateOnly Today => DateOnly.FromDateTime(TimeProvider.GetLocalNow().DateTime);
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Session.EnsureLoadedAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Session.Me is not { HouseholdId: { } householdId })
+        {
+            return;
+        }
+
+        var household = await Api.GetHouseholdAsync(householdId);
+        _areas = household?.Areas.Where(area => area.IsActive).ToList() ?? [];
+        _members = household?.Members.Where(member => member.IsActive).ToList() ?? [];
+        _tasks = await Api.ListTasksAsync(householdId);
+    }
+
+    private static string RecurrenceLabel(RecurrenceRuleContract recurrence) => recurrence.Frequency switch
+    {
+        "Daily" => "varje dag",
+        "Weekly" => "varje vecka",
+        "Monthly" => "varje månad",
+        _ => "återkommer"
+    };
+
+    private async Task CreateAsync()
+    {
+        if (Session.Me is not { HouseholdId: { } householdId })
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_form.Name))
+        {
+            _message = "Uppgiften behöver ett namn.";
+            return;
+        }
+
+        if (_form.EstimatedMinutes <= 0)
+        {
+            _message = "Uppskattad tid måste vara större än noll.";
+            return;
+        }
+
+        _busy = true;
+        _message = null;
+
+        try
+        {
+            var recurrence = _form.Recurrence switch
+            {
+                "Daily" => new RecurrenceRuleContract("Daily", 1, Today, null, null),
+                "Weekly" => new RecurrenceRuleContract("Weekly", 1, Today, Today.DayOfWeek.ToString(), null),
+                "Monthly" => new RecurrenceRuleContract("Monthly", 1, Today, null, null),
+                _ => (RecurrenceRuleContract?)null
+            };
+
+            var request = new CreateTaskRequest(
+                _form.Name.Trim(),
+                _form.EstimatedMinutes,
+                Description: null,
+                AreaId: string.IsNullOrEmpty(_form.AreaId) ? null : Guid.Parse(_form.AreaId),
+                Priority: _form.Priority,
+                DefaultResponsibleMemberId: string.IsNullOrEmpty(_form.DefaultResponsibleMemberId)
+                    ? null : Guid.Parse(_form.DefaultResponsibleMemberId),
+                PreferredWeekday: null,
+                CanBeDeferred: _form.CanBeDeferred,
+                HasRotatingResponsibility: _form.HasRotatingResponsibility,
+                RequiresMultiplePeople: _form.RequiresMultiplePeople,
+                Recurrence: recurrence);
+
+            if (await Api.CreateTaskAsync(householdId, request) is null)
+            {
+                _message = "Det gick inte att skapa uppgiften. Försök igen.";
+                return;
+            }
+
+            _form.Name = string.Empty;
+            _form.EstimatedMinutes = 10;
+            await LoadAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _message = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}
