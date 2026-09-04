@@ -11,6 +11,8 @@
     <link rel="preload" id="webassembly" />
     <link rel="stylesheet" href="css/app.css" />
     <link rel="icon" type="image/svg+xml" href="brand/logo.svg" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="apple-touch-icon" sizes="192x192" href="icon-192.png" />
     <link href="Hemordna.Client.styles.css" rel="stylesheet" />
     <script type="importmap"></script>
 </head>
@@ -29,6 +31,7 @@
         <span class="dismiss">🗙</span>
     </div>
     <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
+    <script>navigator.serviceWorker?.register('service-worker.js');</script>
 </body>
 
 </html>

@@ -2,6 +2,7 @@
 @inject HemordnaApiClient Api
 @inject HemordnaSession Session
 @inject NavigationManager Navigation
+@inject TimeProvider TimeProvider
 
 <PageTitle>Min dag – Hemordna</PageTitle>
 
@@ -145,8 +146,9 @@ else
     private bool _editingTime;
     private int _minutesToday;
 
-    // The date comes from the browser here at the edge; nothing below reads a clock.
-    private DateOnly Today => DateOnly.FromDateTime(DateTime.Now);
+    // The date is resolved from an injected clock here at the edge; nothing below reads one.
+    // TimeProvider rather than DateTime.Now so the page can be rendered at a fixed date.
+    private DateOnly Today => DateOnly.FromDateTime(TimeProvider.GetLocalNow().DateTime);
 
     private string DateLabel => Today.ToString("dddd d MMMM", SwedishCulture);
 
