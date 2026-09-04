@@ -1,0 +1,15 @@
+# Normalisera radslut. Utan detta konverterar Git for Windows vid checkout och
+# normaliserar tillbaka vid commit, vilket får orörda filer att se ändrade ut.
+# Repot lagrar allt med LF; arbetskopian får plattformens radslut.
+* text=auto eol=lf
+
+# Filtyper som aldrig ska radsluts-konverteras.
+*.png binary
+*.svg text eol=lf
+
+# Skalfiler som körs i container eller på Windows behåller sina radslut oavsett
+# vad utvecklarens plattform har.
+*.sh text eol=lf
+*.ps1 text eol=crlf
+*.cmd text eol=crlf
+*.bat text eol=crlf
