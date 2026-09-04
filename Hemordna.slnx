@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Hemordna.Api/Hemordna.Api.csproj" />
+    <Project Path="src/Hemordna.Application/Hemordna.Application.csproj" />
+    <Project Path="src/Hemordna.Client/Hemordna.Client.csproj" />
+    <Project Path="src/Hemordna.Domain/Hemordna.Domain.csproj" />
+    <Project Path="src/Hemordna.Infrastructure/Hemordna.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Hemordna.Application.Tests/Hemordna.Application.Tests.csproj" />
+    <Project Path="tests/Hemordna.Domain.Tests/Hemordna.Domain.Tests.csproj" />
+  </Folder>
+</Solution>
