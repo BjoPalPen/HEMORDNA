@@ -55,6 +55,13 @@ internal static class DevelopmentDataSeeder
             await addMember.HandleAsync(household.Id, "Alex", WeeklyTimeBudget.Uniform(30), cancellationToken);
         }
 
+        // A third member makes this a real family to test against, not just a couple, and
+        // gives rotation something more interesting to cycle through than two people.
+        if (household.Members.All(member => member.DisplayName != "Charlie"))
+        {
+            await addMember.HandleAsync(household.Id, "Charlie", WeeklyTimeBudget.Uniform(15), cancellationToken);
+        }
+
         // A brand-new household starts with no budget for its creator by design (see
         // CreateHousehold) - the seed gives the demo account a normal week so "Min dag" has
         // something to plan. Only when still untouched, so a tester's own change survives a restart.
@@ -96,15 +103,46 @@ internal static class DevelopmentDataSeeder
                 cancellationToken);
         }
 
+        var scheduleTask = scope.ServiceProvider.GetRequiredService<ScheduleTaskOccurrence>();
+
         if (washDishes is not null && existingTasks.All(task => task.Name != "Diska"))
         {
-            var scheduleTask = scope.ServiceProvider.GetRequiredService<ScheduleTaskOccurrence>();
             await scheduleTask.HandleAsync(
                 household.Id,
                 washDishes.Id,
                 DateOnly.FromDateTime(DateTime.UtcNow),
                 demoMember.Id,
                 cancellationToken);
+        }
+
+        // A recurring, rotating task, so logging in actually exercises EnsureOccurrencesGenerated
+        // and RotationPicker instead of only ever showing hand-scheduled work. The recurrence
+        // starts today so it is visible the first time anyone loads Min dag, not next week.
+        if (existingTasks.All(task => task.Name != "Dammsug vardagsrum"))
+        {
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+            var vacuum = await createTask.HandleAsync(
+                household.Id,
+                new NewTaskDefinition(
+                    "Dammsug vardagsrum", 15, AreaId: null,
+                    Priority: TaskPriority.Normal, HasRotatingResponsibility: true,
+                    Recurrence: RecurrenceRule.Weekly(today, today.DayOfWeek)),
+                cancellationToken);
+
+            if (vacuum is not null)
+            {
+                await scheduleTask.HandleAsync(household.Id, vacuum.Id, today, assignToMemberId: null, cancellationToken);
+            }
+        }
+
+        // Exercises the preferences endpoint end to end, even without a settings page yet.
+        var preferences = scope.ServiceProvider.GetRequiredService<IMemberPreferenceRepository>();
+        if (await preferences.FindAsync(household.Id, demoMember.Id, cancellationToken) is null)
+        {
+            var setPreference = scope.ServiceProvider.GetRequiredService<SetMemberPreference>();
+            await setPreference.HandleAsync(
+                household.Id, demoMember.Id, PresentationMode.LargeText, MotivationLevel.Calm, cancellationToken);
         }
     }
 }
