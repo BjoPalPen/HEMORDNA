@@ -1,5 +1,9 @@
 using Hemordna.Application.Households;
+using Hemordna.Application.Planning;
+using Hemordna.Application.Tasks;
+using Hemordna.Infrastructure.Identity;
 using Hemordna.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -32,6 +36,21 @@ public static class DependencyInjection
         services.AddDbContext<HemordnaDbContext>(options => options.UseNpgsql(connectionString));
 
         services.AddScoped<IHouseholdRepository, HouseholdRepository>();
+        services.AddScoped<IHouseholdMembershipQuery, HouseholdMembershipQuery>();
+        services.AddScoped<IMemberAvailabilityRepository, MemberAvailabilityRepository>();
+        services.AddScoped<ITaskDefinitionRepository, TaskDefinitionRepository>();
+        services.AddScoped<ITaskOccurrenceRepository, TaskOccurrenceRepository>();
+        services.AddScoped<IPlanCandidateQuery, PlanCandidateQuery>();
+
+        // Identity supplies user storage and password hashing. Hemordna never implements its
+        // own password handling.
+        services.AddIdentityCore<HemordnaUser>(options =>
+            {
+                options.User.RequireUniqueEmail = true;
+                options.Password.RequiredLength = 12;
+            })
+            .AddRoles<IdentityRole<Guid>>()
+            .AddEntityFrameworkStores<HemordnaDbContext>();
 
         return services;
     }

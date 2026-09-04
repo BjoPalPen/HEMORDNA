@@ -16,6 +16,9 @@ internal sealed class HouseholdRepository : IHouseholdRepository
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
+    public Task UpdateAsync(Household household, CancellationToken cancellationToken)
+        => _dbContext.SaveChangesAsync(cancellationToken);
+
     public Task<Household?> FindByIdAsync(Guid householdId, CancellationToken cancellationToken)
         => _dbContext.Households
             .Include(household => household.Members)

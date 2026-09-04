@@ -1,6 +1,9 @@
 using Hemordna.Domain.Areas;
 using Hemordna.Domain.Households;
 using Hemordna.Domain.Tasks;
+using Hemordna.Infrastructure.Identity;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace Hemordna.Infrastructure.Persistence;
@@ -9,7 +12,12 @@ namespace Hemordna.Infrastructure.Persistence;
 /// The application's PostgreSQL context. All mapping lives in
 /// <see cref="Configurations"/> via Fluent API - the domain carries no EF attributes.
 /// </summary>
-public sealed class HemordnaDbContext : DbContext
+/// <remarks>
+/// Identity lives in this same context rather than a second one, so the database has a
+/// single migration history and a user and their first household member can be written in
+/// one transaction.
+/// </remarks>
+public sealed class HemordnaDbContext : IdentityDbContext<HemordnaUser, IdentityRole<Guid>, Guid>
 {
     public HemordnaDbContext(DbContextOptions<HemordnaDbContext> options) : base(options)
     {
@@ -28,5 +36,9 @@ public sealed class HemordnaDbContext : DbContext
     public DbSet<TaskOccurrence> TaskOccurrences => Set<TaskOccurrence>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
-        => modelBuilder.ApplyConfigurationsFromAssembly(typeof(HemordnaDbContext).Assembly);
+    {
+        base.OnModelCreating(modelBuilder);
+
+        modelBuilder.ApplyConfigurationsFromAssembly(typeof(HemordnaDbContext).Assembly);
+    }
 }
