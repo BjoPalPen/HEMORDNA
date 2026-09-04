@@ -1,0 +1,30 @@
+# Development environment for HEMORDNA.
+# The values below are LOCAL DEVELOPMENT defaults only - never reuse them for any
+# deployed environment. Override them by exporting POSTGRES_* before the container starts.
+services:
+  app:
+    image: mcr.microsoft.com/devcontainers/dotnet:10.0
+    volumes:
+      - ../..:/workspaces:cached
+    command: sleep infinity
+    network_mode: service:db
+    environment:
+      ConnectionStrings__Hemordna: "Host=localhost;Port=5432;Database=${POSTGRES_DB:-hemordna};Username=${POSTGRES_USER:-hemordna};Password=${POSTGRES_PASSWORD:-hemordna_dev}"
+
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    volumes:
+      - hemordna-db-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-hemordna}
+      POSTGRES_USER: ${POSTGRES_USER:-hemordna}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hemordna_dev}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hemordna} -d ${POSTGRES_DB:-hemordna}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  hemordna-db-data:
