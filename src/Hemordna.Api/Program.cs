@@ -83,6 +83,11 @@ builder.Services.AddHealthChecks()
 
 var app = builder.Build();
 
+if (app.Environment.IsDevelopment())
+{
+    await DevelopmentDataSeeder.SeedAsync(app.Services);
+}
+
 app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())

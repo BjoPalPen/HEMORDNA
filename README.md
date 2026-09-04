@@ -109,6 +109,16 @@ dotnet run --project src/Hemordna.Client
 Klienten öppnas på <http://localhost:5200> och läser API:ts adress från
 `src/Hemordna.Client/wwwroot/appsettings.json`.
 
+I Development-miljö seedas ett litet demohem automatiskt vid API-start. Logga in med:
+
+```text
+E-post: demo@hemordna.local
+Lösenord: Hemordna-demo-2026!
+```
+
+Kontot har hushållet "Demohemmet", medlemmen Alex, områdena Kok och Badrum samt ett par
+uppgifter. Seedningen är återkörningssäker och påverkar inte andra miljöer.
+
 ## Bygg och testa
 
 ```bash

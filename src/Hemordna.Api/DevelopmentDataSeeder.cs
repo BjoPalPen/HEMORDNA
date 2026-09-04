@@ -1,0 +1,110 @@
+using Hemordna.Application.Households;
+using Hemordna.Application.Tasks;
+using Hemordna.Domain.Households;
+using Hemordna.Domain.Tasks;
+using Hemordna.Infrastructure.Identity;
+using Microsoft.AspNetCore.Identity;
+
+namespace Hemordna.Api;
+
+internal static class DevelopmentDataSeeder
+{
+    private const string DemoEmail = "demo@hemordna.local";
+    private const string DemoPassword = "Hemordna-demo-2026!";
+    private const string DemoName = "Demo";
+
+    internal static async Task SeedAsync(IServiceProvider services)
+    {
+        using var scope = services.CreateScope();
+
+        var users = scope.ServiceProvider.GetRequiredService<UserManager<HemordnaUser>>();
+        var user = await users.FindByEmailAsync(DemoEmail);
+
+        if (user is null)
+        {
+            user = new HemordnaUser
+            {
+                UserName = DemoEmail,
+                Email = DemoEmail,
+                DisplayName = DemoName
+            };
+
+            var result = await users.CreateAsync(user, DemoPassword);
+            if (!result.Succeeded)
+            {
+                throw new InvalidOperationException(
+                    "Could not create the development demo user: "
+                    + string.Join(", ", result.Errors.Select(error => error.Description)));
+            }
+        }
+
+        var cancellationToken = CancellationToken.None;
+        var memberships = scope.ServiceProvider.GetRequiredService<IHouseholdMembershipQuery>();
+        var membership = await memberships.FindByUserIdAsync(user.Id, cancellationToken);
+        var households = scope.ServiceProvider.GetRequiredService<IHouseholdRepository>();
+        var household = membership is null
+            ? await scope.ServiceProvider.GetRequiredService<CreateHousehold>().HandleAsync(
+                "Demohemmet", user.Id, DemoName, cancellationToken)
+            : await households.FindByIdAsync(membership.HouseholdId, cancellationToken)
+                ?? throw new InvalidOperationException("The demo user's household was not found.");
+
+        var addMember = scope.ServiceProvider.GetRequiredService<AddHouseholdMember>();
+        var demoMember = household.Members.First(member => member.UserId == user.Id);
+        if (household.Members.All(member => member.DisplayName != "Alex"))
+        {
+            await addMember.HandleAsync(household.Id, "Alex", WeeklyTimeBudget.Uniform(30), cancellationToken);
+        }
+
+        // A brand-new household starts with no budget for its creator by design (see
+        // CreateHousehold) - the seed gives the demo account a normal week so "Min dag" has
+        // something to plan. Only when still untouched, so a tester's own change survives a restart.
+        if (demoMember.WeeklyTimeBudget.TotalWeeklyMinutes == 0)
+        {
+            var setWeeklyBudget = scope.ServiceProvider.GetRequiredService<SetMemberWeeklyBudget>();
+            await setWeeklyBudget.HandleAsync(
+                household.Id, demoMember.Id, WeeklyTimeBudget.Uniform(30), cancellationToken);
+        }
+
+        var addArea = scope.ServiceProvider.GetRequiredService<AddArea>();
+        var kitchen = household.Areas.FirstOrDefault(area => area.Name == "Kok")
+            ?? await addArea.HandleAsync(household.Id, "Kok", cancellationToken);
+        var bathroom = household.Areas.FirstOrDefault(area => area.Name == "Badrum")
+            ?? await addArea.HandleAsync(household.Id, "Badrum", cancellationToken);
+
+        var createTask = scope.ServiceProvider.GetRequiredService<CreateTaskDefinition>();
+        var taskDefinitions = scope.ServiceProvider.GetRequiredService<ITaskDefinitionRepository>();
+        var existingTasks = await taskDefinitions.ListByHouseholdAsync(household.Id, cancellationToken);
+        var washDishes = existingTasks.FirstOrDefault(task => task.Name == "Diska");
+
+        if (washDishes is null)
+        {
+            washDishes = await createTask.HandleAsync(
+                household.Id,
+                new NewTaskDefinition(
+                    "Diska", 20, "Toma maskinen och plocka undan.", kitchen?.Id,
+                    TaskPriority.Normal, demoMember.Id),
+                cancellationToken);
+        }
+
+        if (existingTasks.All(task => task.Name != "Rengor handfatet"))
+        {
+            await createTask.HandleAsync(
+                household.Id,
+                new NewTaskDefinition(
+                    "Rengor handfatet", 15, AreaId: bathroom?.Id,
+                    Priority: TaskPriority.Low, DefaultResponsibleMemberId: demoMember.Id),
+                cancellationToken);
+        }
+
+        if (washDishes is not null && existingTasks.All(task => task.Name != "Diska"))
+        {
+            var scheduleTask = scope.ServiceProvider.GetRequiredService<ScheduleTaskOccurrence>();
+            await scheduleTask.HandleAsync(
+                household.Id,
+                washDishes.Id,
+                DateOnly.FromDateTime(DateTime.UtcNow),
+                demoMember.Id,
+                cancellationToken);
+        }
+    }
+}
