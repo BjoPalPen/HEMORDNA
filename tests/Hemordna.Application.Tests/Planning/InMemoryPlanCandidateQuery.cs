@@ -10,20 +10,36 @@ internal sealed class InMemoryPlanCandidateQuery : IPlanCandidateQuery
     internal void AssignToMember(Guid memberId, PlanCandidate candidate)
         => _candidates.Add((memberId, candidate));
 
+    // Both filters mirror the real query so the use case tests exercise the same shape.
     public Task<IReadOnlyList<PlanCandidate>> FindOutstandingForMemberAsync(
         Guid householdId,
         Guid memberId,
         DateOnly onOrBefore,
         CancellationToken cancellationToken)
+        => Query(householdId, memberId, c =>
+            c.Occurrence.Status == TaskOccurrenceStatus.Planned
+            && c.Occurrence.ScheduledDate <= onOrBefore);
+
+    public Task<IReadOnlyList<PlanCandidate>> FindCompletedForMemberOnAsync(
+        Guid householdId,
+        Guid memberId,
+        DateOnly date,
+        CancellationToken cancellationToken)
+        => Query(householdId, memberId, c =>
+            c.Occurrence.Status == TaskOccurrenceStatus.Completed
+            && c.Occurrence.ScheduledDate == date);
+
+    private Task<IReadOnlyList<PlanCandidate>> Query(
+        Guid householdId,
+        Guid memberId,
+        Func<PlanCandidate, bool> filter)
     {
-        // Mirrors the real query's filter so the use case tests exercise the same shape.
         IReadOnlyList<PlanCandidate> result =
         [
             .. _candidates
                 .Where(entry => entry.MemberId == memberId
                     && entry.Candidate.Occurrence.HouseholdId == householdId
-                    && entry.Candidate.Occurrence.Status == TaskOccurrenceStatus.Planned
-                    && entry.Candidate.Occurrence.ScheduledDate <= onOrBefore)
+                    && filter(entry.Candidate))
                 .Select(entry => entry.Candidate)
         ];
 

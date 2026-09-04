@@ -26,10 +26,10 @@ public sealed class GetDailyPlan
     }
 
     /// <summary>
-    /// Builds the plan, or returns <c>null</c> when the household has no such member.
+    /// Builds the member's day, or returns <c>null</c> when the household has no such member.
     /// The date is supplied by the caller - this use case reads no clock either.
     /// </summary>
-    public async Task<DailyPlan?> HandleAsync(
+    public async Task<MemberDay?> HandleAsync(
         Guid householdId,
         Guid memberId,
         DateOnly date,
@@ -54,6 +54,11 @@ public sealed class GetDailyPlan
         var candidates =
             await _candidates.FindOutstandingForMemberAsync(householdId, memberId, date, cancellationToken);
 
-        return _planner.Plan(new DailyPlanRequest(memberId, date, availableMinutes, candidates));
+        var completed =
+            await _candidates.FindCompletedForMemberOnAsync(householdId, memberId, date, cancellationToken);
+
+        var plan = _planner.Plan(new DailyPlanRequest(memberId, date, availableMinutes, candidates));
+
+        return new MemberDay(plan, completed);
     }
 }
