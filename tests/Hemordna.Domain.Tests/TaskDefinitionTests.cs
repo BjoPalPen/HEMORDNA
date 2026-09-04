@@ -99,4 +99,17 @@ public class TaskDefinitionTests
 
         Assert.Throws<DomainException>(() => definition.ScheduleFor(Friday, CreatedAt));
     }
+
+    [Fact]
+    public void SetRecurrence_can_be_set_and_cleared()
+    {
+        var definition = CreateDefinition();
+        var recurrence = RecurrenceRule.Weekly(Friday, DayOfWeek.Friday);
+
+        definition.SetRecurrence(recurrence);
+        Assert.Equal(recurrence, definition.Recurrence);
+
+        definition.SetRecurrence(null);
+        Assert.Null(definition.Recurrence);
+    }
 }
