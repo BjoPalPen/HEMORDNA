@@ -116,8 +116,10 @@ E-post: demo@hemordna.local
 Lösenord: Hemordna-demo-2026!
 ```
 
-Kontot har hushållet "Demohemmet", medlemmen Alex, områdena Kok och Badrum samt ett par
-uppgifter. Seedningen är återkörningssäker och påverkar inte andra miljöer.
+Kontot har hushållet "Demohemmet" med tre medlemmar (Demo, Alex, Charlie) med olika
+veckobudgetar, områdena Kok och Badrum, ett par vanliga uppgifter och en återkommande,
+roterande uppgift ("Dammsug vardagsrum") - så recurrence och rotation syns direkt utan
+manuell uppsättning. Seedningen är återkörningssäker och påverkar inte andra miljöer.
 
 ## Bygg och testa
 

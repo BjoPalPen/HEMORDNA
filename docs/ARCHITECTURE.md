@@ -101,35 +101,42 @@ kvar, så uppskjutning kan inte dölja att något är försenat.
 Alternativet – en `Deferred`-status – gör frågan "är detta fortfarande ogjort?" tvetydig och
 kräver att varje query hanterar två utestående tillstånd.
 
-### Beslut: `TaskAssignment` och `TaskCompletion` är ännu inte egna entiteter — `PROPOSED`
+### Beslut: `TaskAssignment` är en egen entitet — `IMPLEMENTED`
 
-`TaskOccurrence` bär i dag `AssignedMemberId`, `CompletedByMemberId` och `CompletedAt`
-direkt. Den konceptuella kedjan definition → occurrence → assignment → completion är
-bevarad, men assignment och completion är fält snarare än rader.
+`TaskOccurrence` bär fortfarande `AssignedMemberId`, `CompletedByMemberId` och `CompletedAt`
+direkt - det ändras inte. `TaskAssignment` tillkommer separat, som historik: en rad per
+tillfälle någon tilldelas ett roterande arbete, oberoende av vad som sen händer med
+occurrencen (omfördelning, uppskjutning). `RotationPicker` (Application) läser den senaste
+raden för en `TaskDefinition` och ger turen till nästa aktiva medlem i join-ordning.
 
-Egna entiteter behövs när något av detta blir ett verkligt krav:
+`TaskCompletion` som egen entitet är fortfarande `PROPOSED` - inget verkligt krav (delvis
+slutförande, ångrad completion) har uppstått än.
 
-- historik över vem som haft ansvaret (roterande ansvar över tid)
-- flera personer på samma occurrence (`RequiresMultiplePeople`)
-- delvis slutförande, eller completion-händelser som ska kunna ångras
+### Beslut: `RecurrenceRule` — `IMPLEMENTED`
 
-Uppgraderingen är additiv och kräver ingen ändring av definition/occurrence-gränsen.
+Ett självständigt value object på `TaskDefinition.Recurrence`: daily/weekly/monthly, inklusive
+"var Nde vecka/månad" och "tredje tisdagen i månaden". Beräknar bara "nästa datum på eller
+efter X" via stegning framåt - inget kalenderbibliotek, ingen closed-form-matematik.
+`TaskDefinition.PreferredWeekday` är kvar oförändrad som ett fristående, manuellt
+schemaläggningshint.
 
-### Beslut: `RecurrenceRule` är inte byggd — `PROPOSED`
+**Vem genererar `TaskOccurrence` (löser §10):** on demand, i `EnsureOccurrencesGenerated`,
+anropad från `GetDailyPlan` varje gång en medlems dag hämtas. Inget schemalagt jobb, ingen
+bakgrundstjänst. Generering är begränsad till det som redan är förfallet (upp till "idag"),
+med ett hårt tak (366) som skydd mot en flodvåg av uteblivet arbete efter lång frånvaro - inte
+avsett att någonsin nås i normal drift.
 
-`TaskDefinition.PreferredWeekday` är den enda schemaläggningshjälp som finns. Full recurrence
-(every N weeks, monthly, "tredje tisdagen i månaden") införs när det första verkliga
-återkommande use casen kräver det – att bygga motorn i förväg är den mest sannolika källan
-till överdesign i det här projektet.
+**Hur roterande ansvar räknas ut (löser §10):** `RotationPicker` cyklar genom hushållets
+aktiva medlemmar, ordnade efter `CreatedAt` och sen `Id`. Utan tidigare tilldelning används
+`DefaultResponsibleMemberId` om satt, annars den som gick med först.
 
-Modellen är förberedd: recurrence hör hemma på `TaskDefinition`, och genereringen av
-`TaskOccurrence` går redan via `TaskDefinition.ScheduleFor`.
+### Beslut: `MemberPreference` — `IMPLEMENTED` (domän och API) / `PROPOSED` (UI)
 
-### Beslut: `MemberPreference` och `NotificationPreference` — `PROPOSED`
-
-Individuell presentation (text / bild+text / stor text / en uppgift åt gången) och
-motivationsnivå (Ingen / Lugn) är individuella preferenser, inte hushållsinställningar. De
-modelleras som en `MemberPreference` hängd på `HouseholdMember` när presentationslagret byggs.
+Individuell presentation (`PresentationMode`: text / bild+text / stor text / en uppgift åt
+gången, plus `ImageOnly`/`ReadAloud` förberedda) och motivationsnivå (`MotivationLevel`: Ingen
+/ Lugn) finns som `MemberPreference`, en rad per medlem, satt via
+`PUT .../members/{id}/preferences`. En egen inställningssida i klienten är medvetet
+uppskjuten - se HANDOFF.md.
 
 ### Identifierare
 
@@ -183,17 +190,23 @@ additiv och går att göra utan att befintlig data blir fel.
 
 ---
 
-## 5. Source of truth och synkstrategi — `PROPOSED`
+## 5. Source of truth och synkstrategi — `IMPLEMENTED` (1–2) / `PROPOSED` (3)
 
 Servern är source of truth. Klienten är aldrig auktoritativ.
 
-Planerad väg:
-
-1. HTTP mot Api för alla skrivningar.
-2. SignalR-hub per hushåll för att pusha ändringar till anslutna klienter. Hushållet är den
-   naturliga gruppen – klienter joinar gruppen `household:{id}` och får bara det egna
-   hushållets händelser, vilket gör isoleringen till samma gräns som i datamodellen.
+1. HTTP mot Api för alla skrivningar. `IMPLEMENTED`.
+2. `HouseholdHub` (Api, SignalR): en grupp per hushåll, `household:{id}`. Klienter joinar
+   efter inloggning och får bara det egna hushållets händelser - samma gräns som i
+   datamodellen, kontrollerad på samma sätt som `HouseholdAccessFilter` gör för REST.
+   Application känner inte till SignalR: `IHouseholdNotifier` är gränssnittet,
+   `SignalRHouseholdNotifier` (Api) implementerar det. Ett enda grovkornigt meddelande
+   (`OccurrencesChanged`) snarare än ett per händelsetyp - varje klient läser om sin egen dag i
+   stället för att servern behöver designa en payload per händelse innan det finns en andra
+   konsument som behöver en. JWT-token skickas som query-parameter bara på hub-vägen, eftersom
+   en webbläsare inte kan sätta en Authorization-header på WebSocket-handskakningen.
+   `IMPLEMENTED`.
 3. Offline byggs stegvis. Full offline conflict resolution är uttryckligen utanför MVP.
+   `PROPOSED`.
 
 ### Concurrency — `IMPLEMENTED` (dubbel completion) / `PROPOSED` (resten)
 
@@ -393,6 +406,7 @@ Integrationstester mot en verklig PostgreSQL införs när persistence byggs – 
 
 | Fråga | Varför den väntar |
 |---|---|
-| Vem eller vad som genererar `TaskOccurrence` (on demand vid planering eller ett schemalagt jobb) | Beror på recurrence-modellen |
-| Hur roterande ansvar ska räknas ut | Kräver `TaskAssignment` som egen entitet |
 | Offline-strategi bortom read-only cache | Utanför MVP; får inte låsas in i förväg |
+
+Tidigare på denna lista, nu lösta: vem som genererar `TaskOccurrence` och hur roterande ansvar
+räknas ut - se §3 och §5.
