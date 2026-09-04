@@ -1,29 +1,49 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">Hemordna</a>
-        <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-    </div>
-</div>
+@inject HemordnaSession Session
 
-<div class="@NavMenuCssClass nav-scrollable" @onclick="ToggleNavMenu">
-    <nav class="nav flex-column">
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
-            </NavLink>
+<nav class="nav-shell" aria-label="Huvudmeny">
+    <div class="brand">
+        <img src="brand/logo.svg" alt="" class="brand-mark" width="40" height="40" />
+        <span class="brand-text">
+            <span class="brand-name">Hemordna</span>
+            <span class="brand-tagline">Ett enklare hem, en lugnare vardag</span>
+        </span>
+    </div>
+
+    <ul class="nav-items">
+        @foreach (var item in Items)
+        {
+            <li>
+                <NavLink class="nav-link" href="@item.Href" Match="@item.Match">
+                    <span class="nav-icon" aria-hidden="true">@item.Icon</span>
+                    <span class="nav-label">@item.Label</span>
+                </NavLink>
+            </li>
+        }
+    </ul>
+
+    @if (Session.Me is { } me)
+    {
+        <div class="nav-user">
+            <span class="avatar" aria-hidden="true">@Initial(me.DisplayName)</span>
+            <span class="nav-user-text">
+                <span class="nav-user-name">@me.DisplayName</span>
+            </span>
         </div>
-    </nav>
-</div>
+    }
+</nav>
 
 @code {
-    private bool collapseNavMenu = true;
+    private sealed record NavItem(string Href, string Label, string Icon, NavLinkMatch Match);
 
-    private string? NavMenuCssClass => collapseNavMenu ? "collapse" : null;
+    private static readonly NavItem[] Items =
+    [
+        new("", "Min dag", "☀", NavLinkMatch.All),
+        new("uppgifter", "Uppgifter", "≡", NavLinkMatch.Prefix),
+        new("planering", "Planering", "▦", NavLinkMatch.Prefix),
+        new("hushall", "Hushåll", "⌂", NavLinkMatch.Prefix),
+        new("installningar", "Inställningar", "⚙", NavLinkMatch.Prefix)
+    ];
 
-    private void ToggleNavMenu()
-    {
-        collapseNavMenu = !collapseNavMenu;
-    }
+    private static string Initial(string name)
+        => string.IsNullOrWhiteSpace(name) ? "?" : name.Trim()[..1].ToUpperInvariant();
 }

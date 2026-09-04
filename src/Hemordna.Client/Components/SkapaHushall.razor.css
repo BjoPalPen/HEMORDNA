@@ -1,0 +1,8 @@
+.onboarding {
+    max-width: 420px;
+    margin: var(--space-7) auto;
+}
+
+.onboarding p {
+    margin-bottom: var(--space-5);
+}

@@ -1,31 +1,31 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="sv">
 
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Hemordna.Client</title>
+    <meta name="theme-color" content="#4E9D74" />
+    <meta name="description" content="Ett enklare hem, en lugnare vardag." />
+    <title>Hemordna</title>
     <base href="/" />
     <link rel="preload" id="webassembly" />
-    <link rel="stylesheet" href="lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="css/app.css" />
-    <link rel="icon" type="image/png" href="favicon.png" />
+    <link rel="icon" type="image/svg+xml" href="brand/logo.svg" />
     <link href="Hemordna.Client.styles.css" rel="stylesheet" />
     <script type="importmap"></script>
 </head>
 
 <body>
     <div id="app">
-        <svg class="loading-progress">
-            <circle r="40%" cx="50%" cy="50%" />
-            <circle r="40%" cx="50%" cy="50%" />
-        </svg>
-        <div class="loading-progress-text"></div>
+        <div class="app-loading">
+            <img src="brand/logo.svg" alt="" width="64" height="64" />
+            <p>Hemordna</p>
+        </div>
     </div>
 
     <div id="blazor-error-ui">
-        An unhandled error has occurred.
-        <a href="." class="reload">Reload</a>
+        Något gick fel.
+        <a href="." class="reload">Ladda om</a>
         <span class="dismiss">🗙</span>
     </div>
     <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>

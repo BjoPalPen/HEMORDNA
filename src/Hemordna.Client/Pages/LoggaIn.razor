@@ -1,0 +1,124 @@
+@page "/logga-in"
+@layout EmptyLayout
+@inject HemordnaApiClient Api
+@inject HemordnaSession Session
+@inject NavigationManager Navigation
+
+<PageTitle>Logga in – Hemordna</PageTitle>
+
+<div class="signin-page">
+    <div class="signin-card card">
+        <div class="signin-brand">
+            <img src="brand/logo.svg" alt="" width="56" height="56" />
+            <h1>Hemordna</h1>
+            <p class="muted">Ett enklare hem, en lugnare vardag</p>
+        </div>
+
+        <div class="tabs" role="tablist">
+            <button type="button" role="tab" class="tab @(_mode == Mode.SignIn ? "tab-active" : "")"
+                    aria-selected="@(_mode == Mode.SignIn)" @onclick="() => SetMode(Mode.SignIn)">
+                Logga in
+            </button>
+            <button type="button" role="tab" class="tab @(_mode == Mode.Register ? "tab-active" : "")"
+                    aria-selected="@(_mode == Mode.Register)" @onclick="() => SetMode(Mode.Register)">
+                Skapa konto
+            </button>
+        </div>
+
+        <EditForm Model="_form" OnValidSubmit="SubmitAsync">
+            @if (_mode == Mode.Register)
+            {
+                <label class="field">
+                    <span>Ditt namn</span>
+                    <InputText @bind-Value="_form.DisplayName" autocomplete="name" />
+                </label>
+            }
+
+            <label class="field">
+                <span>E-post</span>
+                <InputText @bind-Value="_form.Email" type="email" autocomplete="username" />
+            </label>
+
+            <label class="field">
+                <span>Lösenord</span>
+                <InputText @bind-Value="_form.Password" type="password"
+                           autocomplete="@(_mode == Mode.Register ? "new-password" : "current-password")" />
+            </label>
+
+            @if (_messages.Count > 0)
+            {
+                <div class="notice notice-problem" role="alert">
+                    <ul class="message-list">
+                        @foreach (var message in _messages)
+                        {
+                            <li>@message</li>
+                        }
+                    </ul>
+                </div>
+            }
+
+            <button type="submit" class="btn btn-primary btn-block" disabled="@_busy">
+                @(_busy ? "Ett ögonblick…" : _mode == Mode.SignIn ? "Logga in" : "Skapa konto")
+            </button>
+        </EditForm>
+    </div>
+</div>
+
+@code {
+    private enum Mode { SignIn, Register }
+
+    private sealed class Form
+    {
+        public string Email { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+        public string DisplayName { get; set; } = string.Empty;
+    }
+
+    private readonly Form _form = new();
+    private List<string> _messages = [];
+    private Mode _mode = Mode.SignIn;
+    private bool _busy;
+
+    private void SetMode(Mode mode)
+    {
+        _mode = mode;
+        _messages = [];
+    }
+
+    private async Task SubmitAsync()
+    {
+        _busy = true;
+        _messages = [];
+
+        try
+        {
+            if (_mode == Mode.Register)
+            {
+                var errors = await Api.RegisterAsync(_form.Email, _form.Password, _form.DisplayName);
+
+                if (errors.Count > 0)
+                {
+                    _messages = [.. errors];
+                    return;
+                }
+            }
+            else if (!await Api.LoginAsync(_form.Email, _form.Password))
+            {
+                // Deliberately does not say which of the two was wrong.
+                _messages = ["E-postadressen eller lösenordet stämmer inte."];
+                return;
+            }
+
+            await Session.RefreshAsync();
+            Navigation.NavigateTo("");
+        }
+        catch (HttpRequestException)
+        {
+            _messages = ["Vi når inte servern just nu. Försök igen om en stund."];
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

@@ -1,0 +1,9 @@
+@inject NavigationManager Navigation
+
+@code {
+    /// <summary>Relative path to send the browser to.</summary>
+    [Parameter, EditorRequired]
+    public string To { get; set; } = string.Empty;
+
+    protected override void OnInitialized() => Navigation.NavigateTo(To);
+}

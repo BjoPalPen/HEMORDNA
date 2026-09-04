@@ -1,0 +1,29 @@
+@* Planned time against the day's budget. Calm by design: it never turns red, and an
+   over-full day is simply a full ring. *@
+
+<svg class="ring" viewBox="0 0 48 48" width="48" height="48" role="img"
+     aria-label="@($"{Planned} av {Available} minuter planerade")">
+    <circle class="ring-track" cx="24" cy="24" r="20" />
+    <circle class="ring-value" cx="24" cy="24" r="20"
+            stroke-dasharray="@Circumference"
+            stroke-dashoffset="@Offset"
+            transform="rotate(-90 24 24)" />
+</svg>
+
+@code {
+    [Parameter] public int Planned { get; set; }
+
+    [Parameter] public int Available { get; set; }
+
+    private const double Circumference = 2 * Math.PI * 20;
+
+    private string Offset
+    {
+        get
+        {
+            var fraction = Available <= 0 ? 0 : Math.Clamp((double)Planned / Available, 0, 1);
+            return (Circumference * (1 - fraction)).ToString(
+                "0.##", System.Globalization.CultureInfo.InvariantCulture);
+        }
+    }
+}
