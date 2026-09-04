@@ -10,7 +10,9 @@ services:
     restart: unless-stopped
     # Bind till loopback, så databasen aldrig exponeras på nätverket.
     ports:
-      - "127.0.0.1:5432:5432"
+      # Värdporten kan bytas när 5432 redan är upptagen, till exempel av en lokalt
+      # installerad PostgreSQL. Sätt POSTGRES_HOST_PORT i miljön eller i en .env-fil.
+      - "127.0.0.1:${POSTGRES_HOST_PORT:-5432}:5432"
     volumes:
       - hemordna-db-data:/var/lib/postgresql/data
     environment:
