@@ -85,7 +85,7 @@ public sealed record TaskDefinitionResponse(
     bool CanBeDeferred,
     bool IsActive);
 
-public sealed record ScheduleOccurrenceRequest(DateOnly Date, Guid? AssignToMemberId);
+public sealed record ScheduleOccurrenceRequest(DateOnly? Date, Guid? AssignToMemberId);
 
 public sealed record TaskOccurrenceResponse(
     Guid Id,
@@ -98,9 +98,9 @@ public sealed record TaskOccurrenceResponse(
     Guid? AssignedMemberId,
     TaskOccurrenceStatus Status);
 
-public sealed record SetAvailabilityRequest(DateOnly Date, int AvailableMinutes);
+public sealed record SetAvailabilityRequest(DateOnly? Date, int AvailableMinutes);
 
-public sealed record DeferOccurrenceRequest(DateOnly Date);
+public sealed record DeferOccurrenceRequest(DateOnly? Date);
 
 public sealed record AvailabilityResponse(Guid MemberId, DateOnly Date, int AvailableMinutes);
 
