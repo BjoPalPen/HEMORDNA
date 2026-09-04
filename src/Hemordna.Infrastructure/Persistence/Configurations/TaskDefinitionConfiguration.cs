@@ -14,6 +14,9 @@ internal sealed class TaskDefinitionConfiguration : IEntityTypeConfiguration<Tas
 
         builder.HasKey(definition => definition.Id);
 
+        // The domain creates its own identifiers; the database never generates one.
+        builder.Property(definition => definition.Id).ValueGeneratedNever();
+
         builder.Property(definition => definition.HouseholdId).IsRequired();
 
         builder.Property(definition => definition.Name)

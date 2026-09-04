@@ -14,6 +14,9 @@ internal sealed class HouseholdMemberConfiguration : IEntityTypeConfiguration<Ho
 
         builder.HasKey(member => member.Id);
 
+        // The domain creates its own identifiers; the database never generates one.
+        builder.Property(member => member.Id).ValueGeneratedNever();
+
         builder.Property(member => member.HouseholdId).IsRequired();
 
         builder.Property(member => member.DisplayName)
@@ -41,6 +44,12 @@ internal sealed class HouseholdMemberConfiguration : IEntityTypeConfiguration<Ho
                     budget => budget));
 
         builder.HasIndex(member => member.HouseholdId);
+
+        // One user signs in as at most one member. The unique index is what stops a second
+        // membership from being created behind the application's back.
+        builder.HasIndex(member => member.UserId)
+            .IsUnique()
+            .HasFilter("\"UserId\" IS NOT NULL");
     }
 
     private static int[] ToMinutesPerWeekday(WeeklyTimeBudget budget)

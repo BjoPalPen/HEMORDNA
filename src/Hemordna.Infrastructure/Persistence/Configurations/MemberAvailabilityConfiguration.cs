@@ -12,6 +12,9 @@ internal sealed class MemberAvailabilityConfiguration : IEntityTypeConfiguration
 
         builder.HasKey(availability => availability.Id);
 
+        // The domain creates its own identifiers; the database never generates one.
+        builder.Property(availability => availability.Id).ValueGeneratedNever();
+
         builder.Property(availability => availability.HouseholdId).IsRequired();
         builder.Property(availability => availability.MemberId).IsRequired();
         builder.Property(availability => availability.Date).IsRequired();

@@ -13,6 +13,9 @@ internal sealed class HouseholdConfiguration : IEntityTypeConfiguration<Househol
 
         builder.HasKey(household => household.Id);
 
+        // The domain creates its own identifiers; the database never generates one.
+        builder.Property(household => household.Id).ValueGeneratedNever();
+
         builder.Property(household => household.Name)
             .IsRequired()
             .HasMaxLength(200);

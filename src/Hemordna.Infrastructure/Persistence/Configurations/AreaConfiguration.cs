@@ -12,6 +12,9 @@ internal sealed class AreaConfiguration : IEntityTypeConfiguration<Area>
 
         builder.HasKey(area => area.Id);
 
+        // The domain creates its own identifiers; the database never generates one.
+        builder.Property(area => area.Id).ValueGeneratedNever();
+
         builder.Property(area => area.HouseholdId).IsRequired();
 
         builder.Property(area => area.Name)

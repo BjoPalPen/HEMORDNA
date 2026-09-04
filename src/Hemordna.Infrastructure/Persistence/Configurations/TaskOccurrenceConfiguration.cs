@@ -13,6 +13,9 @@ internal sealed class TaskOccurrenceConfiguration : IEntityTypeConfiguration<Tas
 
         builder.HasKey(occurrence => occurrence.Id);
 
+        // The domain creates its own identifiers; the database never generates one.
+        builder.Property(occurrence => occurrence.Id).ValueGeneratedNever();
+
         builder.Property(occurrence => occurrence.HouseholdId).IsRequired();
         builder.Property(occurrence => occurrence.TaskDefinitionId).IsRequired();
         builder.Property(occurrence => occurrence.ScheduledDate).IsRequired();
