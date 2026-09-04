@@ -136,15 +136,54 @@ else
                     </div>
                 }
             </div>
+
+            <div class="card">
+                <h2>Din vanliga vecka</h2>
+                <p class="muted small">Hur mycket tid du normalt har, varje veckodag.</p>
+
+                @if (_weekBudget is null)
+                {
+                    <button type="button" class="btn btn-secondary btn-block" @onclick="ToggleWeekEditorAsync">
+                        Ändra din vanliga vecka
+                    </button>
+                }
+                else
+                {
+                    <div class="week-editor">
+                        @foreach (var day in Weekdays)
+                        {
+                            <label class="field field-day">
+                                <span>@day.Label</span>
+                                <input type="number" min="0" max="600" @bind="_weekBudget[day.Value]" />
+                            </label>
+                        }
+                        <button type="button" class="btn btn-primary btn-block" @onclick="SaveWeekBudgetAsync">
+                            Spara vanlig vecka
+                        </button>
+                    </div>
+                }
+            </div>
         </aside>
     </div>
 }
 
 @code {
+    private static readonly (DayOfWeek Value, string Label)[] Weekdays =
+    [
+        (DayOfWeek.Monday, "Mån"),
+        (DayOfWeek.Tuesday, "Tis"),
+        (DayOfWeek.Wednesday, "Ons"),
+        (DayOfWeek.Thursday, "Tors"),
+        (DayOfWeek.Friday, "Fre"),
+        (DayOfWeek.Saturday, "Lör"),
+        (DayOfWeek.Sunday, "Sön")
+    ];
+
     private DailyPlanResponse? _day;
     private Guid? _busyOccurrence;
     private bool _editingTime;
     private int _minutesToday;
+    private Dictionary<DayOfWeek, int>? _weekBudget;
 
     // The date is resolved from an injected clock here at the edge; nothing below reads one.
     // TimeProvider rather than DateTime.Now so the page can be rendered at a fixed date.
@@ -239,6 +278,57 @@ else
         if (await Api.SetAvailabilityAsync(householdId, memberId, Today, Math.Max(0, _minutesToday)))
         {
             _editingTime = false;
+            await LoadDayAsync();
+        }
+    }
+
+    private async Task ToggleWeekEditorAsync()
+    {
+        if (Session.Me is not { HouseholdId: { } householdId, MemberId: { } memberId })
+        {
+            return;
+        }
+
+        var household = await Api.GetHouseholdAsync(householdId);
+        var member = household?.Members.FirstOrDefault(m => m.Id == memberId);
+
+        if (member is null)
+        {
+            return;
+        }
+
+        var budget = member.WeeklyTimeBudgetMinutes;
+        _weekBudget = new Dictionary<DayOfWeek, int>
+        {
+            [DayOfWeek.Monday] = budget.Monday,
+            [DayOfWeek.Tuesday] = budget.Tuesday,
+            [DayOfWeek.Wednesday] = budget.Wednesday,
+            [DayOfWeek.Thursday] = budget.Thursday,
+            [DayOfWeek.Friday] = budget.Friday,
+            [DayOfWeek.Saturday] = budget.Saturday,
+            [DayOfWeek.Sunday] = budget.Sunday
+        };
+    }
+
+    private async Task SaveWeekBudgetAsync()
+    {
+        if (Session.Me is not { HouseholdId: { } householdId, MemberId: { } memberId } || _weekBudget is null)
+        {
+            return;
+        }
+
+        var budget = new WeeklyTimeBudgetContract(
+            _weekBudget[DayOfWeek.Monday],
+            _weekBudget[DayOfWeek.Tuesday],
+            _weekBudget[DayOfWeek.Wednesday],
+            _weekBudget[DayOfWeek.Thursday],
+            _weekBudget[DayOfWeek.Friday],
+            _weekBudget[DayOfWeek.Saturday],
+            _weekBudget[DayOfWeek.Sunday]);
+
+        if (await Api.SetWeeklyBudgetAsync(householdId, memberId, budget))
+        {
+            _weekBudget = null;
             await LoadDayAsync();
         }
     }

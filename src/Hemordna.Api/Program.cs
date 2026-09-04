@@ -30,6 +30,7 @@ builder.Services.AddScoped<GetHousehold>();
 builder.Services.AddScoped<AddHouseholdMember>();
 builder.Services.AddScoped<AddArea>();
 builder.Services.AddScoped<SetMemberAvailability>();
+builder.Services.AddScoped<SetMemberWeeklyBudget>();
 builder.Services.AddScoped<CreateTaskDefinition>();
 builder.Services.AddScoped<ScheduleTaskOccurrence>();
 builder.Services.AddScoped<CompleteTaskOccurrence>();

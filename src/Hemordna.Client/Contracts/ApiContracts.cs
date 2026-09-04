@@ -54,6 +54,20 @@ public sealed record HouseholdResponse(
     IReadOnlyList<HouseholdMemberResponse> Members,
     IReadOnlyList<AreaResponse> Areas);
 
-public sealed record HouseholdMemberResponse(Guid Id, string DisplayName, bool IsActive);
+public sealed record HouseholdMemberResponse(
+    Guid Id,
+    string DisplayName,
+    bool IsActive,
+    WeeklyTimeBudgetContract WeeklyTimeBudgetMinutes);
 
 public sealed record AreaResponse(Guid Id, string Name, bool IsActive);
+
+/// <summary>Minutes per weekday. Mirrors the API's contract - see it for the domain mapping.</summary>
+public sealed record WeeklyTimeBudgetContract(
+    int Monday,
+    int Tuesday,
+    int Wednesday,
+    int Thursday,
+    int Friday,
+    int Saturday,
+    int Sunday);

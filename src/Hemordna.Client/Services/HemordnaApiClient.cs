@@ -150,6 +150,23 @@ public sealed class HemordnaApiClient
         return response.IsSuccessStatusCode;
     }
 
+    /// <summary>Replaces a member's normal weekly time budget - their ordinary week, not a single day.</summary>
+    public async Task<bool> SetWeeklyBudgetAsync(
+        Guid householdId,
+        Guid memberId,
+        WeeklyTimeBudgetContract weeklyTimeBudget,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Put,
+            $"api/households/{householdId}/members/{memberId}/weekly-budget",
+            cancellationToken);
+        request.Content = JsonContent.Create(weeklyTimeBudget);
+
+        var response = await _http.SendAsync(request, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
     private async Task<T?> GetAsync<T>(string path, CancellationToken cancellationToken)
     {
         var request = await AuthorizedAsync(HttpMethod.Get, path, cancellationToken);

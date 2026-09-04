@@ -64,6 +64,11 @@ internal static class HouseholdEndpoints
             .Produces(StatusCodes.Status404NotFound)
             .ProducesValidationProblem();
 
+        scoped.MapPut("/members/{memberId:guid}/weekly-budget", SetWeeklyBudgetAsync)
+            .Produces<HouseholdMemberResponse>()
+            .Produces(StatusCodes.Status404NotFound)
+            .ProducesValidationProblem();
+
         scoped.MapPost("/occurrences/{occurrenceId:guid}/complete", CompleteOccurrenceAsync)
             .Produces<TaskOccurrenceResponse>()
             .Produces(StatusCodes.Status404NotFound);
@@ -287,6 +292,19 @@ internal static class HouseholdEndpoints
             ? Results.NotFound()
             : Results.Ok(new AvailabilityResponse(
                 availability.MemberId, availability.Date, availability.AvailableMinutes));
+    }
+
+    private static async Task<IResult> SetWeeklyBudgetAsync(
+        Guid householdId,
+        Guid memberId,
+        WeeklyTimeBudgetContract request,
+        SetMemberWeeklyBudget setWeeklyBudget,
+        CancellationToken cancellationToken)
+    {
+        var member = await setWeeklyBudget.HandleAsync(
+            householdId, memberId, request.ToDomain(), cancellationToken);
+
+        return member is null ? Results.NotFound() : Results.Ok(ToResponse(member));
     }
 
     private static async Task<IResult> CompleteOccurrenceAsync(

@@ -117,6 +117,27 @@ public class MinDagTests
         await page.WaitForURLAsync("**/logga-in", new() { Timeout = 15_000 });
     }
 
+    [Fact]
+    public async Task Changing_the_normal_week_persists_across_a_reload()
+    {
+        var page = await _app.NewPageAsync();
+
+        await SignUpAsync(page, "Cecilia");
+
+        await page.GetByRole(AriaRole.Button, new() { Name = "Ändra din vanliga vecka" }).ClickAsync();
+        await page.GetByLabel("Mån").FillAsync("45");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Spara vanlig vecka" }).ClickAsync();
+
+        // The editor closes on save, going back to the button that opens it.
+        await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Ändra din vanliga vecka" }))
+            .ToBeVisibleAsync();
+
+        await page.ReloadAsync();
+        await page.GetByRole(AriaRole.Button, new() { Name = "Ändra din vanliga vecka" }).ClickAsync();
+
+        await Assertions.Expect(page.GetByLabel("Mån")).ToHaveValueAsync("45");
+    }
+
     /// <summary>
     /// Hemordna is a Swedish app, so the date is Swedish even to someone whose browser is not.
     /// Blazor loads its globalization data based on the browser language, so an English browser
