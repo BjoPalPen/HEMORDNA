@@ -67,13 +67,18 @@ public sealed class HemordnaAppFixture : IAsyncLifetime
         });
     }
 
-    /// <summary>A fresh browser context, so no test inherits another's stored token.</summary>
-    public async Task<IPage> NewPageAsync()
+    /// <summary>
+    /// A fresh browser context, so no test inherits another's stored token. Pass
+    /// <paramref name="locale"/> to pin the browser language - Blazor picks its globalization
+    /// data from the browser, so the language is part of what a test can need to control.
+    /// </summary>
+    public async Task<IPage> NewPageAsync(string? locale = null)
     {
         var context = await _browser!.NewContextAsync(new BrowserNewContextOptions
         {
             BaseURL = ClientBaseUrl,
-            ViewportSize = new ViewportSize { Width = 1280, Height = 900 }
+            ViewportSize = new ViewportSize { Width = 1280, Height = 900 },
+            Locale = locale
         });
 
         return await context.NewPageAsync();

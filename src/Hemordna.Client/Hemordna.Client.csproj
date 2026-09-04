@@ -6,6 +6,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <OverrideHtmlAssetPlaceholders>true</OverrideHtmlAssetPlaceholders>
     <ServiceWorkerAssetsManifest>service-worker-assets.js</ServiceWorkerAssetsManifest>
+    <!--
+      Blazor otherwise ships an ICU shard chosen from the browser's language, and the English
+      one carries no Swedish. Setting the culture in Program.cs is not enough on its own -
+      without the full data, sv-SE formats as invariant. This is what makes the dates Swedish.
+    -->
+    <BlazorWebAssemblyLoadAllGlobalizationData>true</BlazorWebAssemblyLoadAllGlobalizationData>
   </PropertyGroup>
 
   <ItemGroup>
