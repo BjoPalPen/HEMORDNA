@@ -1,0 +1,13 @@
+<Router AppAssembly="@typeof(Program).Assembly">
+    <Found Context="routeData">
+        <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
+        <FocusOnNavigate RouteData="@routeData" Selector="h1" />
+    </Found>
+    <NotFound>
+        <LayoutView Layout="@typeof(MainLayout)">
+            <PageTitle>Sidan finns inte – Hemordna</PageTitle>
+            <h1>Sidan finns inte</h1>
+            <p class="muted">Länken leder ingenstans. Gå till <a href="">Min dag</a>.</p>
+        </LayoutView>
+    </NotFound>
+</Router>

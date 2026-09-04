@@ -1,0 +1,27 @@
+# PostgreSQL för lokal utveckling utanför devcontainern (t.ex. Windows + Docker Desktop).
+# Devcontainern har sin egen databas i .devcontainer/docker-compose.yml - den här filen är
+# till för att köra repot direkt på värdmaskinen.
+#
+# Värdena nedan är LOKALA UTVECKLINGSVÄRDEN. Återanvänd dem aldrig i en driftsatt miljö.
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: hemordna-db
+    restart: unless-stopped
+    # Bind till loopback, så databasen aldrig exponeras på nätverket.
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - hemordna-db-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-hemordna}
+      POSTGRES_USER: ${POSTGRES_USER:-hemordna}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hemordna_dev}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hemordna} -d ${POSTGRES_DB:-hemordna}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  hemordna-db-data:

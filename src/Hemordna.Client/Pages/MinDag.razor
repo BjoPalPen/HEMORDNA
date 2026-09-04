@@ -1,0 +1,243 @@
+@page "/"
+@inject HemordnaApiClient Api
+@inject HemordnaSession Session
+@inject NavigationManager Navigation
+
+<PageTitle>Min dag – Hemordna</PageTitle>
+
+@if (!Session.IsLoaded)
+{
+    <p class="muted">Hämtar din dag…</p>
+}
+else if (!Session.IsSignedIn)
+{
+    <Redirect To="logga-in" />
+}
+else if (Session.NeedsHousehold)
+{
+    <SkapaHushall OnCreated="ReloadAsync" />
+}
+else
+{
+    <div class="day">
+        <div class="day-main">
+            <p class="day-date">@DateLabel</p>
+            <h1>Hej @Session.Me!.DisplayName! 👋</h1>
+            <p class="muted day-lead">@LeadText</p>
+
+            @if (_day is null)
+            {
+                <p class="muted">Hämtar dagens uppgifter…</p>
+            }
+            else
+            {
+                <div class="card summary">
+                    <ProgressRing Planned="@_day.PlannedMinutes" Available="@_day.AvailableMinutes" />
+
+                    <div class="summary-text">
+                        <p class="summary-minutes">
+                            <strong>@_day.PlannedMinutes av @_day.AvailableMinutes min</strong> planerade
+                        </p>
+                        <p class="muted small">@CountsText</p>
+                    </div>
+                </div>
+
+                @if (_day.Completed.Count > 0)
+                {
+                    <ul class="task-list" aria-label="Klara uppgifter">
+                        @foreach (var done in _day.Completed)
+                        {
+                            <li class="task task-done">
+                                <span class="task-check task-check-done" aria-hidden="true">✓</span>
+                                <span class="task-name">@done.Name</span>
+                                <span class="task-minutes muted">@done.EstimatedMinutes min</span>
+                            </li>
+                        }
+                    </ul>
+                }
+
+                @if (_day.Items.Count > 0)
+                {
+                    <ul class="task-list" aria-label="Uppgifter kvar idag">
+                        @foreach (var item in _day.Items)
+                        {
+                            <li class="task">
+                                <button type="button" class="task-check"
+                                        aria-label="@($"Markera {item.Name} som klar")"
+                                        disabled="@(_busyOccurrence == item.OccurrenceId)"
+                                        @onclick="() => CompleteAsync(item.OccurrenceId)"></button>
+
+                                <span class="task-name">
+                                    @item.Name
+                                    @if (item.IsOverdue)
+                                    {
+                                        <span class="task-note muted small">sedan tidigare</span>
+                                    }
+                                </span>
+
+                                <span class="task-minutes muted">@item.EstimatedMinutes min</span>
+                            </li>
+                        }
+                    </ul>
+                }
+                else if (_day.Completed.Count > 0)
+                {
+                    <div class="notice">Dagens uppgifter är klara.</div>
+                }
+                else
+                {
+                    <div class="notice">Inget är inplanerat idag.</div>
+                }
+
+                @if (_day.Unplanned.Count > 0)
+                {
+                    <details class="rest">
+                        <summary>@_day.Unplanned.Count till en annan dag</summary>
+                        <ul class="task-list">
+                            @foreach (var task in _day.Unplanned)
+                            {
+                                <li class="task task-rest">
+                                    <span class="task-name">@task.Name</span>
+                                    <span class="task-minutes muted">@task.EstimatedMinutes min</span>
+                                </li>
+                            }
+                        </ul>
+                    </details>
+                }
+            }
+        </div>
+
+        <aside class="day-side">
+            @if (_day is not null && EncouragementText is { } encouragement)
+            {
+                <div class="card encouragement">@encouragement</div>
+            }
+
+            <div class="card">
+                <h2>Snabbval</h2>
+                <div class="quick-actions">
+                    <button type="button" class="btn btn-secondary btn-block" @onclick="ToggleTimeEditor">
+                        Lägg till tillfällig tid idag
+                    </button>
+                </div>
+
+                @if (_editingTime)
+                {
+                    <div class="time-editor">
+                        <label class="field">
+                            <span>Minuter idag</span>
+                            <input type="number" min="0" max="600" @bind="_minutesToday" />
+                        </label>
+                        <button type="button" class="btn btn-primary btn-block" @onclick="SaveTimeAsync">
+                            Spara för idag
+                        </button>
+                        <p class="muted small">Din vanliga vecka påverkas inte.</p>
+                    </div>
+                }
+            </div>
+        </aside>
+    </div>
+}
+
+@code {
+    private DailyPlanResponse? _day;
+    private Guid? _busyOccurrence;
+    private bool _editingTime;
+    private int _minutesToday;
+
+    // The date comes from the browser here at the edge; nothing below reads a clock.
+    private DateOnly Today => DateOnly.FromDateTime(DateTime.Now);
+
+    private string DateLabel => Today.ToString("dddd d MMMM", SwedishCulture);
+
+    private static readonly System.Globalization.CultureInfo SwedishCulture = new("sv-SE");
+
+    private string LeadText => _day switch
+    {
+        { Items.Count: 0, Completed.Count: > 0 } => "Det viktigaste är gjort.",
+        { Items.Count: 0 } => "Ingenting väntar på dig just nu.",
+        _ => "Här är dina uppgifter för idag. En sak i taget räcker."
+    };
+
+    private string CountsText
+    {
+        get
+        {
+            var total = _day!.Completed.Count + _day.Items.Count;
+            return $"{total} uppgifter · {_day.Completed.Count} klara · {_day.Items.Count} kvar";
+        }
+    }
+
+    private string? EncouragementText => _day switch
+    {
+        { Items.Count: 0, Completed.Count: > 0 } => "Dagens uppgifter är klara. Bra jobbat!",
+        { Completed.Count: > 0 } => "Det viktigaste är på väg. En sak i taget räcker.",
+        _ => null
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Wait for the session before the first render decides what to show, otherwise this
+        // page would sit on "loading" forever for a signed-out visitor.
+        await Session.EnsureLoadedAsync();
+
+        await LoadDayAsync();
+    }
+
+    /// <summary>Called after creating a household, when membership has changed.</summary>
+    private async Task ReloadAsync()
+    {
+        await Session.RefreshAsync();
+        await LoadDayAsync();
+    }
+
+    private async Task LoadDayAsync()
+    {
+        if (Session.Me is not { HouseholdId: { } householdId, MemberId: { } memberId })
+        {
+            return;
+        }
+
+        _day = await Api.GetDailyPlanAsync(householdId, memberId, Today);
+        _minutesToday = _day?.AvailableMinutes ?? 0;
+    }
+
+    private async Task CompleteAsync(Guid occurrenceId)
+    {
+        if (Session.Me is not { HouseholdId: { } householdId })
+        {
+            return;
+        }
+
+        _busyOccurrence = occurrenceId;
+
+        try
+        {
+            // Safe to repeat: the server keeps the first completion.
+            if (await Api.CompleteOccurrenceAsync(householdId, occurrenceId))
+            {
+                await LoadDayAsync();
+            }
+        }
+        finally
+        {
+            _busyOccurrence = null;
+        }
+    }
+
+    private void ToggleTimeEditor() => _editingTime = !_editingTime;
+
+    private async Task SaveTimeAsync()
+    {
+        if (Session.Me is not { HouseholdId: { } householdId, MemberId: { } memberId })
+        {
+            return;
+        }
+
+        if (await Api.SetAvailabilityAsync(householdId, memberId, Today, Math.Max(0, _minutesToday)))
+        {
+            _editingTime = false;
+            await LoadDayAsync();
+        }
+    }
+}

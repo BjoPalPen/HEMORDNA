@@ -1,0 +1,69 @@
+@inject HemordnaApiClient Api
+
+@* First run: signed in, but there is no household yet. *@
+<div class="onboarding card">
+    <h1>Välkommen!</h1>
+    <p class="muted">Börja med att ge ditt hushåll ett namn. Du kan bjuda in fler senare.</p>
+
+    <EditForm Model="_form" OnValidSubmit="CreateAsync">
+        <label class="field">
+            <span>Hushållets namn</span>
+            <InputText @bind-Value="_form.Name" placeholder="Familjen Andersson" />
+        </label>
+
+        @if (_message is { } message)
+        {
+            <div class="notice notice-problem" role="alert">@message</div>
+        }
+
+        <button type="submit" class="btn btn-primary btn-block" disabled="@_busy">
+            @(_busy ? "Skapar…" : "Skapa hushåll")
+        </button>
+    </EditForm>
+</div>
+
+@code {
+    private sealed class Form
+    {
+        public string Name { get; set; } = string.Empty;
+    }
+
+    private readonly Form _form = new();
+    private string? _message;
+    private bool _busy;
+
+    /// <summary>Raised once the household exists, so the day can be loaded.</summary>
+    [Parameter]
+    public EventCallback OnCreated { get; set; }
+
+    private async Task CreateAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_form.Name))
+        {
+            _message = "Hushållet behöver ett namn.";
+            return;
+        }
+
+        _busy = true;
+        _message = null;
+
+        try
+        {
+            if (await Api.CreateHouseholdAsync(_form.Name) is null)
+            {
+                _message = "Det gick inte att skapa hushållet. Försök igen.";
+                return;
+            }
+
+            await OnCreated.InvokeAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _message = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}
