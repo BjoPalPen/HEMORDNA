@@ -69,6 +69,10 @@ internal static class HouseholdEndpoints
             .Produces(StatusCodes.Status404NotFound)
             .ProducesValidationProblem();
 
+        scoped.MapPut("/members/{memberId:guid}/preferences", SetPreferenceAsync)
+            .Produces<PreferenceResponse>()
+            .Produces(StatusCodes.Status404NotFound);
+
         scoped.MapPost("/occurrences/{occurrenceId:guid}/complete", CompleteOccurrenceAsync)
             .Produces<TaskOccurrenceResponse>()
             .Produces(StatusCodes.Status404NotFound);
@@ -231,7 +235,8 @@ internal static class HouseholdEndpoints
                 request.PreferredWeekday,
                 request.CanBeDeferred,
                 request.HasRotatingResponsibility,
-                request.RequiresMultiplePeople),
+                request.RequiresMultiplePeople,
+                request.Recurrence?.ToDomain()),
             cancellationToken);
 
         return definition is null
@@ -305,6 +310,21 @@ internal static class HouseholdEndpoints
             householdId, memberId, request.ToDomain(), cancellationToken);
 
         return member is null ? Results.NotFound() : Results.Ok(ToResponse(member));
+    }
+
+    private static async Task<IResult> SetPreferenceAsync(
+        Guid householdId,
+        Guid memberId,
+        SetPreferenceRequest request,
+        SetMemberPreference setPreference,
+        CancellationToken cancellationToken)
+    {
+        var preference = await setPreference.HandleAsync(
+            householdId, memberId, request.Presentation, request.Motivation, cancellationToken);
+
+        return preference is null
+            ? Results.NotFound()
+            : Results.Ok(new PreferenceResponse(preference.MemberId, preference.Presentation, preference.Motivation));
     }
 
     private static async Task<IResult> CompleteOccurrenceAsync(
@@ -391,7 +411,10 @@ internal static class HouseholdEndpoints
             definition.DefaultResponsibleMemberId,
             definition.PreferredWeekday,
             definition.CanBeDeferred,
-            definition.IsActive);
+            definition.HasRotatingResponsibility,
+            definition.RequiresMultiplePeople,
+            definition.IsActive,
+            definition.Recurrence is { } recurrence ? RecurrenceRuleContract.From(recurrence) : null);
 
     private static TaskOccurrenceResponse ToResponse(TaskOccurrence occurrence)
         => new(

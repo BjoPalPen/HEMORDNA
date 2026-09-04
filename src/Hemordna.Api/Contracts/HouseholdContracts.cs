@@ -71,7 +71,8 @@ public sealed record CreateTaskRequest(
     DayOfWeek? PreferredWeekday = null,
     bool CanBeDeferred = true,
     bool HasRotatingResponsibility = false,
-    bool RequiresMultiplePeople = false);
+    bool RequiresMultiplePeople = false,
+    RecurrenceRuleContract? Recurrence = null);
 
 public sealed record TaskDefinitionResponse(
     Guid Id,
@@ -83,7 +84,37 @@ public sealed record TaskDefinitionResponse(
     Guid? DefaultResponsibleMemberId,
     DayOfWeek? PreferredWeekday,
     bool CanBeDeferred,
-    bool IsActive);
+    bool HasRotatingResponsibility,
+    bool RequiresMultiplePeople,
+    bool IsActive,
+    RecurrenceRuleContract? Recurrence);
+
+/// <summary>
+/// How a task repeats on its own. Mirrors <see cref="RecurrenceRule"/>'s own public shape -
+/// see it for what each combination means.
+/// </summary>
+public sealed record RecurrenceRuleContract(
+    RecurrenceFrequency Frequency,
+    int Interval,
+    DateOnly StartDate,
+    DayOfWeek? Weekday,
+    WeekOfMonth? MonthlyWeek)
+{
+    internal RecurrenceRule ToDomain() => this switch
+    {
+        { MonthlyWeek: { } which } => RecurrenceRule.MonthlyOnWeekday(StartDate, which, Weekday!.Value, Interval),
+        { Frequency: RecurrenceFrequency.Weekly } => RecurrenceRule.Weekly(StartDate, Weekday!.Value, Interval),
+        { Frequency: RecurrenceFrequency.Monthly } => RecurrenceRule.Monthly(StartDate, Interval),
+        _ => RecurrenceRule.Daily(StartDate, Interval)
+    };
+
+    internal static RecurrenceRuleContract From(RecurrenceRule rule)
+        => new(rule.Frequency, rule.Interval, rule.StartDate, rule.Weekday, rule.MonthlyWeek);
+}
+
+public sealed record SetPreferenceRequest(PresentationMode Presentation, MotivationLevel Motivation);
+
+public sealed record PreferenceResponse(Guid MemberId, PresentationMode Presentation, MotivationLevel Motivation);
 
 public sealed record ScheduleOccurrenceRequest(DateOnly? Date, Guid? AssignToMemberId);
 

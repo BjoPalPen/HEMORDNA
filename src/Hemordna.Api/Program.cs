@@ -3,8 +3,10 @@ using System.Text.Json.Serialization;
 using Hemordna.Api;
 using Hemordna.Api.Authentication;
 using Hemordna.Api.Endpoints;
+using Hemordna.Api.Realtime;
 using Hemordna.Application.Households;
 using Hemordna.Application.Planning;
+using Hemordna.Application.Realtime;
 using Hemordna.Application.Tasks;
 using Hemordna.Infrastructure;
 using Hemordna.Infrastructure.Persistence;
@@ -31,12 +33,18 @@ builder.Services.AddScoped<AddHouseholdMember>();
 builder.Services.AddScoped<AddArea>();
 builder.Services.AddScoped<SetMemberAvailability>();
 builder.Services.AddScoped<SetMemberWeeklyBudget>();
+builder.Services.AddScoped<SetMemberPreference>();
 builder.Services.AddScoped<CreateTaskDefinition>();
 builder.Services.AddScoped<ScheduleTaskOccurrence>();
 builder.Services.AddScoped<CompleteTaskOccurrence>();
 builder.Services.AddScoped<DeferTaskOccurrence>();
+builder.Services.AddScoped<EnsureOccurrencesGenerated>();
 builder.Services.AddScoped<GetDailyPlan>();
 builder.Services.AddSingleton<DailyPlanner>();
+
+// SignalR pushes changes to a household's other connected clients - see docs/ARCHITECTURE.md §5.
+builder.Services.AddSignalR();
+builder.Services.AddScoped<IHouseholdNotifier, SignalRHouseholdNotifier>();
 
 var jwtOptions = builder.Configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
 jwtOptions.Validate();
@@ -58,6 +66,22 @@ builder.Services
             ValidAudience = jwtOptions.Audience,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtOptions.SigningKey)),
             ClockSkew = TimeSpan.FromSeconds(30)
+        };
+
+        // A browser cannot set an Authorization header on the WebSocket handshake SignalR
+        // uses, so the token travels as a query string parameter on that one path instead.
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                if (context.Request.Path.StartsWithSegments("/hubs")
+                    && context.Request.Query.TryGetValue("access_token", out var accessToken))
+                {
+                    context.Token = accessToken;
+                }
+
+                return Task.CompletedTask;
+            }
         };
     });
 
@@ -109,5 +133,6 @@ app.MapHealthChecks("/health").AllowAnonymous();
 
 app.MapAuthEndpoints();
 app.MapHouseholdEndpoints();
+app.MapHub<HouseholdHub>("/hubs/household").RequireAuthorization();
 
 app.Run();
