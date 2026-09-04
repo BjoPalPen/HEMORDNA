@@ -100,6 +100,8 @@ public sealed record TaskOccurrenceResponse(
 
 public sealed record SetAvailabilityRequest(DateOnly Date, int AvailableMinutes);
 
+public sealed record DeferOccurrenceRequest(DateOnly Date);
+
 public sealed record AvailabilityResponse(Guid MemberId, DateOnly Date, int AvailableMinutes);
 
 /// <summary>One member's day, as "Min dag" renders it.</summary>
@@ -109,8 +111,16 @@ public sealed record DailyPlanResponse(
     int AvailableMinutes,
     int PlannedMinutes,
     int RemainingMinutes,
+    int CompletedMinutes,
     IReadOnlyList<PlannedTaskResponse> Items,
+    IReadOnlyList<CompletedTaskResponse> Completed,
     IReadOnlyList<UnplannedTaskResponse> Unplanned);
+
+public sealed record CompletedTaskResponse(
+    Guid OccurrenceId,
+    Guid TaskDefinitionId,
+    string Name,
+    int EstimatedMinutes);
 
 public sealed record PlannedTaskResponse(
     Guid OccurrenceId,

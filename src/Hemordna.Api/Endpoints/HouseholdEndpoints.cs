@@ -64,6 +64,15 @@ internal static class HouseholdEndpoints
             .Produces(StatusCodes.Status404NotFound)
             .ProducesValidationProblem();
 
+        scoped.MapPost("/occurrences/{occurrenceId:guid}/complete", CompleteOccurrenceAsync)
+            .Produces<TaskOccurrenceResponse>()
+            .Produces(StatusCodes.Status404NotFound);
+
+        scoped.MapPost("/occurrences/{occurrenceId:guid}/defer", DeferOccurrenceAsync)
+            .Produces<TaskOccurrenceResponse>()
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status409Conflict);
+
         scoped.MapGet("/members/{memberId:guid}/plan", GetPlanAsync)
             .WithName("GetDailyPlan")
             .Produces<DailyPlanResponse>()
@@ -264,6 +273,36 @@ internal static class HouseholdEndpoints
                 availability.MemberId, availability.Date, availability.AvailableMinutes));
     }
 
+    private static async Task<IResult> CompleteOccurrenceAsync(
+        Guid householdId,
+        Guid occurrenceId,
+        HttpContext httpContext,
+        CompleteTaskOccurrence complete,
+        CancellationToken cancellationToken)
+    {
+        // The caller completes it as themselves. The membership was resolved and verified by
+        // HouseholdAccessFilter, so it cannot name someone in another household.
+        var membership = httpContext.GetMembership();
+
+        var occurrence = await complete.HandleAsync(
+            householdId, occurrenceId, membership.MemberId, cancellationToken);
+
+        return occurrence is null ? Results.NotFound() : Results.Ok(ToResponse(occurrence));
+    }
+
+    private static async Task<IResult> DeferOccurrenceAsync(
+        Guid householdId,
+        Guid occurrenceId,
+        DeferOccurrenceRequest request,
+        DeferTaskOccurrence defer,
+        CancellationToken cancellationToken)
+    {
+        var occurrence = await defer.HandleAsync(
+            householdId, occurrenceId, request.Date, cancellationToken);
+
+        return occurrence is null ? Results.NotFound() : Results.Ok(ToResponse(occurrence));
+    }
+
     private static async Task<IResult> GetPlanAsync(
         Guid householdId,
         Guid memberId,
@@ -277,9 +316,9 @@ internal static class HouseholdEndpoints
         // reads a clock.
         var planDate = date ?? DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
 
-        var plan = await getDailyPlan.HandleAsync(householdId, memberId, planDate, cancellationToken);
+        var day = await getDailyPlan.HandleAsync(householdId, memberId, planDate, cancellationToken);
 
-        return plan is null ? Results.NotFound() : Results.Ok(ToResponse(plan));
+        return day is null ? Results.NotFound() : Results.Ok(ToResponse(day));
     }
 
     private static HouseholdResponse ToResponse(Household household)
@@ -324,13 +363,17 @@ internal static class HouseholdEndpoints
             occurrence.AssignedMemberId,
             occurrence.Status);
 
-    private static DailyPlanResponse ToResponse(DailyPlan plan)
-        => new(
+    private static DailyPlanResponse ToResponse(MemberDay day)
+    {
+        var plan = day.Plan;
+
+        return new DailyPlanResponse(
             plan.MemberId,
             plan.Date,
             plan.AvailableMinutes,
             plan.PlannedMinutes,
             plan.RemainingMinutes,
+            day.CompletedMinutes,
             [.. plan.Items.Select(item => new PlannedTaskResponse(
                 item.Candidate.Occurrence.Id,
                 item.Candidate.Occurrence.TaskDefinitionId,
@@ -338,6 +381,11 @@ internal static class HouseholdEndpoints
                 item.Candidate.EstimatedMinutes,
                 item.Candidate.Priority,
                 item.IsOverdue))],
+            [.. day.Completed.Select(done => new CompletedTaskResponse(
+                done.Occurrence.Id,
+                done.Occurrence.TaskDefinitionId,
+                done.TaskName,
+                done.EstimatedMinutes))],
             [.. plan.Unplanned.Select(task => new UnplannedTaskResponse(
                 task.Candidate.Occurrence.Id,
                 task.Candidate.Occurrence.TaskDefinitionId,
@@ -346,4 +394,5 @@ internal static class HouseholdEndpoints
                 task.Candidate.Priority,
                 task.Candidate.CanBeDeferred,
                 task.Reason))]);
+    }
 }
