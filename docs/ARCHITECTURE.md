@@ -34,9 +34,8 @@ docs/
 Alla projekt är `net10.0` med `Nullable` och `ImplicitUsings` påslaget.
 Solutionformatet är `.slnx` och ska inte konverteras till `.sln`.
 
-`Hemordna.Infrastructure`, `Hemordna.Api` och `Hemordna.Client` innehåller i skrivande stund
-fortfarande projektmall-kod (weatherforecast, Counter, Weather). Den ersätts när respektive
-lager byggs.
+Projektmall-koden (weatherforecast, Counter, Weather) är borttagen. `Hemordna.Client`
+innehåller ännu bara ett skal - "Min dag" byggs härnäst.
 
 ---
 
@@ -234,27 +233,24 @@ filtrerar på `Candidate.CanBeDeferred`.
 
 ---
 
-## 7. Persistence — `PROPOSED`
+## 7. Persistence — `IMPLEMENTED`
 
-Ingen persistence är byggd ännu. `Hemordna.Infrastructure` är tomt bortsett från
-projektfilen.
-
-Inriktning:
-
-- EF Core med Npgsql mot PostgreSQL. Dev-databas finns redan i
+- EF Core 10 med Npgsql-providern 10.0.3 mot PostgreSQL. Dev-databas i
   `.devcontainer/docker-compose.yml` (postgres:17-alpine), connection string via
   `ConnectionStrings__Hemordna`.
 - `HemordnaDbContext` i Infrastructure, mappning via `IEntityTypeConfiguration<T>` och Fluent
-  API. Inga EF-attribut i Domain.
+  API i `Persistence/Configurations/`. Inga EF-attribut i Domain.
 - `services.AddInfrastructure(configuration)` som DI-extension, så att Api inte känner till
   implementationsdetaljer.
-- Inga generiska repositories och ingen Unit of Work-wrapper ovanpå EF Core. Interfaces
-  införs där Application har en verklig boundary, och namnges efter vad applikationen behöver.
+- Inga generiska repositories och ingen Unit of Work-wrapper ovanpå EF Core.
+  `IHouseholdRepository` är namngivet efter de use cases det tjänar, och `AddAsync`
+  persisterar direkt. Ingen use case spänner ännu över mer än ett aggregat, så det finns
+  inget att commita separat. Det omprövas när en use case gör det.
 
-Domänmodellen är byggd för att kunna mappas utan ändringar: privata setters, privata
-konstruktorer och backing-fält för samlingar är alla saker EF Core hanterar.
+Domänmodellen mappades utan en enda ändring: privata setters, privata konstruktorer och
+backing-fält för samlingar hanterar EF Core som de är.
 
-Första migrationen skapas med:
+Migrationen skapas med:
 
 ```bash
 dotnet ef migrations add InitialCreate \
@@ -263,17 +259,24 @@ dotnet ef migrations add InitialCreate \
 ```
 
 Migrationen ska läsas innan den appliceras, och verifieras mot dev-databasen.
+`InitialCreate` är skapad och applicerad.
 
-`OPEN`: hur `WeeklyTimeBudget` ska mappas – owned entity med sju kolumner, eller en jsonb-
-kolumn. Sju kolumner är mer queryable, jsonb är enklare att utvidga. Beslutet fattas när
-`HemordnaDbContext` byggs och påverkar inte domänmodellen.
+### Beslut: `WeeklyTimeBudget` mappas som `integer[]`
+
+Ursprunglig inriktning var sju kolumner. Den föll på att value objectet lagrar minuterna i
+en privat array och medvetet inte exponerar någon property per veckodag – sju kolumner hade
+krävt sju publika properties som bara finns för ORM:ens skull, alltså att persistence
+dikterar domänen.
+
+I stället mappas det till en native PostgreSQL `integer[]`, ordnad söndag–lördag enligt
+`DayOfWeek`-värdena, via en `ValueConverter` som bara använder value objectets befintliga
+publika API. Kolumnen är fortfarande queryable via array-indexering, och domänmodellen
+behövde inte röras. Reversibelt via migration om verkliga queries visar att sju kolumner
+behövs.
 
 ---
 
-## 8. Första API-kontrakt och use cases — `PROPOSED`
-
-Inget av detta är byggt. `Hemordna.Api` innehåller fortfarande projektmallens
-`/weatherforecast`, som ska tas bort när de riktiga endpointsen läggs till.
+## 8. Första API-kontrakt och use cases — `IMPLEMENTED`
 
 ### Application
 
@@ -335,7 +338,6 @@ Integrationstester mot en verklig PostgreSQL införs när persistence byggs – 
 |---|---|
 | Identitets- och autentiseringslösning | Påverkar tenant isolation och API-kontrakt. Måste beslutas före första publika API |
 | Håndhävande av household-scoping: global query filter eller explicit per use case | Beror på auth-modellen |
-| Mappning av `WeeklyTimeBudget` (kolumner eller jsonb) | Beror på vilka queries som faktiskt behövs |
 | Vem eller vad som genererar `TaskOccurrence` (on demand vid planering eller ett schemalagt jobb) | Beror på recurrence-modellen |
 | Hur roterande ansvar ska räknas ut | Kräver `TaskAssignment` som egen entitet |
 | Offline-strategi bortom read-only cache | Utanför MVP; får inte låsas in i förväg |
