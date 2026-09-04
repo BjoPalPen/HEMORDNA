@@ -139,16 +139,47 @@ inte beslutas nu.
 
 ---
 
-## 4. Household som säkerhetsgräns — `IMPLEMENTED` (modell) / `OPEN` (håndhävande)
+## 4. Household som säkerhetsgräns — `IMPLEMENTED`
 
 Varje entitet som kan nås av en klient bär `HouseholdId`, även när den är nåbar via en
 förälder. `MemberAvailability` och `TaskOccurrence` har `HouseholdId` denormaliserat just för
 att varje query ska kunna household-scope:as direkt, utan join.
 
-Auth finns ännu inte. När den införs ska varje läsning och skrivning filtreras på
-medlemskap i hushållet. `OPEN`: val av identitetslösning, och om scoping ska hävdas i ett
-query-filter i `DbContext` eller explicit per use case. Beslutet ska fattas innan det första
-publika API:t går live – inte efteråt.
+### Autentisering
+
+Egen JWT-utgivare med ASP.NET Core Identity som användarlagring. Identity sköter
+lösenordshashning – Hemordna implementerar aldrig egen lösenordshantering.
+
+- `POST /api/auth/register` och `POST /api/auth/login` returnerar en bearer-token.
+- Signeringsnyckeln kommer från `Jwt__SigningKey` i miljön. Den har ingen default, och
+  API:t vägrar starta om den saknas eller är kortare än 32 byte. Ingen nyckel ligger i repot.
+- Login svarar likadant på okänd e-post som på fel lösenord, så endpointen inte kan användas
+  för att kartlägga vilka adresser som är registrerade.
+
+Token bär bara vem den anropande är. **Hushållstillhörighet ligger medvetet inte i en
+claim** – den skulle bli gammal i samma stund medlemskapet ändras. Den slås upp per anrop.
+
+### Håndhävande av scoping
+
+`HouseholdAccessFilter` är ett endpoint-filter på routegruppen
+`/api/households/{householdId}`. Det körs före varje handler, så ingen handler kan glömma
+kontrollen. Valet föll på ett filter framför ett globalt query-filter i `DbContext` eftersom
+gränsen då syns i routingen i stället för att vara osynlig magi i persistence-lagret.
+
+En anropare som frågar efter ett hushåll hen inte tillhör får **404, inte 403**: ett 403
+skulle bekräfta att hushållet existerar för någon som inte har rätt att veta det.
+
+### Medlemskapsmodell
+
+En användare är för närvarande medlem i **ett** hushåll. `HouseholdMember.UserId` är nullable
+– medlemmar som lagts till av någon annan, ett barn eller en partner som ännu inte
+registrerat sig, har ingen användare förrän de skaffar en. Ett unikt filtrerat index på
+`UserId` hindrar ett andra medlemskap från att skapas bakom applikationens rygg, och
+`LinkToUser` vägrar peka om en medlem till en annan användare eftersom det tyst skulle
+flytta hens historik.
+
+`PROPOSED`: flera hushåll per användare kräver en egen medlemskapstabell. Ändringen är
+additiv och går att göra utan att befintlig data blir fel.
 
 ---
 
@@ -280,24 +311,50 @@ behövs.
 
 ### Application
 
-Två use cases räcker för att stänga första vertikala snittet:
-
 | Use case | Ansvar |
 |---|---|
-| `CreateHousehold` | Skapar ett hushåll och persisterar det |
+| `CreateHousehold` | Skapar ett hushåll med den inloggade användaren som första medlem |
 | `GetHousehold` | Hämtar ett hushåll, eller inget om det saknas |
+| `AddHouseholdMember` | Lägger till en person med veckobudget |
+| `AddArea` | Lägger till ett område |
+| `CreateTaskDefinition` | Beskriver ett nytt arbete |
+| `ScheduleTaskOccurrence` | Lägger en uppgift på ett datum |
+| `SetMemberAvailability` | "Mindre tid idag" utan att veckan ändras |
+| `GetDailyPlan` | Löser tillgänglig tid, hämtar kandidater, kör `DailyPlanner` |
 
 Enkla use case-klasser, inte ett generiskt repository-system. Interfaces namnges efter vad
-applikationen faktiskt behöver (`IHouseholdRepository` eller motsvarande) och införs bara
-där Application har en verklig boundary mot Infrastructure.
+applikationen faktiskt behöver och införs bara där Application har en verklig boundary mot
+Infrastructure. `IPlanCandidateQuery` heter query, inte repository, eftersom den bara läser
+och returnerar planeringsmodeller i stället för aggregat.
 
 ### Endpoints
 
+Allt under `/api/households/{householdId}` kräver token och körs bakom
+`HouseholdAccessFilter`.
+
 | Metod | Väg | Svar |
 |---|---|---|
-| `GET` | `/health` | Verifierar att API-processen lever. PostgreSQL-check läggs till om det går utan onödig komplexitet |
-| `POST` | `/api/households` | `201 Created` med den skapade resursen |
-| `GET` | `/api/households/{id}` | `200` om hushållet finns, `404` om det saknas |
+| `GET` | `/health` | Processen och databasanslutningen. Anonym |
+| `POST` | `/api/auth/register` | `201` med bearer-token. Anonym |
+| `POST` | `/api/auth/login` | `200` med bearer-token, annars `401`. Anonym |
+| `GET` | `/api/me` | Den inloggades identitet och hushållstillhörighet |
+| `POST` | `/api/households` | `201` med den skapade resursen, `409` om användaren redan har ett hushåll |
+| `GET` | `/api/households/{householdId}` | `200`, annars `404` |
+| `POST` | `/api/households/{householdId}/members` | `201` med medlemmen |
+| `POST` | `/api/households/{householdId}/areas` | `201` med området |
+| `GET` | `/api/households/{householdId}/tasks` | `200` med hushållets uppgifter |
+| `POST` | `/api/households/{householdId}/tasks` | `201` med uppgiften |
+| `POST` | `/api/households/{householdId}/tasks/{taskId}/occurrences` | `201` med den schemalagda instansen |
+| `PUT` | `/api/households/{householdId}/members/{memberId}/availability` | `200` med dagens tidsbudget |
+| `GET` | `/api/households/{householdId}/members/{memberId}/plan?date=` | `200` med Min dag |
+
+Enum-värden serialiseras som namn, inte siffror: en klient som läser
+`"ExceedsRemainingTime"` behöver ingen uppslagstabell, och en ny enum-medlem kan inte tyst
+ändra vad ett värde betyder.
+
+Schemaläggning av occurrences är **explicit** tills vidare. Att generera dem ur en
+recurrence-regel, och om det sker on demand eller i ett schemalagt jobb, är fortfarande ett
+öppet beslut – en explicit endpoint håller det öppet i stället för att avgöra det av misstag.
 
 ```json
 POST /api/households
@@ -336,8 +393,6 @@ Integrationstester mot en verklig PostgreSQL införs när persistence byggs – 
 
 | Fråga | Varför den väntar |
 |---|---|
-| Identitets- och autentiseringslösning | Påverkar tenant isolation och API-kontrakt. Måste beslutas före första publika API |
-| Håndhävande av household-scoping: global query filter eller explicit per use case | Beror på auth-modellen |
 | Vem eller vad som genererar `TaskOccurrence` (on demand vid planering eller ett schemalagt jobb) | Beror på recurrence-modellen |
 | Hur roterande ansvar ska räknas ut | Kräver `TaskAssignment` som egen entitet |
 | Offline-strategi bortom read-only cache | Utanför MVP; får inte låsas in i förväg |
