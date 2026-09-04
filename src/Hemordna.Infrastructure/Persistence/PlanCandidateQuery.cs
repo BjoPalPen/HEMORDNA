@@ -1,3 +1,4 @@
+using System.Linq.Expressions;
 using Hemordna.Application.Planning;
 using Hemordna.Domain.Tasks;
 using Microsoft.EntityFrameworkCore;
@@ -10,20 +11,41 @@ internal sealed class PlanCandidateQuery : IPlanCandidateQuery
 
     public PlanCandidateQuery(HemordnaDbContext dbContext) => _dbContext = dbContext;
 
-    public async Task<IReadOnlyList<PlanCandidate>> FindOutstandingForMemberAsync(
+    public Task<IReadOnlyList<PlanCandidate>> FindOutstandingForMemberAsync(
         Guid householdId,
         Guid memberId,
         DateOnly onOrBefore,
         CancellationToken cancellationToken)
-    {
-        // Read-only, so no change tracking. The filter matches the
-        // (HouseholdId, ScheduledDate, Status) index.
-        var rows = await _dbContext.TaskOccurrences
-            .AsNoTracking()
-            .Where(occurrence => occurrence.HouseholdId == householdId
+        => QueryAsync(
+            occurrence => occurrence.HouseholdId == householdId
                 && occurrence.AssignedMemberId == memberId
                 && occurrence.Status == TaskOccurrenceStatus.Planned
-                && occurrence.ScheduledDate <= onOrBefore)
+                && occurrence.ScheduledDate <= onOrBefore,
+            cancellationToken);
+
+    public Task<IReadOnlyList<PlanCandidate>> FindCompletedForMemberOnAsync(
+        Guid householdId,
+        Guid memberId,
+        DateOnly date,
+        CancellationToken cancellationToken)
+        => QueryAsync(
+            occurrence => occurrence.HouseholdId == householdId
+                && occurrence.AssignedMemberId == memberId
+                && occurrence.Status == TaskOccurrenceStatus.Completed
+                && occurrence.ScheduledDate == date,
+            cancellationToken);
+
+    /// <summary>
+    /// Read-only, so no change tracking. Every filter leads with HouseholdId so it matches
+    /// the (HouseholdId, ScheduledDate, Status) index.
+    /// </summary>
+    private async Task<IReadOnlyList<PlanCandidate>> QueryAsync(
+        Expression<Func<TaskOccurrence, bool>> filter,
+        CancellationToken cancellationToken)
+    {
+        var rows = await _dbContext.TaskOccurrences
+            .AsNoTracking()
+            .Where(filter)
             .Join(
                 _dbContext.TaskDefinitions.AsNoTracking(),
                 occurrence => occurrence.TaskDefinitionId,
