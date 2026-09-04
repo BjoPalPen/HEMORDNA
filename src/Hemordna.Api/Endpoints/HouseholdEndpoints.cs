@@ -241,8 +241,16 @@ internal static class HouseholdEndpoints
         ScheduleTaskOccurrence schedule,
         CancellationToken cancellationToken)
     {
+        if (request.Date is null)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                [nameof(request.Date)] = ["Ett datum måste anges."]
+            });
+        }
+
         var occurrence = await schedule.HandleAsync(
-            householdId, taskId, request.Date, request.AssignToMemberId, cancellationToken);
+            householdId, taskId, request.Date.Value, request.AssignToMemberId, cancellationToken);
 
         return occurrence is null
             ? Results.NotFound()
@@ -256,6 +264,14 @@ internal static class HouseholdEndpoints
         SetMemberAvailability setAvailability,
         CancellationToken cancellationToken)
     {
+        if (request.Date is null)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                [nameof(request.Date)] = ["Ett datum måste anges."]
+            });
+        }
+
         if (request.AvailableMinutes < 0)
         {
             return Results.ValidationProblem(new Dictionary<string, string[]>
@@ -265,7 +281,7 @@ internal static class HouseholdEndpoints
         }
 
         var availability = await setAvailability.HandleAsync(
-            householdId, memberId, request.Date, request.AvailableMinutes, cancellationToken);
+            householdId, memberId, request.Date.Value, request.AvailableMinutes, cancellationToken);
 
         return availability is null
             ? Results.NotFound()
@@ -297,8 +313,16 @@ internal static class HouseholdEndpoints
         DeferTaskOccurrence defer,
         CancellationToken cancellationToken)
     {
+        if (request.Date is null)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                [nameof(request.Date)] = ["Ett datum att skjuta upp till måste anges."]
+            });
+        }
+
         var occurrence = await defer.HandleAsync(
-            householdId, occurrenceId, request.Date, cancellationToken);
+            householdId, occurrenceId, request.Date.Value, cancellationToken);
 
         return occurrence is null ? Results.NotFound() : Results.Ok(ToResponse(occurrence));
     }

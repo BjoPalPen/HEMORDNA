@@ -30,6 +30,9 @@ public sealed class HemordnaAppFixture : IAsyncLifetime
 
     public string ClientUrl => ClientBaseUrl;
 
+    /// <summary>The API the tests drive directly, without going through a browser.</summary>
+    public string ApiUrl => ApiBaseUrl;
+
     public async Task InitializeAsync()
     {
         await StartIfNeededAsync(
