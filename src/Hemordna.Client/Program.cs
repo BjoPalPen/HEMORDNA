@@ -12,6 +12,10 @@ builder.RootComponents.Add<HeadOutlet>("head::after");
 // pointed at a deployed API without a rebuild.
 var apiBaseAddress = builder.Configuration["ApiBaseAddress"] ?? "http://localhost:5199/";
 
+// TimeProvider rather than DateTime.Now, so "today" enters the UI through one
+// replaceable seam instead of being read from a static clock inside a component.
+builder.Services.AddSingleton(TimeProvider.System);
+
 builder.Services.AddScoped(_ => new HttpClient { BaseAddress = new Uri(apiBaseAddress) });
 builder.Services.AddScoped<TokenStore>();
 builder.Services.AddScoped<HemordnaApiClient>();
