@@ -1,0 +1,24 @@
+{
+  "name": "HEMORDNA",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "app",
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/anthropics/devcontainer-features/claude-code:1.0": {}
+  },
+  "forwardPorts": [5273, 5432],
+  "portsAttributes": {
+    "5273": { "label": "Hemordna API" },
+    "5432": { "label": "PostgreSQL" }
+  },
+  "postCreateCommand": "dotnet tool install --global dotnet-ef --version 10.0.11 || true",
+  "remoteEnv": {
+    "PATH": "${containerEnv:PATH}:/home/vscode/.dotnet/tools"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": ["ms-dotnettools.csdevkit"]
+    }
+  }
+}
