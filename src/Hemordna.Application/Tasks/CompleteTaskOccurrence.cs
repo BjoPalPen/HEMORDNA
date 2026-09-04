@@ -1,3 +1,4 @@
+using Hemordna.Application.Realtime;
 using Hemordna.Domain.Tasks;
 
 namespace Hemordna.Application.Tasks;
@@ -6,11 +7,14 @@ namespace Hemordna.Application.Tasks;
 public sealed class CompleteTaskOccurrence
 {
     private readonly ITaskOccurrenceRepository _occurrences;
+    private readonly IHouseholdNotifier _notifier;
     private readonly TimeProvider _timeProvider;
 
-    public CompleteTaskOccurrence(ITaskOccurrenceRepository occurrences, TimeProvider timeProvider)
+    public CompleteTaskOccurrence(
+        ITaskOccurrenceRepository occurrences, IHouseholdNotifier notifier, TimeProvider timeProvider)
     {
         _occurrences = occurrences;
+        _notifier = notifier;
         _timeProvider = timeProvider;
     }
 
@@ -35,6 +39,7 @@ public sealed class CompleteTaskOccurrence
         occurrence.Complete(completedByMemberId, _timeProvider.GetUtcNow());
 
         await _occurrences.UpdateAsync(occurrence, cancellationToken);
+        await _notifier.NotifyOccurrencesChangedAsync(householdId, cancellationToken);
 
         return occurrence;
     }

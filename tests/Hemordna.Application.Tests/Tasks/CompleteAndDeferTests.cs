@@ -1,5 +1,6 @@
 using Hemordna.Application.Tasks;
 using Hemordna.Application.Tests.Households;
+using Hemordna.Application.Tests.Realtime;
 using Hemordna.Domain.Common;
 using Hemordna.Domain.Tasks;
 
@@ -13,6 +14,7 @@ public class CompleteAndDeferTests
     private static readonly Guid AnnaId = Guid.NewGuid();
 
     private readonly InMemoryTaskOccurrenceRepository _occurrences = new();
+    private readonly SpyHouseholdNotifier _notifier = new();
 
     private TaskOccurrence Seed(bool canBeDeferred = true)
     {
@@ -23,9 +25,9 @@ public class CompleteAndDeferTests
         return occurrence;
     }
 
-    private CompleteTaskOccurrence Complete() => new(_occurrences, new FixedTimeProvider(Now));
+    private CompleteTaskOccurrence Complete() => new(_occurrences, _notifier, new FixedTimeProvider(Now));
 
-    private DeferTaskOccurrence Defer() => new(_occurrences);
+    private DeferTaskOccurrence Defer() => new(_occurrences, _notifier);
 
     [Fact]
     public async Task Completing_records_the_caller_and_the_injected_time()
@@ -39,6 +41,7 @@ public class CompleteAndDeferTests
         Assert.Equal(AnnaId, result.CompletedByMemberId);
         Assert.Equal(Now, result.CompletedAt);
         Assert.Equal(1, _occurrences.UpdateCallCount);
+        Assert.True(_notifier.WasNotified(HouseholdId));
     }
 
     [Fact]

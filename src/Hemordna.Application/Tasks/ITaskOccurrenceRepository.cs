@@ -13,4 +13,14 @@ public interface ITaskOccurrenceRepository
         CancellationToken cancellationToken);
 
     Task UpdateAsync(TaskOccurrence occurrence, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The <see cref="TaskOccurrence.OriginalScheduledDate"/> of the most recently scheduled
+    /// occurrence for this definition, or null if none exist yet. Used to find where automatic
+    /// recurrence generation left off, regardless of status or later deferrals.
+    /// </summary>
+    Task<DateOnly?> FindMostRecentOriginalDateAsync(
+        Guid householdId,
+        Guid taskDefinitionId,
+        CancellationToken cancellationToken);
 }
