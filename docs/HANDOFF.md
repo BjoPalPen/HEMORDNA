@@ -6,11 +6,11 @@ Lägesbild per 2026-09-04, för en ny session. Arbetssättet styrs av
 
 ## Läge
 
-`main` är aktuell. Inga öppna PR:er, inga omergade brancher. 119 tester gröna, build utan
-varningar. Domän, planering, EF Core mot PostgreSQL, Minimal APIs med JWT och
-`HouseholdAccessFilter`, samt Blazor WASM med `LoggaIn` och `MinDag` – installerbar som PWA,
-svensk kultur. Per-beslut-status finns i [ARCHITECTURE.md](ARCHITECTURE.md), märkt
-`IMPLEMENTED`, `PROPOSED` eller `OPEN`.
+`main` är på `2abb539`. Branchen `feat/tidsbudget-per-medlem` (ej pushad) lägger till ändring av
+en medlems veckobudget efter skapande (satt tidigare bara vid skapande) och en demo-seed i
+Development (`DevelopmentDataSeeder`, se README). 124 tester gröna, build utan varningar.
+Domän, planering, EF Core/PostgreSQL, JWT + `HouseholdAccessFilter`, Blazor WASM
+(`LoggaIn`/`MinDag`) – installerbar PWA, svensk kultur. Beslutsstatus: [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Köra
 
