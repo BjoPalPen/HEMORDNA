@@ -1,7 +1,15 @@
+using System.Globalization;
 using Hemordna.Client;
 using Hemordna.Client.Services;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
+
+// Hemordna is Swedish, so dates and numbers are Swedish no matter what the browser is set to.
+// Without this the app inherits the browser's culture and renders "Friday 4 September" to
+// anyone whose system is not Swedish.
+var swedish = new CultureInfo("sv-SE");
+CultureInfo.DefaultThreadCurrentCulture = swedish;
+CultureInfo.DefaultThreadCurrentUICulture = swedish;
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
 

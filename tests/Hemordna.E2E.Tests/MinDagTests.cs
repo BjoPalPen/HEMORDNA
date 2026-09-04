@@ -116,4 +116,29 @@ public class MinDagTests
 
         await page.WaitForURLAsync("**/logga-in", new() { Timeout = 15_000 });
     }
+
+    /// <summary>
+    /// Hemordna is a Swedish app, so the date is Swedish even to someone whose browser is not.
+    /// Blazor loads its globalization data based on the browser language, so an English browser
+    /// leaves the app without Swedish unless the app pins its own culture.
+    /// </summary>
+    [Fact]
+    public async Task The_date_is_Swedish_even_when_the_browser_is_English()
+    {
+        var page = await _app.NewPageAsync(locale: "en-US");
+
+        await SignUpAsync(page, "Sara");
+
+        // TextContent, not InnerText: the stylesheet capitalises the label, and what is under
+        // test is how the app formats the date, not how the design presents it.
+        var label = await page.Locator(".day-date").TextContentAsync();
+
+        string[] swedishWeekdays =
+            ["måndag", "tisdag", "onsdag", "torsdag", "fredag", "lördag", "söndag"];
+
+        Assert.True(
+            label is not null
+                && swedishWeekdays.Any(day => label.StartsWith(day, StringComparison.Ordinal)),
+            $"The date read '{label}', which is not a Swedish weekday.");
+    }
 }

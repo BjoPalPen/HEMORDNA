@@ -258,3 +258,35 @@ Ange aldrig PASS utan verklig körning.
 - Kod, identifierare, XML-doc och tekniska termer: engelska.
 - Domänbegrepp behåller sina engelska namn i koden (`Household`, `TaskDefinition`)
   även när dokumentationen är svensk.
+
+---
+
+## 17. Överlämning och arkivering
+
+`docs/HANDOFF.md` är lägesbilden en ny session läser för att slippa börja från noll. Den
+beskriver **nuläget** – inte historiken.
+
+Hårda krav:
+
+- **Max 50 rader.** Gränsen är själva poängen: dokumentet ska gå att läsa i sin helhet.
+  Länka till `README.md`, `ARCHITECTURE.md` och `PRODUCT.md` i stället för att upprepa dem.
+- Innehåller: var koden står, hur den körs, fällor som kostat tid, kända brister, öppna
+  frågor, nästa steg. Inget annat.
+- Ingen changelog. Vad som gjordes står i git-historiken och i PR-beskrivningar.
+
+### Arkiveringsschema
+
+Innan `HANDOFF.md` skrivs om, och alltid när den skulle passera 50 rader:
+
+1. Kopiera den nuvarande filen till `docs/handoff/ÅÅÅÅ-MM-DD.md`, daterad den dag
+   ögonblicksbilden gällde.
+2. Ge arkivfilen rubriken `# Arkiverad överlämning – ÅÅÅÅ-MM-DD` och en notis om att den är
+   en ögonblicksbild och att aktuellt läge finns i `../HANDOFF.md`.
+3. Skriv om `HANDOFF.md` till nuläget, inom 50 rader.
+
+Arkivfiler **ändras aldrig i efterhand**. De är bevarade ögonblicksbilder, och rättas inte
+när något visar sig ha varit fel – det som är fel hör hemma i den aktuella filen.
+
+Finns redan en arkivfil för dagens datum, skriv inte över den. Lägg till ett suffix
+(`2026-09-04-2.md`) eller uppdatera dagens `HANDOFF.md` i stället, beroende på om det verkligen
+rör sig om två skilda lägen.
