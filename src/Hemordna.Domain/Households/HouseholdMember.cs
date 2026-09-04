@@ -35,6 +35,12 @@ public sealed class HouseholdMember
 
     public bool IsActive { get; private set; }
 
+    /// <summary>
+    /// The authenticated user this member signs in as, when one is linked. Members added by
+    /// someone else - a child, a partner who has not signed up yet - have no user until they do.
+    /// </summary>
+    public Guid? UserId { get; private set; }
+
     public DateTimeOffset CreatedAt { get; private set; }
 
     internal static HouseholdMember Create(
@@ -62,6 +68,22 @@ public sealed class HouseholdMember
     {
         ArgumentNullException.ThrowIfNull(weeklyTimeBudget);
         WeeklyTimeBudget = weeklyTimeBudget;
+    }
+
+    /// <summary>
+    /// Links this member to an authenticated user. A member can only be linked once - moving
+    /// a member to a different user would silently transfer their history.
+    /// </summary>
+    public void LinkToUser(Guid userId)
+    {
+        Guard.AgainstEmpty(userId, nameof(userId));
+
+        if (UserId is { } existing && existing != userId)
+        {
+            throw new DomainException("This member is already linked to a different user.");
+        }
+
+        UserId = userId;
     }
 
     public void Deactivate() => IsActive = false;
