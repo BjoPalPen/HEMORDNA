@@ -47,6 +47,32 @@ docker compose up -d db
 Connection string för lokal utveckling ligger redan i
 `src/Hemordna.Api/appsettings.Development.json`, så den behöver inte sättas.
 
+#### Om port 5432 redan är upptagen
+
+Har du en PostgreSQL installerad på maskinen sedan tidigare vägrar containern starta:
+
+```text
+bind: address already in use
+```
+
+Välj då en annan värdport. Skapa en `.env` i repo-roten – den är gitignorerad:
+
+```text
+POSTGRES_HOST_PORT=5433
+```
+
+Databasen inuti containern lyssnar fortfarande på 5432; det är bara porten på din maskin som
+flyttas. Peka sedan API:t dit. Miljövariabeln slår värdet i `appsettings.Development.json`:
+
+```powershell
+$env:ConnectionStrings__Hemordna =
+    "Host=localhost;Port=5433;Database=hemordna;Username=hemordna;Password=hemordna_dev"
+```
+
+Variabeln gäller bara i den terminalen, så den måste sättas i varje fönster där du kör
+`dotnet ef` eller `dotnet run --project src/Hemordna.Api`. Vill du slippa det, ändra `Port=`
+i `appsettings.Development.json` i stället – men den filen är versionshanterad.
+
 ### JWT-signeringsnyckel
 
 API:t vägrar starta utan en signeringsnyckel, och den ska aldrig checkas in. Nyckeln måste
