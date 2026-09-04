@@ -8,11 +8,14 @@ public class GetHouseholdTests
 
     private readonly InMemoryHouseholdRepository _households = new();
 
+    private Task<Domain.Households.Household> CreateAsync()
+        => new CreateHousehold(_households, new FixedTimeProvider(Now))
+            .HandleAsync("Familjen", Guid.NewGuid(), "Anna", CancellationToken.None);
+
     [Fact]
     public async Task Returns_the_household_when_it_exists()
     {
-        var created = await new CreateHousehold(_households, new FixedTimeProvider(Now))
-            .HandleAsync("Familjen", CancellationToken.None);
+        var created = await CreateAsync();
 
         var found = await new GetHousehold(_households)
             .HandleAsync(created.Id, CancellationToken.None);

@@ -13,6 +13,8 @@ internal sealed class InMemoryHouseholdRepository : IHouseholdRepository
 
     internal int AddCallCount { get; private set; }
 
+    internal int UpdateCallCount { get; private set; }
+
     public Task AddAsync(Household household, CancellationToken cancellationToken)
     {
         AddCallCount++;
@@ -22,4 +24,11 @@ internal sealed class InMemoryHouseholdRepository : IHouseholdRepository
 
     public Task<Household?> FindByIdAsync(Guid householdId, CancellationToken cancellationToken)
         => Task.FromResult(_households.GetValueOrDefault(householdId));
+
+    public Task UpdateAsync(Household household, CancellationToken cancellationToken)
+    {
+        UpdateCallCount++;
+        _households[household.Id] = household;
+        return Task.CompletedTask;
+    }
 }

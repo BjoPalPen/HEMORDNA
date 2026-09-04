@@ -18,4 +18,7 @@ public interface IHouseholdRepository
 
     /// <summary>Loads a household with its members and areas, or <c>null</c> if it does not exist.</summary>
     Task<Household?> FindByIdAsync(Guid householdId, CancellationToken cancellationToken);
+
+    /// <summary>Persists changes made to a household loaded through this repository.</summary>
+    Task UpdateAsync(Household household, CancellationToken cancellationToken);
 }
