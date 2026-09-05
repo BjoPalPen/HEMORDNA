@@ -141,7 +141,16 @@ app.UseHttpsRedirection();
 // only needs a single upstream. In development the client runs as its own dev-server
 // process instead, so wwwroot is absent here and these are harmless no-ops.
 app.UseDefaultFiles();
-app.UseStaticFiles();
+
+// The default ContentTypeProvider has no mapping for .dat/.blat (ICU globalization data,
+// the Blazor lazy-loading manifest) or .wasm - ServeUnknownFileTypes defaults to false, so
+// StaticFileMiddleware 404s those files rather than guess a content type. That 404 fails the
+// WASM runtime's subresource-integrity check for the file and the whole app fails to boot.
+var staticFileTypeProvider = new Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider();
+staticFileTypeProvider.Mappings[".dat"] = "application/octet-stream";
+staticFileTypeProvider.Mappings[".blat"] = "application/octet-stream";
+staticFileTypeProvider.Mappings[".wasm"] = "application/wasm";
+app.UseStaticFiles(new StaticFileOptions { ContentTypeProvider = staticFileTypeProvider });
 
 if (allowedOrigins.Length > 0)
 {
