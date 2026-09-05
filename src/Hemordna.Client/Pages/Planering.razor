@@ -1,0 +1,75 @@
+@page "/planering"
+@inject HemordnaApiClient Api
+@inject HemordnaSession Session
+
+<PageTitle>Planering – Hemordna</PageTitle>
+
+@if (!Session.IsLoaded)
+{
+    <p class="muted">Hämtar...</p>
+}
+else if (!Session.IsSignedIn)
+{
+    <Redirect To="logga-in" />
+}
+else if (Session.NeedsHousehold)
+{
+    <SkapaHushall OnCreated="LoadAsync" />
+}
+else if (_member is null)
+{
+    <p class="muted">Hämtar din vecka...</p>
+}
+else
+{
+    <h1>Min tidsbudget</h1>
+    <p class="muted">Din normala tid per veckodag. Ändra den från "Min dag".</p>
+
+    <div class="card">
+        <div class="chart" role="img" aria-label="Minuter per veckodag">
+            @foreach (var day in Weekdays(_member))
+            {
+                <div class="chart-column">
+                    <div class="chart-bar" style="height: @(BarHeight(day.Minutes))px" title="@day.Minutes min"></div>
+                    <span class="chart-value muted small">@day.Minutes</span>
+                    <span class="chart-label muted small">@day.Label</span>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private HouseholdMemberResponse? _member;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Session.EnsureLoadedAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Session.Me is not { HouseholdId: { } householdId, MemberId: { } memberId })
+        {
+            return;
+        }
+
+        var household = await Api.GetHouseholdAsync(householdId);
+        _member = household?.Members.FirstOrDefault(m => m.Id == memberId);
+    }
+
+    private static IEnumerable<(string Label, int Minutes)> Weekdays(HouseholdMemberResponse member)
+    {
+        var budget = member.WeeklyTimeBudgetMinutes;
+        yield return ("Mån", budget.Monday);
+        yield return ("Tis", budget.Tuesday);
+        yield return ("Ons", budget.Wednesday);
+        yield return ("Tor", budget.Thursday);
+        yield return ("Fre", budget.Friday);
+        yield return ("Lör", budget.Saturday);
+        yield return ("Sön", budget.Sunday);
+    }
+
+    private static int BarHeight(int minutes) => Math.Clamp(minutes, 0, 180) + 4;
+}
