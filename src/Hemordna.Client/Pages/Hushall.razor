@@ -35,9 +35,22 @@ else
             <li class="list-item">
                 <span class="avatar" aria-hidden="true">@Initial(member.DisplayName)</span>
                 <span class="list-name">@member.DisplayName</span>
+                <select class="role-select" aria-label="@($"Roll för {member.DisplayName}")"
+                        value="@RoleValueFor(member)"
+                        @onchange="e => SetMemberRoleAsync(member.Id, e.Value)">
+                    <option value="" disabled>Anpassad tid</option>
+                    @foreach (var preset in HouseholdRolePresets.All)
+                    {
+                        <option value="@preset.Role">@preset.Label</option>
+                    }
+                </select>
             </li>
         }
     </ul>
+    <p class="muted small">
+        Rollen styr hur mycket tid var och en normalt får för hushållssysslor - inget alla
+        medlemmar behöver tänka på själva.
+    </p>
 
     <div class="card">
         <h2>Veckans plan</h2>
@@ -233,6 +246,27 @@ else
     }
 
     private int TaskCountFor(Guid areaId) => _tasks.Count(t => t.AreaId == areaId && t.IsActive);
+
+    private static string RoleValueFor(HouseholdMemberResponse member)
+        => HouseholdRolePresets.Match(member.WeeklyTimeBudgetMinutes)?.ToString() ?? string.Empty;
+
+    private async Task SetMemberRoleAsync(Guid memberId, object? value)
+    {
+        if (Session.Me is not { HouseholdId: { } householdId })
+        {
+            return;
+        }
+
+        if (value is not string text || !Enum.TryParse<HouseholdRole>(text, out var role))
+        {
+            return;
+        }
+
+        if (await Api.SetWeeklyBudgetAsync(householdId, memberId, HouseholdRolePresets.BudgetFor(role)))
+        {
+            await LoadAsync();
+        }
+    }
 
     private string DotClass(Guid memberId, DateOnly date) => _weeklyStatus.GetValueOrDefault((memberId, date)) switch
     {

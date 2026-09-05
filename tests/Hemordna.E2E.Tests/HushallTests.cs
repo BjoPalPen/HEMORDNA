@@ -56,6 +56,38 @@ public class HushallTests
     }
 
     [Fact]
+    public async Task Changing_a_members_role_from_the_household_page_updates_their_week()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Cecilia");
+
+        await page.GotoAsync("/hushall");
+        // Role management lives on the household page, not on Min dag - that page is not
+        // something every member opens daily, unlike their own day. See DESIGN.md §6b.
+        var row = page.Locator(".list-item", new() { HasText = "Cecilia" });
+        await row.GetByLabel("Roll för Cecilia")
+            .SelectOptionAsync(new SelectOptionValue { Label = "Pensionär / hemma dagtid" });
+
+        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
+        http.DefaultRequestHeaders.Authorization = new("Bearer", token);
+        var me = await (await http.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
+        var household = await (await http.GetAsync($"/api/households/{me.GetProperty("householdId").GetGuid()}"))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        var cecilia = household.GetProperty("members").EnumerateArray()
+            .Single(m => m.GetProperty("displayName").GetString() == "Cecilia");
+
+        var budget = cecilia.GetProperty("weeklyTimeBudgetMinutes");
+        Assert.Equal(60, budget.GetProperty("monday").GetInt32());
+        Assert.Equal(60, budget.GetProperty("saturday").GetInt32());
+
+        // The dropdown reflects the saved role back, not just accepts the click.
+        await page.ReloadAsync();
+        row = page.Locator(".list-item", new() { HasText = "Cecilia" });
+        await Assertions.Expect(row.GetByLabel("Roll för Cecilia")).ToHaveValueAsync("Retired");
+    }
+
+    [Fact]
     public async Task Shows_an_areas_task_count()
     {
         var page = await _app.NewPageAsync();

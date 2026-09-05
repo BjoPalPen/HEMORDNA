@@ -162,78 +162,14 @@ else
                 </div>
                 <p class="muted small">Din vanliga vecka påverkas inte.</p>
             </div>
-
-            <div class="card">
-                <h2>Din vanliga vecka</h2>
-                <p class="muted small">
-                    Vilken roll stämmer bäst med din vardag? Vi räknar ut en rimlig tid utifrån den.
-                </p>
-                <div class="level-picker">
-                    @foreach (var preset in HouseholdRolePresets.All)
-                    {
-                        <button type="button" class="btn btn-secondary" disabled="@_roleBusy"
-                                @onclick="() => SetRoleAsync(preset.Role)">
-                            @preset.Label
-                        </button>
-                    }
-                </div>
-
-                <details class="more-options">
-                    <summary>Anpassa varje dag för sig</summary>
-
-                    @if (_weekBudget is null)
-                    {
-                        <button type="button" class="btn btn-secondary btn-block" @onclick="ToggleWeekEditorAsync">
-                            Ändra din vanliga vecka
-                        </button>
-                    }
-                    else
-                    {
-                        <div class="week-editor">
-                            @foreach (var day in Weekdays)
-                            {
-                                <div class="field field-day">
-                                    <span>@day.Label</span>
-                                    <div class="level-picker level-picker-compact">
-                                        @foreach (var level in TimeLevel.All)
-                                        {
-                                            <button type="button"
-                                                    class="@(_weekBudget[day.Value] == level.Minutes ? "btn btn-primary" : "btn btn-secondary")"
-                                                    @onclick="() => _weekBudget[day.Value] = level.Minutes">
-                                                @level.Label
-                                            </button>
-                                        }
-                                    </div>
-                                </div>
-                            }
-                            <button type="button" class="btn btn-primary btn-block" @onclick="SaveWeekBudgetAsync">
-                                Spara vanlig vecka
-                            </button>
-                        </div>
-                    }
-                </details>
-            </div>
         </aside>
     </div>
 }
 
 @code {
-    private static readonly (DayOfWeek Value, string Label)[] Weekdays =
-    [
-        (DayOfWeek.Monday, "Mån"),
-        (DayOfWeek.Tuesday, "Tis"),
-        (DayOfWeek.Wednesday, "Ons"),
-        (DayOfWeek.Thursday, "Tors"),
-        (DayOfWeek.Friday, "Fre"),
-        (DayOfWeek.Saturday, "Lör"),
-        (DayOfWeek.Sunday, "Sön")
-    ];
-
     private DailyPlanResponse? _day;
     private Guid? _busyOccurrence;
     private Guid? _expandedOccurrence;
-    private Dictionary<DayOfWeek, int>? _weekBudget;
-    private bool _roleBusy;
 
     // The date is resolved from an injected clock here at the edge; nothing below reads one.
     // TimeProvider rather than DateTime.Now so the page can be rendered at a fixed date.
@@ -369,78 +305,4 @@ else
         }
     }
 
-    private async Task SetRoleAsync(HouseholdRole role)
-    {
-        if (Session.Me is not { HouseholdId: { } householdId, MemberId: { } memberId })
-        {
-            return;
-        }
-
-        _roleBusy = true;
-
-        try
-        {
-            if (await Api.SetWeeklyBudgetAsync(householdId, memberId, HouseholdRolePresets.BudgetFor(role)))
-            {
-                // The day-by-day editor, if open, now shows stale values - close it.
-                _weekBudget = null;
-                await LoadDayAsync();
-            }
-        }
-        finally
-        {
-            _roleBusy = false;
-        }
-    }
-
-    private async Task ToggleWeekEditorAsync()
-    {
-        if (Session.Me is not { HouseholdId: { } householdId, MemberId: { } memberId })
-        {
-            return;
-        }
-
-        var household = await Api.GetHouseholdAsync(householdId);
-        var member = household?.Members.FirstOrDefault(m => m.Id == memberId);
-
-        if (member is null)
-        {
-            return;
-        }
-
-        var budget = member.WeeklyTimeBudgetMinutes;
-        _weekBudget = new Dictionary<DayOfWeek, int>
-        {
-            [DayOfWeek.Monday] = TimeLevel.ClosestMinutes(budget.Monday),
-            [DayOfWeek.Tuesday] = TimeLevel.ClosestMinutes(budget.Tuesday),
-            [DayOfWeek.Wednesday] = TimeLevel.ClosestMinutes(budget.Wednesday),
-            [DayOfWeek.Thursday] = TimeLevel.ClosestMinutes(budget.Thursday),
-            [DayOfWeek.Friday] = TimeLevel.ClosestMinutes(budget.Friday),
-            [DayOfWeek.Saturday] = TimeLevel.ClosestMinutes(budget.Saturday),
-            [DayOfWeek.Sunday] = TimeLevel.ClosestMinutes(budget.Sunday)
-        };
-    }
-
-    private async Task SaveWeekBudgetAsync()
-    {
-        if (Session.Me is not { HouseholdId: { } householdId, MemberId: { } memberId } || _weekBudget is null)
-        {
-            return;
-        }
-
-        var budget = new WeeklyTimeBudgetContract(
-            _weekBudget[DayOfWeek.Monday],
-            _weekBudget[DayOfWeek.Tuesday],
-            _weekBudget[DayOfWeek.Wednesday],
-            _weekBudget[DayOfWeek.Thursday],
-            _weekBudget[DayOfWeek.Friday],
-            _weekBudget[DayOfWeek.Saturday],
-            _weekBudget[DayOfWeek.Sunday]);
-
-        if (await Api.SetWeeklyBudgetAsync(householdId, memberId, budget))
-        {
-            _weekBudget = null;
-            await LoadDayAsync();
-        }
-    }
 }

@@ -1,6 +1,3 @@
-using System.Net.Http.Json;
-using System.Text.Json;
-using System.Text.RegularExpressions;
 using Microsoft.Playwright;
 
 namespace Hemordna.E2E.Tests;
@@ -102,62 +99,6 @@ public class MinDagTests
         await page.GotoAsync("/");
 
         await page.WaitForURLAsync("**/logga-in", new() { Timeout = 15_000 });
-    }
-
-    [Fact]
-    public async Task Choosing_a_role_sets_a_whole_week_without_a_single_daily_choice()
-    {
-        var page = await _app.NewPageAsync();
-        await SignUpAsync(page, "Kristina");
-
-        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
-
-        await page.GetByRole(AriaRole.Heading, new() { Name = "Din vanliga vecka" }).WaitForAsync();
-        await page.Locator(".card", new() { HasText = "Din vanliga vecka" })
-            .GetByRole(AriaRole.Button, new() { Name = "Pensionär / hemma dagtid" }).ClickAsync();
-
-        // Nothing on the page shows a number - verify the inferred week against the API.
-        using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
-        http.DefaultRequestHeaders.Authorization = new("Bearer", token);
-        var me = await (await http.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
-        var household = await (await http.GetAsync($"/api/households/{me.GetProperty("householdId").GetGuid()}"))
-            .Content.ReadFromJsonAsync<JsonElement>();
-        var kristina = household.GetProperty("members").EnumerateArray()
-            .Single(m => m.GetProperty("displayName").GetString() == "Kristina");
-
-        var budget = kristina.GetProperty("weeklyTimeBudgetMinutes");
-        Assert.Equal(60, budget.GetProperty("monday").GetInt32());
-        Assert.Equal(60, budget.GetProperty("saturday").GetInt32());
-    }
-
-    [Fact]
-    public async Task Changing_the_normal_week_persists_across_a_reload()
-    {
-        var page = await _app.NewPageAsync();
-
-        await SignUpAsync(page, "Cecilia");
-
-        // The day-by-day editor is an advanced fallback for weeks a role does not fit - see
-        // Choosing_a_role_sets_a_whole_week_without_a_single_daily_choice for the primary flow.
-        await page.GetByText("Anpassa varje dag för sig").ClickAsync();
-        await page.GetByRole(AriaRole.Button, new() { Name = "Ändra din vanliga vecka" }).ClickAsync();
-        // No number field: a qualitative level picker per day - see Support.TimeLevel.
-        await page.Locator(".field-day", new() { HasText = "Mån" })
-            .GetByRole(AriaRole.Button, new() { Name = "Gott om tid" }).ClickAsync();
-        await page.GetByRole(AriaRole.Button, new() { Name = "Spara vanlig vecka" }).ClickAsync();
-
-        // The editor closes on save, going back to the button that opens it.
-        await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Ändra din vanliga vecka" }))
-            .ToBeVisibleAsync();
-
-        await page.ReloadAsync();
-        await page.GetByText("Anpassa varje dag för sig").ClickAsync();
-        await page.GetByRole(AriaRole.Button, new() { Name = "Ändra din vanliga vecka" }).ClickAsync();
-
-        // The chosen level comes back highlighted, without ever showing a minute count.
-        await Assertions.Expect(page.Locator(".field-day", new() { HasText = "Mån" })
-            .GetByRole(AriaRole.Button, new() { Name = "Gott om tid" }))
-            .ToHaveClassAsync(new Regex("btn-primary"));
     }
 
     /// <summary>

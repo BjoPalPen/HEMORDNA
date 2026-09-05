@@ -11,18 +11,17 @@ Lägesbild per 2026-09-05, för en ny session. Arbetssättet styrs av
 ansvar, `MemberPreference`, riktig realtidssynk via SignalR - se
 [ARCHITECTURE.md](ARCHITECTURE.md) §3/§5.
 
-**Tid är helt dold i gränssnittet** (produktfeedback: talvisning skapar stress). Domänen
-räknar fortfarande i minuter internt; klienten mappar till fyra kvalitativa lägen
-(`Support.TimeLevel`) och visar aldrig en siffra - se DESIGN.md §6a.
+**Tid är helt dold i gränssnittet**, satt via tre roller i stället för minuter eller dagliga
+val - `Support.HouseholdRolePresets` (Vuxen heltid/Barn-ungdom/Pensionär), se DESIGN.md
+§6a/§6b. `Support.RoomTemplates` ger en roterande veckouppgiftslista per rumstyp på Områden.
+Båda rena klientfunktioner ovanpå befintliga API-anrop.
 
-**Ännu färre val vid start** (uppföljande feedback: fyra lägen per veckodag var för mycket).
-`Support.HouseholdRolePresets` ger tre roller (Vuxen heltid/Barn-ungdom/Pensionär) som i ett
-klick sätter hela veckans budget, vid "Lägg till medlem" och i Min dags "Din vanliga vecka";
-dag-för-dag-redigeringen ligger kvar bakom "Anpassa varje dag för sig". `Support.RoomTemplates`
-ger en färdig, roterande veckouppgiftslista när ett rum namnges efter typ (Litet wc/Badrum/
-Kök/Sovrum/Vardagsrum/Hall) på Områden - se DESIGN.md §6b. Båda rena klientfunktioner ovanpå
-befintliga API-anrop; ingen domän- eller API-ändring.
-176 tester gröna (Domain 66, Application 78, E2E 32 - alla mot en riktig webbläsare).
+**Roll flyttad från Min dag till Hushållsöversikten** (feedback: att välja/ändra roll är
+"tid som ett val", inte alla medlemmar behöver se det dagligen). Min dag har bara kvar
+**Snabbval**. Varje medlem i hushållslistan har en egen rollväljare
+(`RoleValueFor`/`SetMemberRoleAsync`, `Hushall.razor`; `HouseholdRolePresets.Match` visar
+"Anpassad tid" annars). Dag-för-dag-redigeringen är borttagen helt.
+175 tester gröna (Domain 66, Application 78, E2E 31).
 
 ## Köra
 
@@ -37,8 +36,7 @@ kan slå upp `::1` först på denna maskin. Windows brandvägg hade Block-regler
 
 ## Kända brister
 
-- PWA:n är verifierad i publiceringskedjan, inte i en riktig browser.
-- Ikoner är text/symboler, inte den riktiga ikonuppsättningen från mockupen.
+PWA:n är overifierad i en riktig browser; ikoner är text/symboler, inte mockupens.
 
 **EF Core-fälla:** `OrderBy` på en redan konstruerad `record` i samma queryable-kedja kan ge
 `InvalidOperationException` vid körning. Sortera som anonym typ, mappa i minnet. Se
@@ -46,7 +44,7 @@ kan slå upp `::1` först på denna maskin. Windows brandvägg hade Block-regler
 
 ## Öppna frågor och nästa steg
 
-Rumsmallarna täcker rumstyp, inte våningsantal (ursprunglig produktidé nämnde "sovrum per
-våning") - vänta på användarens utvärdering innan det byggs vidare.
+Rumsmallarna täcker rumstyp, inte våningsantal (ursprunglig idé: "sovrum per våning") - vänta
+på användarens utvärdering innan det byggs vidare.
 
 **Beslut, inte öppen fråga:** en användare tillhör exakt ett hushåll (ARCHITECTURE.md §4).

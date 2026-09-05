@@ -40,4 +40,18 @@ public static class HouseholdRolePresets
 
         return new WeeklyTimeBudgetContract(weekday, weekday, weekday, weekday, weekday, weekend, weekend);
     }
+
+    /// <summary>The role a stored budget came from, or <c>null</c> when it was set by hand.</summary>
+    public static HouseholdRole? Match(WeeklyTimeBudgetContract budget)
+    {
+        foreach (var (role, _) in All)
+        {
+            if (BudgetFor(role) == budget)
+            {
+                return role;
+            }
+        }
+
+        return null;
+    }
 }

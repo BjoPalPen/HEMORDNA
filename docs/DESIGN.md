@@ -105,9 +105,10 @@ Här är dina uppgifter för idag. En sak i taget räcker.
 Varje rad: kryssruta, namn, områdeschip, expandering. Ingen tid visas – varken per uppgift
 eller som summa. Tid hanteras i bakgrunden (se §6a); användaren ser bara namn och bock.
 Sidopanel (dator): uppmuntranskort och **Snabbval** – ett kvalitativt lägesval (Ingen/Lite/
-Lagom/Gott om tid) för dagens tillfälliga avvikelse, och **Din vanliga vecka**: en rollknapp
-(se §6b) sätter hela veckan i ett klick, med dag-för-dag-redigeraren undangömd bakom
-"Anpassa varje dag för sig" för den som verkligen behöver avvika från rollen.
+Lagom/Gott om tid) för dagens tillfälliga avvikelse. Det är den enda tidsrelaterade
+inställningen på Min dag; den normala veckobudgeten sätts inte här (se Hushållsöversikt och
+§6b) – Min dag är sidan alla öppnar varje dag, och ska inte kräva att man tar ställning till
+sin egen eller andras roll varje gång.
 
 ### Uppgiftsdetalj
 
@@ -124,10 +125,13 @@ samma fyra lägesknappar som Min dag för att ändra just dagens avvikelse.
 
 ### Hushållsöversikt
 
-Medlemsavatarer (namn, ingen `använd/budget`-siffra), veckans plan som prickmatris per
-medlem och dag, områden med antal uppgifter, senaste händelser.
+Medlemsavatarer (namn, ingen `använd/budget`-siffra) med en rollväljare per medlem (se §6b) -
+en roll sätter hela veckans budget i ett val, utan siffror. Vidare: veckans plan som
+prickmatris per medlem och dag, områden med antal uppgifter, senaste händelser.
 
-Detta är den enda vyn som visar hela hushållet, och den är aldrig startskärm.
+Detta är den enda vyn som visar hela hushållet, och den är aldrig startskärm - därför är den
+också platsen för roll-/tidsinställningar som inte alla medlemmar behöver se eller röra vid,
+till skillnad från Min dag som alla öppnar varje dag.
 
 ### Områden
 
@@ -153,9 +157,15 @@ ett internt planeringsverktyg, inte något användaren ska behöva förhålla si
 Även fyra kvalitativa lägen per veckodag var för många beslut på en gång (produktfeedback).
 `Hemordna.Client.Support.HouseholdRolePresets` erbjuder tre roller istället – **Vuxen, jobbar
 heltid**, **Barn eller ungdom**, **Pensionär / hemma dagtid** – och räknar ut en rimlig
-vardag/helg-fördelning åt medlemmen i ett enda val, både vid "Lägg till medlem" och i "Din
-vanliga vecka". Dag-för-dag-redigeringen finns kvar som ett undangömt avancerat alternativ
-för den som inte passar någon roll.
+vardag/helg-fördelning åt medlemmen i ett enda val.
+
+Rollvalet sätts vid "Lägg till medlem" och kan ändras därefter från en liten rollväljare per
+medlem på Hushållsöversikten - inte på Min dag. Uppföljande feedback: att visa och kunna ändra
+en roll är i sig "tid som ett val", och det behöver inte alla medlemmar se eller ta ställning
+till varje gång de öppnar appen. Hushållsöversikten är redan en sida ingen är tvungen att
+besöka dagligen, till skillnad från Min dag, så den är rätt plats för den här typen av
+inställning. `HouseholdRolePresets.Match` känner igen om en medlems sparade budget kommer
+från en roll eller är satt för hand (då visas "Anpassad tid" i väljaren i stället).
 
 På samma sätt genererar `RoomTemplates` en färdig checklista av vanliga städuppgifter när
 någon namnger vilken typ av rum de lägger till (t.ex. "Litet wc" ger handfat, toalettstol,
