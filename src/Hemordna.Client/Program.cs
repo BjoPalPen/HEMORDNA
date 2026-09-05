@@ -16,9 +16,16 @@ var builder = WebAssemblyHostBuilder.CreateDefault(args);
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
-// The API lives on its own origin. The address comes from configuration so the client can be
-// pointed at a deployed API without a rebuild.
-var apiBaseAddress = builder.Configuration["ApiBaseAddress"] ?? "http://localhost:5199/";
+// In local dev the API lives on its own origin (its own dotnet-run process/port), so
+// appsettings.json names it explicitly - overridden per machine by the gitignored
+// appsettings.Development.json for LAN testing. In production the API is served from the
+// same origin as this client (see Hemordna.Api's UseStaticFiles/MapFallbackToFile), so
+// appsettings.Production.json blanks the setting and this falls back to the page's own
+// origin instead - never a value hardcoded for someone else's machine.
+var configuredApiBaseAddress = builder.Configuration["ApiBaseAddress"];
+var apiBaseAddress = string.IsNullOrWhiteSpace(configuredApiBaseAddress)
+    ? builder.HostEnvironment.BaseAddress
+    : configuredApiBaseAddress;
 
 // TimeProvider rather than DateTime.Now, so "today" enters the UI through one
 // replaceable seam instead of being read from a static clock inside a component.
