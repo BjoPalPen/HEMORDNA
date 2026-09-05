@@ -236,6 +236,28 @@ public sealed class HemordnaApiClient
         return response.IsSuccessStatusCode;
     }
 
+    public async Task<PreferenceResponse?> GetPreferenceAsync(
+        Guid householdId,
+        Guid memberId,
+        CancellationToken cancellationToken = default)
+        => await GetAsync<PreferenceResponse>(
+            $"api/households/{householdId}/members/{memberId}/preferences", cancellationToken);
+
+    public async Task<bool> SetPreferenceAsync(
+        Guid householdId,
+        Guid memberId,
+        string presentation,
+        string motivation,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Put, $"api/households/{householdId}/members/{memberId}/preferences", cancellationToken);
+        request.Content = JsonContent.Create(new { presentation, motivation });
+
+        var response = await _http.SendAsync(request, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
     private async Task<T?> GetAsync<T>(string path, CancellationToken cancellationToken)
     {
         var request = await AuthorizedAsync(HttpMethod.Get, path, cancellationToken);

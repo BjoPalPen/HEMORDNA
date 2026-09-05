@@ -72,6 +72,8 @@ public sealed record WeeklyTimeBudgetContract(
     int Saturday,
     int Sunday);
 
+public sealed record PreferenceResponse(Guid MemberId, string Presentation, string Motivation);
+
 public sealed record AddAreaRequest(string Name);
 
 public sealed record AddMemberRequest(string DisplayName, WeeklyTimeBudgetContract? WeeklyTimeBudgetMinutes);

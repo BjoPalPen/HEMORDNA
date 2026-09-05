@@ -34,6 +34,7 @@ builder.Services.AddScoped<AddArea>();
 builder.Services.AddScoped<SetMemberAvailability>();
 builder.Services.AddScoped<SetMemberWeeklyBudget>();
 builder.Services.AddScoped<SetMemberPreference>();
+builder.Services.AddScoped<GetMemberPreference>();
 builder.Services.AddScoped<CreateTaskDefinition>();
 builder.Services.AddScoped<ScheduleTaskOccurrence>();
 builder.Services.AddScoped<CompleteTaskOccurrence>();

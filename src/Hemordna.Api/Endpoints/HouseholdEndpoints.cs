@@ -69,6 +69,10 @@ internal static class HouseholdEndpoints
             .Produces(StatusCodes.Status404NotFound)
             .ProducesValidationProblem();
 
+        scoped.MapGet("/members/{memberId:guid}/preferences", GetPreferenceAsync)
+            .Produces<PreferenceResponse>()
+            .Produces(StatusCodes.Status404NotFound);
+
         scoped.MapPut("/members/{memberId:guid}/preferences", SetPreferenceAsync)
             .Produces<PreferenceResponse>()
             .Produces(StatusCodes.Status404NotFound);
@@ -310,6 +314,19 @@ internal static class HouseholdEndpoints
             householdId, memberId, request.ToDomain(), cancellationToken);
 
         return member is null ? Results.NotFound() : Results.Ok(ToResponse(member));
+    }
+
+    private static async Task<IResult> GetPreferenceAsync(
+        Guid householdId,
+        Guid memberId,
+        GetMemberPreference getPreference,
+        CancellationToken cancellationToken)
+    {
+        var preference = await getPreference.HandleAsync(householdId, memberId, cancellationToken);
+
+        return preference is null
+            ? Results.NotFound()
+            : Results.Ok(new PreferenceResponse(preference.MemberId, preference.Presentation, preference.Motivation));
     }
 
     private static async Task<IResult> SetPreferenceAsync(
