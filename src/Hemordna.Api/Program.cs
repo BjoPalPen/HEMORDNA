@@ -11,6 +11,7 @@ using Hemordna.Application.Tasks;
 using Hemordna.Infrastructure;
 using Hemordna.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -117,6 +118,15 @@ if (app.Environment.IsDevelopment())
     await DevelopmentDataSeeder.SeedAsync(app.Services);
 }
 
+// Off by default - the runtime image has no dotnet-ef CLI, so this is how migrations reach
+// a deployed database instead. Opt in per environment (RUN_MIGRATIONS_ON_STARTUP=true) rather
+// than always-on, so a deploy never applies a migration by surprise.
+if (builder.Configuration.GetValue<bool>("RunMigrationsOnStartup"))
+{
+    using var migrationScope = app.Services.CreateScope();
+    await migrationScope.ServiceProvider.GetRequiredService<HemordnaDbContext>().Database.MigrateAsync();
+}
+
 app.UseExceptionHandler();
 
 if (app.Environment.IsDevelopment())
@@ -125,6 +135,13 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+// In production the published Blazor client's wwwroot is copied into this project's own
+// wwwroot (see Dockerfile), so one container serves both the API and the SPA - Caddy then
+// only needs a single upstream. In development the client runs as its own dev-server
+// process instead, so wwwroot is absent here and these are harmless no-ops.
+app.UseDefaultFiles();
+app.UseStaticFiles();
 
 if (allowedOrigins.Length > 0)
 {
@@ -139,5 +156,9 @@ app.MapHealthChecks("/health").AllowAnonymous();
 app.MapAuthEndpoints();
 app.MapHouseholdEndpoints();
 app.MapHub<HouseholdHub>("/hubs/household").RequireAuthorization();
+
+// SPA fallback for the Blazor client - see the UseStaticFiles comment above. Registered
+// last so it never shadows an API route; only unmatched GET requests fall through to it.
+app.MapFallbackToFile("index.html");
 
 app.Run();
