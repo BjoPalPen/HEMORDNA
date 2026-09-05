@@ -2,14 +2,20 @@
 # BowlingPlatforms bas+prod-overlay-mönster) eftersom docker-compose.yml här bara är en
 # lokal dev-databas utan api-tjänst att bygga vidare på.
 #
-# api ligger på BÅDA nätverken: det egna (för att nå postgres) och det delade, externa
+# hemordna-api ligger på BÅDA nätverken: det egna (för att nå postgres) och det delade, externa
 # bowling-edge-nätet (så den redan körande, delade Caddy-containern kan nå den vid namn) -
 # samma mönster som BowlingPlatforms testmiljö redan använder. postgres ligger bara på det
 # egna nätverket och exponeras aldrig utåt.
 #
+# Tjänsten heter hemordna-api, inte det generiska "api": Compose lägger alltid till
+# service-nyckelns namn som nätverksalias (oavsett container_name), och bowling-edge delas
+# med andra appar. Två tjänster som båda heter "api" på samma delade nätverk gör Dockers
+# interna DNS-uppslagning tvetydig - det orsakade en produktionsincident 2026-09-05 där
+# BowlingPlatforms trafik konsekvent routades hit i stället.
+#
 # Körs med: docker compose -f docker-compose.prod.yml up -d --build
 services:
-  api:
+  hemordna-api:
     build:
       context: .
       dockerfile: Dockerfile
