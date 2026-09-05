@@ -1,0 +1,19 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build-api",
+            "type": "process",
+            "command": "dotnet",
+            "args": ["build", "${workspaceFolder}/src/Hemordna.Api/Hemordna.Api.csproj"],
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "build-client",
+            "type": "process",
+            "command": "dotnet",
+            "args": ["build", "${workspaceFolder}/src/Hemordna.Client/Hemordna.Client.csproj"],
+            "problemMatcher": "$msCompile"
+        }
+    ]
+}

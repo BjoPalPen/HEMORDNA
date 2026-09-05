@@ -1,0 +1,31 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "API",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "build-api",
+            "program": "${workspaceFolder}/src/Hemordna.Api/bin/Debug/net10.0/Hemordna.Api.dll",
+            "cwd": "${workspaceFolder}/src/Hemordna.Api",
+            "env": {
+                "ASPNETCORE_ENVIRONMENT": "Development"
+            },
+            "stopAtEntry": false
+        },
+        {
+            "name": "Client",
+            "type": "blazorwasm",
+            "request": "launch",
+            "preLaunchTask": "build-client",
+            "cwd": "${workspaceFolder}/src/Hemordna.Client",
+            "url": "http://localhost:5200"
+        }
+    ],
+    "compounds": [
+        {
+            "name": "API + Client",
+            "configurations": ["API", "Client"]
+        }
+    ]
+}
