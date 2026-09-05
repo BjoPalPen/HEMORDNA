@@ -10,39 +10,40 @@ Lägesbild per 2026-09-05, för en ny session. Arbetssättet styrs av
 (pushad, ej PR/merge). Utöver tidsbudget per medlem: `RecurrenceRule`, roterande ansvar
 (`TaskAssignment`/`RotationPicker`), `MemberPreference`, och riktig realtidssynk via
 SignalR (`HouseholdHub`) - se [ARCHITECTURE.md](ARCHITECTURE.md) §3/§5 för besluten. Klienten
-har nu alla fem sidor från `NavMenu`: `MinDag`, `Uppgifter`, `Områden`, `Planering`
-(veckans tidsbudget som stapeldiagram) och `Hushåll`, plus `Inställningar` för
-`MemberPreference`. 165 tester gröna (Domain 66, Application 78, E2E 24 - alla mot en riktig
-webbläsare, inklusive ett som bevisar realtidspushen utan `page.ReloadAsync()`).
+har alla fem sidor från `NavMenu` plus `Inställningar`. Hushållsöversikten visar nu även
+"Senaste händelser" (senast avklarade uppgifter, byggt på befintlig `TaskOccurrence`-data,
+ingen ny entitet) och uppdateras live. 166 tester gröna (Domain 66, Application 78, E2E 25 -
+alla mot en riktig webbläsare).
 
 ## Köra
 
 Fullständig uppstart: [../README.md](../README.md). Portar: API `5199`, klient `5200`.
-`.vscode/launch.json` + `tasks.json` finns nu för F5 (compound "API + Client").
+`.vscode/launch.json` + `tasks.json` finns för F5 (compound "API + Client").
 
 **Denna maskin har PostgreSQL på port `5433`, inte `5432`** (något annat upptar 5432 lokalt).
 `.env` sätter `POSTGRES_HOST_PORT=5433`; API:t behöver då
 `ConnectionStrings__Hemordna=Host=localhost;Port=5433;...` i miljön. E2E-fixturen
 (`HemordnaAppFixture`) känner inte till detta - startar den sin egen API-process hamnar den
 mot fel port och timar ut efter 90s. Starta API+klient manuellt med rätt env **innan** E2E
-körs, så återanvänder fixturen dem (se dess egen kommentar om detta beteende).
+körs, så återanvänder fixturen dem.
 
 ## Kända brister
 
 - PWA:n är verifierad i publiceringskedjan, inte i en riktig browser.
-- Hushållsöversiktens veckomatris och "Senaste händelser"-flöde (mockup) är inte byggda -
-  skulle kräva en ny händelselogg-entitet, medvetet uppskjutet.
+- Hushållsöversiktens veckomatris (mockup) är inte byggd - bara "Senaste händelser".
 
 **Rör inte** `BlazorWebAssemblyLoadAllGlobalizationData` i `Hemordna.Client.csproj` - se
 `MinDagTests.The_date_is_Swedish_even_when_the_browser_is_English` för varför.
+
+**EF Core-fälla:** `OrderBy` efter en property på en redan konstruerad `record` i samma
+queryable-kedja kan ge `InvalidOperationException` vid körning, inte kompilering. Sortera och
+`Take` som anonym typ i databasen, bygg posten i minnet efteråt. Se `RecentActivityQuery`.
 
 ## Öppna frågor och nästa steg
 
 Endast offline-strategi kvarstår som `OPEN` i ARCHITECTURE.md §10.
 
-1. En persisterad aktivitetslogg för Hushållsöversiktens händelseflöde, om det blir prioriterat
-   - ny entitet, större beslut, inte bara UI.
-2. Visuell design matchad mot UXUI-mockupen (färgpalett, ikoner) - medvetet uppskjutet,
+1. Visuell design matchad mot UXUI-mockupen (färgpalett, ikoner) - medvetet uppskjutet,
    funktion prioriterades.
 
 **Beslut, inte öppen fråga:** en användare tillhör exakt ett hushåll. Flera hushåll per
