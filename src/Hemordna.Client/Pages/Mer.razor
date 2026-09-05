@@ -1,0 +1,39 @@
+@page "/mer"
+@inject HemordnaSession Session
+
+<PageTitle>Mer – Hemordna</PageTitle>
+
+@if (!Session.IsLoaded)
+{
+    <p class="muted">Hämtar...</p>
+}
+else if (!Session.IsSignedIn)
+{
+    <Redirect To="logga-in" />
+}
+else
+{
+    <h1>Mer</h1>
+
+    <ul class="list" aria-label="Fler sidor">
+        @foreach (var item in Items)
+        {
+            <li class="list-item">
+                <a href="@item.Href" class="list-name">
+                    <span aria-hidden="true">@item.Icon</span> @item.Label
+                </a>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    private sealed record MoreItem(string Href, string Label, string Icon);
+
+    private static readonly MoreItem[] Items =
+    [
+        new("omraden", "Områden", "▤"),
+        new("hushall", "Hushåll", "⌂"),
+        new("installningar", "Inställningar", "⚙")
+    ];
+}

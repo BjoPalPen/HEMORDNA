@@ -89,6 +89,9 @@ internal static class HouseholdEndpoints
         scoped.MapGet("/activity", GetRecentActivityAsync)
             .Produces<IReadOnlyList<RecentActivityResponse>>();
 
+        scoped.MapGet("/weekly-status", GetWeeklyStatusAsync)
+            .Produces<IReadOnlyList<MemberDayStatusResponse>>();
+
         scoped.MapGet("/members/{memberId:guid}/plan", GetPlanAsync)
             .WithName("GetDailyPlan")
             .Produces<DailyPlanResponse>()
@@ -394,6 +397,27 @@ internal static class HouseholdEndpoints
 
         return Results.Ok(recent
             .Select(a => new RecentActivityResponse(a.OccurrenceId, a.TaskName, a.MemberDisplayName, a.CompletedAt))
+            .ToList());
+    }
+
+    private static async Task<IResult> GetWeeklyStatusAsync(
+        Guid householdId,
+        DateOnly? date,
+        IWeeklyStatusQuery weeklyStatus,
+        TimeProvider timeProvider,
+        CancellationToken cancellationToken)
+    {
+        var anchor = date ?? DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+
+        // ISO week: Monday first. DayOfWeek.Sunday is 0, so it needs its own case rather than
+        // falling out of the (int)DayOfWeek - 1 arithmetic that works for every other day.
+        var offsetFromMonday = anchor.DayOfWeek == DayOfWeek.Sunday ? 6 : (int)anchor.DayOfWeek - 1;
+        var weekStart = anchor.AddDays(-offsetFromMonday);
+
+        var statuses = await weeklyStatus.FindWeeklyStatusAsync(householdId, weekStart, cancellationToken);
+
+        return Results.Ok(statuses
+            .Select(s => new MemberDayStatusResponse(s.MemberId, s.Date, s.Status))
             .ToList());
     }
 

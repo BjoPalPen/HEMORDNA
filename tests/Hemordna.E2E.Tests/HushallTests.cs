@@ -1,3 +1,5 @@
+using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.Playwright;
 
 namespace Hemordna.E2E.Tests;
@@ -60,5 +62,41 @@ public class HushallTests
 
         var areaRow = page.Locator(".list-item", new() { HasText = "Kök" });
         await Assertions.Expect(areaRow).ToContainTextAsync("1 uppgifter");
+    }
+
+    [Fact]
+    public async Task Completing_todays_only_task_marks_todays_dot_done()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Henrik");
+
+        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+
+        using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
+        http.DefaultRequestHeaders.Authorization = new("Bearer", token);
+
+        var me = await (await http.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
+        var householdId = me.GetProperty("householdId").GetGuid();
+        var memberId = me.GetProperty("memberId").GetGuid();
+
+        var task = await (await http.PostAsJsonAsync(
+            $"/api/households/{householdId}/tasks", new { name = "Häng tvätt", estimatedMinutes = 5 }))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        var taskId = task.GetProperty("id").GetGuid();
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var occurrence = await (await http.PostAsJsonAsync(
+            $"/api/households/{householdId}/tasks/{taskId}/occurrences",
+            new { date = today, assignToMemberId = memberId }))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        var occurrenceId = occurrence.GetProperty("id").GetGuid();
+
+        await http.PostAsync($"/api/households/{householdId}/occurrences/{occurrenceId}/complete", content: null);
+
+        await page.GotoAsync("/hushall");
+
+        var row = page.Locator("tbody tr", new() { HasText = "Henrik" });
+        // The only task this member has all week is done, so exactly one dot is filled.
+        await Assertions.Expect(row.Locator(".dot-done")).ToHaveCountAsync(1);
     }
 }

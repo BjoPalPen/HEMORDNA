@@ -10,3 +10,53 @@
     color: var(--color-primary-strong);
     font-weight: 600;
 }
+
+.week-grid-wrap {
+    overflow-x: auto;
+}
+
+.week-grid {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: center;
+}
+
+.week-grid th,
+.week-grid td {
+    padding: var(--space-2);
+}
+
+.week-grid thead th {
+    color: var(--color-text-soft);
+    font-weight: 500;
+    font-size: calc(var(--font-size-base) * .8);
+    text-transform: capitalize;
+}
+
+.week-grid tbody th {
+    text-align: left;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.week-grid-today {
+    background: var(--color-primary-soft);
+    border-radius: var(--radius-control);
+}
+
+.dot {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: var(--radius-pill);
+    background: var(--color-border);
+}
+
+.dot-done {
+    background: var(--color-primary);
+}
+
+.dot-planned {
+    background: var(--color-surface);
+    border: 2px solid var(--color-primary);
+}

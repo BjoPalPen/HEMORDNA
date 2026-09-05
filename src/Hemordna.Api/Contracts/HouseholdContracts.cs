@@ -1,3 +1,4 @@
+using Hemordna.Application.Households;
 using Hemordna.Application.Planning;
 using Hemordna.Domain.Households;
 using Hemordna.Domain.Tasks;
@@ -116,6 +117,8 @@ public sealed record SetPreferenceRequest(PresentationMode Presentation, Motivat
 
 public sealed record RecentActivityResponse(
     Guid OccurrenceId, string TaskName, string MemberDisplayName, DateTimeOffset CompletedAt);
+
+public sealed record MemberDayStatusResponse(Guid MemberId, DateOnly Date, DayStatus Status);
 
 public sealed record PreferenceResponse(Guid MemberId, PresentationMode Presentation, MotivationLevel Motivation);
 
