@@ -1,4 +1,5 @@
 @page "/uppgifter"
+@using Hemordna.Client.Support
 @inject HemordnaApiClient Api
 @inject HemordnaSession Session
 @inject TimeProvider TimeProvider
@@ -29,10 +30,19 @@ else
                 <InputText @bind-Value="_form.Name" placeholder="T.ex. Dammsug vardagsrum" />
             </label>
 
-            <label class="field">
-                <span>Uppskattad tid (minuter)</span>
-                <input type="number" min="1" max="600" @bind="_form.EstimatedMinutes" />
-            </label>
+            <div class="field">
+                <span>Ungefär hur mycket tid tar det?</span>
+                <div class="level-picker">
+                    @foreach (var level in TimeLevel.All)
+                    {
+                        <button type="button"
+                                class="@(_form.EstimatedMinutes == level.Minutes ? "btn btn-primary" : "btn btn-secondary")"
+                                @onclick="() => _form.EstimatedMinutes = level.Minutes">
+                            @level.Label
+                        </button>
+                    }
+                </div>
+            </div>
 
             <label class="field">
                 <span>Område</span>
@@ -45,50 +55,54 @@ else
                 </select>
             </label>
 
-            <label class="field">
-                <span>Normal ansvarig</span>
-                <select @bind="_form.DefaultResponsibleMemberId">
-                    <option value="">Ingen bestämd</option>
-                    @foreach (var member in _members)
-                    {
-                        <option value="@member.Id">@member.DisplayName</option>
-                    }
-                </select>
-            </label>
+            <details class="more-options">
+                <summary>Fler alternativ</summary>
 
-            <label class="field">
-                <span>Prioritet</span>
-                <select @bind="_form.Priority">
-                    <option value="Low">Låg</option>
-                    <option value="Normal">Normal</option>
-                    <option value="High">Hög</option>
-                </select>
-            </label>
+                <label class="field">
+                    <span>Normal ansvarig</span>
+                    <select @bind="_form.DefaultResponsibleMemberId">
+                        <option value="">Ingen bestämd</option>
+                        @foreach (var member in _members)
+                        {
+                            <option value="@member.Id">@member.DisplayName</option>
+                        }
+                    </select>
+                </label>
 
-            <label class="field">
-                <span>Upprepning</span>
-                <select @bind="_form.Recurrence">
-                    <option value="">Ingen - schemaläggs för hand</option>
-                    <option value="Daily">Varje dag</option>
-                    <option value="Weekly">Varje vecka</option>
-                    <option value="Monthly">Varje månad</option>
-                </select>
-            </label>
+                <label class="field">
+                    <span>Prioritet</span>
+                    <select @bind="_form.Priority">
+                        <option value="Low">Låg</option>
+                        <option value="Normal">Normal</option>
+                        <option value="High">Hög</option>
+                    </select>
+                </label>
 
-            <label class="field field-check">
-                <input type="checkbox" @bind="_form.HasRotatingResponsibility" />
-                <span>Ansvaret roterar mellan hushållets medlemmar</span>
-            </label>
+                <label class="field">
+                    <span>Upprepning</span>
+                    <select @bind="_form.Recurrence">
+                        <option value="">Ingen - schemaläggs för hand</option>
+                        <option value="Daily">Varje dag</option>
+                        <option value="Weekly">Varje vecka</option>
+                        <option value="Monthly">Varje månad</option>
+                    </select>
+                </label>
 
-            <label class="field field-check">
-                <input type="checkbox" @bind="_form.RequiresMultiplePeople" />
-                <span>Kräver flera personer</span>
-            </label>
+                <label class="field field-check">
+                    <input type="checkbox" @bind="_form.HasRotatingResponsibility" />
+                    <span>Ansvaret roterar mellan hushållets medlemmar</span>
+                </label>
 
-            <label class="field field-check">
-                <input type="checkbox" @bind="_form.CanBeDeferred" />
-                <span>Kan skjutas upp</span>
-            </label>
+                <label class="field field-check">
+                    <input type="checkbox" @bind="_form.RequiresMultiplePeople" />
+                    <span>Kräver flera personer</span>
+                </label>
+
+                <label class="field field-check">
+                    <input type="checkbox" @bind="_form.CanBeDeferred" />
+                    <span>Kan skjutas upp</span>
+                </label>
+            </details>
 
             @if (_message is { } message)
             {
@@ -126,7 +140,6 @@ else
                             <span class="muted small">roterar</span>
                         }
                     </span>
-                    <span class="list-meta muted">@task.EstimatedMinutes min</span>
                 </li>
             }
         </ul>
@@ -137,7 +150,7 @@ else
     private sealed class Form
     {
         public string Name { get; set; } = string.Empty;
-        public int EstimatedMinutes { get; set; } = 10;
+        public int EstimatedMinutes { get; set; } = 30;
         public string AreaId { get; set; } = string.Empty;
         public string DefaultResponsibleMemberId { get; set; } = string.Empty;
         public string Priority { get; set; } = "Normal";
@@ -198,7 +211,7 @@ else
 
         if (_form.EstimatedMinutes <= 0)
         {
-            _message = "Uppskattad tid måste vara större än noll.";
+            _message = "Välj ungefär hur mycket tid uppgiften tar.";
             return;
         }
 
@@ -236,7 +249,7 @@ else
             }
 
             _form.Name = string.Empty;
-            _form.EstimatedMinutes = 10;
+            _form.EstimatedMinutes = 30;
             await LoadAsync();
         }
         catch (HttpRequestException)

@@ -25,20 +25,31 @@ public class HushallTests
     }
 
     [Fact]
-    public async Task Adding_a_member_shows_their_weekly_total()
+    public async Task Adding_a_member_sets_their_normal_week_without_asking_for_a_number()
     {
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Erik");
 
         await page.GotoAsync("/hushall");
         await page.GetByLabel("Namn").FillAsync("Filippa");
-        await page.GetByLabel("Normal tid per dag (minuter, samma varje veckodag)").FillAsync("30");
+        // No minute field: a qualitative level picker instead - see Support.TimeLevel.
+        await page.Locator("form").GetByRole(AriaRole.Button, new() { Name = "Lagom tid" }).ClickAsync();
         await page.GetByRole(AriaRole.Button, new() { Name = "Lägg till medlem" }).ClickAsync();
 
-        var row = page.Locator(".list-item", new() { HasText = "Filippa" });
-        await row.WaitForAsync();
-        // 30 minutes every day of the week is 210 minutes total.
-        await Assertions.Expect(row).ToContainTextAsync("210 min/vecka");
+        await Assertions.Expect(page.Locator(".list-item", new() { HasText = "Filippa" })).ToBeVisibleAsync();
+
+        // Nothing in the UI shows the number, but "Lagom tid" (30 min) must actually have been
+        // sent - verified against the API, which is the only place minutes still live.
+        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
+        http.DefaultRequestHeaders.Authorization = new("Bearer", token);
+        var me = await (await http.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
+        var household = await (await http.GetAsync($"/api/households/{me.GetProperty("householdId").GetGuid()}"))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        var filippa = household.GetProperty("members").EnumerateArray()
+            .Single(m => m.GetProperty("displayName").GetString() == "Filippa");
+
+        Assert.Equal(30, filippa.GetProperty("weeklyTimeBudgetMinutes").GetProperty("monday").GetInt32());
     }
 
     [Fact]

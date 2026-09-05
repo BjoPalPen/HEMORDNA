@@ -33,7 +33,7 @@ Designen får aldrig få användaren att känna sig sen, granskad eller jämför
 | Bakgrund | Ljus och luftig | `#FBFAF7` | Sidbakgrund |
 | Yta | | `#FFFFFF` | Kort och paneler |
 | Text | | `#2C3330` | Brödtext och rubriker |
-| Text mjuk | | `#6B7570` | Sekundär text, minuter, områdesetiketter |
+| Text mjuk | | `#6B7570` | Sekundär text, lägesetiketter, områdesetiketter |
 | Ram | | `#E6E4DE` | Kortkanter, avdelare |
 | Logotyp | Skifferblå | `#3F6191` | Endast logotypen |
 
@@ -95,32 +95,50 @@ Startskärmen. Visar **bara den egna dagen** – aldrig hushållets backlogg.
 Hej Anna! 👋
 Här är dina uppgifter för idag. En sak i taget räcker.
 
-( ◔ )  25 av 30 min planerade     4 uppgifter · 2 klara · 2 kvar
+4 uppgifter · 2 klara · 2 kvar
 
-[x] Torka av köksbänkar    [Kök]           5 min   ⌄
-[ ] Dammsug vardagsrum     [Vardagsrum]   10 min   ⌄
-[ ] Plocka tvätt           [Tvättstuga]    5 min   ⌄
+[x] Torka av köksbänkar    [Kök]      ⌄
+[ ] Dammsug vardagsrum     [Vardagsrum]   ⌄
+[ ] Plocka tvätt           [Tvättstuga]   ⌄
 ```
 
-Varje rad: kryssruta, namn, områdeschip, uppskattad tid, expandering.
-Sidopanel (dator): uppmuntranskort och **Snabbval** – lägg till tillfällig tid idag, ändra
-dagens plan, visa hela hushållets plan.
+Varje rad: kryssruta, namn, områdeschip, expandering. Ingen tid visas – varken per uppgift
+eller som summa. Tid hanteras i bakgrunden (se §6a); användaren ser bara namn och bock.
+Sidopanel (dator): uppmuntranskort och **Snabbval** – ett kvalitativt lägesval (Ingen/Lite/
+Lagom/Gott om tid) för dagens tillfälliga avvikelse, och en **Din vanliga vecka**-redigerare
+med samma fyra nivåer per veckodag i stället för minutfält.
 
 ### Uppgiftsdetalj
 
-Bild, namn, områdeschip, tid, återkommande, beskrivning, ansvarig, växlarna *Kan skjutas
+Bild, namn, områdeschip, återkommande, beskrivning, ansvarig, växlarna *Kan skjutas
 upp* och *Kräver flera personer*. Primär knapp **Markera som klar**, sekundär **Skjut upp**.
+Ingen tid visas; uppskattad tid sätts som ett kvalitativt läge (se §6a) och lever bara i
+domänen.
 
 ### Planering (vecka)
 
-Dagremsa, stapeldiagram över veckans tidsbudget, dagens planerade tid, **Ändra tid idag**.
+**Min vecka**: sju rader, en per veckodag, med bara ett kvalitativt läge i text (t.ex.
+"Ingen tid", "Lagom tid") – inget stapeldiagram, inga minuter. **Idag**-kortet erbjuder
+samma fyra lägesknappar som Min dag för att ändra just dagens avvikelse.
 
 ### Hushållsöversikt
 
-Medlemsavatarer med `använd/budget` minuter, veckans plan som prickmatris per medlem och
-dag, områden med antal uppgifter, senaste händelser.
+Medlemsavatarer (namn, ingen `använd/budget`-siffra), veckans plan som prickmatris per
+medlem och dag, områden med antal uppgifter, senaste händelser.
 
 Detta är den enda vyn som visar hela hushållet, och den är aldrig startskärm.
+
+### 6a. Tid hanteras i bakgrunden, visas aldrig
+
+Domänen räknar fortfarande i minuter (uppskattad tid, veckobudget, `availableMinutes` från
+API:t) – det är vad `RecurrenceRule`, `DailyPlanner` och rotationslogiken behöver för att
+räkna ut vad som får plats en given dag. Men inget UI-lager visar den siffran. Klienten
+mappar minuter till fyra kvalitativa lägen (`Hemordna.Client.Support.TimeLevel`: Ingen tid/
+Lite tid/Lagom tid/Gott om tid → 0/15/30/60 min) och visar bara läget, aldrig talet.
+
+Bakgrund: alltför mycket tidsvisning (minuträknare, progress-ringar, stapeldiagram) skapar
+stress snarare än lugn – motsatsen till appens syfte. Uppgiften och bocken räcker; tiden är
+ett internt planeringsverktyg, inte något användaren ska behöva förhålla sig till.
 
 ### Inställningar – Min visning
 

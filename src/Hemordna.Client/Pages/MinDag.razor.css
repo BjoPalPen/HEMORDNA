@@ -16,19 +16,8 @@
     margin: var(--space-2) 0 var(--space-5);
 }
 
-.summary {
-    display: flex;
-    align-items: center;
-    gap: var(--space-4);
-    margin-bottom: var(--space-4);
-}
-
-.summary-text p {
-    margin: 0;
-}
-
-.summary-minutes {
-    font-size: calc(var(--font-size-base) * 1.05);
+.day-counts {
+    margin: 0 0 var(--space-4);
 }
 
 .task-list {
@@ -100,11 +89,6 @@
     font-style: normal;
 }
 
-.task-minutes {
-    flex-shrink: 0;
-    font-variant-numeric: tabular-nums;
-}
-
 .task-name .chip {
     margin-top: var(--space-1);
     align-self: flex-start;
@@ -166,29 +150,29 @@
     margin-top: var(--space-3);
 }
 
-.time-editor {
-    margin-top: var(--space-4);
-    padding-top: var(--space-4);
-    border-top: 1px solid var(--color-border);
+.level-picker-compact {
+    flex-wrap: nowrap;
+    gap: var(--space-1);
+    margin: 0;
+}
+
+.level-picker-compact .btn {
+    min-height: 32px;
+    padding: 0 var(--space-2);
+    font-size: calc(var(--font-size-base) * .78);
 }
 
 .week-editor {
     margin-top: var(--space-3);
     display: grid;
-    gap: var(--space-2);
+    gap: var(--space-3);
 }
 
 .field-day {
     display: flex;
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-3);
+    flex-direction: column;
+    gap: var(--space-1);
     margin-bottom: 0;
-}
-
-.field-day input {
-    width: 72px;
 }
 
 @media (max-width: 900px) {

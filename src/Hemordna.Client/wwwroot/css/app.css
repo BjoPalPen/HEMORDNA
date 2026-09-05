@@ -177,6 +177,29 @@ a {
     min-height: 0;
 }
 
+/* A row of qualitative choices (Ingen/Lite/Lagom/Gott om tid) standing in for a minute count -
+   see Hemordna.Client.Support.TimeLevel for why nothing in the app asks for a number instead. */
+.level-picker {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin: var(--space-3) 0;
+}
+
+.level-picker .btn {
+    flex: 1 1 auto;
+    padding: 0 var(--space-3);
+    min-height: 40px;
+}
+
+.more-options summary {
+    cursor: pointer;
+    color: var(--color-text-soft);
+    font-size: calc(var(--font-size-base) * .9);
+    padding: var(--space-2) 0;
+    margin-bottom: var(--space-2);
+}
+
 /* A simple, read-only list of things - areas, tasks, members. "Min dag" has its own richer,
    interactive task list scoped to that component; this is the plain version other pages share. */
 .list {

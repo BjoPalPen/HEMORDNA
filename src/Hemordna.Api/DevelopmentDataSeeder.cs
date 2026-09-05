@@ -73,8 +73,8 @@ internal static class DevelopmentDataSeeder
         }
 
         var addArea = scope.ServiceProvider.GetRequiredService<AddArea>();
-        var kitchen = household.Areas.FirstOrDefault(area => area.Name == "Kok")
-            ?? await addArea.HandleAsync(household.Id, "Kok", cancellationToken);
+        var kitchen = household.Areas.FirstOrDefault(area => area.Name == "Kök")
+            ?? await addArea.HandleAsync(household.Id, "Kök", cancellationToken);
         var bathroom = household.Areas.FirstOrDefault(area => area.Name == "Badrum")
             ?? await addArea.HandleAsync(household.Id, "Badrum", cancellationToken);
 
@@ -88,17 +88,17 @@ internal static class DevelopmentDataSeeder
             washDishes = await createTask.HandleAsync(
                 household.Id,
                 new NewTaskDefinition(
-                    "Diska", 20, "Toma maskinen och plocka undan.", kitchen?.Id,
+                    "Diska", 20, "Töm maskinen och plocka undan.", kitchen?.Id,
                     TaskPriority.Normal, demoMember.Id),
                 cancellationToken);
         }
 
-        if (existingTasks.All(task => task.Name != "Rengor handfatet"))
+        if (existingTasks.All(task => task.Name != "Rengör handfatet"))
         {
             await createTask.HandleAsync(
                 household.Id,
                 new NewTaskDefinition(
-                    "Rengor handfatet", 15, AreaId: bathroom?.Id,
+                    "Rengör handfatet", 15, AreaId: bathroom?.Id,
                     Priority: TaskPriority.Low, DefaultResponsibleMemberId: demoMember.Id),
                 cancellationToken);
         }
@@ -133,6 +133,39 @@ internal static class DevelopmentDataSeeder
             if (vacuum is not null)
             {
                 await scheduleTask.HandleAsync(household.Id, vacuum.Id, today, assignToMemberId: null, cancellationToken);
+            }
+        }
+
+        // A week's worth of history, mostly done, so the household overview's weekly matrix
+        // and "senaste händelser" have something real to show on first login instead of an
+        // empty week. Only seeded once - later runs must not keep completing today's copy.
+        if (existingTasks.All(task => task.Name != "Torka av köksbänken"))
+        {
+            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            var weekAgo = today.AddDays(-6);
+
+            var counterWipe = await createTask.HandleAsync(
+                household.Id,
+                new NewTaskDefinition(
+                    "Torka av köksbänken", 5, AreaId: kitchen?.Id,
+                    Priority: TaskPriority.Low, DefaultResponsibleMemberId: demoMember.Id,
+                    Recurrence: RecurrenceRule.Daily(weekAgo)),
+                cancellationToken);
+
+            if (counterWipe is not null)
+            {
+                var completeTask = scope.ServiceProvider.GetRequiredService<CompleteTaskOccurrence>();
+
+                for (var date = weekAgo; date <= today; date = date.AddDays(1))
+                {
+                    var occurrence = await scheduleTask.HandleAsync(
+                        household.Id, counterWipe.Id, date, demoMember.Id, cancellationToken);
+
+                    if (occurrence is not null && date < today)
+                    {
+                        await completeTask.HandleAsync(household.Id, occurrence.Id, demoMember.Id, cancellationToken);
+                    }
+                }
             }
         }
 

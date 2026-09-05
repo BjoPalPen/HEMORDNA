@@ -1,5 +1,6 @@
 @page "/hushall"
 @implements IDisposable
+@using Hemordna.Client.Support
 @inject HemordnaApiClient Api
 @inject HemordnaSession Session
 @inject TimeProvider TimeProvider
@@ -33,16 +34,7 @@ else
         {
             <li class="list-item">
                 <span class="avatar" aria-hidden="true">@Initial(member.DisplayName)</span>
-                <span class="list-name">
-                    @member.DisplayName
-                    <span class="muted small">@WeeklyTotal(member) min/vecka normalt</span>
-                </span>
-                <span class="list-meta muted">
-                    @if (_todayMinutes.TryGetValue(member.Id, out var today))
-                    {
-                        @($"{today.Planned} av {today.Available} min idag")
-                    }
-                </span>
+                <span class="list-name">@member.DisplayName</span>
             </li>
         }
     </ul>
@@ -127,10 +119,19 @@ else
                 <InputText @bind-Value="_form.DisplayName" placeholder="T.ex. Bjorn" />
             </label>
 
-            <label class="field">
-                <span>Normal tid per dag (minuter, samma varje veckodag)</span>
-                <input type="number" min="0" max="600" @bind="_form.MinutesPerDay" />
-            </label>
+            <div class="field">
+                <span>Normal tid per dag</span>
+                <div class="level-picker">
+                    @foreach (var level in TimeLevel.All)
+                    {
+                        <button type="button"
+                                class="@(_form.MinutesPerDay == level.Minutes ? "btn btn-primary" : "btn btn-secondary")"
+                                @onclick="() => _form.MinutesPerDay = level.Minutes">
+                            @level.Label
+                        </button>
+                    }
+                </div>
+            </div>
 
             @if (_message is { } message)
             {
@@ -145,8 +146,6 @@ else
 }
 
 @code {
-    private sealed record TodayMinutes(int Available, int Planned);
-
     private sealed class Form
     {
         public string DisplayName { get; set; } = string.Empty;
@@ -155,7 +154,6 @@ else
 
     private readonly Form _form = new();
     private HouseholdResponse? _household;
-    private readonly Dictionary<Guid, TodayMinutes> _todayMinutes = [];
     private IReadOnlyList<TaskDefinitionResponse> _tasks = [];
     private IReadOnlyList<RecentActivityResponse> _activity = [];
     private readonly Dictionary<(Guid MemberId, DateOnly Date), string> _weeklyStatus = [];
@@ -213,23 +211,6 @@ else
         {
             _weeklyStatus[(status.MemberId, status.Date)] = status.Status;
         }
-
-        if (_household is null)
-        {
-            return;
-        }
-
-        _todayMinutes.Clear();
-
-        foreach (var member in _household.Members.Where(m => m.IsActive))
-        {
-            var day = await Api.GetDailyPlanAsync(householdId, member.Id, Today);
-
-            if (day is not null)
-            {
-                _todayMinutes[member.Id] = new TodayMinutes(day.AvailableMinutes, day.PlannedMinutes);
-            }
-        }
     }
 
     private int TaskCountFor(Guid areaId) => _tasks.Count(t => t.AreaId == areaId && t.IsActive);
@@ -250,13 +231,6 @@ else
 
     private static string Initial(string name)
         => string.IsNullOrWhiteSpace(name) ? "?" : name.Trim()[..1].ToUpperInvariant();
-
-    private static int WeeklyTotal(HouseholdMemberResponse member)
-    {
-        var budget = member.WeeklyTimeBudgetMinutes;
-        return budget.Monday + budget.Tuesday + budget.Wednesday + budget.Thursday
-            + budget.Friday + budget.Saturday + budget.Sunday;
-    }
 
     private async Task AddMemberAsync()
     {

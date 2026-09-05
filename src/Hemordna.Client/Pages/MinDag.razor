@@ -1,5 +1,6 @@
 @page "/"
 @implements IDisposable
+@using Hemordna.Client.Support
 @inject HemordnaApiClient Api
 @inject HemordnaSession Session
 @inject NavigationManager Navigation
@@ -34,16 +35,10 @@ else
             }
             else
             {
-                <div class="card summary">
-                    <ProgressRing Planned="@_day.PlannedMinutes" Available="@_day.AvailableMinutes" />
-
-                    <div class="summary-text">
-                        <p class="summary-minutes">
-                            <strong>@_day.PlannedMinutes av @_day.AvailableMinutes min</strong> planerade
-                        </p>
-                        <p class="muted small">@CountsText</p>
-                    </div>
-                </div>
+                @if (_day.Completed.Count > 0 || _day.Items.Count > 0)
+                {
+                    <p class="muted small day-counts">@CountsText</p>
+                }
 
                 @if (_day.Completed.Count > 0)
                 {
@@ -59,7 +54,6 @@ else
                                         <span class="chip">@doneArea</span>
                                     }
                                 </span>
-                                <span class="task-minutes muted">@done.EstimatedMinutes min</span>
                             </li>
                         }
                     </ul>
@@ -87,8 +81,6 @@ else
                                         <span class="task-note muted small">sedan tidigare</span>
                                     }
                                 </span>
-
-                                <span class="task-minutes muted">@item.EstimatedMinutes min</span>
 
                                 <button type="button" class="task-expand"
                                         aria-label="@($"Mer om {item.Name}")"
@@ -141,7 +133,6 @@ else
                                             <span class="chip">@unplannedArea</span>
                                         }
                                     </span>
-                                    <span class="task-minutes muted">@task.EstimatedMinutes min</span>
                                 </li>
                             }
                         </ul>
@@ -158,25 +149,18 @@ else
 
             <div class="card">
                 <h2>Snabbval</h2>
-                <div class="quick-actions">
-                    <button type="button" class="btn btn-secondary btn-block" @onclick="ToggleTimeEditor">
-                        Lägg till tillfällig tid idag
-                    </button>
-                </div>
-
-                @if (_editingTime)
-                {
-                    <div class="time-editor">
-                        <label class="field">
-                            <span>Minuter idag</span>
-                            <input type="number" min="0" max="600" @bind="_minutesToday" />
-                        </label>
-                        <button type="button" class="btn btn-primary btn-block" @onclick="SaveTimeAsync">
-                            Spara för idag
+                <p class="muted small">Har du mindre eller mer tid idag än vanligt?</p>
+                <div class="level-picker">
+                    @foreach (var level in TimeLevel.All)
+                    {
+                        <button type="button" class="btn btn-secondary"
+                                disabled="@(_busyOccurrence is not null)"
+                                @onclick="() => SetTodayLevelAsync(level.Minutes)">
+                            @level.Label
                         </button>
-                        <p class="muted small">Din vanliga vecka påverkas inte.</p>
-                    </div>
-                }
+                    }
+                </div>
+                <p class="muted small">Din vanliga vecka påverkas inte.</p>
             </div>
 
             <div class="card">
@@ -194,10 +178,19 @@ else
                     <div class="week-editor">
                         @foreach (var day in Weekdays)
                         {
-                            <label class="field field-day">
+                            <div class="field field-day">
                                 <span>@day.Label</span>
-                                <input type="number" min="0" max="600" @bind="_weekBudget[day.Value]" />
-                            </label>
+                                <div class="level-picker level-picker-compact">
+                                    @foreach (var level in TimeLevel.All)
+                                    {
+                                        <button type="button"
+                                                class="@(_weekBudget[day.Value] == level.Minutes ? "btn btn-primary" : "btn btn-secondary")"
+                                                @onclick="() => _weekBudget[day.Value] = level.Minutes">
+                                            @level.Label
+                                        </button>
+                                    }
+                                </div>
+                            </div>
                         }
                         <button type="button" class="btn btn-primary btn-block" @onclick="SaveWeekBudgetAsync">
                             Spara vanlig vecka
@@ -224,8 +217,6 @@ else
     private DailyPlanResponse? _day;
     private Guid? _busyOccurrence;
     private Guid? _expandedOccurrence;
-    private bool _editingTime;
-    private int _minutesToday;
     private Dictionary<DayOfWeek, int>? _weekBudget;
 
     // The date is resolved from an injected clock here at the edge; nothing below reads one.
@@ -298,7 +289,6 @@ else
         }
 
         _day = await Api.GetDailyPlanAsync(householdId, memberId, Today);
-        _minutesToday = _day?.AvailableMinutes ?? 0;
     }
 
     private async Task CompleteAsync(Guid occurrenceId)
@@ -350,18 +340,15 @@ else
         }
     }
 
-    private void ToggleTimeEditor() => _editingTime = !_editingTime;
-
-    private async Task SaveTimeAsync()
+    private async Task SetTodayLevelAsync(int minutes)
     {
         if (Session.Me is not { HouseholdId: { } householdId, MemberId: { } memberId })
         {
             return;
         }
 
-        if (await Api.SetAvailabilityAsync(householdId, memberId, Today, Math.Max(0, _minutesToday)))
+        if (await Api.SetAvailabilityAsync(householdId, memberId, Today, minutes))
         {
-            _editingTime = false;
             await LoadDayAsync();
         }
     }
@@ -384,13 +371,13 @@ else
         var budget = member.WeeklyTimeBudgetMinutes;
         _weekBudget = new Dictionary<DayOfWeek, int>
         {
-            [DayOfWeek.Monday] = budget.Monday,
-            [DayOfWeek.Tuesday] = budget.Tuesday,
-            [DayOfWeek.Wednesday] = budget.Wednesday,
-            [DayOfWeek.Thursday] = budget.Thursday,
-            [DayOfWeek.Friday] = budget.Friday,
-            [DayOfWeek.Saturday] = budget.Saturday,
-            [DayOfWeek.Sunday] = budget.Sunday
+            [DayOfWeek.Monday] = TimeLevel.ClosestMinutes(budget.Monday),
+            [DayOfWeek.Tuesday] = TimeLevel.ClosestMinutes(budget.Tuesday),
+            [DayOfWeek.Wednesday] = TimeLevel.ClosestMinutes(budget.Wednesday),
+            [DayOfWeek.Thursday] = TimeLevel.ClosestMinutes(budget.Thursday),
+            [DayOfWeek.Friday] = TimeLevel.ClosestMinutes(budget.Friday),
+            [DayOfWeek.Saturday] = TimeLevel.ClosestMinutes(budget.Saturday),
+            [DayOfWeek.Sunday] = TimeLevel.ClosestMinutes(budget.Sunday)
         };
     }
 

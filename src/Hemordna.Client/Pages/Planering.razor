@@ -1,4 +1,5 @@
 @page "/planering"
+@using Hemordna.Client.Support
 @inject HemordnaApiClient Api
 @inject HemordnaSession Session
 @inject TimeProvider TimeProvider
@@ -23,57 +24,36 @@ else if (_member is null)
 }
 else
 {
-    <h1>Min tidsbudget</h1>
-    <p class="muted">Din normala tid per veckodag. Ändra den från "Min dag".</p>
+    <h1>Min vecka</h1>
+    <p class="muted">Hur mycket tid du normalt brukar ha, dag för dag.</p>
 
-    <div class="card">
-        <div class="chart" role="img" aria-label="Minuter per veckodag">
-            @foreach (var day in Weekdays(_member))
-            {
-                <div class="chart-column">
-                    <div class="chart-bar" style="height: @(BarHeight(day.Minutes))px" title="@day.Minutes min"></div>
-                    <span class="chart-value muted small">@day.Minutes</span>
-                    <span class="chart-label muted small">@day.Label</span>
-                </div>
-            }
-        </div>
-    </div>
+    <ul class="list" aria-label="Veckans normala tid">
+        @foreach (var day in Weekdays(_member))
+        {
+            <li class="list-item">
+                <span class="list-name">@day.Label</span>
+                <span class="list-meta muted small">@day.LevelLabel</span>
+            </li>
+        }
+    </ul>
 
     <div class="card">
         <h2>Idag</h2>
-
-        @if (_day is not null)
-        {
-            <p class="muted small">
-                @_day.PlannedMinutes av @_day.AvailableMinutes min planerade idag.
-            </p>
-        }
-
-        @if (!_editingTime)
-        {
-            <button type="button" class="btn btn-secondary btn-block" @onclick="ToggleTimeEditor">
-                Ändra tid idag
-            </button>
-        }
-        else
-        {
-            <label class="field">
-                <span>Minuter idag</span>
-                <input type="number" min="0" max="600" @bind="_minutesToday" />
-            </label>
-            <button type="button" class="btn btn-primary btn-block" @onclick="SaveTimeAsync">
-                Spara för idag
-            </button>
-            <p class="muted small">Din vanliga vecka påverkas inte.</p>
-        }
+        <p class="muted small">Har du mindre eller mer tid idag än vanligt?</p>
+        <div class="level-picker">
+            @foreach (var level in TimeLevel.All)
+            {
+                <button type="button" class="btn btn-secondary" @onclick="() => SetTodayLevelAsync(level.Minutes)">
+                    @level.Label
+                </button>
+            }
+        </div>
+        <p class="muted small">Din vanliga vecka påverkas inte.</p>
     </div>
 }
 
 @code {
     private HouseholdMemberResponse? _member;
-    private DailyPlanResponse? _day;
-    private bool _editingTime;
-    private int _minutesToday;
 
     private DateOnly Today => DateOnly.FromDateTime(TimeProvider.GetLocalNow().DateTime);
 
@@ -92,37 +72,33 @@ else
 
         var household = await Api.GetHouseholdAsync(householdId);
         _member = household?.Members.FirstOrDefault(m => m.Id == memberId);
-        _day = await Api.GetDailyPlanAsync(householdId, memberId, Today);
-        _minutesToday = _day?.AvailableMinutes ?? 0;
     }
 
-    private void ToggleTimeEditor() => _editingTime = !_editingTime;
-
-    private async Task SaveTimeAsync()
+    private async Task SetTodayLevelAsync(int minutes)
     {
         if (Session.Me is not { HouseholdId: { } householdId, MemberId: { } memberId })
         {
             return;
         }
 
-        if (await Api.SetAvailabilityAsync(householdId, memberId, Today, Math.Max(0, _minutesToday)))
-        {
-            _editingTime = false;
-            await LoadAsync();
-        }
+        await Api.SetAvailabilityAsync(householdId, memberId, Today, minutes);
     }
 
-    private static IEnumerable<(string Label, int Minutes)> Weekdays(HouseholdMemberResponse member)
+    private static IEnumerable<(string Label, string LevelLabel)> Weekdays(HouseholdMemberResponse member)
     {
         var budget = member.WeeklyTimeBudgetMinutes;
-        yield return ("Mån", budget.Monday);
-        yield return ("Tis", budget.Tuesday);
-        yield return ("Ons", budget.Wednesday);
-        yield return ("Tor", budget.Thursday);
-        yield return ("Fre", budget.Friday);
-        yield return ("Lör", budget.Saturday);
-        yield return ("Sön", budget.Sunday);
+        yield return ("Måndag", LevelLabelFor(budget.Monday));
+        yield return ("Tisdag", LevelLabelFor(budget.Tuesday));
+        yield return ("Onsdag", LevelLabelFor(budget.Wednesday));
+        yield return ("Torsdag", LevelLabelFor(budget.Thursday));
+        yield return ("Fredag", LevelLabelFor(budget.Friday));
+        yield return ("Lördag", LevelLabelFor(budget.Saturday));
+        yield return ("Söndag", LevelLabelFor(budget.Sunday));
     }
 
-    private static int BarHeight(int minutes) => Math.Clamp(minutes, 0, 180) + 4;
+    private static string LevelLabelFor(int minutes)
+    {
+        var closest = TimeLevel.ClosestMinutes(minutes);
+        return TimeLevel.All.First(level => level.Minutes == closest).Label;
+    }
 }

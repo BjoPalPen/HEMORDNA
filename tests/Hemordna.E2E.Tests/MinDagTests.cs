@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Microsoft.Playwright;
 
 namespace Hemordna.E2E.Tests;
@@ -109,7 +110,9 @@ public class MinDagTests
         await SignUpAsync(page, "Cecilia");
 
         await page.GetByRole(AriaRole.Button, new() { Name = "Ändra din vanliga vecka" }).ClickAsync();
-        await page.GetByLabel("Mån").FillAsync("45");
+        // No number field: a qualitative level picker per day - see Support.TimeLevel.
+        await page.Locator(".field-day", new() { HasText = "Mån" })
+            .GetByRole(AriaRole.Button, new() { Name = "Gott om tid" }).ClickAsync();
         await page.GetByRole(AriaRole.Button, new() { Name = "Spara vanlig vecka" }).ClickAsync();
 
         // The editor closes on save, going back to the button that opens it.
@@ -119,7 +122,10 @@ public class MinDagTests
         await page.ReloadAsync();
         await page.GetByRole(AriaRole.Button, new() { Name = "Ändra din vanliga vecka" }).ClickAsync();
 
-        await Assertions.Expect(page.GetByLabel("Mån")).ToHaveValueAsync("45");
+        // The chosen level comes back highlighted, without ever showing a minute count.
+        await Assertions.Expect(page.Locator(".field-day", new() { HasText = "Mån" })
+            .GetByRole(AriaRole.Button, new() { Name = "Gott om tid" }))
+            .ToHaveClassAsync(new Regex("btn-primary"));
     }
 
     /// <summary>
