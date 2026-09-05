@@ -18,11 +18,15 @@ public sealed record HouseholdMemberResponse(
     Guid Id,
     string DisplayName,
     bool IsActive,
-    WeeklyTimeBudgetContract WeeklyTimeBudgetMinutes);
+    WeeklyTimeBudgetContract WeeklyTimeBudgetMinutes,
+    HouseholdRole? Role);
 
 public sealed record AreaResponse(Guid Id, string Name, bool IsActive);
 
-public sealed record AddMemberRequest(string? DisplayName, WeeklyTimeBudgetContract? WeeklyTimeBudgetMinutes);
+public sealed record AddMemberRequest(
+    string? DisplayName, WeeklyTimeBudgetContract? WeeklyTimeBudgetMinutes, HouseholdRole? Role = null);
+
+public sealed record SetMemberRoleRequest(HouseholdRole? Role);
 
 public sealed record AddAreaRequest(string? Name);
 
@@ -73,6 +77,7 @@ public sealed record CreateTaskRequest(
     bool CanBeDeferred = true,
     bool HasRotatingResponsibility = false,
     bool RequiresMultiplePeople = false,
+    bool RequiresAdult = false,
     RecurrenceRuleContract? Recurrence = null,
     int? StaleAfterDays = null);
 
@@ -88,6 +93,7 @@ public sealed record TaskDefinitionResponse(
     bool CanBeDeferred,
     bool HasRotatingResponsibility,
     bool RequiresMultiplePeople,
+    bool RequiresAdult,
     bool IsActive,
     RecurrenceRuleContract? Recurrence,
     int? StaleAfterDays);

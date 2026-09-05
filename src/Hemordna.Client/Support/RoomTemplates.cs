@@ -5,25 +5,42 @@ namespace Hemordna.Client.Support;
 /// <summary>
 /// How often a template task repeats. "AsNeeded" has no calendar slot - it becomes due a fixed
 /// number of days after it was last completed instead, see TaskDefinition.StaleAfterDays.
+/// "TwiceWeekly" has no single weekly slot either - a week's recurrence only carries one
+/// weekday (see RecurrenceRule.Weekly) - so it is approximated as a task that comes due every
+/// few days rather than on the same two weekdays every week; see ToScheduling.
 /// </summary>
 public enum TaskFrequency
 {
     Daily,
+    TwiceWeekly,
     Weekly,
     Monthly,
     AsNeeded
 }
 
-/// <summary>One item a room template generates. The minutes travel to the API but are never shown - see TimeLevel.</summary>
-public sealed record RoomTemplateTask(string Name, int EstimatedMinutes, TaskFrequency Frequency)
+/// <summary>
+/// One item a room template generates. The minutes travel to the API but are never shown - see
+/// TimeLevel. <paramref name="AdultsOnly"/> keeps the task's rotation away from children (e.g.
+/// washing windows) - see TaskDefinition.RequiresAdult.
+/// </summary>
+public sealed record RoomTemplateTask(
+    string Name, int EstimatedMinutes, TaskFrequency Frequency, bool AdultsOnly = false)
 {
     /// <summary>Default "as needed" interval - not shown, and not user-configurable, anywhere it is used.</summary>
     public const int AsNeededDefaultDays = 21;
+
+    /// <summary>
+    /// Every 3 days averages out to a little over twice a week without pinning it to the same
+    /// two weekdays - close enough for a chore reminder, and it drifts across the week over
+    /// time instead of always landing on, say, Tuesday and Friday.
+    /// </summary>
+    private const int TwiceWeeklyIntervalDays = 3;
 
     /// <summary>The recurrence and/or stale-after-days pair to send when creating this task.</summary>
     public (RecurrenceRuleContract? Recurrence, int? StaleAfterDays) ToScheduling(DateOnly today) => Frequency switch
     {
         TaskFrequency.Daily => (new RecurrenceRuleContract("Daily", 1, today, null, null), null),
+        TaskFrequency.TwiceWeekly => (new RecurrenceRuleContract("Daily", TwiceWeeklyIntervalDays, today, null, null), null),
         TaskFrequency.Weekly => (new RecurrenceRuleContract("Weekly", 1, today, today.DayOfWeek.ToString(), null), null),
         TaskFrequency.Monthly => (new RecurrenceRuleContract("Monthly", 1, today, null, null), null),
         TaskFrequency.AsNeeded => (null, AsNeededDefaultDays),
@@ -81,12 +98,18 @@ public static class RoomTemplates
         new("Bedroom", "Sovrum",
         [
             new("Bädda sängen", 2, TaskFrequency.Daily),
-            new("Dammsug golvet", 5, TaskFrequency.Weekly),
+            // Opening a window and closing it again - barely any active effort, but a daily
+            // habit rather than something to be reminded of occasionally, so it keeps a token,
+            // near-zero estimate rather than 0 and repeats daily alongside making the bed.
+            new("Vädra rummet", 1, TaskFrequency.Daily),
+            new("Dammsug golvet", 5, TaskFrequency.TwiceWeekly),
+            new("Torka golvet", 3, TaskFrequency.Weekly),
             new("Damma ytor", 3, TaskFrequency.AsNeeded),
-            // Opening a window and closing it again - barely any active effort, but still
-            // worth a reminder, so it keeps a token, near-zero estimate rather than 0.
-            new("Vädra rummet", 1, TaskFrequency.AsNeeded),
-            new("Plocka undan kläder", 5, TaskFrequency.Weekly)
+            new("Plocka undan kläder", 5, TaskFrequency.Weekly),
+            new("Torka lister", 5, TaskFrequency.Monthly),
+            // Ladders, reach, and a bit more care than most chores here - kept off children's
+            // rotation by default; still fully editable per task afterwards.
+            new("Tvätta fönster", 10, TaskFrequency.Monthly, AdultsOnly: true)
         ]),
         new("LivingRoom", "Vardagsrum",
         [

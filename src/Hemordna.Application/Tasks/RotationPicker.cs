@@ -21,6 +21,19 @@ internal static class RotationPicker
             .ThenBy(member => member.Id)
             .ToList();
 
+        if (definition.RequiresAdult)
+        {
+            // A soft preference: if every active member happens to be a child (or nobody's
+            // role is known), falling back to the full list keeps the task assignable rather
+            // than stuck with no eligible candidate.
+            var adults = eligible.Where(member => member.Role != HouseholdRole.ChildOrTeen).ToList();
+
+            if (adults.Count > 0)
+            {
+                eligible = adults;
+            }
+        }
+
         if (eligible.Count == 0)
         {
             return null;

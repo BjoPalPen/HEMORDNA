@@ -162,7 +162,7 @@ else
             <h2>Övrigt</h2>
             <p class="muted small">Uppgifter som inte hör till ett särskilt rum.</p>
 
-            <RoomTasks HouseholdId="@_householdId" Label="Övrigt"
+            <RoomTasks HouseholdId="@_householdId" Label="Övrigt" ShowSuggestions="true"
                        AllTasks="@_tasks" Members="@_members" OnChanged="LoadAsync" />
         </div>
     }
@@ -379,7 +379,8 @@ else
                             HasRotatingResponsibility: ownerId is null,
                             RequiresMultiplePeople: false,
                             Recurrence: recurrence,
-                            StaleAfterDays: staleAfterDays));
+                            StaleAfterDays: staleAfterDays,
+                            RequiresAdult: task.AdultsOnly));
                     }
 
                     created.Add((name, selectedTasks.Sum(t => t.EstimatedMinutes)));

@@ -253,8 +253,7 @@ else
 
     private int TaskCountFor(Guid areaId) => _tasks.Count(t => t.AreaId == areaId && t.IsActive);
 
-    private static string RoleValueFor(HouseholdMemberResponse member)
-        => HouseholdRolePresets.Match(member.WeeklyTimeBudgetMinutes)?.ToString() ?? string.Empty;
+    private static string RoleValueFor(HouseholdMemberResponse member) => member.Role ?? string.Empty;
 
     private async Task SetMemberRoleAsync(Guid memberId, object? value)
     {
@@ -268,7 +267,14 @@ else
             return;
         }
 
-        if (await Api.SetWeeklyBudgetAsync(householdId, memberId, HouseholdRolePresets.BudgetFor(role)))
+        // Both calls describe the same pick from the UI's point of view - the role itself, and
+        // the budget the preset implies for it (still freely editable afterwards) - and neither
+        // depends on the other, so they run concurrently rather than doubling the round trip.
+        var roleTask = Api.SetMemberRoleAsync(householdId, memberId, role.ToString());
+        var budgetTask = Api.SetWeeklyBudgetAsync(householdId, memberId, HouseholdRolePresets.BudgetFor(role));
+        await Task.WhenAll(roleTask, budgetTask);
+
+        if (await budgetTask)
         {
             await LoadAsync();
         }
@@ -349,7 +355,7 @@ else
                         _form.MinutesPerDay, _form.MinutesPerDay, _form.MinutesPerDay)
                     : null;
 
-            if (await Api.AddMemberAsync(householdId, _form.DisplayName.Trim(), budget) is null)
+            if (await Api.AddMemberAsync(householdId, _form.DisplayName.Trim(), budget, _form.Role?.ToString()) is null)
             {
                 _message = "Det gick inte att lägga till medlemmen. Försök igen.";
                 return;

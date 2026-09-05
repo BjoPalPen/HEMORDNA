@@ -161,16 +161,32 @@ public sealed class HemordnaApiClient
         Guid householdId,
         string displayName,
         WeeklyTimeBudgetContract? weeklyTimeBudget,
+        string? role = null,
         CancellationToken cancellationToken = default)
     {
         var request = await AuthorizedAsync(HttpMethod.Post, $"api/households/{householdId}/members", cancellationToken);
-        request.Content = JsonContent.Create(new AddMemberRequest(displayName, weeklyTimeBudget));
+        request.Content = JsonContent.Create(new AddMemberRequest(displayName, weeklyTimeBudget, role));
 
         var response = await _http.SendAsync(request, cancellationToken);
 
         return response.IsSuccessStatusCode
             ? await response.Content.ReadFromJsonAsync<HouseholdMemberResponse>(cancellationToken)
             : null;
+    }
+
+    /// <summary>Sets or clears a member's role. Independent of their weekly budget - see SetWeeklyBudgetAsync.</summary>
+    public async Task<bool> SetMemberRoleAsync(
+        Guid householdId,
+        Guid memberId,
+        string? role,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Put, $"api/households/{householdId}/members/{memberId}/role", cancellationToken);
+        request.Content = JsonContent.Create(new SetMemberRoleRequest(role));
+
+        var response = await _http.SendAsync(request, cancellationToken);
+        return response.IsSuccessStatusCode;
     }
 
     /// <summary>Deactivates the area rather than deleting it - see Area for why.</summary>

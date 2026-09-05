@@ -7,29 +7,28 @@ Lägesbild per 2026-09-05, för en ny session. Arbetssättet styrs av
 ## Läge
 
 `main` är på `2abb539`, opåverkad. Allt arbete ligger på `feat/tidsbudget-per-medlem`, med
-öppen PR #9 mot `main` (ej mergad). Tid: se §6a/§6b i DESIGN.md - fortfarande dold i Min
-dag/Planering, satt via roll (Hushållsöversikten) eller rumsmallens våningsguide (Områden).
+öppen PR #9 mot `main` (ej mergad).
 
-**"Uppgifter" som egen sida är borttagen.** All uppgiftshantering flyttade in i Områden
-(feedback: kändes fel att hantera uppgifter någon annanstans än rummet de hör till). Varje
-rum är nu ett eget kort med sin uppgiftslista, en "Ta bort"-knapp per uppgift och en dold
-"Lägg till en uppgift i `<rum>`"-form; ett "Övrigt"-kort tar arealösa uppgifter. Ny use case
-`DeactivateTaskDefinition` + `DELETE .../tasks/{id}` gör borttag av en enskild, redan skapad
-uppgift möjligt - tidigare fanns bara hela-rummet-bort. Se `RoomTasks.razor` (ny komponent).
-NavMenu/Mer uppdaterade: Områden tog Uppgifters plats i mobilens bottenrad.
+**Sovrumsmallen har en riktig städrytm** i stället för en enda uppskattning: bädda sängen +
+vädra dagligen, dammsug två gånger i veckan (`TaskFrequency.TwiceWeekly` - byggs som daglig
+regel med 3 dagars intervall, ingen kalenderplats för "2x/vecka" annars - ARCHITECTURE.md §3),
+torka golvet varje vecka, torka lister/tvätta fönster en gång i månaden.
 
-**Sovrum kan ägas av en medlem** - vid "Sovrum" i våningsguiden väljs per instans ("Sovrum 1",
-"Sovrum 2", ...) en ägare eller "Delat ansvar"; en ägare ger `HasRotatingResponsibility=false`
-tillsammans med `DefaultResponsibleMemberId`. Ny komponent `BedroomOwnerPicker.razor` - bara
-för sovrum, inte andra rumstyper. Tidsuppskattningar i `RoomTemplates` är omkalibrerade nedåt
-(t.ex. dammsugning 10→3-5 min) efter feedback om orimligt höga siffror.
+**Roll är nu en sparad egenskap** på `HouseholdMember` (`Role`), inte längre bara gissad från
+budgeten. `TaskDefinition.RequiresAdult` låter en mallad uppgift (sovrummets "Tvätta fönster")
+hoppas över av barn i rotationen - `RotationPicker` faller tillbaka till hela hushållet om
+ingen vuxen är kvar. Ny migration `AddMemberRoleAndTaskRequiresAdult`, applicerad lokalt.
 
-**Playwright-lärdom:** `@bind` på `<input type=number>` committar bara på blur, inte
-`FillAsync`. Utlöser blur (via nästa klick) en re-render som flyttar submit-knappen (fler
-rader läggs till), kan Playwrights redan beräknade klick-koordinat missa - inget fel, klicket
-uträttar bara ingenting. Fix: `Keyboard.PressAsync("Tab")` + vänta in layouten före klicket.
-Inte en produktbugg.
-195 tester gröna (Domain 69, Application 90, E2E 36).
+**"Lägg till vanliga hushållssysslor"** (`GeneralTaskTemplates`, Övrigt-kortet) fanns redan
+från förra passet; nu dokumenterad i DESIGN.md §6b.
+
+**Playwright-lärdomar (nya):** (1) klientens lokala, gitignorade
+`appsettings.Development.json` kan peka på LAN-IP:n (för mobiltest) i stället för `localhost` -
+starta då dev-API:t med `--urls "http://*:5199"`, annars svarar det bara på egen bindningsadress.
+(2) Två oberoende `PUT`-anrop i sekvens fördubblar rundresetiden i onödan och gör ett
+tajmningskänsligt test flakigt - kör dem med `Task.WhenAll` (se `Hushall.razor`s rollväljare).
+
+197 tester gröna (Domain 69, Application 90, E2E 38).
 
 ## Köra
 
@@ -41,8 +40,9 @@ med samma `ConnectionStrings__Hemordna` som API:t.
 
 ## Kända brister
 
-PWA:n är overifierad i riktig browser. `HushallTests.Changing_a_members_role_...` är flaky
-under full parallell körning (passerar isolerat) - misstänkt timing, ej åtgärdad.
+PWA:n är overifierad i riktig browser. `HushallTests.Changing_a_members_role_...` var flaky
+under full parallell körning - trolig orsak (sekventiella anrop, se ovan) åtgärdad, men inte
+omtestad under lång tid ännu.
 
 ## Öppna frågor och nästa steg
 

@@ -78,11 +78,11 @@ public class OmradenTests
         await Assertions.Expect(AreaCard(page, "Sovrum 2")).ToBeVisibleAsync();
         await Assertions.Expect(AreaCard(page, "Sovrum 3")).ToBeVisibleAsync();
 
-        // Bedroom template: 2+5+3+1+5 = 16 minutes, repeated for each of the three rooms.
+        // Bedroom template: 2+1+5+3+3+5+5+10 = 34 minutes, repeated for each of the three rooms.
         var summary = page.Locator(".notice", new() { HasText = "Skapat, uppskattad tid per rum" });
         await Assertions.Expect(summary.Locator(".list-item", new() { HasText = "Sovrum 1" }))
-            .ToContainTextAsync("16 min");
-        await Assertions.Expect(summary).ToContainTextAsync("Totalt: 48 min");
+            .ToContainTextAsync("34 min");
+        await Assertions.Expect(summary).ToContainTextAsync("Totalt: 102 min");
     }
 
     [Fact]
@@ -192,6 +192,27 @@ public class OmradenTests
     }
 
     [Fact]
+    public async Task A_bedroom_templates_window_washing_task_is_restricted_to_adults()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Lovisa");
+
+        await page.GotoAsync("/omraden");
+        await page.GetByLabel("Rumstyp").SelectOptionAsync(new SelectOptionValue { Label = "Sovrum" });
+        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa" }).ClickAsync();
+
+        // Ladders and more care than most chores here - kept off children's rotation by
+        // default (see RoomTemplates.Bedroom), unlike the room's everyday tasks.
+        var card = AreaCard(page, "Sovrum");
+        var windowRow = card.Locator(".list-item", new() { HasText = "Tvätta fönster" });
+        await windowRow.WaitForAsync();
+        await Assertions.Expect(windowRow).ToContainTextAsync("endast vuxna");
+
+        await Assertions.Expect(card.Locator(".list-item", new() { HasText = "Bädda sängen" }))
+            .Not.ToContainTextAsync("endast vuxna");
+    }
+
+    [Fact]
     public async Task Adding_an_as_needed_task_by_hand_labels_it_vid_behov()
     {
         var page = await _app.NewPageAsync();
@@ -206,5 +227,25 @@ public class OmradenTests
         var row = page.Locator(".list-item", new() { HasText = "Putsa fönster" });
         await row.WaitForAsync();
         await Assertions.Expect(row).ToContainTextAsync("vid behov");
+    }
+
+    [Fact]
+    public async Task Choosing_a_common_household_chore_creates_it_with_its_template_frequency()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Karin");
+
+        await page.GotoAsync("/omraden");
+        await page.GetByText("Lägg till vanliga hushållssysslor").ClickAsync();
+        // Nothing is preselected - it varies too much between households (see GeneralTaskTemplates).
+        await page.GetByLabel("Rasta hunden").CheckAsync();
+        await page.GetByRole(AriaRole.Button, new() { Name = "Lägg till valda" }).ClickAsync();
+
+        var row = page.Locator(".list-item", new() { HasText = "Rasta hunden" });
+        await row.WaitForAsync();
+        await Assertions.Expect(row).ToContainTextAsync("varje dag");
+
+        // Only the checked chore was created - the rest of the list is still just suggestions.
+        await Assertions.Expect(page.Locator(".list-item", new() { HasText = "Handla mat" })).Not.ToBeVisibleAsync();
     }
 }

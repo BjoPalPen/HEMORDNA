@@ -37,6 +37,7 @@ internal sealed class TaskDefinitionConfiguration : IEntityTypeConfiguration<Tas
         builder.Property(definition => definition.CanBeDeferred).IsRequired();
         builder.Property(definition => definition.HasRotatingResponsibility).IsRequired();
         builder.Property(definition => definition.RequiresMultiplePeople).IsRequired();
+        builder.Property(definition => definition.RequiresAdult).IsRequired();
         builder.Property(definition => definition.IsActive).IsRequired();
         builder.Property(definition => definition.CreatedAt).IsRequired();
 

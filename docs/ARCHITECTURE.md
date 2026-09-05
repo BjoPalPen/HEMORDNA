@@ -169,6 +169,29 @@ Varje rumskort listar och hanterar sina egna uppgifter inline; ett `TaskDefiniti
 den saknade pusselbiten för att kunna rätta ett rum som redan skapats, inte bara filtrera bort
 en mall-uppgift innan skapandet (se `RoomTemplates`-kryssrutorna, §6b i DESIGN.md).
 
+### Beslut: `HouseholdMember.Role` som sparad egenskap, `TaskDefinition.RequiresAdult` — `IMPLEMENTED`
+
+Rollen (`HouseholdRole`: `AdultFullTime`/`ChildOrTeen`/`Retired`) fanns tidigare bara som en
+klientsidig gissning - `HouseholdRolePresets.Match` jämförde en medlems sparade veckobudget mot
+de tre rollmallarnas budgetar och visade "Anpassad tid" om ingen matchade. Det räckte för att
+visa rätt val i rollväljaren, men gick sönder så fort budgeten redigerades för hand efteråt, och
+gav ingen sanning en backend-regel kunde luta sig mot. Rollen är nu ett riktigt, nullable fält
+på `HouseholdMember` (`SetRole`), satt av samma val som redan sätter veckobudgeten (`AddMember`/
+`PUT .../members/{id}/role`, båda anropen körs parallellt från klienten - se nedan).
+
+Motivet var konkret: vissa uppgifter (fönstertvätt i sovrumsmallen) passar inte barn, oavsett
+hur rolig deras vecka annars ser ut. `TaskDefinition.RequiresAdult` är en mjuk spärr -
+`RotationPicker` hoppar över medlemmar vars roll är `ChildOrTeen` när den är satt, men faller
+tillbaka till hela listan om det inte finns någon kvar (samma "stale rotation ska aldrig
+blockera schemaläggning"-princip som redan gäller när senast tilldelade lämnat hushållet).
+`Role` är `null` tills någon uttryckligen väljer en roll eller sätter tiden för hand - precis
+som tidigare, bara sant lagrat i stället för återskapat via gissning.
+
+`Hushall.razor`s rollväljare gör nu två oberoende PUT-anrop (roll, veckobudget) samtidigt med
+`Task.WhenAll` i stället för i sekvens - att köra dem efter varandra fördubblade
+rundresetiden till servern helt i onödan, eftersom de inte beror på varandra, och gjorde ett
+redan tajmningskänsligt E2E-test (`HushallTests.Changing_a_members_role_...`) flakigare.
+
 ### Beslut: `MemberPreference` — `IMPLEMENTED` (domän och API) / `PROPOSED` (UI)
 
 Individuell presentation (`PresentationMode`: text / bild+text / stor text / en uppgift åt

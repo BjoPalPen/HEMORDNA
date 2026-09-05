@@ -22,7 +22,8 @@ public sealed class AddHouseholdMember
         Guid householdId,
         string displayName,
         WeeklyTimeBudget weeklyTimeBudget,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        HouseholdRole? role = null)
     {
         var household = await _households.FindByIdAsync(householdId, cancellationToken);
 
@@ -31,7 +32,7 @@ public sealed class AddHouseholdMember
             return null;
         }
 
-        var member = household.AddMember(displayName, weeklyTimeBudget, _timeProvider.GetUtcNow());
+        var member = household.AddMember(displayName, weeklyTimeBudget, _timeProvider.GetUtcNow(), role);
 
         await _households.UpdateAsync(household, cancellationToken);
 

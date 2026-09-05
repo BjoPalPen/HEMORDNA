@@ -30,6 +30,10 @@ else
                     {
                         <span class="muted small">@MemberNameFor(ownerId)</span>
                     }
+                    @if (task.RequiresAdult)
+                    {
+                        <span class="muted small">endast vuxna</span>
+                    }
                 </span>
                 <button type="button" class="btn btn-secondary" aria-label="@($"Ta bort {task.Name}")"
                         disabled="@(_removingTaskId == task.Id)"
@@ -39,6 +43,28 @@ else
             </li>
         }
     </ul>
+}
+
+@if (ShowSuggestions)
+{
+    <details class="more-options">
+        <summary>Lägg till vanliga hushållssysslor</summary>
+        <p class="muted small">Kryssa i det som stämmer för ert hushåll - inget är förvalt, eftersom det varierar mycket mellan hushåll.</p>
+
+        @foreach (var task in GeneralTaskTemplates.All)
+        {
+            <label class="field-check">
+                <input type="checkbox" @bind="_suggestedSelected[task.Name]" />
+                <span>@task.Name</span>
+            </label>
+        }
+
+        <div class="floor-submit">
+            <button type="button" class="btn btn-primary" disabled="@_suggestionsBusy" @onclick="AddSuggestedTasksAsync">
+                @(_suggestionsBusy ? "Lägger till..." : "Lägg till valda")
+            </button>
+        </div>
+    </details>
 }
 
 <details class="more-options">
@@ -75,6 +101,11 @@ else
             </select>
         </label>
 
+        <label class="field-check">
+            <input type="checkbox" @bind="_form.RequiresAdult" />
+            <span>Bara vuxna ska tilldelas den här</span>
+        </label>
+
         @if (_message is { } message)
         {
             <div class="notice notice-problem" role="alert">@message</div>
@@ -108,17 +139,26 @@ else
     [Parameter, EditorRequired]
     public EventCallback OnChanged { get; set; }
 
+    /// <summary>Whether to offer GeneralTaskTemplates' checklist - true only for "Övrigt" (no room to suggest tasks from instead).</summary>
+    [Parameter]
+    public bool ShowSuggestions { get; set; }
+
     private sealed class Form
     {
         public string Name { get; set; } = string.Empty;
         public int EstimatedMinutes { get; set; } = 30;
         public string Recurrence { get; set; } = string.Empty;
+        public bool RequiresAdult { get; set; }
     }
 
     private readonly Form _form = new();
     private string? _message;
     private bool _busy;
     private Guid? _removingTaskId;
+
+    private readonly Dictionary<string, bool> _suggestedSelected =
+        GeneralTaskTemplates.All.ToDictionary(task => task.Name, _ => false);
+    private bool _suggestionsBusy;
 
     private DateOnly Today => DateOnly.FromDateTime(TimeProvider.GetLocalNow().DateTime);
 
@@ -128,11 +168,14 @@ else
     private string MemberNameFor(Guid memberId)
         => Members.FirstOrDefault(m => m.Id == memberId)?.DisplayName ?? "okänd";
 
-    private static string RecurrenceLabel(RecurrenceRuleContract recurrence) => recurrence.Frequency switch
+    private static string RecurrenceLabel(RecurrenceRuleContract recurrence) => recurrence switch
     {
-        "Daily" => "varje dag",
-        "Weekly" => "varje vecka",
-        "Monthly" => "varje månad",
+        // A "twice weekly" template task travels as a Daily rule with an interval > 1 - see
+        // RoomTemplateTask.ToScheduling. There is no calendar slot for "twice a week" as such.
+        { Frequency: "Daily", Interval: > 1 } => $"ungefär var {recurrence.Interval}:e dag",
+        { Frequency: "Daily" } => "varje dag",
+        { Frequency: "Weekly" } => "varje vecka",
+        { Frequency: "Monthly" } => "varje månad",
         _ => "återkommer"
     };
 
@@ -177,7 +220,8 @@ else
                 HasRotatingResponsibility: true,
                 RequiresMultiplePeople: false,
                 Recurrence: recurrence,
-                StaleAfterDays: staleAfterDays);
+                StaleAfterDays: staleAfterDays,
+                RequiresAdult: _form.RequiresAdult);
 
             if (await Api.CreateTaskAsync(HouseholdId, request) is null)
             {
@@ -188,6 +232,7 @@ else
             _form.Name = string.Empty;
             _form.EstimatedMinutes = 30;
             _form.Recurrence = string.Empty;
+            _form.RequiresAdult = false;
             await OnChanged.InvokeAsync();
         }
         catch (HttpRequestException)
@@ -197,6 +242,52 @@ else
         finally
         {
             _busy = false;
+        }
+    }
+
+    private async Task AddSuggestedTasksAsync()
+    {
+        var selected = GeneralTaskTemplates.All.Where(task => _suggestedSelected.GetValueOrDefault(task.Name)).ToList();
+
+        if (selected.Count == 0)
+        {
+            return;
+        }
+
+        _suggestionsBusy = true;
+
+        try
+        {
+            foreach (var task in selected)
+            {
+                var (recurrence, staleAfterDays) = task.ToScheduling(Today);
+
+                await Api.CreateTaskAsync(HouseholdId, new CreateTaskRequest(
+                    task.Name,
+                    task.EstimatedMinutes,
+                    Description: null,
+                    AreaId: null,
+                    Priority: "Normal",
+                    DefaultResponsibleMemberId: null,
+                    PreferredWeekday: null,
+                    CanBeDeferred: true,
+                    HasRotatingResponsibility: true,
+                    RequiresMultiplePeople: false,
+                    Recurrence: recurrence,
+                    StaleAfterDays: staleAfterDays,
+                    RequiresAdult: task.AdultsOnly));
+            }
+
+            foreach (var task in selected)
+            {
+                _suggestedSelected[task.Name] = false;
+            }
+
+            await OnChanged.InvokeAsync();
+        }
+        finally
+        {
+            _suggestionsBusy = false;
         }
     }
 

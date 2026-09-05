@@ -26,6 +26,10 @@ internal sealed class HouseholdMemberConfiguration : IEntityTypeConfiguration<Ho
         builder.Property(member => member.IsActive).IsRequired();
         builder.Property(member => member.CreatedAt).IsRequired();
 
+        // Nullable - see HouseholdMember.Role for what null means. Stored as its underlying
+        // int, the same approach as TaskDefinition.Priority.
+        builder.Property(member => member.Role);
+
         // WeeklyTimeBudget stores its minutes in a private array and exposes no per-weekday
         // properties. Rather than adding seven public properties purely to satisfy the ORM,
         // it maps to a native PostgreSQL integer[] - ordered Sunday..Saturday, matching

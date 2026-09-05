@@ -81,6 +81,10 @@ internal static class HouseholdEndpoints
             .Produces(StatusCodes.Status404NotFound)
             .ProducesValidationProblem();
 
+        scoped.MapPut("/members/{memberId:guid}/role", SetMemberRoleAsync)
+            .Produces<HouseholdMemberResponse>()
+            .Produces(StatusCodes.Status404NotFound);
+
         scoped.MapGet("/members/{memberId:guid}/preferences", GetPreferenceAsync)
             .Produces<PreferenceResponse>()
             .Produces(StatusCodes.Status404NotFound);
@@ -185,7 +189,7 @@ internal static class HouseholdEndpoints
         var budget = request.WeeklyTimeBudgetMinutes?.ToDomain() ?? WeeklyTimeBudget.Empty;
 
         var member = await addMember.HandleAsync(
-            householdId, request.DisplayName, budget, cancellationToken);
+            householdId, request.DisplayName, budget, cancellationToken, request.Role);
 
         return member is null
             ? Results.NotFound()
@@ -280,6 +284,7 @@ internal static class HouseholdEndpoints
                 request.CanBeDeferred,
                 request.HasRotatingResponsibility,
                 request.RequiresMultiplePeople,
+                request.RequiresAdult,
                 request.Recurrence?.ToDomain(),
                 request.StaleAfterDays),
             cancellationToken);
@@ -364,6 +369,18 @@ internal static class HouseholdEndpoints
     {
         var member = await setWeeklyBudget.HandleAsync(
             householdId, memberId, request.ToDomain(), cancellationToken);
+
+        return member is null ? Results.NotFound() : Results.Ok(ToResponse(member));
+    }
+
+    private static async Task<IResult> SetMemberRoleAsync(
+        Guid householdId,
+        Guid memberId,
+        SetMemberRoleRequest request,
+        SetMemberRole setRole,
+        CancellationToken cancellationToken)
+    {
+        var member = await setRole.HandleAsync(householdId, memberId, request.Role, cancellationToken);
 
         return member is null ? Results.NotFound() : Results.Ok(ToResponse(member));
     }
@@ -498,7 +515,8 @@ internal static class HouseholdEndpoints
             member.Id,
             member.DisplayName,
             member.IsActive,
-            WeeklyTimeBudgetContract.From(member.WeeklyTimeBudget));
+            WeeklyTimeBudgetContract.From(member.WeeklyTimeBudget),
+            member.Role);
 
     private static AreaResponse ToResponse(Area area) => new(area.Id, area.Name, area.IsActive);
 
@@ -515,6 +533,7 @@ internal static class HouseholdEndpoints
             definition.CanBeDeferred,
             definition.HasRotatingResponsibility,
             definition.RequiresMultiplePeople,
+            definition.RequiresAdult,
             definition.IsActive,
             definition.Recurrence is { } recurrence ? RecurrenceRuleContract.From(recurrence) : null,
             definition.StaleAfterDays);

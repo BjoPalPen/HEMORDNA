@@ -64,6 +64,7 @@ public sealed class CreateTaskDefinition
         definition.SetCanBeDeferred(request.CanBeDeferred);
         definition.SetRotatingResponsibility(request.HasRotatingResponsibility);
         definition.SetRequiresMultiplePeople(request.RequiresMultiplePeople);
+        definition.SetRequiresAdult(request.RequiresAdult);
         definition.SetRecurrence(request.Recurrence);
         definition.SetStaleAfterDays(request.StaleAfterDays);
 
@@ -85,5 +86,6 @@ public sealed record NewTaskDefinition(
     bool CanBeDeferred = true,
     bool HasRotatingResponsibility = false,
     bool RequiresMultiplePeople = false,
+    bool RequiresAdult = false,
     RecurrenceRule? Recurrence = null,
     int? StaleAfterDays = null);

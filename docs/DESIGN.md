@@ -199,14 +199,38 @@ kunna plocka bort det enstaka som inte stämmer (ett badrum utan badkar behöver
 dusch eller badkar"). Att bocka ur en uppgift utesluter den helt - den skapas aldrig, snarare
 än att skapas och sen behöva tas bort.
 
-Varje mallad uppgift får också en **frekvens** - Daglig, Veckovis, Månadsvis eller **Vid
-behov** - satt som ett förvalt, rimligt standardvärde per uppgift i `RoomTemplates` (t.ex.
-"Diska" dagligen, "Rengör toalettstolen" varje vecka, "Damma hyllor" vid behov), i stället för
-att den som lägger till rummet ska behöva svara på det för var och en av upp till åtta
-uppgifter. "Vid behov" är inte en kalendercykel: uppgiften dyker upp igen ett fast antal dagar
-(`RoomTemplateTask.AsNeededDefaultDays`, 21) efter den senast blev avklarad, inte på ett givet
-datum - se ARCHITECTURE.md §3 för `TaskDefinition.StaleAfterDays`. Samma frekvensval finns
-även i det manuella "Lägg till en uppgift i `<rum>`"-formuläret på Områden.
+Varje mallad uppgift får också en **frekvens** - Daglig, **Två gånger i veckan**, Veckovis,
+Månadsvis eller **Vid behov** - satt som ett förvalt, rimligt standardvärde per uppgift i
+`RoomTemplates` (t.ex. "Diska" dagligen, "Rengör toalettstolen" varje vecka, "Damma hyllor" vid
+behov), i stället för att den som lägger till rummet ska behöva svara på det för var och en av
+upp till åtta uppgifter. "Två gånger i veckan" (t.ex. dammsugning i sovrummet) har ingen egen
+kalenderplats - en veckas återkommelse bär bara en veckodag - så den byggs som en daglig regel
+med tre dagars intervall (`RoomTemplateTask.ToScheduling`), vilket i praktiken glider över
+veckans dagar snarare än att alltid landa på exakt samma två. "Vid behov" är inte en
+kalendercykel: uppgiften dyker upp igen ett fast antal dagar (`RoomTemplateTask.
+AsNeededDefaultDays`, 21) efter den senast blev avklarad, inte på ett givet datum - se
+ARCHITECTURE.md §3 för `TaskDefinition.StaleAfterDays`. Samma frekvensval finns även i det
+manuella "Lägg till en uppgift i `<rum>`"-formuläret på Områden.
+
+Sovrumsmallen speglar en verklig städrytm snarare än en enda uppskattning: bädda sängen och
+vädra rummet dagligen, dammsugning två gånger i veckan, torka golvet varje vecka, och torka
+lister/tvätta fönster en gång i månaden.
+
+En mallad uppgift kan också märkas **endast vuxna** (`RoomTemplateTask.AdultsOnly`,
+`TaskDefinition.RequiresAdult`) - sovrumsmallens "Tvätta fönster" är det första exemplet, då
+stegar och högre höjd inte är en barnuppgift. Rotationen (`RotationPicker`) hoppar då över
+medlemmar vars roll är "Barn eller ungdom"; är alla aktiva medlemmar barn faller den tillbaka
+till hela hushållet snarare än att låta uppgiften stå utan någon ansvarig. Samma kryssruta
+("Bara vuxna ska tilldelas den här") finns i det manuella formuläret. Rollen är numera en
+sparad egenskap på medlemmen (`HouseholdMember.Role`), satt när rollen väljs på
+Hushållsöversikten - inte längre bara härledd genom att jämföra sparad veckobudget mot en
+rollmall.
+
+"Övrigt"-kortet erbjuder också ett eget bibliotek av vanliga, rumslösa hushållssysslor
+(`GeneralTaskTemplates`: handla mat, tvätta, betala räkningar, rasta hunden, ...) bakom
+disclosuren "Lägg till vanliga hushållssysslor" - samma mall-tänk som `RoomTemplates`, men
+**inget är förvalt**, eftersom vilka som är relevanta varierar mycket mer mellan hushåll än
+vilka uppgifter ett givet rum har.
 
 **Rum och medlemmar kan tas bort**, liksom enskilda uppgifter. Ett rum kan ha skapats fel,
 eller en medlem kan ha flyttat. Knapparna heter "Ta bort" och avaktiverar

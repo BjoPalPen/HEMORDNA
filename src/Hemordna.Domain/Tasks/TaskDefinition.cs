@@ -67,6 +67,14 @@ public sealed class TaskDefinition
     /// <summary>Whether the task realistically needs more than one person.</summary>
     public bool RequiresMultiplePeople { get; private set; }
 
+    /// <summary>
+    /// Whether this task's rotation should skip members whose role is a child - e.g. washing
+    /// windows. Only a soft preference: if every active member is a child, rotation falls back
+    /// to the whole household rather than leaving the task with nobody to assign - see
+    /// RotationPicker.
+    /// </summary>
+    public bool RequiresAdult { get; private set; }
+
     /// <summary>How this task repeats on its own, or null when occurrences are only scheduled by hand.</summary>
     public RecurrenceRule? Recurrence { get; private set; }
 
@@ -153,6 +161,8 @@ public sealed class TaskDefinition
 
     public void SetRequiresMultiplePeople(bool requiresMultiplePeople)
         => RequiresMultiplePeople = requiresMultiplePeople;
+
+    public void SetRequiresAdult(bool requiresAdult) => RequiresAdult = requiresAdult;
 
     /// <summary>Sets or clears the automatic recurrence. Does not touch occurrences already scheduled.</summary>
     public void SetRecurrence(RecurrenceRule? recurrence) => Recurrence = recurrence;

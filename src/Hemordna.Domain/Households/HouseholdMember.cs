@@ -13,7 +13,8 @@ public sealed class HouseholdMember
         Guid householdId,
         string displayName,
         WeeklyTimeBudget weeklyTimeBudget,
-        DateTimeOffset createdAt)
+        DateTimeOffset createdAt,
+        HouseholdRole? role)
     {
         Id = id;
         HouseholdId = householdId;
@@ -21,6 +22,7 @@ public sealed class HouseholdMember
         WeeklyTimeBudget = weeklyTimeBudget;
         IsActive = true;
         CreatedAt = createdAt;
+        Role = role;
     }
 
     public Guid Id { get; private set; }
@@ -36,6 +38,13 @@ public sealed class HouseholdMember
     public bool IsActive { get; private set; }
 
     /// <summary>
+    /// This member's rough role, or <c>null</c> when nobody has set one (e.g. a hand-picked
+    /// budget rather than a role preset). Used by role-aware rules such as keeping a task's
+    /// rotation away from children - see TaskDefinition.RequiresAdult.
+    /// </summary>
+    public HouseholdRole? Role { get; private set; }
+
+    /// <summary>
     /// The authenticated user this member signs in as, when one is linked. Members added by
     /// someone else - a child, a partner who has not signed up yet - have no user until they do.
     /// </summary>
@@ -47,7 +56,8 @@ public sealed class HouseholdMember
         Guid householdId,
         string displayName,
         WeeklyTimeBudget weeklyTimeBudget,
-        DateTimeOffset createdAt)
+        DateTimeOffset createdAt,
+        HouseholdRole? role = null)
     {
         Guard.AgainstEmpty(householdId, nameof(householdId));
         ArgumentNullException.ThrowIfNull(weeklyTimeBudget);
@@ -57,7 +67,8 @@ public sealed class HouseholdMember
             householdId,
             Guard.AgainstNullOrWhiteSpace(displayName, nameof(displayName)),
             weeklyTimeBudget,
-            createdAt);
+            createdAt,
+            role);
     }
 
     public void Rename(string displayName)
@@ -84,6 +95,17 @@ public sealed class HouseholdMember
         }
 
         UserId = userId;
+    }
+
+    /// <summary>Sets or clears this member's role. Does not touch their weekly budget.</summary>
+    public void SetRole(HouseholdRole? role)
+    {
+        if (role is { } value && !Enum.IsDefined(value))
+        {
+            throw new ArgumentOutOfRangeException(nameof(role), role, "Not a valid role.");
+        }
+
+        Role = role;
     }
 
     public void Deactivate() => IsActive = false;
