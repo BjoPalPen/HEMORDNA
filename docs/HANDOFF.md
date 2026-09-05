@@ -7,44 +7,43 @@ Lägesbild per 2026-09-05, för en ny session. Arbetssättet styrs av
 ## Läge
 
 `main` är på `2abb539`, opåverkad. Allt arbete ligger på `feat/tidsbudget-per-medlem`, med
-öppen PR #9 mot `main` (ej mergad). Utöver tidsbudget per medlem: `RecurrenceRule`, roterande
-ansvar, `MemberPreference`, riktig realtidssynk via SignalR - se
-[ARCHITECTURE.md](ARCHITECTURE.md) §3/§5. Min dag/Planering saknar helt tidsval (§6a);
-tid sätts bara via roll på Hushållsöversikten (§6b).
+öppen PR #9 mot `main` (ej mergad). Min dag/Planering saknar helt tidsval (§6a); tid sätts via
+roll på Hushållsöversikten (§6b) eller via rumsmallens våningsguide på Områden.
 
-**Nytt: våningsguide och tidsfilter, ett medvetet undantag från "tid syns aldrig".** Områden
-har nu en flerrumsguide - en valfri **våning** (fritext) kan fyllas med flera rumstyper och
-**antal** i ett svep, i stället för att skapa varje rum för hand. Fler än ett av samma typ
-numreras ("Sovrum 1", "Sovrum 2"); en våning blir prefix på namnet ("Våning 1 – Kök"). Direkt
-efter skapandet visas en tidssammanfattning per rum (`RoomTemplate.TotalMinutes`) och en
-totalsumma - se `Omraden.razor` `CreateFloorAsync`. Uppgifter har fått ett "Filtrera efter
-område"-filter med samma sorts summering (`FilteredTasks`/`FilterSummaryText`). Se DESIGN.md
-§6b: under planering är "hur lång tid tar rummet?" rimligt att svara på med en siffra, till
-skillnad från den dagliga vyn. Rena klientfunktioner; ingen domän- eller API-ändring.
-177 tester gröna (Domain 66, Application 78, E2E 33).
+**Nytt, med riktig domänändring** (tidigare rundor denna dag var rena klientfunktioner - inte
+denna): rumsmallens uppgifter är nu **förvalda kryssrutor** (avmarkera för att utesluta) och
+har var sin **frekvens** - Daglig/Veckovis/Månadsvis/**Vid behov** - som default per uppgift i
+`RoomTemplates`. "Vid behov" är ett nytt fält `TaskDefinition.StaleAfterDays` (migration
+`AddStaleAfterDaysToTaskDefinition`, applicerad), oberoende av `RecurrenceRule` eftersom det
+bara bryr sig om senaste completion, inte ett kalenderdatum. Genereras av
+`EnsureOccurrencesGenerated` (nu `GenerateOnScheduleAsync`/`GenerateIfStaleAsync`), högst en
+utestående occurrence åt gången. Se ARCHITECTURE.md §3.
+
+**Rum och medlemmar kan tas bort** (avaktiveras, inte raderas - `Area`/`HouseholdMember.
+Deactivate` fanns redan, saknade use case/endpoint). Nya: `DeactivateArea` (kaskaderar till
+rummets egna uppgifter), `DeactivateHouseholdMember`, `DELETE .../areas/{id}` och
+`.../members/{id}`. "Ta bort"-knappar på Områden/Hushåll.
+196 tester gröna (Domain 69, Application 90, E2E 37).
 
 ## Köra
 
 Fullständig uppstart: [../README.md](../README.md). Portar: API `5199`, klient `5200`.
 **Denna maskin har PostgreSQL på port `5433`, inte `5432`** (`.env` sätter
-`POSTGRES_HOST_PORT=5433`).
+`POSTGRES_HOST_PORT=5433`). Migrationer: `dotnet ef database update` med samma
+`ConnectionStrings__Hemordna` som API:t.
 
 **LAN-åtkomst:** binda med `--urls "http://*:PORT"`, inte `"http://0.0.0.0:PORT"` - `0.0.0.0`
-öppnar bara IPv4, medan `*` binder dual-stack. Krävs även för `localhost`/E2E-fixturen, som
-kan slå upp `::1` först på denna maskin.
+öppnar bara IPv4, medan `*` binder dual-stack.
 
 ## Kända brister
 
-PWA:n är overifierad i en riktig browser; ikoner är text/symboler, inte mockupens.
-`HushallTests.Changing_a_members_role_...` har visat sig flaky under full parallell körning
-(passerar isolerat och i omkörning) - misstänkt timing, inte en produktbugg. Ej åtgärdad.
-
-**Playwright-fälla:** `.list-item` på Områden måste skopas till `ul[aria-label='Områden']` -
-"just skapat"-sammanfattningen renderar samma radtext. `GetByLabel` substräng-matchar, så
-snarlika etiketter ("Område" / "Filtrera efter område") kräver `<form>`-scoping, inte `Exact`.
+PWA:n är overifierad i en riktig browser. `HushallTests.Changing_a_members_role_...` är
+flaky under full parallell körning (passerar isolerat) - misstänkt timing, ej åtgärdad.
+`.list-item` på Områden måste skopas till `ul[aria-label='Områden']` i tester.
 
 ## Öppna frågor och nästa steg
 
-Våningsguiden namnger med fritext/prefix, ingen egen `Floor`-modell - avvakta om det räcker.
+Väckt men **inte påbörjad**: uppskatta städbehov utifrån antal rum/medlemmar/husdjur -
+naturlig fortsättning på `RoomTemplates`/`StaleAfterDays`, väntar på avstämning.
 
 **Beslut, inte öppen fråga:** en användare tillhör exakt ett hushåll (ARCHITECTURE.md §4).

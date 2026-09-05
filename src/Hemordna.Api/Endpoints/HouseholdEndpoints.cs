@@ -48,6 +48,14 @@ internal static class HouseholdEndpoints
             .Produces<AreaResponse>(StatusCodes.Status201Created)
             .ProducesValidationProblem();
 
+        scoped.MapDelete("/areas/{areaId:guid}", DeactivateAreaAsync)
+            .Produces<AreaResponse>()
+            .Produces(StatusCodes.Status404NotFound);
+
+        scoped.MapDelete("/members/{memberId:guid}", DeactivateMemberAsync)
+            .Produces<HouseholdMemberResponse>()
+            .Produces(StatusCodes.Status404NotFound);
+
         scoped.MapGet("/tasks", ListTasksAsync)
             .Produces<IReadOnlyList<TaskDefinitionResponse>>();
 
@@ -201,6 +209,28 @@ internal static class HouseholdEndpoints
             : Results.Created($"/api/households/{householdId}", ToResponse(area));
     }
 
+    private static async Task<IResult> DeactivateAreaAsync(
+        Guid householdId,
+        Guid areaId,
+        DeactivateArea deactivateArea,
+        CancellationToken cancellationToken)
+    {
+        var area = await deactivateArea.HandleAsync(householdId, areaId, cancellationToken);
+
+        return area is null ? Results.NotFound() : Results.Ok(ToResponse(area));
+    }
+
+    private static async Task<IResult> DeactivateMemberAsync(
+        Guid householdId,
+        Guid memberId,
+        DeactivateHouseholdMember deactivateMember,
+        CancellationToken cancellationToken)
+    {
+        var member = await deactivateMember.HandleAsync(householdId, memberId, cancellationToken);
+
+        return member is null ? Results.NotFound() : Results.Ok(ToResponse(member));
+    }
+
     private static async Task<IResult> ListTasksAsync(
         Guid householdId,
         ITaskDefinitionRepository definitions,
@@ -246,7 +276,8 @@ internal static class HouseholdEndpoints
                 request.CanBeDeferred,
                 request.HasRotatingResponsibility,
                 request.RequiresMultiplePeople,
-                request.Recurrence?.ToDomain()),
+                request.Recurrence?.ToDomain(),
+                request.StaleAfterDays),
             cancellationToken);
 
         return definition is null
@@ -470,7 +501,8 @@ internal static class HouseholdEndpoints
             definition.HasRotatingResponsibility,
             definition.RequiresMultiplePeople,
             definition.IsActive,
-            definition.Recurrence is { } recurrence ? RecurrenceRuleContract.From(recurrence) : null);
+            definition.Recurrence is { } recurrence ? RecurrenceRuleContract.From(recurrence) : null,
+            definition.StaleAfterDays);
 
     private static TaskOccurrenceResponse ToResponse(TaskOccurrence occurrence)
         => new(

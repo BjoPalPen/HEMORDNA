@@ -130,6 +130,38 @@ avsett att någonsin nås i normal drift.
 aktiva medlemmar, ordnade efter `CreatedAt` och sen `Id`. Utan tidigare tilldelning används
 `DefaultResponsibleMemberId` om satt, annars den som gick med först.
 
+### Beslut: `TaskDefinition.StaleAfterDays` för "vid behov" — `IMPLEMENTED`
+
+Ett fjärde schemaläggningssätt utöver `RecurrenceRule`, för uppgifter utan en naturlig
+kalendercykel ("putsa fönster", "damma ytor"): i stället för nästa kalenderdatum frågar den
+bara "har det gått för lång tid sen den senast blev klar?". Medvetet en egen, oberoende
+egenskap på `TaskDefinition` snarare än ytterligare en `RecurrenceFrequency` - de två delar
+inget beteende (`RecurrenceRule.NextOnOrAfter` stegar framåt kalendermässigt oavsett
+completion; "vid behov" bryr sig bara om den senaste completion-tiden, eller skapelsetid om
+uppgiften aldrig blivit klar) och att tvinga in det i samma value object hade gjort
+`Advance`/`NextOnOrAfter` otydliga. En uppgift har antingen `Recurrence` eller
+`StaleAfterDays`, aldrig båda samtidigt - `EnsureOccurrencesGenerated` grenar på vilken som är
+satt. Till skillnad från kalenderåterkommande uppgifter (som kan hinna i kapp flera missade
+tillfällen, upp till taket 366) genererar "vid behov" som mest en utestående occurrence åt
+gången - `ITaskOccurrenceRepository.HasOutstandingAsync` förhindrar att en andra läggs på
+innan den första är klar.
+
+Klienten sätter för närvarande ett fast standardintervall (21 dagar,
+`RoomTemplateTask.AsNeededDefaultDays`) i stället för att fråga efter ett antal dagar - se
+DESIGN.md §6b för samma resonemang som bär `HouseholdRolePresets` och `RoomTemplates`.
+
+### Beslut: `Area`/`HouseholdMember` kan tas bort — `IMPLEMENTED`
+
+Båda hade redan `Deactivate()`/`Reactivate()` i domänen (och `IsActive` i kontraktet) sen
+tidigare, men ingen use case eller endpoint exponerade det. `DeactivateArea` och
+`DeactivateHouseholdMember` (Application, `Households`-mappen) följer samma mönster som
+`SetMemberWeeklyBudget`: hämta hushållet, hitta raden, mutera, `UpdateAsync`. `DeactivateArea`
+kaskaderar till rummets egna aktiva uppgifter (`ITaskDefinitionRepository.
+ListActiveByAreaAsync` + `UpdateAsync`) - annars skulle en borttagen station lämna kvar
+uppgifter som fortsätter dyka upp varje vecka. `DeactivateHouseholdMember` kaskaderar inte:
+`RotationPicker` filtrerar redan bort inaktiva medlemmar och återställer rotationen från
+början om den senast tilldelade inte längre är aktiv.
+
 ### Beslut: `MemberPreference` — `IMPLEMENTED` (domän och API) / `PROPOSED` (UI)
 
 Individuell presentation (`PresentationMode`: text / bild+text / stor text / en uppgift åt

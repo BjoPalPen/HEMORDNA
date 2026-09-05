@@ -1,4 +1,5 @@
 using Hemordna.Application.Households;
+using Hemordna.Domain.Households;
 using Hemordna.Domain.Tasks;
 
 namespace Hemordna.Application.Tasks;
@@ -51,47 +52,103 @@ public sealed class EnsureOccurrencesGenerated
 
         foreach (var definition in definitions)
         {
-            if (!definition.IsActive || definition.Recurrence is not { } recurrence)
+            if (!definition.IsActive)
             {
                 continue;
             }
 
-            var lastDate = await _occurrences.FindMostRecentOriginalDateAsync(
-                householdId, definition.Id, cancellationToken);
-
-            var next = recurrence.NextOnOrAfter(lastDate?.AddDays(1) ?? recurrence.StartDate);
-            var generated = 0;
-
-            while (next <= today && generated < MaxCatchUpPerDefinition)
+            if (definition.Recurrence is { } recurrence)
             {
-                var occurrence = definition.ScheduleFor(next, _timeProvider.GetUtcNow());
-                Guid? memberId = null;
-
-                if (definition.HasRotatingResponsibility)
-                {
-                    var last = await _assignments.FindMostRecentAsync(
-                        householdId, definition.Id, cancellationToken);
-                    memberId = RotationPicker.PickNext(household, definition, last);
-
-                    if (memberId is { } rotatingMemberId)
-                    {
-                        await _assignments.AddAsync(
-                            TaskAssignment.Create(
-                                householdId, definition.Id, rotatingMemberId, next, _timeProvider.GetUtcNow()),
-                            cancellationToken);
-                    }
-                }
-
-                if (memberId is { } finalMemberId)
-                {
-                    occurrence.AssignTo(finalMemberId);
-                }
-
-                await _occurrences.AddAsync(occurrence, cancellationToken);
-
-                generated++;
-                next = recurrence.NextOnOrAfter(next.AddDays(1));
+                await GenerateOnScheduleAsync(household, definition, recurrence, today, cancellationToken);
+            }
+            else if (definition.StaleAfterDays is { } staleAfterDays)
+            {
+                await GenerateIfStaleAsync(household, definition, staleAfterDays, today, cancellationToken);
             }
         }
+    }
+
+    private async Task GenerateOnScheduleAsync(
+        Household household,
+        TaskDefinition definition,
+        RecurrenceRule recurrence,
+        DateOnly today,
+        CancellationToken cancellationToken)
+    {
+        var lastDate = await _occurrences.FindMostRecentOriginalDateAsync(
+            household.Id, definition.Id, cancellationToken);
+
+        var next = recurrence.NextOnOrAfter(lastDate?.AddDays(1) ?? recurrence.StartDate);
+        var generated = 0;
+
+        while (next <= today && generated < MaxCatchUpPerDefinition)
+        {
+            await ScheduleGeneratedOccurrenceAsync(household, definition, next, cancellationToken);
+            generated++;
+            next = recurrence.NextOnOrAfter(next.AddDays(1));
+        }
+    }
+
+    /// <summary>
+    /// Unlike calendar recurrence, "as needed" has no missed slots to catch up on - it only
+    /// ever asks "is it due right now?", so at most one occurrence is generated per call.
+    /// </summary>
+    private async Task GenerateIfStaleAsync(
+        Household household,
+        TaskDefinition definition,
+        int staleAfterDays,
+        DateOnly today,
+        CancellationToken cancellationToken)
+    {
+        if (await _occurrences.HasOutstandingAsync(household.Id, definition.Id, cancellationToken))
+        {
+            return;
+        }
+
+        var lastCompletedAt = await _occurrences.FindMostRecentCompletedAtAsync(
+            household.Id, definition.Id, cancellationToken);
+
+        var since = lastCompletedAt is { } completedAt
+            ? DateOnly.FromDateTime(completedAt.UtcDateTime)
+            : DateOnly.FromDateTime(definition.CreatedAt.UtcDateTime);
+
+        if (since.AddDays(staleAfterDays) > today)
+        {
+            return;
+        }
+
+        await ScheduleGeneratedOccurrenceAsync(household, definition, today, cancellationToken);
+    }
+
+    private async Task ScheduleGeneratedOccurrenceAsync(
+        Household household,
+        TaskDefinition definition,
+        DateOnly date,
+        CancellationToken cancellationToken)
+    {
+        var occurrence = definition.ScheduleFor(date, _timeProvider.GetUtcNow());
+        Guid? memberId = null;
+
+        if (definition.HasRotatingResponsibility)
+        {
+            var last = await _assignments.FindMostRecentAsync(
+                household.Id, definition.Id, cancellationToken);
+            memberId = RotationPicker.PickNext(household, definition, last);
+
+            if (memberId is { } rotatingMemberId)
+            {
+                await _assignments.AddAsync(
+                    TaskAssignment.Create(
+                        household.Id, definition.Id, rotatingMemberId, date, _timeProvider.GetUtcNow()),
+                    cancellationToken);
+            }
+        }
+
+        if (memberId is { } finalMemberId)
+        {
+            occurrence.AssignTo(finalMemberId);
+        }
+
+        await _occurrences.AddAsync(occurrence, cancellationToken);
     }
 }

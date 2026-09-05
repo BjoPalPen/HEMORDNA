@@ -53,6 +53,25 @@ public class UppgifterTests
     }
 
     [Fact]
+    public async Task Creating_an_as_needed_task_labels_it_vid_behov()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Ida");
+
+        await page.GotoAsync("/uppgifter");
+        await page.GetByRole(AriaRole.Heading, new() { Name = "Uppgifter" }).WaitForAsync();
+
+        await page.GetByLabel("Namn").FillAsync("Putsa fönster");
+        await page.GetByText("Fler alternativ").ClickAsync();
+        await page.GetByLabel("Upprepning").SelectOptionAsync("AsNeeded");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa uppgift" }).ClickAsync();
+
+        var row = page.Locator(".list-item", new() { HasText = "Putsa fönster" });
+        await row.WaitForAsync();
+        await Assertions.Expect(row).ToContainTextAsync("vid behov");
+    }
+
+    [Fact]
     public async Task A_task_without_a_name_is_rejected_without_calling_the_server()
     {
         var page = await _app.NewPageAsync();

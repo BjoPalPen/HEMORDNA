@@ -40,4 +40,18 @@ internal sealed class InMemoryTaskOccurrenceRepository : ITaskOccurrenceReposito
             .Select(o => (DateOnly?)o.OriginalScheduledDate)
             .OrderDescending()
             .FirstOrDefault());
+
+    public Task<DateTimeOffset?> FindMostRecentCompletedAtAsync(
+        Guid householdId, Guid taskDefinitionId, CancellationToken cancellationToken)
+        => Task.FromResult(_occurrences
+            .Where(o => o.HouseholdId == householdId && o.TaskDefinitionId == taskDefinitionId
+                && o.Status == TaskOccurrenceStatus.Completed)
+            .Select(o => o.CompletedAt)
+            .OrderDescending()
+            .FirstOrDefault());
+
+    public Task<bool> HasOutstandingAsync(
+        Guid householdId, Guid taskDefinitionId, CancellationToken cancellationToken)
+        => Task.FromResult(_occurrences.Any(o => o.HouseholdId == householdId
+            && o.TaskDefinitionId == taskDefinitionId && o.Status == TaskOccurrenceStatus.Planned));
 }

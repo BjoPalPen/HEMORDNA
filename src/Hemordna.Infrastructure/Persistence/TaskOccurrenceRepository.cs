@@ -39,4 +39,27 @@ internal sealed class TaskOccurrenceRepository : ITaskOccurrenceRepository
             .OrderByDescending(occurrence => occurrence.OriginalScheduledDate)
             .Select(occurrence => (DateOnly?)occurrence.OriginalScheduledDate)
             .FirstOrDefaultAsync(cancellationToken);
+
+    public Task<DateTimeOffset?> FindMostRecentCompletedAtAsync(
+        Guid householdId,
+        Guid taskDefinitionId,
+        CancellationToken cancellationToken)
+        => _dbContext.TaskOccurrences
+            .AsNoTracking()
+            .Where(occurrence => occurrence.HouseholdId == householdId
+                && occurrence.TaskDefinitionId == taskDefinitionId
+                && occurrence.Status == TaskOccurrenceStatus.Completed)
+            .OrderByDescending(occurrence => occurrence.CompletedAt)
+            .Select(occurrence => occurrence.CompletedAt)
+            .FirstOrDefaultAsync(cancellationToken);
+
+    public Task<bool> HasOutstandingAsync(
+        Guid householdId,
+        Guid taskDefinitionId,
+        CancellationToken cancellationToken)
+        => _dbContext.TaskOccurrences
+            .AsNoTracking()
+            .AnyAsync(occurrence => occurrence.HouseholdId == householdId
+                && occurrence.TaskDefinitionId == taskDefinitionId
+                && occurrence.Status == TaskOccurrenceStatus.Planned, cancellationToken);
 }

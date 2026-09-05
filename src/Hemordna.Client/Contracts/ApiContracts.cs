@@ -99,7 +99,8 @@ public sealed record CreateTaskRequest(
     bool CanBeDeferred,
     bool HasRotatingResponsibility,
     bool RequiresMultiplePeople,
-    RecurrenceRuleContract? Recurrence);
+    RecurrenceRuleContract? Recurrence,
+    int? StaleAfterDays = null);
 
 public sealed record TaskDefinitionResponse(
     Guid Id,
@@ -114,7 +115,8 @@ public sealed record TaskDefinitionResponse(
     bool HasRotatingResponsibility,
     bool RequiresMultiplePeople,
     bool IsActive,
-    RecurrenceRuleContract? Recurrence);
+    RecurrenceRuleContract? Recurrence,
+    int? StaleAfterDays);
 
 /// <summary>
 /// How a task repeats. Enum-shaped fields travel as plain strings - see the file header for

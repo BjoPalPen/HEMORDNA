@@ -191,6 +191,27 @@ med `RoomTemplate.TotalMinutes` och en totalsumma - ett medvetet undantag från 
 planering av hemmet är frågan "hur lång tid tar det här rummet?" rimlig att svara på med en
 siffra, till skillnad från den dagliga vyn där samma siffra bara stressar.
 
+Varje uppgift i en vald rumstyp listas som en kryssruta, **förvald**, direkt under raden - inte
+för att beslutet ska tas varje gång (mallens urval räcker för de allra flesta), utan för att
+kunna plocka bort det enstaka som inte stämmer (ett badrum utan badkar behöver inte "Skrubba
+dusch eller badkar"). Att bocka ur en uppgift utesluter den helt - den skapas aldrig, snarare
+än att skapas och sen behöva tas bort.
+
+Varje mallad uppgift får också en **frekvens** - Daglig, Veckovis, Månadsvis eller **Vid
+behov** - satt som ett förvalt, rimligt standardvärde per uppgift i `RoomTemplates` (t.ex.
+"Diska" dagligen, "Rengör toalettstolen" varje vecka, "Damma hyllor" vid behov), i stället för
+att den som lägger till rummet ska behöva svara på det för var och en av upp till åtta
+uppgifter. "Vid behov" är inte en kalendercykel: uppgiften dyker upp igen ett fast antal dagar
+(`RoomTemplateTask.AsNeededDefaultDays`, 21) efter den senast blev avklarad, inte på ett givet
+datum - se ARCHITECTURE.md §3 för `TaskDefinition.StaleAfterDays`. Samma frekvensval finns
+även i den manuella uppgiftsformuläret på Uppgifter, för den som skapar en uppgift för hand.
+
+**Rum och medlemmar kan tas bort.** Ett rum kan ha skapats fel, eller en medlem kan ha flyttat.
+Båda knapparna heter "Ta bort" och avaktiverar (`Area`/`HouseholdMember.Deactivate`) snarare än
+raderar - historiken (avklarade uppgifter, vem som gjorde vad) pekar fortfarande på en riktig
+rad. Att ta bort ett rum avaktiverar även rummets egna uppgifter, så en borttagen "Sovrum 2"
+inte fortsätter dyka upp i någons dag.
+
 ### Inställningar – Min visning
 
 Se §7. Skärmen avslutas med raden:

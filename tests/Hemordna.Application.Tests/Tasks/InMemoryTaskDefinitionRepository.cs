@@ -24,4 +24,12 @@ internal sealed class InMemoryTaskDefinitionRepository : ITaskDefinitionReposito
         Guid householdId, CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<TaskDefinition>>(
             [.. _definitions.Where(d => d.HouseholdId == householdId)]);
+
+    public Task<IReadOnlyList<TaskDefinition>> ListActiveByAreaAsync(
+        Guid householdId, Guid areaId, CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<TaskDefinition>>(
+            [.. _definitions.Where(d => d.HouseholdId == householdId && d.AreaId == areaId && d.IsActive)]);
+
+    public Task UpdateAsync(TaskDefinition definition, CancellationToken cancellationToken)
+        => Task.CompletedTask;
 }

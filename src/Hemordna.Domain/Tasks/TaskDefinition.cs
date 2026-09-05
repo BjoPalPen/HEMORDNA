@@ -70,6 +70,13 @@ public sealed class TaskDefinition
     /// <summary>How this task repeats on its own, or null when occurrences are only scheduled by hand.</summary>
     public RecurrenceRule? Recurrence { get; private set; }
 
+    /// <summary>
+    /// "As needed": becomes due this many days after it was last completed (or after creation,
+    /// if never completed), instead of on a fixed calendar cadence. Independent of
+    /// <see cref="Recurrence"/> - a task uses one or the other, not both.
+    /// </summary>
+    public int? StaleAfterDays { get; private set; }
+
     public bool IsActive { get; private set; }
 
     public DateTimeOffset CreatedAt { get; private set; }
@@ -149,6 +156,17 @@ public sealed class TaskDefinition
 
     /// <summary>Sets or clears the automatic recurrence. Does not touch occurrences already scheduled.</summary>
     public void SetRecurrence(RecurrenceRule? recurrence) => Recurrence = recurrence;
+
+    /// <summary>Sets or clears the "as needed" interval. See <see cref="StaleAfterDays"/>.</summary>
+    public void SetStaleAfterDays(int? staleAfterDays)
+    {
+        if (staleAfterDays is { } days)
+        {
+            Guard.AgainstNonPositive(days, nameof(staleAfterDays));
+        }
+
+        StaleAfterDays = staleAfterDays;
+    }
 
     public void Deactivate() => IsActive = false;
 

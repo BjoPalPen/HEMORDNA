@@ -81,6 +81,50 @@ public class OmradenTests
     }
 
     [Fact]
+    public async Task Unchecking_a_template_task_excludes_it_from_the_created_room()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Greta");
+
+        await page.GotoAsync("/omraden");
+        await page.GetByRole(AriaRole.Heading, new() { Name = "Områden" }).WaitForAsync();
+
+        await page.GetByLabel("Rumstyp").SelectOptionAsync(new SelectOptionValue { Label = "Litet wc" });
+        // Tasks are checked by default - unchecking one leaves it out of the room entirely.
+        await page.GetByLabel("Putsa spegeln").UncheckAsync();
+        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa" }).ClickAsync();
+
+        // 35 total minutes minus the excluded task's 5.
+        await Assertions.Expect(AreaList(page).Locator(".list-item", new() { HasText = "Litet wc" }))
+            .ToContainTextAsync("5 uppgifter · 30 min");
+
+        await page.GotoAsync("/uppgifter");
+        await Assertions.Expect(page.Locator(".list-item", new() { HasText = "Putsa spegeln" })).Not.ToBeVisibleAsync();
+        await Assertions.Expect(page.Locator(".list-item", new() { HasText = "Rengör toalettstolen" })).ToBeVisibleAsync();
+    }
+
+    [Fact]
+    public async Task Removing_a_room_takes_it_off_the_list()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Henrietta");
+
+        await page.GotoAsync("/omraden");
+        await page.GetByText("Lägg till ett tomt område i stället").ClickAsync();
+        await page.GetByLabel("Nytt område").FillAsync("Tvättstuga");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Lägg till område" }).ClickAsync();
+
+        var row = AreaList(page).Locator(".list-item", new() { HasText = "Tvättstuga" });
+        await row.WaitForAsync();
+
+        // A room can have been created by mistake, or the household changed - see Area.Deactivate.
+        await row.GetByRole(AriaRole.Button, new() { Name = "Ta bort" }).ClickAsync();
+
+        await Assertions.Expect(AreaList(page).Locator(".list-item", new() { HasText = "Tvättstuga" }))
+            .Not.ToBeVisibleAsync();
+    }
+
+    [Fact]
     public async Task Naming_a_floor_prefixes_each_of_its_rooms()
     {
         var page = await _app.NewPageAsync();

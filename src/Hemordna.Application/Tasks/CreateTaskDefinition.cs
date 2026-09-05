@@ -65,6 +65,7 @@ public sealed class CreateTaskDefinition
         definition.SetRotatingResponsibility(request.HasRotatingResponsibility);
         definition.SetRequiresMultiplePeople(request.RequiresMultiplePeople);
         definition.SetRecurrence(request.Recurrence);
+        definition.SetStaleAfterDays(request.StaleAfterDays);
 
         await _definitions.AddAsync(definition, cancellationToken);
 
@@ -84,4 +85,5 @@ public sealed record NewTaskDefinition(
     bool CanBeDeferred = true,
     bool HasRotatingResponsibility = false,
     bool RequiresMultiplePeople = false,
-    RecurrenceRule? Recurrence = null);
+    RecurrenceRule? Recurrence = null,
+    int? StaleAfterDays = null);

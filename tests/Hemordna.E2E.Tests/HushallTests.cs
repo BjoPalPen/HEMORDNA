@@ -88,6 +88,26 @@ public class HushallTests
     }
 
     [Fact]
+    public async Task Removing_a_member_takes_them_off_the_list()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Gustav");
+
+        await page.GotoAsync("/hushall");
+        await page.GetByLabel("Namn").FillAsync("Filippa");
+        await page.Locator("form").GetByRole(AriaRole.Button, new() { Name = "Vuxen, jobbar heltid" }).ClickAsync();
+        await page.GetByRole(AriaRole.Button, new() { Name = "Lägg till medlem" }).ClickAsync();
+
+        var row = page.Locator(".list-item", new() { HasText = "Filippa" });
+        await row.WaitForAsync();
+
+        // Someone moved out, or was added by mistake - see HouseholdMember.Deactivate.
+        await row.GetByRole(AriaRole.Button, new() { Name = "Ta bort" }).ClickAsync();
+
+        await Assertions.Expect(page.Locator(".list-item", new() { HasText = "Filippa" })).Not.ToBeVisibleAsync();
+    }
+
+    [Fact]
     public async Task Shows_an_areas_task_count()
     {
         var page = await _app.NewPageAsync();

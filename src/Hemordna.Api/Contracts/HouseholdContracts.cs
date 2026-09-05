@@ -73,7 +73,8 @@ public sealed record CreateTaskRequest(
     bool CanBeDeferred = true,
     bool HasRotatingResponsibility = false,
     bool RequiresMultiplePeople = false,
-    RecurrenceRuleContract? Recurrence = null);
+    RecurrenceRuleContract? Recurrence = null,
+    int? StaleAfterDays = null);
 
 public sealed record TaskDefinitionResponse(
     Guid Id,
@@ -88,7 +89,8 @@ public sealed record TaskDefinitionResponse(
     bool HasRotatingResponsibility,
     bool RequiresMultiplePeople,
     bool IsActive,
-    RecurrenceRuleContract? Recurrence);
+    RecurrenceRuleContract? Recurrence,
+    int? StaleAfterDays);
 
 /// <summary>
 /// How a task repeats on its own. Mirrors <see cref="RecurrenceRule"/>'s own public shape -

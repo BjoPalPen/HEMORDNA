@@ -44,6 +44,11 @@ else
                         <option value="@preset.Role">@preset.Label</option>
                     }
                 </select>
+                <button type="button" class="btn btn-secondary" aria-label="@($"Ta bort {member.DisplayName}")"
+                        disabled="@(_removingMemberId == member.Id)"
+                        @onclick="() => RemoveMemberAsync(member.Id)">
+                    Ta bort
+                </button>
             </li>
         }
     </ul>
@@ -191,6 +196,7 @@ else
     private readonly Dictionary<(Guid MemberId, DateOnly Date), string> _weeklyStatus = [];
     private string? _message;
     private bool _busy;
+    private Guid? _removingMemberId;
 
     private static readonly System.Globalization.CultureInfo SwedishCulture = new("sv-SE");
 
@@ -265,6 +271,26 @@ else
         if (await Api.SetWeeklyBudgetAsync(householdId, memberId, HouseholdRolePresets.BudgetFor(role)))
         {
             await LoadAsync();
+        }
+    }
+
+    private async Task RemoveMemberAsync(Guid memberId)
+    {
+        if (Session.Me is not { HouseholdId: { } householdId })
+        {
+            return;
+        }
+
+        _removingMemberId = memberId;
+
+        try
+        {
+            await Api.DeactivateMemberAsync(householdId, memberId);
+            await LoadAsync();
+        }
+        finally
+        {
+            _removingMemberId = null;
         }
     }
 

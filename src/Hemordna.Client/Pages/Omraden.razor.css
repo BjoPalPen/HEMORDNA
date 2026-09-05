@@ -40,3 +40,16 @@
 .floor-submit {
     margin-top: var(--space-3);
 }
+
+.floor-room-tasks {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    margin: 0 0 var(--space-4) var(--space-4);
+    padding: var(--space-2) 0 var(--space-2) var(--space-3);
+    border-left: 2px solid var(--color-border);
+}
+
+.floor-room-tasks p {
+    margin: 0 0 var(--space-1);
+}

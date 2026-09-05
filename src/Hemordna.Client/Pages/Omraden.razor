@@ -40,7 +40,7 @@ else
             @foreach (var row in _floorForm.Rooms)
             {
                 <div class="floor-room-row" @key="row">
-                    <select @bind="row.TemplateKey" aria-label="Rumstyp">
+                    <select @bind="row.TemplateKey" @bind:after="() => row.ExcludedTasks.Clear()" aria-label="Rumstyp">
                         <option value="">Välj rumstyp...</option>
                         @foreach (var template in RoomTemplates.All)
                         {
@@ -54,6 +54,21 @@ else
                                 @onclick="() => RemoveRoomRow(row)">✕</button>
                     }
                 </div>
+
+                @if (RoomTemplates.All.FirstOrDefault(t => t.Key == row.TemplateKey) is { } chosenTemplate)
+                {
+                    <div class="floor-room-tasks">
+                        <p class="muted small">Uppgifter i @chosenTemplate.Label - avmarkera det ni inte vill ha:</p>
+                        @foreach (var task in chosenTemplate.Tasks)
+                        {
+                            <label class="field-check">
+                                <input type="checkbox" checked="@(!row.ExcludedTasks.Contains(task.Name))"
+                                       @onchange="e => ToggleTask(row, task.Name, (bool)e.Value!)" />
+                                <span>@task.Name</span>
+                            </label>
+                        }
+                    </div>
+                }
             }
 
             <button type="button" class="btn btn-secondary" @onclick="AddRoomRow">+ Lägg till fler rum</button>
@@ -126,6 +141,11 @@ else
                 <li class="list-item">
                     <span class="list-name">@area.Name</span>
                     <span class="list-meta muted small">@TaskCountFor(area.Id) uppgifter · @TotalMinutesFor(area.Id) min</span>
+                    <button type="button" class="btn btn-secondary" aria-label="@($"Ta bort {area.Name}")"
+                            disabled="@(_removingAreaId == area.Id)"
+                            @onclick="() => RemoveAreaAsync(area.Id)">
+                        Ta bort
+                    </button>
                 </li>
             }
         </ul>
@@ -142,6 +162,9 @@ else
     {
         public string TemplateKey { get; set; } = string.Empty;
         public int Count { get; set; } = 1;
+
+        /// <summary>Template tasks left unchecked - everything else is included by default.</summary>
+        public HashSet<string> ExcludedTasks { get; } = [];
     }
 
     private sealed class FloorForm
@@ -159,6 +182,7 @@ else
     private string? _floorMessage;
     private bool _floorBusy;
     private List<(string Name, int Minutes)> _createdRooms = [];
+    private Guid? _removingAreaId;
 
     private DateOnly Today => DateOnly.FromDateTime(TimeProvider.GetLocalNow().DateTime);
 
@@ -184,6 +208,26 @@ else
 
     private int TotalMinutesFor(Guid areaId)
         => _tasks.Where(t => t.AreaId == areaId && t.IsActive).Sum(t => t.EstimatedMinutes);
+
+    private async Task RemoveAreaAsync(Guid areaId)
+    {
+        if (Session.Me is not { HouseholdId: { } householdId })
+        {
+            return;
+        }
+
+        _removingAreaId = areaId;
+
+        try
+        {
+            await Api.DeactivateAreaAsync(householdId, areaId);
+            await LoadAsync();
+        }
+        finally
+        {
+            _removingAreaId = null;
+        }
+    }
 
     private async Task CreateAsync()
     {
@@ -226,6 +270,18 @@ else
 
     private void RemoveRoomRow(FloorRoomRow row) => _floorForm.Rooms.Remove(row);
 
+    private static void ToggleTask(FloorRoomRow row, string taskName, bool included)
+    {
+        if (included)
+        {
+            row.ExcludedTasks.Remove(taskName);
+        }
+        else
+        {
+            row.ExcludedTasks.Add(taskName);
+        }
+    }
+
     private async Task CreateFloorAsync()
     {
         if (Session.Me is not { HouseholdId: { } householdId })
@@ -247,12 +303,12 @@ else
 
         try
         {
-            var recurrence = new RecurrenceRuleContract("Weekly", 1, Today, Today.DayOfWeek.ToString(), null);
             var floor = _floorForm.FloorName.Trim();
 
             foreach (var row in rows)
             {
                 var template = RoomTemplates.All.First(t => t.Key == row.TemplateKey);
+                var selectedTasks = template.Tasks.Where(t => !row.ExcludedTasks.Contains(t.Name)).ToList();
                 var count = Math.Clamp(row.Count, 1, 20);
 
                 for (var i = 1; i <= count; i++)
@@ -274,8 +330,10 @@ else
                         continue;
                     }
 
-                    foreach (var task in template.Tasks)
+                    foreach (var task in selectedTasks)
                     {
+                        var (recurrence, staleAfterDays) = task.ToScheduling(Today);
+
                         await Api.CreateTaskAsync(householdId, new CreateTaskRequest(
                             task.Name,
                             task.EstimatedMinutes,
@@ -287,10 +345,11 @@ else
                             CanBeDeferred: true,
                             HasRotatingResponsibility: true,
                             RequiresMultiplePeople: false,
-                            Recurrence: recurrence));
+                            Recurrence: recurrence,
+                            StaleAfterDays: staleAfterDays));
                     }
 
-                    created.Add((name, template.TotalMinutes));
+                    created.Add((name, selectedTasks.Sum(t => t.EstimatedMinutes)));
                 }
             }
 

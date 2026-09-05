@@ -116,6 +116,70 @@ public class EnsureOccurrencesGeneratedTests
     }
 
     [Fact]
+    public async Task Generates_an_as_needed_occurrence_once_it_is_stale()
+    {
+        var householdId = await ArrangeHouseholdAsync();
+        var definition = TaskDefinition.Create(householdId, "Putsa fönster", 20, Now);
+        definition.SetStaleAfterDays(14);
+        _definitions.Seed(definition);
+
+        // Never completed: the interval counts from creation (Monday).
+        await CreateUseCase().HandleAsync(householdId, Monday.AddDays(14), CancellationToken.None);
+
+        Assert.Equal(1, _occurrences.AddCallCount);
+    }
+
+    [Fact]
+    public async Task Does_not_generate_an_as_needed_occurrence_before_it_is_stale()
+    {
+        var householdId = await ArrangeHouseholdAsync();
+        var definition = TaskDefinition.Create(householdId, "Putsa fönster", 20, Now);
+        definition.SetStaleAfterDays(14);
+        _definitions.Seed(definition);
+
+        await CreateUseCase().HandleAsync(householdId, Monday.AddDays(13), CancellationToken.None);
+
+        Assert.Equal(0, _occurrences.AddCallCount);
+    }
+
+    [Fact]
+    public async Task An_as_needed_task_does_not_pile_up_a_second_occurrence_while_one_is_outstanding()
+    {
+        var householdId = await ArrangeHouseholdAsync();
+        var definition = TaskDefinition.Create(householdId, "Putsa fönster", 20, Now);
+        definition.SetStaleAfterDays(14);
+        _definitions.Seed(definition);
+        var useCase = CreateUseCase();
+
+        await useCase.HandleAsync(householdId, Monday.AddDays(14), CancellationToken.None);
+        await useCase.HandleAsync(householdId, Monday.AddDays(20), CancellationToken.None);
+
+        Assert.Equal(1, _occurrences.AddCallCount);
+    }
+
+    [Fact]
+    public async Task An_as_needed_task_becomes_due_again_from_its_last_completion_not_its_creation()
+    {
+        var householdId = await ArrangeHouseholdAsync();
+        var definition = TaskDefinition.Create(householdId, "Putsa fönster", 20, Now);
+        definition.SetStaleAfterDays(14);
+
+        // Completed 5 days after creation, so the next due date is 5 + 14 days out - not 14
+        // days from creation, which would wrongly ignore the completion.
+        var completedAt = Now.AddDays(5);
+        var doneOccurrence = definition.ScheduleFor(Monday.AddDays(5), Now);
+        doneOccurrence.Complete(Guid.NewGuid(), completedAt);
+        _occurrences.Seed(doneOccurrence);
+        _definitions.Seed(definition);
+
+        await CreateUseCase().HandleAsync(householdId, Monday.AddDays(5 + 13), CancellationToken.None);
+        Assert.Equal(0, _occurrences.AddCallCount);
+
+        await CreateUseCase().HandleAsync(householdId, Monday.AddDays(5 + 14), CancellationToken.None);
+        Assert.Equal(1, _occurrences.AddCallCount);
+    }
+
+    [Fact]
     public async Task A_rotating_recurring_task_assigns_and_records_a_turn_for_each_generated_occurrence()
     {
         var household = await new CreateHousehold(_households, new FixedTimeProvider(Now))

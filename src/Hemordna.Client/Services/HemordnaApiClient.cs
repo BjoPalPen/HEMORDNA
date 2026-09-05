@@ -160,6 +160,32 @@ public sealed class HemordnaApiClient
             : null;
     }
 
+    /// <summary>Deactivates the area rather than deleting it - see Area for why.</summary>
+    public async Task<bool> DeactivateAreaAsync(
+        Guid householdId,
+        Guid areaId,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Delete, $"api/households/{householdId}/areas/{areaId}", cancellationToken);
+
+        var response = await _http.SendAsync(request, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
+    /// <summary>Deactivates the member rather than deleting them - see HouseholdMember for why.</summary>
+    public async Task<bool> DeactivateMemberAsync(
+        Guid householdId,
+        Guid memberId,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Delete, $"api/households/{householdId}/members/{memberId}", cancellationToken);
+
+        var response = await _http.SendAsync(request, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
     public async Task<DailyPlanResponse?> GetDailyPlanAsync(
         Guid householdId,
         Guid memberId,
