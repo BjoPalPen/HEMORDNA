@@ -5,6 +5,11 @@
     max-width: 1100px;
 }
 
+/* No encouragement to show yet - the sidebar column would just be an empty gap. */
+.day-no-sidebar {
+    grid-template-columns: minmax(0, 1fr);
+}
+
 .day-date {
     margin: 0 0 var(--space-1);
     color: var(--color-text-soft);

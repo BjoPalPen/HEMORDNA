@@ -11,17 +11,17 @@ Lägesbild per 2026-09-05, för en ny session. Arbetssättet styrs av
 ansvar, `MemberPreference`, riktig realtidssynk via SignalR - se
 [ARCHITECTURE.md](ARCHITECTURE.md) §3/§5.
 
-**Tid är helt dold i gränssnittet**, satt via tre roller i stället för minuter eller dagliga
-val - `Support.HouseholdRolePresets` (Vuxen heltid/Barn-ungdom/Pensionär), se DESIGN.md
-§6a/§6b. `Support.RoomTemplates` ger en roterande veckouppgiftslista per rumstyp på Områden.
-Båda rena klientfunktioner ovanpå befintliga API-anrop.
+**Min dag har inget tidsval längre.** "Snabbval" (dagens tillfälliga avvikelse) är borttaget
+helt - feedback: även det lilla, kvalitativa valet kändes rörigt och stressande på sidan alla
+öppnar varje dag. Samma "Idag"-kort togs bort från Planering av samma skäl; den sidan är nu
+ren läsning av veckans roll-satta nivåer. `availableMinutes` finns kvar som API-kapacitet
+(testad i `DatumValideringTests`) men har ingen knapp kvar i gränssnittet.
 
-**Roll flyttad från Min dag till Hushållsöversikten** (feedback: att välja/ändra roll är
-"tid som ett val", inte alla medlemmar behöver se det dagligen). Min dag har bara kvar
-**Snabbval**. Varje medlem i hushållslistan har en egen rollväljare
-(`RoleValueFor`/`SetMemberRoleAsync`, `Hushall.razor`; `HouseholdRolePresets.Match` visar
-"Anpassad tid" annars). Dag-för-dag-redigeringen är borttagen helt.
-175 tester gröna (Domain 66, Application 78, E2E 31).
+Tid sätts nu bara via roll (`Support.HouseholdRolePresets`: Vuxen heltid/Barn-ungdom/
+Pensionär) från Hushållsöversiktens medlemslista - inte på Min dag, se DESIGN.md §6a/§6b.
+`Support.RoomTemplates` ger städ-checklistor per rumstyp på Områden. Allt rena
+klientfunktioner ovanpå befintliga API-anrop; ingen domän- eller API-ändring.
+174 tester gröna (Domain 66, Application 78, E2E 30).
 
 ## Köra
 
@@ -31,16 +31,16 @@ Fullständig uppstart: [../README.md](../README.md). Portar: API `5199`, klient 
 
 **LAN-åtkomst:** binda med `--urls "http://*:PORT"`, inte `"http://0.0.0.0:PORT"` - `0.0.0.0`
 öppnar bara IPv4, medan `*` binder dual-stack. Krävs även för `localhost`/E2E-fixturen, som
-kan slå upp `::1` först på denna maskin. Windows brandvägg hade Block-regler för
-`Hemordna.Api.exe` på "Public"; kräver admin att ändra (`Get-NetFirewallRule`).
+kan slå upp `::1` först på denna maskin.
 
 ## Kända brister
 
 PWA:n är overifierad i en riktig browser; ikoner är text/symboler, inte mockupens.
+`HushallTests.Changing_a_members_role_...` har visat sig flaky under full parallell körning
+(passerar isolerat och i omkörning) - misstänkt timing, inte en produktbugg. Ej åtgärdad.
 
 **EF Core-fälla:** `OrderBy` på en redan konstruerad `record` i samma queryable-kedja kan ge
-`InvalidOperationException` vid körning. Sortera som anonym typ, mappa i minnet. Se
-`RecentActivityQuery`.
+`InvalidOperationException` vid körning. Sortera som anonym typ, mappa i minnet.
 
 ## Öppna frågor och nästa steg
 

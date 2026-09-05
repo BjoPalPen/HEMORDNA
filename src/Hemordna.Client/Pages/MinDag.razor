@@ -1,6 +1,5 @@
 @page "/"
 @implements IDisposable
-@using Hemordna.Client.Support
 @inject HemordnaApiClient Api
 @inject HemordnaSession Session
 @inject NavigationManager Navigation
@@ -23,7 +22,7 @@ else if (Session.NeedsHousehold)
 }
 else
 {
-    <div class="day">
+    <div class="day @(ShowSidebar ? "" : "day-no-sidebar")">
         <div class="day-main">
             <p class="day-date">@DateLabel</p>
             <h1>Hej @Session.Me!.DisplayName! 👋</h1>
@@ -141,28 +140,12 @@ else
             }
         </div>
 
-        <aside class="day-side">
-            @if (_day is not null && EncouragementText is { } encouragement)
-            {
-                <div class="card encouragement">@encouragement</div>
-            }
-
-            <div class="card">
-                <h2>Snabbval</h2>
-                <p class="muted small">Har du mindre eller mer tid idag än vanligt?</p>
-                <div class="level-picker">
-                    @foreach (var level in TimeLevel.All)
-                    {
-                        <button type="button" class="btn btn-secondary"
-                                disabled="@(_busyOccurrence is not null)"
-                                @onclick="() => SetTodayLevelAsync(level.Minutes)">
-                            @level.Label
-                        </button>
-                    }
-                </div>
-                <p class="muted small">Din vanliga vecka påverkas inte.</p>
-            </div>
-        </aside>
+        @if (ShowSidebar)
+        {
+            <aside class="day-side">
+                <div class="card encouragement">@EncouragementText</div>
+            </aside>
+        }
     </div>
 }
 
@@ -201,6 +184,8 @@ else
         { Completed.Count: > 0 } => "Det viktigaste är på väg. En sak i taget räcker.",
         _ => null
     };
+
+    private bool ShowSidebar => _day is not null && EncouragementText is not null;
 
     protected override async Task OnInitializedAsync()
     {
@@ -289,19 +274,6 @@ else
         finally
         {
             _busyOccurrence = null;
-        }
-    }
-
-    private async Task SetTodayLevelAsync(int minutes)
-    {
-        if (Session.Me is not { HouseholdId: { } householdId, MemberId: { } memberId })
-        {
-            return;
-        }
-
-        if (await Api.SetAvailabilityAsync(householdId, memberId, Today, minutes))
-        {
-            await LoadDayAsync();
         }
     }
 

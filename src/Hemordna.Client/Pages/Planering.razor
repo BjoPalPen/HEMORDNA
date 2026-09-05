@@ -2,7 +2,6 @@
 @using Hemordna.Client.Support
 @inject HemordnaApiClient Api
 @inject HemordnaSession Session
-@inject TimeProvider TimeProvider
 
 <PageTitle>Planering – Hemordna</PageTitle>
 
@@ -36,26 +35,10 @@ else
             </li>
         }
     </ul>
-
-    <div class="card">
-        <h2>Idag</h2>
-        <p class="muted small">Har du mindre eller mer tid idag än vanligt?</p>
-        <div class="level-picker">
-            @foreach (var level in TimeLevel.All)
-            {
-                <button type="button" class="btn btn-secondary" @onclick="() => SetTodayLevelAsync(level.Minutes)">
-                    @level.Label
-                </button>
-            }
-        </div>
-        <p class="muted small">Din vanliga vecka påverkas inte.</p>
-    </div>
 }
 
 @code {
     private HouseholdMemberResponse? _member;
-
-    private DateOnly Today => DateOnly.FromDateTime(TimeProvider.GetLocalNow().DateTime);
 
     protected override async Task OnInitializedAsync()
     {
@@ -72,16 +55,6 @@ else
 
         var household = await Api.GetHouseholdAsync(householdId);
         _member = household?.Members.FirstOrDefault(m => m.Id == memberId);
-    }
-
-    private async Task SetTodayLevelAsync(int minutes)
-    {
-        if (Session.Me is not { HouseholdId: { } householdId, MemberId: { } memberId })
-        {
-            return;
-        }
-
-        await Api.SetAvailabilityAsync(householdId, memberId, Today, minutes);
     }
 
     private static IEnumerable<(string Label, string LevelLabel)> Weekdays(HouseholdMemberResponse member)

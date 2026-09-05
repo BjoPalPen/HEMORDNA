@@ -103,12 +103,11 @@ Här är dina uppgifter för idag. En sak i taget räcker.
 ```
 
 Varje rad: kryssruta, namn, områdeschip, expandering. Ingen tid visas – varken per uppgift
-eller som summa. Tid hanteras i bakgrunden (se §6a); användaren ser bara namn och bock.
-Sidopanel (dator): uppmuntranskort och **Snabbval** – ett kvalitativt lägesval (Ingen/Lite/
-Lagom/Gott om tid) för dagens tillfälliga avvikelse. Det är den enda tidsrelaterade
-inställningen på Min dag; den normala veckobudgeten sätts inte här (se Hushållsöversikt och
-§6b) – Min dag är sidan alla öppnar varje dag, och ska inte kräva att man tar ställning till
-sin egen eller andras roll varje gång.
+eller som summa, och inget val om tid över huvud taget. Tid hanteras helt i bakgrunden (se
+§6a); användaren ser bara namn och bock. Sidopanel (dator): bara ett uppmuntranskort, och
+bara när det finns något avklarat att uppmuntra – annars ingen sidopanel alls. Ett tidigare
+"Snabbval" för dagens tillfälliga avvikelse är borttaget: även ett litet, kvalitativt tidsval
+visade sig kännas rörigt och stressande på sidan alla öppnar varje dag (produktfeedback).
 
 ### Uppgiftsdetalj
 
@@ -120,8 +119,8 @@ domänen.
 ### Planering (vecka)
 
 **Min vecka**: sju rader, en per veckodag, med bara ett kvalitativt läge i text (t.ex.
-"Ingen tid", "Lagom tid") – inget stapeldiagram, inga minuter. **Idag**-kortet erbjuder
-samma fyra lägesknappar som Min dag för att ändra just dagens avvikelse.
+"Ingen tid", "Lagom tid") – inget stapeldiagram, inga minuter, och ingen redigering här.
+Helt läsläge; rollen (se §6b) är enda sättet att ändra veckan.
 
 ### Hushållsöversikt
 
@@ -150,7 +149,10 @@ Lite tid/Lagom tid/Gott om tid → 0/15/30/60 min) och visar bara läget, aldrig
 
 Bakgrund: alltför mycket tidsvisning (minuträknare, progress-ringar, stapeldiagram) skapar
 stress snarare än lugn – motsatsen till appens syfte. Uppgiften och bocken räcker; tiden är
-ett internt planeringsverktyg, inte något användaren ska behöva förhålla sig till.
+ett internt planeringsverktyg, inte något användaren ska behöva förhålla sig till. Det gäller
+även ett litet, kvalitativt val: dagens tillfälliga avvikelse (`availableMinutes`) går
+fortfarande att sätta via API:t, men har ingen knapp någonstans i gränssnittet längre - även
+det visade sig kännas som "tid som ett val".
 
 ### 6b. Roller och rumsmallar – färre val vid start
 
