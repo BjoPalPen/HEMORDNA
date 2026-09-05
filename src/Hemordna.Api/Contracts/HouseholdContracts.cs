@@ -114,6 +114,9 @@ public sealed record RecurrenceRuleContract(
 
 public sealed record SetPreferenceRequest(PresentationMode Presentation, MotivationLevel Motivation);
 
+public sealed record RecentActivityResponse(
+    Guid OccurrenceId, string TaskName, string MemberDisplayName, DateTimeOffset CompletedAt);
+
 public sealed record PreferenceResponse(Guid MemberId, PresentationMode Presentation, MotivationLevel Motivation);
 
 public sealed record ScheduleOccurrenceRequest(DateOnly? Date, Guid? AssignToMemberId);

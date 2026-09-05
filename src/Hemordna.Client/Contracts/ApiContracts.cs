@@ -74,6 +74,9 @@ public sealed record WeeklyTimeBudgetContract(
 
 public sealed record PreferenceResponse(Guid MemberId, string Presentation, string Motivation);
 
+public sealed record RecentActivityResponse(
+    Guid OccurrenceId, string TaskName, string MemberDisplayName, DateTimeOffset CompletedAt);
+
 public sealed record AddAreaRequest(string Name);
 
 public sealed record AddMemberRequest(string DisplayName, WeeklyTimeBudgetContract? WeeklyTimeBudgetMinutes);

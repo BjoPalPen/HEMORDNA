@@ -236,6 +236,12 @@ public sealed class HemordnaApiClient
         return response.IsSuccessStatusCode;
     }
 
+    public async Task<IReadOnlyList<RecentActivityResponse>> GetRecentActivityAsync(
+        Guid householdId,
+        CancellationToken cancellationToken = default)
+        => await GetAsync<IReadOnlyList<RecentActivityResponse>>(
+            $"api/households/{householdId}/activity", cancellationToken) ?? [];
+
     public async Task<PreferenceResponse?> GetPreferenceAsync(
         Guid householdId,
         Guid memberId,

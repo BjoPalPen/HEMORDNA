@@ -86,6 +86,9 @@ internal static class HouseholdEndpoints
             .Produces(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status409Conflict);
 
+        scoped.MapGet("/activity", GetRecentActivityAsync)
+            .Produces<IReadOnlyList<RecentActivityResponse>>();
+
         scoped.MapGet("/members/{memberId:guid}/plan", GetPlanAsync)
             .WithName("GetDailyPlan")
             .Produces<DailyPlanResponse>()
@@ -380,6 +383,18 @@ internal static class HouseholdEndpoints
             householdId, occurrenceId, request.Date.Value, cancellationToken);
 
         return occurrence is null ? Results.NotFound() : Results.Ok(ToResponse(occurrence));
+    }
+
+    private static async Task<IResult> GetRecentActivityAsync(
+        Guid householdId,
+        IRecentActivityQuery activity,
+        CancellationToken cancellationToken)
+    {
+        var recent = await activity.FindRecentlyCompletedAsync(householdId, limit: 10, cancellationToken);
+
+        return Results.Ok(recent
+            .Select(a => new RecentActivityResponse(a.OccurrenceId, a.TaskName, a.MemberDisplayName, a.CompletedAt))
+            .ToList());
     }
 
     private static async Task<IResult> GetPlanAsync(
