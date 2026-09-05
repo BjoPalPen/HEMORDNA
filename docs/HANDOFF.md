@@ -42,6 +42,8 @@ Endast offline-strategi kvarstår som `OPEN` i ARCHITECTURE.md §10.
 
 1. En persisterad aktivitetslogg för Hushållsöversiktens händelseflöde, om det blir prioriterat
    - ny entitet, större beslut, inte bara UI.
-2. Flera hushåll per användare - additivt, se ARCHITECTURE.md §4.
-3. Visuell design matchad mot UXUI-mockupen (färgpalett, ikoner) - medvetet uppskjutet,
+2. Visuell design matchad mot UXUI-mockupen (färgpalett, ikoner) - medvetet uppskjutet,
    funktion prioriterades.
+
+**Beslut, inte öppen fråga:** en användare tillhör exakt ett hushåll. Flera hushåll per
+användare ska **inte** byggas - se ARCHITECTURE.md §4.

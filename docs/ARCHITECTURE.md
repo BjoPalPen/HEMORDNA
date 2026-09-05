@@ -185,8 +185,9 @@ registrerat sig, har ingen användare förrän de skaffar en. Ett unikt filtrera
 `LinkToUser` vägrar peka om en medlem till en annan användare eftersom det tyst skulle
 flytta hens historik.
 
-`PROPOSED`: flera hushåll per användare kräver en egen medlemskapstabell. Ändringen är
-additiv och går att göra utan att befintlig data blir fel.
+**Beslut: en användare tillhör exakt ett hushåll, avsiktligt.** Detta är ingen tillfällig
+begränsning som väntar på en medlemskapstabell - flera hushåll per användare ska inte byggas.
+Det unika filtrerade indexet på `UserId` är produktgränsen, inte bara en fas-1-genväg.
 
 ---
 
