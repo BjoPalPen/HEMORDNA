@@ -120,18 +120,36 @@ else
             </label>
 
             <div class="field">
-                <span>Normal tid per dag</span>
+                <span>Vilken roll har personen i hushållet?</span>
                 <div class="level-picker">
-                    @foreach (var level in TimeLevel.All)
+                    @foreach (var preset in HouseholdRolePresets.All)
                     {
                         <button type="button"
-                                class="@(_form.MinutesPerDay == level.Minutes ? "btn btn-primary" : "btn btn-secondary")"
-                                @onclick="() => _form.MinutesPerDay = level.Minutes">
-                            @level.Label
+                                class="@(_form.Role == preset.Role ? "btn btn-primary" : "btn btn-secondary")"
+                                @onclick="() => SelectRole(preset.Role)">
+                            @preset.Label
                         </button>
                     }
                 </div>
+                <p class="muted small">Vi räknar ut en rimlig tid för hushållssysslor utifrån rollen - det går att ändra senare.</p>
             </div>
+
+            <details class="more-options">
+                <summary>Fler alternativ</summary>
+                <div class="field">
+                    <span>Ange tid manuellt i stället för en roll</span>
+                    <div class="level-picker">
+                        @foreach (var level in TimeLevel.All)
+                        {
+                            <button type="button"
+                                    class="@(_form.Role is null && _form.MinutesPerDay == level.Minutes ? "btn btn-primary" : "btn btn-secondary")"
+                                    @onclick="() => SelectManualLevel(level.Minutes)">
+                                @level.Label
+                            </button>
+                        }
+                    </div>
+                </div>
+            </details>
 
             @if (_message is { } message)
             {
@@ -149,6 +167,7 @@ else
     private sealed class Form
     {
         public string DisplayName { get; set; } = string.Empty;
+        public HouseholdRole? Role { get; set; }
         public int MinutesPerDay { get; set; }
     }
 
@@ -232,6 +251,18 @@ else
     private static string Initial(string name)
         => string.IsNullOrWhiteSpace(name) ? "?" : name.Trim()[..1].ToUpperInvariant();
 
+    private void SelectRole(HouseholdRole role)
+    {
+        _form.Role = role;
+        _form.MinutesPerDay = 0;
+    }
+
+    private void SelectManualLevel(int minutes)
+    {
+        _form.Role = null;
+        _form.MinutesPerDay = minutes;
+    }
+
     private async Task AddMemberAsync()
     {
         if (Session.Me is not { HouseholdId: { } householdId })
@@ -250,11 +281,13 @@ else
 
         try
         {
-            var budget = _form.MinutesPerDay > 0
-                ? new WeeklyTimeBudgetContract(
-                    _form.MinutesPerDay, _form.MinutesPerDay, _form.MinutesPerDay, _form.MinutesPerDay,
-                    _form.MinutesPerDay, _form.MinutesPerDay, _form.MinutesPerDay)
-                : null;
+            var budget = _form.Role is { } role
+                ? HouseholdRolePresets.BudgetFor(role)
+                : _form.MinutesPerDay > 0
+                    ? new WeeklyTimeBudgetContract(
+                        _form.MinutesPerDay, _form.MinutesPerDay, _form.MinutesPerDay, _form.MinutesPerDay,
+                        _form.MinutesPerDay, _form.MinutesPerDay, _form.MinutesPerDay)
+                    : null;
 
             if (await Api.AddMemberAsync(householdId, _form.DisplayName.Trim(), budget) is null)
             {
@@ -263,6 +296,7 @@ else
             }
 
             _form.DisplayName = string.Empty;
+            _form.Role = null;
             _form.MinutesPerDay = 0;
             await LoadAsync();
         }

@@ -1,6 +1,8 @@
 @page "/omraden"
+@using Hemordna.Client.Support
 @inject HemordnaApiClient Api
 @inject HemordnaSession Session
+@inject TimeProvider TimeProvider
 
 <PageTitle>Områden – Hemordna</PageTitle>
 
@@ -22,22 +24,58 @@ else
     <p class="muted">Delar av hemmet, eller andra grupperingar hushållet väljer. En uppgift behöver inte höra till ett rum.</p>
 
     <div class="card">
-        <EditForm Model="_form" OnValidSubmit="CreateAsync">
+        <h2>Lägg till rum från mall</h2>
+        <p class="muted small">Välj typ av rum, så skapas en färdig checklista för att hålla det snyggt.</p>
+
+        <EditForm Model="_templateForm" OnValidSubmit="CreateFromTemplateAsync">
             <label class="field">
-                <span>Nytt område</span>
-                <InputText @bind-Value="_form.Name" placeholder="T.ex. Kök, Hund, Garage" />
+                <span>Typ av rum</span>
+                <select @bind="_templateForm.TemplateKey">
+                    <option value="">Välj...</option>
+                    @foreach (var template in RoomTemplates.All)
+                    {
+                        <option value="@template.Key">@template.Label</option>
+                    }
+                </select>
             </label>
 
-            @if (_message is { } message)
+            <label class="field">
+                <span>Namn på rummet</span>
+                <InputText @bind-Value="_templateForm.Name" placeholder="T.ex. Kök" />
+            </label>
+
+            @if (_templateMessage is { } templateMessage)
             {
-                <div class="notice notice-problem" role="alert">@message</div>
+                <div class="notice notice-problem" role="alert">@templateMessage</div>
             }
 
-            <button type="submit" class="btn btn-primary" disabled="@_busy">
-                @(_busy ? "Lägger till..." : "Lägg till område")
+            <button type="submit" class="btn btn-primary" disabled="@_templateBusy">
+                @(_templateBusy ? "Skapar..." : "Skapa rum med uppgifter")
             </button>
         </EditForm>
     </div>
+
+    <details class="more-options">
+        <summary>Lägg till ett tomt område i stället</summary>
+
+        <div class="card">
+            <EditForm Model="_form" OnValidSubmit="CreateAsync">
+                <label class="field">
+                    <span>Nytt område</span>
+                    <InputText @bind-Value="_form.Name" placeholder="T.ex. Hund, Garage" />
+                </label>
+
+                @if (_message is { } message)
+                {
+                    <div class="notice notice-problem" role="alert">@message</div>
+                }
+
+                <button type="submit" class="btn btn-primary" disabled="@_busy">
+                    @(_busy ? "Lägger till..." : "Lägg till område")
+                </button>
+            </EditForm>
+        </div>
+    </details>
 
     @if (_areas is null)
     {
@@ -54,6 +92,7 @@ else
             {
                 <li class="list-item">
                     <span class="list-name">@area.Name</span>
+                    <span class="list-meta muted small">@TaskCountFor(area.Id) uppgifter</span>
                 </li>
             }
         </ul>
@@ -66,10 +105,22 @@ else
         public string Name { get; set; } = string.Empty;
     }
 
+    private sealed class TemplateForm
+    {
+        public string TemplateKey { get; set; } = string.Empty;
+        public string Name { get; set; } = string.Empty;
+    }
+
     private readonly Form _form = new();
+    private readonly TemplateForm _templateForm = new();
     private IReadOnlyList<AreaResponse>? _areas;
+    private IReadOnlyList<TaskDefinitionResponse> _tasks = [];
     private string? _message;
     private bool _busy;
+    private string? _templateMessage;
+    private bool _templateBusy;
+
+    private DateOnly Today => DateOnly.FromDateTime(TimeProvider.GetLocalNow().DateTime);
 
     protected override async Task OnInitializedAsync()
     {
@@ -86,7 +137,10 @@ else
 
         var household = await Api.GetHouseholdAsync(householdId);
         _areas = household?.Areas.Where(area => area.IsActive).ToList() ?? [];
+        _tasks = await Api.ListTasksAsync(householdId);
     }
+
+    private int TaskCountFor(Guid areaId) => _tasks.Count(t => t.AreaId == areaId && t.IsActive);
 
     private async Task CreateAsync()
     {
@@ -122,6 +176,68 @@ else
         finally
         {
             _busy = false;
+        }
+    }
+
+    private async Task CreateFromTemplateAsync()
+    {
+        if (Session.Me is not { HouseholdId: { } householdId })
+        {
+            return;
+        }
+
+        var template = RoomTemplates.All.FirstOrDefault(t => t.Key == _templateForm.TemplateKey);
+
+        if (template is null)
+        {
+            _templateMessage = "Välj en typ av rum.";
+            return;
+        }
+
+        var name = string.IsNullOrWhiteSpace(_templateForm.Name) ? template.Label : _templateForm.Name.Trim();
+
+        _templateBusy = true;
+        _templateMessage = null;
+
+        try
+        {
+            var area = await Api.AddAreaAsync(householdId, name);
+
+            if (area is null)
+            {
+                _templateMessage = "Det gick inte att skapa rummet. Försök igen.";
+                return;
+            }
+
+            var recurrence = new RecurrenceRuleContract("Weekly", 1, Today, Today.DayOfWeek.ToString(), null);
+
+            foreach (var task in template.Tasks)
+            {
+                await Api.CreateTaskAsync(householdId, new CreateTaskRequest(
+                    task.Name,
+                    task.EstimatedMinutes,
+                    Description: null,
+                    AreaId: area.Id,
+                    Priority: "Normal",
+                    DefaultResponsibleMemberId: null,
+                    PreferredWeekday: null,
+                    CanBeDeferred: true,
+                    HasRotatingResponsibility: true,
+                    RequiresMultiplePeople: false,
+                    Recurrence: recurrence));
+            }
+
+            _templateForm.TemplateKey = string.Empty;
+            _templateForm.Name = string.Empty;
+            await LoadAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _templateMessage = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _templateBusy = false;
         }
     }
 }

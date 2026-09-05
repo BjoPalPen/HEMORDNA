@@ -105,8 +105,9 @@ Här är dina uppgifter för idag. En sak i taget räcker.
 Varje rad: kryssruta, namn, områdeschip, expandering. Ingen tid visas – varken per uppgift
 eller som summa. Tid hanteras i bakgrunden (se §6a); användaren ser bara namn och bock.
 Sidopanel (dator): uppmuntranskort och **Snabbval** – ett kvalitativt lägesval (Ingen/Lite/
-Lagom/Gott om tid) för dagens tillfälliga avvikelse, och en **Din vanliga vecka**-redigerare
-med samma fyra nivåer per veckodag i stället för minutfält.
+Lagom/Gott om tid) för dagens tillfälliga avvikelse, och **Din vanliga vecka**: en rollknapp
+(se §6b) sätter hela veckan i ett klick, med dag-för-dag-redigeraren undangömd bakom
+"Anpassa varje dag för sig" för den som verkligen behöver avvika från rollen.
 
 ### Uppgiftsdetalj
 
@@ -128,6 +129,13 @@ medlem och dag, områden med antal uppgifter, senaste händelser.
 
 Detta är den enda vyn som visar hela hushållet, och den är aldrig startskärm.
 
+### Områden
+
+Lista över hemmets delar. Formuläret "Lägg till rum från mall" (se §6b) är förstahandsvägen;
+ett tomt, namnlöst område ligger bakom disclosuren "Lägg till ett tomt område i stället", för
+grupperingar som inte är ett rum (t.ex. "Hund", "Garage"). Varje område visar sitt antal
+uppgifter.
+
 ### 6a. Tid hanteras i bakgrunden, visas aldrig
 
 Domänen räknar fortfarande i minuter (uppskattad tid, veckobudget, `availableMinutes` från
@@ -139,6 +147,21 @@ Lite tid/Lagom tid/Gott om tid → 0/15/30/60 min) och visar bara läget, aldrig
 Bakgrund: alltför mycket tidsvisning (minuträknare, progress-ringar, stapeldiagram) skapar
 stress snarare än lugn – motsatsen till appens syfte. Uppgiften och bocken räcker; tiden är
 ett internt planeringsverktyg, inte något användaren ska behöva förhålla sig till.
+
+### 6b. Roller och rumsmallar – färre val vid start
+
+Även fyra kvalitativa lägen per veckodag var för många beslut på en gång (produktfeedback).
+`Hemordna.Client.Support.HouseholdRolePresets` erbjuder tre roller istället – **Vuxen, jobbar
+heltid**, **Barn eller ungdom**, **Pensionär / hemma dagtid** – och räknar ut en rimlig
+vardag/helg-fördelning åt medlemmen i ett enda val, både vid "Lägg till medlem" och i "Din
+vanliga vecka". Dag-för-dag-redigeringen finns kvar som ett undangömt avancerat alternativ
+för den som inte passar någon roll.
+
+På samma sätt genererar `RoomTemplates` en färdig checklista av vanliga städuppgifter när
+någon namnger vilken typ av rum de lägger till (t.ex. "Litet wc" ger handfat, toalettstol,
+spegel, hyllor, golv) i stället för att användaren ska hitta på och skriva in varje uppgift
+för hand. Genererade uppgifter upprepas varje vecka och roterar mellan hushållets medlemmar,
+samma mönster som redan används för den seedade uppgiften "Dammsug vardagsrum".
 
 ### Inställningar – Min visning
 

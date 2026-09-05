@@ -165,38 +165,53 @@ else
 
             <div class="card">
                 <h2>Din vanliga vecka</h2>
-                <p class="muted small">Hur mycket tid du normalt har, varje veckodag.</p>
-
-                @if (_weekBudget is null)
-                {
-                    <button type="button" class="btn btn-secondary btn-block" @onclick="ToggleWeekEditorAsync">
-                        Ändra din vanliga vecka
-                    </button>
-                }
-                else
-                {
-                    <div class="week-editor">
-                        @foreach (var day in Weekdays)
-                        {
-                            <div class="field field-day">
-                                <span>@day.Label</span>
-                                <div class="level-picker level-picker-compact">
-                                    @foreach (var level in TimeLevel.All)
-                                    {
-                                        <button type="button"
-                                                class="@(_weekBudget[day.Value] == level.Minutes ? "btn btn-primary" : "btn btn-secondary")"
-                                                @onclick="() => _weekBudget[day.Value] = level.Minutes">
-                                            @level.Label
-                                        </button>
-                                    }
-                                </div>
-                            </div>
-                        }
-                        <button type="button" class="btn btn-primary btn-block" @onclick="SaveWeekBudgetAsync">
-                            Spara vanlig vecka
+                <p class="muted small">
+                    Vilken roll stämmer bäst med din vardag? Vi räknar ut en rimlig tid utifrån den.
+                </p>
+                <div class="level-picker">
+                    @foreach (var preset in HouseholdRolePresets.All)
+                    {
+                        <button type="button" class="btn btn-secondary" disabled="@_roleBusy"
+                                @onclick="() => SetRoleAsync(preset.Role)">
+                            @preset.Label
                         </button>
-                    </div>
-                }
+                    }
+                </div>
+
+                <details class="more-options">
+                    <summary>Anpassa varje dag för sig</summary>
+
+                    @if (_weekBudget is null)
+                    {
+                        <button type="button" class="btn btn-secondary btn-block" @onclick="ToggleWeekEditorAsync">
+                            Ändra din vanliga vecka
+                        </button>
+                    }
+                    else
+                    {
+                        <div class="week-editor">
+                            @foreach (var day in Weekdays)
+                            {
+                                <div class="field field-day">
+                                    <span>@day.Label</span>
+                                    <div class="level-picker level-picker-compact">
+                                        @foreach (var level in TimeLevel.All)
+                                        {
+                                            <button type="button"
+                                                    class="@(_weekBudget[day.Value] == level.Minutes ? "btn btn-primary" : "btn btn-secondary")"
+                                                    @onclick="() => _weekBudget[day.Value] = level.Minutes">
+                                                @level.Label
+                                            </button>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                            <button type="button" class="btn btn-primary btn-block" @onclick="SaveWeekBudgetAsync">
+                                Spara vanlig vecka
+                            </button>
+                        </div>
+                    }
+                </details>
             </div>
         </aside>
     </div>
@@ -218,6 +233,7 @@ else
     private Guid? _busyOccurrence;
     private Guid? _expandedOccurrence;
     private Dictionary<DayOfWeek, int>? _weekBudget;
+    private bool _roleBusy;
 
     // The date is resolved from an injected clock here at the edge; nothing below reads one.
     // TimeProvider rather than DateTime.Now so the page can be rendered at a fixed date.
@@ -350,6 +366,30 @@ else
         if (await Api.SetAvailabilityAsync(householdId, memberId, Today, minutes))
         {
             await LoadDayAsync();
+        }
+    }
+
+    private async Task SetRoleAsync(HouseholdRole role)
+    {
+        if (Session.Me is not { HouseholdId: { } householdId, MemberId: { } memberId })
+        {
+            return;
+        }
+
+        _roleBusy = true;
+
+        try
+        {
+            if (await Api.SetWeeklyBudgetAsync(householdId, memberId, HouseholdRolePresets.BudgetFor(role)))
+            {
+                // The day-by-day editor, if open, now shows stale values - close it.
+                _weekBudget = null;
+                await LoadDayAsync();
+            }
+        }
+        finally
+        {
+            _roleBusy = false;
         }
     }
 

@@ -25,21 +25,22 @@ public class HushallTests
     }
 
     [Fact]
-    public async Task Adding_a_member_sets_their_normal_week_without_asking_for_a_number()
+    public async Task Adding_a_member_infers_their_week_from_a_role_without_asking_for_a_number()
     {
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Erik");
 
         await page.GotoAsync("/hushall");
         await page.GetByLabel("Namn").FillAsync("Filippa");
-        // No minute field: a qualitative level picker instead - see Support.TimeLevel.
-        await page.Locator("form").GetByRole(AriaRole.Button, new() { Name = "Lagom tid" }).ClickAsync();
+        // No minute field, and not even a per-day choice: one role infers the whole week -
+        // see Support.HouseholdRolePresets.
+        await page.Locator("form").GetByRole(AriaRole.Button, new() { Name = "Vuxen, jobbar heltid" }).ClickAsync();
         await page.GetByRole(AriaRole.Button, new() { Name = "Lägg till medlem" }).ClickAsync();
 
         await Assertions.Expect(page.Locator(".list-item", new() { HasText = "Filippa" })).ToBeVisibleAsync();
 
-        // Nothing in the UI shows the number, but "Lagom tid" (30 min) must actually have been
-        // sent - verified against the API, which is the only place minutes still live.
+        // Nothing in the UI shows a number, but the role's weekday/weekend split must actually
+        // have been sent - verified against the API, the only place minutes still live.
         var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
         using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
         http.DefaultRequestHeaders.Authorization = new("Bearer", token);
@@ -49,7 +50,9 @@ public class HushallTests
         var filippa = household.GetProperty("members").EnumerateArray()
             .Single(m => m.GetProperty("displayName").GetString() == "Filippa");
 
-        Assert.Equal(30, filippa.GetProperty("weeklyTimeBudgetMinutes").GetProperty("monday").GetInt32());
+        var budget = filippa.GetProperty("weeklyTimeBudgetMinutes");
+        Assert.Equal(30, budget.GetProperty("monday").GetInt32());
+        Assert.Equal(60, budget.GetProperty("saturday").GetInt32());
     }
 
     [Fact]
@@ -59,6 +62,9 @@ public class HushallTests
         await SignUpHelper.SignUpAsync(page, "Greta");
 
         await page.GotoAsync("/omraden");
+        // The plain area form is tucked behind a disclosure now that room templates are the
+        // primary path - see OmradenTests for that flow.
+        await page.GetByText("Lägg till ett tomt område i stället").ClickAsync();
         await page.GetByLabel("Nytt område").FillAsync("Kök");
         await page.GetByRole(AriaRole.Button, new() { Name = "Lägg till område" }).ClickAsync();
         await Assertions.Expect(page.Locator(".list-item", new() { HasText = "Kök" })).ToBeVisibleAsync();
