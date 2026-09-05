@@ -72,3 +72,14 @@
     background: var(--color-surface);
     border: 2px solid var(--color-primary);
 }
+
+.invite-code {
+    display: inline-block;
+    padding: var(--space-3) var(--space-5);
+    background: var(--color-primary-soft);
+    border-radius: var(--radius-control);
+    font-family: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
+    font-size: 1.25rem;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+}

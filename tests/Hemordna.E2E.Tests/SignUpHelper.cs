@@ -12,6 +12,21 @@ internal static class SignUpHelper
     /// <summary>Registers, names a household and lands on Min dag.</summary>
     internal static async Task SignUpAsync(IPage page, string displayName, string householdName = "Familjen Andersson")
     {
+        await RegisterAsync(page, displayName);
+
+        await page.GetByLabel("Hushållets namn").FillAsync(householdName);
+        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa hushåll" }).ClickAsync();
+
+        await page.GetByRole(AriaRole.Heading, new() { Name = $"Hej {displayName}!" })
+            .WaitForAsync(new() { Timeout = 15_000 });
+    }
+
+    /// <summary>
+    /// Registers an account and stops on the "name your household or join one" screen -
+    /// for tests that then join an existing household instead of creating a new one.
+    /// </summary>
+    internal static async Task RegisterAsync(IPage page, string displayName)
+    {
         await page.GotoAsync("/logga-in");
 
         await page.GetByRole(AriaRole.Tab, new() { Name = "Skapa konto" }).ClickAsync();
@@ -20,10 +35,6 @@ internal static class SignUpHelper
         await page.GetByLabel("Lösenord").FillAsync(Password);
         await page.GetByRole(AriaRole.Button, new() { Name = "Skapa konto" }).ClickAsync();
 
-        await page.GetByLabel("Hushållets namn").FillAsync(householdName);
-        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa hushåll" }).ClickAsync();
-
-        await page.GetByRole(AriaRole.Heading, new() { Name = $"Hej {displayName}!" })
-            .WaitForAsync(new() { Timeout = 15_000 });
+        await page.GetByLabel("Hushållets namn").WaitForAsync(new() { Timeout = 15_000 });
     }
 }

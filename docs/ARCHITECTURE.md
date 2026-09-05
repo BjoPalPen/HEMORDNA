@@ -251,6 +251,21 @@ flytta hens historik.
 begränsning som väntar på en medlemskapstabell - flera hushåll per användare ska inte byggas.
 Det unika filtrerade indexet på `UserId` är produktgränsen, inte bara en fas-1-genväg.
 
+### Beslut: `Household.InviteCode` för att gå med i ett hushåll — `IMPLEMENTED`
+
+Fram tills nu fanns ingen väg in i ett hushåll förutom att skapa ett nytt - "Lägg till
+medlem" på Hushållsöversikten skapar bara en namngiven plats utan eget konto. `JoinHousehold`
+(mirrorar `CreateHousehold`) är den andra halvan: `POST /api/households/join` slår upp
+hushållet på dess `InviteCode` i stället för att skapa ett nytt, kopplar den anropande
+användaren som ny medlem och kräver samma "en användare, ett hushåll"-koll som `CreateAsync`.
+
+Koden är åtta tecken ur ett alfabet utan förväxlingsbara tecken (`0/O`, `1/I/L`) - menad att
+läsas högt eller skrivas för hand, inte en hemlighet i säkerhetsbemärkelse (den ger bara
+medlemskap, ingenting mer). Genereras i `Household.Create` (samma mönster som `Guid.NewGuid()`
+redan används på andra håll i domänen) och kan bytas ut med `RegenerateInviteCode` om en kod
+läckt - påverkar aldrig redan tillagda medlemmar. Ett unikt index i databasen gör kollision
+till en garanti, inte bara en fråga om entropi.
+
 ---
 
 ## 5. Source of truth och synkstrategi — `IMPLEMENTED` (1–2) / `PROPOSED` (3)

@@ -2,24 +2,56 @@
 
 @* First run: signed in, but there is no household yet. *@
 <div class="onboarding card">
-    <h1>Välkommen!</h1>
-    <p class="muted">Börja med att ge ditt hushåll ett namn. Du kan bjuda in fler senare.</p>
+    @if (!_joining)
+    {
+        <h1>Välkommen!</h1>
+        <p class="muted">Börja med att ge ditt hushåll ett namn.</p>
 
-    <EditForm Model="_form" OnValidSubmit="CreateAsync">
-        <label class="field">
-            <span>Hushållets namn</span>
-            <InputText @bind-Value="_form.Name" placeholder="Familjen Andersson" />
-        </label>
+        <EditForm Model="_form" OnValidSubmit="CreateAsync">
+            <label class="field">
+                <span>Hushållets namn</span>
+                <InputText @bind-Value="_form.Name" placeholder="Familjen Andersson" />
+            </label>
 
-        @if (_message is { } message)
-        {
-            <div class="notice notice-problem" role="alert">@message</div>
-        }
+            @if (_message is { } message)
+            {
+                <div class="notice notice-problem" role="alert">@message</div>
+            }
 
-        <button type="submit" class="btn btn-primary btn-block" disabled="@_busy">
-            @(_busy ? "Skapar…" : "Skapa hushåll")
+            <button type="submit" class="btn btn-primary btn-block" disabled="@_busy">
+                @(_busy ? "Skapar…" : "Skapa hushåll")
+            </button>
+        </EditForm>
+
+        <button type="button" class="btn-link" @onclick="() => SwitchTo(joining: true)">
+            Har du en inbjudningskod?
         </button>
-    </EditForm>
+    }
+    else
+    {
+        <h1>Gå med i ett hushåll</h1>
+        <p class="muted">Ange koden du fick av någon i hushållet.</p>
+
+        <EditForm Model="_joinForm" OnValidSubmit="JoinAsync">
+            <label class="field">
+                <span>Inbjudningskod</span>
+                <InputText @bind-Value="_joinForm.InviteCode" placeholder="T.ex. AB3D9F2K" />
+            </label>
+
+            @if (_message is { } joinMessage)
+            {
+                <div class="notice notice-problem" role="alert">@joinMessage</div>
+            }
+
+            <button type="submit" class="btn btn-primary btn-block" disabled="@_busy">
+                @(_busy ? "Går med…" : "Gå med i hushållet")
+            </button>
+        </EditForm>
+
+        <button type="button" class="btn-link" @onclick="() => SwitchTo(joining: false)">
+            Skapa ett nytt hushåll i stället
+        </button>
+    }
 </div>
 
 @code {
@@ -28,13 +60,26 @@
         public string Name { get; set; } = string.Empty;
     }
 
+    private sealed class JoinForm
+    {
+        public string InviteCode { get; set; } = string.Empty;
+    }
+
     private readonly Form _form = new();
+    private readonly JoinForm _joinForm = new();
+    private bool _joining;
     private string? _message;
     private bool _busy;
 
-    /// <summary>Raised once the household exists, so the day can be loaded.</summary>
+    /// <summary>Raised once the household exists (created or joined), so the day can be loaded.</summary>
     [Parameter]
     public EventCallback OnCreated { get; set; }
+
+    private void SwitchTo(bool joining)
+    {
+        _joining = joining;
+        _message = null;
+    }
 
     private async Task CreateAsync()
     {
@@ -52,6 +97,44 @@
             if (await Api.CreateHouseholdAsync(_form.Name) is null)
             {
                 _message = "Det gick inte att skapa hushållet. Försök igen.";
+                return;
+            }
+
+            await OnCreated.InvokeAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _message = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task JoinAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_joinForm.InviteCode))
+        {
+            _message = "Ange en inbjudningskod.";
+            return;
+        }
+
+        _busy = true;
+        _message = null;
+
+        try
+        {
+            var outcome = await Api.JoinHouseholdAsync(_joinForm.InviteCode);
+
+            if (outcome.Error is { } error)
+            {
+                _message = error switch
+                {
+                    JoinHouseholdError.InvalidCode => "Ingen hittade den koden. Kontrollera att du skrev rätt.",
+                    JoinHouseholdError.AlreadyInHousehold => "Du tillhör redan ett hushåll.",
+                    _ => "Det gick inte att gå med. Försök igen."
+                };
                 return;
             }
 

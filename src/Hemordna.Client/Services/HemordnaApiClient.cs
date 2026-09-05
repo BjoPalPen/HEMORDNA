@@ -91,6 +91,45 @@ public sealed class HemordnaApiClient
             : null;
     }
 
+    /// <summary>Joins an existing household via its invite code, instead of creating a new one.</summary>
+    public async Task<JoinHouseholdOutcome> JoinHouseholdAsync(
+        string inviteCode,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(HttpMethod.Post, "api/households/join", cancellationToken);
+        request.Content = JsonContent.Create(new JoinHouseholdRequest(inviteCode));
+
+        var response = await _http.SendAsync(request, cancellationToken);
+
+        if (response.IsSuccessStatusCode)
+        {
+            return JoinHouseholdOutcome.ForSuccess(
+                await response.Content.ReadFromJsonAsync<HouseholdResponse>(cancellationToken));
+        }
+
+        return response.StatusCode switch
+        {
+            HttpStatusCode.NotFound => JoinHouseholdOutcome.ForFailure(JoinHouseholdError.InvalidCode),
+            HttpStatusCode.Conflict => JoinHouseholdOutcome.ForFailure(JoinHouseholdError.AlreadyInHousehold),
+            _ => JoinHouseholdOutcome.ForFailure(JoinHouseholdError.Unknown)
+        };
+    }
+
+    /// <summary>Issues a fresh invite code, so one shared with the wrong person stops working.</summary>
+    public async Task<HouseholdResponse?> RegenerateInviteCodeAsync(
+        Guid householdId,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Post, $"api/households/{householdId}/invite-code/regenerate", cancellationToken);
+
+        var response = await _http.SendAsync(request, cancellationToken);
+
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<HouseholdResponse>(cancellationToken)
+            : null;
+    }
+
     public async Task<IReadOnlyList<TaskDefinitionResponse>> ListTasksAsync(
         Guid householdId,
         CancellationToken cancellationToken = default)
@@ -388,4 +427,25 @@ public sealed class HemordnaApiClient
     }
 
     private sealed record ValidationProblem(string? Detail, Dictionary<string, string[]>? Errors);
+}
+
+/// <summary>Why <see cref="HemordnaApiClient.JoinHouseholdAsync"/> did not succeed.</summary>
+public enum JoinHouseholdError
+{
+    InvalidCode,
+    AlreadyInHousehold,
+    Unknown
+}
+
+/// <summary>
+/// Either the joined household, or the reason it failed - distinct from the other household
+/// endpoints' plain-null-on-failure pattern because joining has two genuinely different
+/// failure modes a person can act on (typo in the code vs. already belongs elsewhere), not
+/// just "something went wrong".
+/// </summary>
+public sealed record JoinHouseholdOutcome(HouseholdResponse? Household, JoinHouseholdError? Error)
+{
+    public static JoinHouseholdOutcome ForSuccess(HouseholdResponse? household) => new(household, null);
+
+    public static JoinHouseholdOutcome ForFailure(JoinHouseholdError error) => new(null, error);
 }

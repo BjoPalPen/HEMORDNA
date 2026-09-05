@@ -138,6 +138,26 @@ a {
     cursor: default;
 }
 
+/* A button that reads as a text link - for a secondary choice next to a primary form action
+   (e.g. "switch to joining instead of creating"), where a bordered .btn-secondary would
+   visually compete with the form's own primary button. */
+.btn-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0;
+    background: none;
+    border: none;
+    color: var(--color-primary-strong);
+    font: inherit;
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.btn-link:hover {
+    color: var(--color-primary);
+}
+
 .btn-block {
     width: 100%;
 }

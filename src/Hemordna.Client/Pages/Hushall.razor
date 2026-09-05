@@ -130,6 +130,29 @@ else
     </div>
 
     <div class="card">
+        <h2>Bjud in fler</h2>
+        <p class="muted small">
+            Ge den här koden till någon i hushållet. De anger den när de skapar sitt eget
+            konto, i stället för att starta ett nytt hushåll.
+        </p>
+        <p class="invite-code" aria-label="Inbjudningskod">@_household.InviteCode</p>
+
+        @if (_inviteMessage is { } inviteMessage)
+        {
+            <div class="notice" role="status">@inviteMessage</div>
+        }
+
+        <button type="button" class="btn btn-secondary" disabled="@_regeneratingInviteCode"
+                @onclick="RegenerateInviteCodeAsync">
+            @(_regeneratingInviteCode ? "Skapar ny kod..." : "Skapa ny kod")
+        </button>
+        <p class="muted small">
+            En ny kod gör den gamla ogiltig - använd bara om den här har hamnat i fel händer.
+            Ingen redan tillagd medlem påverkas.
+        </p>
+    </div>
+
+    <div class="card">
         <h2>Lägg till medlem</h2>
         <EditForm Model="_form" OnValidSubmit="AddMemberAsync">
             <label class="field">
@@ -197,6 +220,8 @@ else
     private string? _message;
     private bool _busy;
     private Guid? _removingMemberId;
+    private string? _inviteMessage;
+    private bool _regeneratingInviteCode;
 
     private static readonly System.Globalization.CultureInfo SwedishCulture = new("sv-SE");
 
@@ -297,6 +322,30 @@ else
         finally
         {
             _removingMemberId = null;
+        }
+    }
+
+    private async Task RegenerateInviteCodeAsync()
+    {
+        if (Session.Me is not { HouseholdId: { } householdId })
+        {
+            return;
+        }
+
+        _regeneratingInviteCode = true;
+        _inviteMessage = null;
+
+        try
+        {
+            if (await Api.RegenerateInviteCodeAsync(householdId) is { } updated)
+            {
+                _household = updated;
+                _inviteMessage = "Ny kod skapad. Den gamla koden fungerar inte längre.";
+            }
+        }
+        finally
+        {
+            _regeneratingInviteCode = false;
         }
     }
 

@@ -76,6 +76,55 @@ public class HouseholdTests
 
         Assert.Single(household.Members);
     }
+
+    [Fact]
+    public void Create_issues_an_eight_character_invite_code()
+    {
+        var household = Household.Create("Familjen", CreatedAt);
+
+        Assert.Equal(8, household.InviteCode.Length);
+    }
+
+    [Fact]
+    public void The_invite_code_only_uses_unambiguous_characters()
+    {
+        // No 0/O or 1/I/L - the code is meant to be read aloud or typed by hand.
+        var household = Household.Create("Familjen", CreatedAt);
+
+        Assert.Matches("^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{8}$", household.InviteCode);
+    }
+
+    [Fact]
+    public void Two_households_get_different_invite_codes()
+    {
+        var first = Household.Create("Familjen ett", CreatedAt);
+        var second = Household.Create("Familjen tva", CreatedAt);
+
+        Assert.NotEqual(first.InviteCode, second.InviteCode);
+    }
+
+    [Fact]
+    public void RegenerateInviteCode_replaces_the_code()
+    {
+        var household = Household.Create("Familjen", CreatedAt);
+        var original = household.InviteCode;
+
+        household.RegenerateInviteCode();
+
+        Assert.NotEqual(original, household.InviteCode);
+        Assert.Equal(8, household.InviteCode.Length);
+    }
+
+    [Fact]
+    public void RegenerateInviteCode_does_not_affect_existing_members()
+    {
+        var household = Household.Create("Familjen", CreatedAt);
+        household.AddMember("Anna", WeeklyTimeBudget.Empty, CreatedAt);
+
+        household.RegenerateInviteCode();
+
+        Assert.Single(household.Members);
+    }
 }
 
 public class HouseholdMemberUserLinkTests

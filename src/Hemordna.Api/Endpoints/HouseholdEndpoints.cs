@@ -31,6 +31,12 @@ internal static class HouseholdEndpoints
             .Produces(StatusCodes.Status409Conflict)
             .ProducesValidationProblem();
 
+        households.MapPost("/join", JoinAsync)
+            .Produces<HouseholdResponse>(StatusCodes.Status201Created)
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status409Conflict)
+            .ProducesValidationProblem();
+
         // Household-scoped routes. The filter resolves and verifies membership.
         var scoped = households.MapGroup("/{householdId:guid}")
             .AddEndpointFilter<HouseholdAccessFilter>();
@@ -83,6 +89,10 @@ internal static class HouseholdEndpoints
 
         scoped.MapPut("/members/{memberId:guid}/role", SetMemberRoleAsync)
             .Produces<HouseholdMemberResponse>()
+            .Produces(StatusCodes.Status404NotFound);
+
+        scoped.MapPost("/invite-code/regenerate", RegenerateInviteCodeAsync)
+            .Produces<HouseholdResponse>()
             .Produces(StatusCodes.Status404NotFound);
 
         scoped.MapGet("/members/{memberId:guid}/preferences", GetPreferenceAsync)
@@ -155,6 +165,55 @@ internal static class HouseholdEndpoints
 
         var household = await createHousehold.HandleAsync(
             request.Name, userId, displayName, cancellationToken);
+
+        return Results.CreatedAtRoute(
+            "GetHousehold",
+            new { householdId = household.Id },
+            ToResponse(household));
+    }
+
+    private static async Task<IResult> JoinAsync(
+        JoinHouseholdRequest request,
+        HttpContext httpContext,
+        JoinHousehold joinHousehold,
+        IHouseholdMembershipQuery memberships,
+        CancellationToken cancellationToken)
+    {
+        if (httpContext.User.GetUserId() is not { } userId)
+        {
+            return Results.Unauthorized();
+        }
+
+        if (string.IsNullOrWhiteSpace(request.InviteCode))
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                [nameof(request.InviteCode)] = ["En inbjudningskod måste anges."]
+            });
+        }
+
+        // Same rule as CreateAsync: one user belongs to one household for now.
+        if (await memberships.FindByUserIdAsync(userId, cancellationToken) is not null)
+        {
+            return Results.Conflict(new { message = "Användaren tillhör redan ett hushåll." });
+        }
+
+        var displayName = httpContext.User.Identity?.Name;
+
+        if (string.IsNullOrWhiteSpace(displayName))
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["DisplayName"] = ["Inloggningen saknar visningsnamn."]
+            });
+        }
+
+        var household = await joinHousehold.HandleAsync(request.InviteCode, userId, displayName, cancellationToken);
+
+        if (household is null)
+        {
+            return Results.NotFound(new { message = "Inget hushåll hittades med den koden." });
+        }
 
         return Results.CreatedAtRoute(
             "GetHousehold",
@@ -385,6 +444,16 @@ internal static class HouseholdEndpoints
         return member is null ? Results.NotFound() : Results.Ok(ToResponse(member));
     }
 
+    private static async Task<IResult> RegenerateInviteCodeAsync(
+        Guid householdId,
+        RegenerateInviteCode regenerateInviteCode,
+        CancellationToken cancellationToken)
+    {
+        var household = await regenerateInviteCode.HandleAsync(householdId, cancellationToken);
+
+        return household is null ? Results.NotFound() : Results.Ok(ToResponse(household));
+    }
+
     private static async Task<IResult> GetPreferenceAsync(
         Guid householdId,
         Guid memberId,
@@ -507,6 +576,7 @@ internal static class HouseholdEndpoints
             household.Id,
             household.Name,
             household.CreatedAt,
+            household.InviteCode,
             [.. household.Members.Select(ToResponse)],
             [.. household.Areas.Select(ToResponse)]);
 

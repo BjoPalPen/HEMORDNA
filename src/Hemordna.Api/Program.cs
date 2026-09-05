@@ -29,6 +29,8 @@ builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddSingleton(TimeProvider.System);
 
 builder.Services.AddScoped<CreateHousehold>();
+builder.Services.AddScoped<JoinHousehold>();
+builder.Services.AddScoped<RegenerateInviteCode>();
 builder.Services.AddScoped<GetHousehold>();
 builder.Services.AddScoped<AddHouseholdMember>();
 builder.Services.AddScoped<AddArea>();

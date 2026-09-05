@@ -132,6 +132,11 @@ Detta är den enda vyn som visar hela hushållet, och den är aldrig startskärm
 också platsen för roll-/tidsinställningar som inte alla medlemmar behöver se eller röra vid,
 till skillnad från Min dag som alla öppnar varje dag.
 
+Ett "Bjud in fler"-kort visar hushållets inbjudningskod (åtta tecken, versaler, inga
+förväxlingsbara siffror/bokstäver) och en knapp för att skapa en ny om koden hamnat i fel
+händer. Den delas manuellt (ingen e-post/länk ännu) - personen som bjuds in anger koden på
+sin egen "Skapa konto"-skärm i stället för att döpa ett nytt hushåll.
+
 ### Områden
 
 Hemmets rum, och all uppgiftshantering, samlat på ett ställe - det finns ingen egen

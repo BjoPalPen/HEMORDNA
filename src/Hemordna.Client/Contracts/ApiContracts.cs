@@ -56,8 +56,11 @@ public sealed record HouseholdResponse(
     Guid Id,
     string Name,
     DateTimeOffset CreatedAt,
+    string InviteCode,
     IReadOnlyList<HouseholdMemberResponse> Members,
     IReadOnlyList<AreaResponse> Areas);
+
+public sealed record JoinHouseholdRequest(string InviteCode);
 
 public sealed record HouseholdMemberResponse(
     Guid Id,

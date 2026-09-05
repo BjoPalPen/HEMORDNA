@@ -25,6 +25,9 @@ internal sealed class InMemoryHouseholdRepository : IHouseholdRepository
     public Task<Household?> FindByIdAsync(Guid householdId, CancellationToken cancellationToken)
         => Task.FromResult(_households.GetValueOrDefault(householdId));
 
+    public Task<Household?> FindByInviteCodeAsync(string inviteCode, CancellationToken cancellationToken)
+        => Task.FromResult(_households.Values.FirstOrDefault(household => household.InviteCode == inviteCode));
+
     public Task UpdateAsync(Household household, CancellationToken cancellationToken)
     {
         UpdateCallCount++;

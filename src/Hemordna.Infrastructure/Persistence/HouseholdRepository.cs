@@ -24,4 +24,10 @@ internal sealed class HouseholdRepository : IHouseholdRepository
             .Include(household => household.Members)
             .Include(household => household.Areas)
             .FirstOrDefaultAsync(household => household.Id == householdId, cancellationToken);
+
+    public Task<Household?> FindByInviteCodeAsync(string inviteCode, CancellationToken cancellationToken)
+        => _dbContext.Households
+            .Include(household => household.Members)
+            .Include(household => household.Areas)
+            .FirstOrDefaultAsync(household => household.InviteCode == inviteCode, cancellationToken);
 }

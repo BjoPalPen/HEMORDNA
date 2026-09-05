@@ -7,10 +7,13 @@ namespace Hemordna.Api.Contracts;
 
 public sealed record CreateHouseholdRequest(string? Name);
 
+public sealed record JoinHouseholdRequest(string? InviteCode);
+
 public sealed record HouseholdResponse(
     Guid Id,
     string Name,
     DateTimeOffset CreatedAt,
+    string InviteCode,
     IReadOnlyList<HouseholdMemberResponse> Members,
     IReadOnlyList<AreaResponse> Areas);
 

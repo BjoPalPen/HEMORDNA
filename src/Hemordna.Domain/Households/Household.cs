@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using Hemordna.Domain.Areas;
 using Hemordna.Domain.Common;
 
@@ -18,11 +19,12 @@ public sealed class Household
     private readonly List<HouseholdMember> _members = [];
     private readonly List<Area> _areas = [];
 
-    private Household(Guid id, string name, DateTimeOffset createdAt)
+    private Household(Guid id, string name, DateTimeOffset createdAt, string inviteCode)
     {
         Id = id;
         Name = name;
         CreatedAt = createdAt;
+        InviteCode = inviteCode;
     }
 
     public Guid Id { get; private set; }
@@ -35,10 +37,40 @@ public sealed class Household
 
     public IReadOnlyCollection<Area> Areas => _areas.AsReadOnly();
 
+    /// <summary>
+    /// The code someone else types in at sign-up to join this household instead of creating
+    /// their own - see <see cref="RegenerateInviteCode"/> for revoking a leaked one. Not a
+    /// secret in the security sense (it only grants membership, nothing more), but random
+    /// enough that it cannot be guessed.
+    /// </summary>
+    public string InviteCode { get; private set; }
+
     public static Household Create(string name, DateTimeOffset createdAt)
-        => new(Guid.NewGuid(), Guard.AgainstNullOrWhiteSpace(name, nameof(name)), createdAt);
+        => new(Guid.NewGuid(), Guard.AgainstNullOrWhiteSpace(name, nameof(name)), createdAt, GenerateInviteCode());
 
     public void Rename(string name) => Name = Guard.AgainstNullOrWhiteSpace(name, nameof(name));
+
+    /// <summary>
+    /// Replaces the invite code with a fresh one, so a code shared with the wrong person (or
+    /// simply no longer wanted) stops working. Anyone who already joined keeps their
+    /// membership - this only affects future attempts to join.
+    /// </summary>
+    public void RegenerateInviteCode() => InviteCode = GenerateInviteCode();
+
+    // Excludes visually ambiguous characters (0/O, 1/I/L) since the code is meant to be read
+    // aloud or typed by hand. 8 characters from this 32-letter alphabet is over a trillion
+    // combinations - not guessable, while staying short enough to share easily.
+    private const string InviteCodeAlphabet = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+    private const int InviteCodeLength = 8;
+
+    private static string GenerateInviteCode()
+        => string.Create(InviteCodeLength, 0, (span, _) =>
+        {
+            for (var i = 0; i < span.Length; i++)
+            {
+                span[i] = InviteCodeAlphabet[RandomNumberGenerator.GetInt32(InviteCodeAlphabet.Length)];
+            }
+        });
 
     /// <summary>Adds a member. Display names must be unique within the household.</summary>
     public HouseholdMember AddMember(
