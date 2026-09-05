@@ -99,4 +99,35 @@ public class TaskDefinitionTests
 
         Assert.Throws<DomainException>(() => definition.ScheduleFor(Friday, CreatedAt));
     }
+
+    [Fact]
+    public void SetRecurrence_can_be_set_and_cleared()
+    {
+        var definition = CreateDefinition();
+        var recurrence = RecurrenceRule.Weekly(Friday, DayOfWeek.Friday);
+
+        definition.SetRecurrence(recurrence);
+        Assert.Equal(recurrence, definition.Recurrence);
+
+        definition.SetRecurrence(null);
+        Assert.Null(definition.Recurrence);
+    }
+
+    [Fact]
+    public void SetStaleAfterDays_can_be_set_and_cleared()
+    {
+        var definition = CreateDefinition();
+
+        definition.SetStaleAfterDays(21);
+        Assert.Equal(21, definition.StaleAfterDays);
+
+        definition.SetStaleAfterDays(null);
+        Assert.Null(definition.StaleAfterDays);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-5)]
+    public void SetStaleAfterDays_rejects_a_non_positive_interval(int days)
+        => Assert.Throws<ArgumentOutOfRangeException>(() => CreateDefinition().SetStaleAfterDays(days));
 }

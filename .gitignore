@@ -6,6 +6,10 @@
 # dotenv files
 .env
 
+# Local machine's LAN address override for the Blazor client - never shared, everyone's
+# network differs (see ApiBaseAddress in wwwroot/appsettings.json for the default).
+src/Hemordna.Client/wwwroot/appsettings.Development.json
+
 # User-specific files
 *.rsuser
 *.suo

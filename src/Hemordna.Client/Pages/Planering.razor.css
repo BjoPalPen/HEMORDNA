@@ -1,0 +1,26 @@
+.chart {
+    display: flex;
+    align-items: flex-end;
+    gap: var(--space-4);
+    min-height: 200px;
+    padding-top: var(--space-4);
+}
+
+.chart-column {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-1);
+    flex: 1;
+}
+
+.chart-bar {
+    width: 100%;
+    max-width: 40px;
+    border-radius: var(--radius-control) var(--radius-control) 0 0;
+    background: var(--color-primary);
+}
+
+.chart-value {
+    font-variant-numeric: tabular-nums;
+}

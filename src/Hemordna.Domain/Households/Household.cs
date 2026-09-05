@@ -44,7 +44,8 @@ public sealed class Household
     public HouseholdMember AddMember(
         string displayName,
         WeeklyTimeBudget weeklyTimeBudget,
-        DateTimeOffset createdAt)
+        DateTimeOffset createdAt,
+        HouseholdRole? role = null)
     {
         var trimmed = Guard.AgainstNullOrWhiteSpace(displayName, nameof(displayName));
 
@@ -53,7 +54,7 @@ public sealed class Household
             throw new DomainException($"A member named '{trimmed}' already exists in this household.");
         }
 
-        var member = HouseholdMember.Create(Id, trimmed, weeklyTimeBudget, createdAt);
+        var member = HouseholdMember.Create(Id, trimmed, weeklyTimeBudget, createdAt, role);
         _members.Add(member);
         return member;
     }

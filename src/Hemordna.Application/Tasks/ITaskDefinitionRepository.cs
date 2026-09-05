@@ -18,4 +18,13 @@ public interface ITaskDefinitionRepository
     Task<IReadOnlyList<TaskDefinition>> ListByHouseholdAsync(
         Guid householdId,
         CancellationToken cancellationToken);
+
+    /// <summary>Active task definitions in a given area, tracked so callers can mutate and save them.</summary>
+    Task<IReadOnlyList<TaskDefinition>> ListActiveByAreaAsync(
+        Guid householdId,
+        Guid areaId,
+        CancellationToken cancellationToken);
+
+    /// <summary>Persists changes made to a task definition loaded through this repository.</summary>
+    Task UpdateAsync(TaskDefinition definition, CancellationToken cancellationToken);
 }

@@ -101,35 +101,104 @@ kvar, så uppskjutning kan inte dölja att något är försenat.
 Alternativet – en `Deferred`-status – gör frågan "är detta fortfarande ogjort?" tvetydig och
 kräver att varje query hanterar två utestående tillstånd.
 
-### Beslut: `TaskAssignment` och `TaskCompletion` är ännu inte egna entiteter — `PROPOSED`
+### Beslut: `TaskAssignment` är en egen entitet — `IMPLEMENTED`
 
-`TaskOccurrence` bär i dag `AssignedMemberId`, `CompletedByMemberId` och `CompletedAt`
-direkt. Den konceptuella kedjan definition → occurrence → assignment → completion är
-bevarad, men assignment och completion är fält snarare än rader.
+`TaskOccurrence` bär fortfarande `AssignedMemberId`, `CompletedByMemberId` och `CompletedAt`
+direkt - det ändras inte. `TaskAssignment` tillkommer separat, som historik: en rad per
+tillfälle någon tilldelas ett roterande arbete, oberoende av vad som sen händer med
+occurrencen (omfördelning, uppskjutning). `RotationPicker` (Application) läser den senaste
+raden för en `TaskDefinition` och ger turen till nästa aktiva medlem i join-ordning.
 
-Egna entiteter behövs när något av detta blir ett verkligt krav:
+`TaskCompletion` som egen entitet är fortfarande `PROPOSED` - inget verkligt krav (delvis
+slutförande, ångrad completion) har uppstått än.
 
-- historik över vem som haft ansvaret (roterande ansvar över tid)
-- flera personer på samma occurrence (`RequiresMultiplePeople`)
-- delvis slutförande, eller completion-händelser som ska kunna ångras
+### Beslut: `RecurrenceRule` — `IMPLEMENTED`
 
-Uppgraderingen är additiv och kräver ingen ändring av definition/occurrence-gränsen.
+Ett självständigt value object på `TaskDefinition.Recurrence`: daily/weekly/monthly, inklusive
+"var Nde vecka/månad" och "tredje tisdagen i månaden". Beräknar bara "nästa datum på eller
+efter X" via stegning framåt - inget kalenderbibliotek, ingen closed-form-matematik.
+`TaskDefinition.PreferredWeekday` är kvar oförändrad som ett fristående, manuellt
+schemaläggningshint.
 
-### Beslut: `RecurrenceRule` är inte byggd — `PROPOSED`
+**Vem genererar `TaskOccurrence` (löser §10):** on demand, i `EnsureOccurrencesGenerated`,
+anropad från `GetDailyPlan` varje gång en medlems dag hämtas. Inget schemalagt jobb, ingen
+bakgrundstjänst. Generering är begränsad till det som redan är förfallet (upp till "idag"),
+med ett hårt tak (366) som skydd mot en flodvåg av uteblivet arbete efter lång frånvaro - inte
+avsett att någonsin nås i normal drift.
 
-`TaskDefinition.PreferredWeekday` är den enda schemaläggningshjälp som finns. Full recurrence
-(every N weeks, monthly, "tredje tisdagen i månaden") införs när det första verkliga
-återkommande use casen kräver det – att bygga motorn i förväg är den mest sannolika källan
-till överdesign i det här projektet.
+**Hur roterande ansvar räknas ut (löser §10):** `RotationPicker` cyklar genom hushållets
+aktiva medlemmar, ordnade efter `CreatedAt` och sen `Id`. Utan tidigare tilldelning används
+`DefaultResponsibleMemberId` om satt, annars den som gick med först.
 
-Modellen är förberedd: recurrence hör hemma på `TaskDefinition`, och genereringen av
-`TaskOccurrence` går redan via `TaskDefinition.ScheduleFor`.
+### Beslut: `TaskDefinition.StaleAfterDays` för "vid behov" — `IMPLEMENTED`
 
-### Beslut: `MemberPreference` och `NotificationPreference` — `PROPOSED`
+Ett fjärde schemaläggningssätt utöver `RecurrenceRule`, för uppgifter utan en naturlig
+kalendercykel ("putsa fönster", "damma ytor"): i stället för nästa kalenderdatum frågar den
+bara "har det gått för lång tid sen den senast blev klar?". Medvetet en egen, oberoende
+egenskap på `TaskDefinition` snarare än ytterligare en `RecurrenceFrequency` - de två delar
+inget beteende (`RecurrenceRule.NextOnOrAfter` stegar framåt kalendermässigt oavsett
+completion; "vid behov" bryr sig bara om den senaste completion-tiden, eller skapelsetid om
+uppgiften aldrig blivit klar) och att tvinga in det i samma value object hade gjort
+`Advance`/`NextOnOrAfter` otydliga. En uppgift har antingen `Recurrence` eller
+`StaleAfterDays`, aldrig båda samtidigt - `EnsureOccurrencesGenerated` grenar på vilken som är
+satt. Till skillnad från kalenderåterkommande uppgifter (som kan hinna i kapp flera missade
+tillfällen, upp till taket 366) genererar "vid behov" som mest en utestående occurrence åt
+gången - `ITaskOccurrenceRepository.HasOutstandingAsync` förhindrar att en andra läggs på
+innan den första är klar.
 
-Individuell presentation (text / bild+text / stor text / en uppgift åt gången) och
-motivationsnivå (Ingen / Lugn) är individuella preferenser, inte hushållsinställningar. De
-modelleras som en `MemberPreference` hängd på `HouseholdMember` när presentationslagret byggs.
+Klienten sätter för närvarande ett fast standardintervall (21 dagar,
+`RoomTemplateTask.AsNeededDefaultDays`) i stället för att fråga efter ett antal dagar - se
+DESIGN.md §6b för samma resonemang som bär `HouseholdRolePresets` och `RoomTemplates`.
+
+### Beslut: `Area`/`HouseholdMember`/`TaskDefinition` kan tas bort — `IMPLEMENTED`
+
+Alla tre hade redan `Deactivate()`/`Reactivate()` i domänen (och `IsActive` i kontraktet) sen
+tidigare, men ingen use case eller endpoint exponerade det. `DeactivateArea`,
+`DeactivateHouseholdMember` och `DeactivateTaskDefinition` (Application) följer samma mönster
+som `SetMemberWeeklyBudget`: hämta raden, mutera, `UpdateAsync`. `DeactivateArea` kaskaderar
+till rummets egna aktiva uppgifter (`ITaskDefinitionRepository.ListActiveByAreaAsync` +
+`UpdateAsync`) - annars skulle en borttagen station lämna kvar uppgifter som fortsätter dyka
+upp varje vecka. `DeactivateHouseholdMember` kaskaderar inte: `RotationPicker` filtrerar redan
+bort inaktiva medlemmar och återställer rotationen från början om den senast tilldelade inte
+längre är aktiv. `DeactivateTaskDefinition` har inget att kaskadera till - en uppgift har inga
+egna barn-entiteter.
+
+Efterfrågat konkret: `Områden`-sidan absorberade hela den tidigare `Uppgifter`-sidan (nu
+borttagen, se `RoomTasks.razor`/HANDOFF.md), eftersom uppgifter i praktiken alltid hör till ett rum.
+Varje rumskort listar och hanterar sina egna uppgifter inline; ett `TaskDefinition`-borttag var
+den saknade pusselbiten för att kunna rätta ett rum som redan skapats, inte bara filtrera bort
+en mall-uppgift innan skapandet (se `RoomTemplates`-kryssrutorna, §6b i DESIGN.md).
+
+### Beslut: `HouseholdMember.Role` som sparad egenskap, `TaskDefinition.RequiresAdult` — `IMPLEMENTED`
+
+Rollen (`HouseholdRole`: `AdultFullTime`/`ChildOrTeen`/`Retired`) fanns tidigare bara som en
+klientsidig gissning - `HouseholdRolePresets.Match` jämförde en medlems sparade veckobudget mot
+de tre rollmallarnas budgetar och visade "Anpassad tid" om ingen matchade. Det räckte för att
+visa rätt val i rollväljaren, men gick sönder så fort budgeten redigerades för hand efteråt, och
+gav ingen sanning en backend-regel kunde luta sig mot. Rollen är nu ett riktigt, nullable fält
+på `HouseholdMember` (`SetRole`), satt av samma val som redan sätter veckobudgeten (`AddMember`/
+`PUT .../members/{id}/role`, båda anropen körs parallellt från klienten - se nedan).
+
+Motivet var konkret: vissa uppgifter (fönstertvätt i sovrumsmallen) passar inte barn, oavsett
+hur rolig deras vecka annars ser ut. `TaskDefinition.RequiresAdult` är en mjuk spärr -
+`RotationPicker` hoppar över medlemmar vars roll är `ChildOrTeen` när den är satt, men faller
+tillbaka till hela listan om det inte finns någon kvar (samma "stale rotation ska aldrig
+blockera schemaläggning"-princip som redan gäller när senast tilldelade lämnat hushållet).
+`Role` är `null` tills någon uttryckligen väljer en roll eller sätter tiden för hand - precis
+som tidigare, bara sant lagrat i stället för återskapat via gissning.
+
+`Hushall.razor`s rollväljare gör nu två oberoende PUT-anrop (roll, veckobudget) samtidigt med
+`Task.WhenAll` i stället för i sekvens - att köra dem efter varandra fördubblade
+rundresetiden till servern helt i onödan, eftersom de inte beror på varandra, och gjorde ett
+redan tajmningskänsligt E2E-test (`HushallTests.Changing_a_members_role_...`) flakigare.
+
+### Beslut: `MemberPreference` — `IMPLEMENTED` (domän och API) / `PROPOSED` (UI)
+
+Individuell presentation (`PresentationMode`: text / bild+text / stor text / en uppgift åt
+gången, plus `ImageOnly`/`ReadAloud` förberedda) och motivationsnivå (`MotivationLevel`: Ingen
+/ Lugn) finns som `MemberPreference`, en rad per medlem, satt via
+`PUT .../members/{id}/preferences`. En egen inställningssida i klienten är medvetet
+uppskjuten - se HANDOFF.md.
 
 ### Identifierare
 
@@ -178,22 +247,29 @@ registrerat sig, har ingen användare förrän de skaffar en. Ett unikt filtrera
 `LinkToUser` vägrar peka om en medlem till en annan användare eftersom det tyst skulle
 flytta hens historik.
 
-`PROPOSED`: flera hushåll per användare kräver en egen medlemskapstabell. Ändringen är
-additiv och går att göra utan att befintlig data blir fel.
+**Beslut: en användare tillhör exakt ett hushåll, avsiktligt.** Detta är ingen tillfällig
+begränsning som väntar på en medlemskapstabell - flera hushåll per användare ska inte byggas.
+Det unika filtrerade indexet på `UserId` är produktgränsen, inte bara en fas-1-genväg.
 
 ---
 
-## 5. Source of truth och synkstrategi — `PROPOSED`
+## 5. Source of truth och synkstrategi — `IMPLEMENTED` (1–2) / `PROPOSED` (3)
 
 Servern är source of truth. Klienten är aldrig auktoritativ.
 
-Planerad väg:
-
-1. HTTP mot Api för alla skrivningar.
-2. SignalR-hub per hushåll för att pusha ändringar till anslutna klienter. Hushållet är den
-   naturliga gruppen – klienter joinar gruppen `household:{id}` och får bara det egna
-   hushållets händelser, vilket gör isoleringen till samma gräns som i datamodellen.
+1. HTTP mot Api för alla skrivningar. `IMPLEMENTED`.
+2. `HouseholdHub` (Api, SignalR): en grupp per hushåll, `household:{id}`. Klienter joinar
+   efter inloggning och får bara det egna hushållets händelser - samma gräns som i
+   datamodellen, kontrollerad på samma sätt som `HouseholdAccessFilter` gör för REST.
+   Application känner inte till SignalR: `IHouseholdNotifier` är gränssnittet,
+   `SignalRHouseholdNotifier` (Api) implementerar det. Ett enda grovkornigt meddelande
+   (`OccurrencesChanged`) snarare än ett per händelsetyp - varje klient läser om sin egen dag i
+   stället för att servern behöver designa en payload per händelse innan det finns en andra
+   konsument som behöver en. JWT-token skickas som query-parameter bara på hub-vägen, eftersom
+   en webbläsare inte kan sätta en Authorization-header på WebSocket-handskakningen.
+   `IMPLEMENTED`.
 3. Offline byggs stegvis. Full offline conflict resolution är uttryckligen utanför MVP.
+   `PROPOSED`.
 
 ### Concurrency — `IMPLEMENTED` (dubbel completion) / `PROPOSED` (resten)
 
@@ -393,6 +469,7 @@ Integrationstester mot en verklig PostgreSQL införs när persistence byggs – 
 
 | Fråga | Varför den väntar |
 |---|---|
-| Vem eller vad som genererar `TaskOccurrence` (on demand vid planering eller ett schemalagt jobb) | Beror på recurrence-modellen |
-| Hur roterande ansvar ska räknas ut | Kräver `TaskAssignment` som egen entitet |
 | Offline-strategi bortom read-only cache | Utanför MVP; får inte låsas in i förväg |
+
+Tidigare på denna lista, nu lösta: vem som genererar `TaskOccurrence` och hur roterande ansvar
+räknas ut - se §3 och §5.

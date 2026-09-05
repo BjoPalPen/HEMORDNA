@@ -48,12 +48,24 @@ internal static class HouseholdEndpoints
             .Produces<AreaResponse>(StatusCodes.Status201Created)
             .ProducesValidationProblem();
 
+        scoped.MapDelete("/areas/{areaId:guid}", DeactivateAreaAsync)
+            .Produces<AreaResponse>()
+            .Produces(StatusCodes.Status404NotFound);
+
+        scoped.MapDelete("/members/{memberId:guid}", DeactivateMemberAsync)
+            .Produces<HouseholdMemberResponse>()
+            .Produces(StatusCodes.Status404NotFound);
+
         scoped.MapGet("/tasks", ListTasksAsync)
             .Produces<IReadOnlyList<TaskDefinitionResponse>>();
 
         scoped.MapPost("/tasks", CreateTaskAsync)
             .Produces<TaskDefinitionResponse>(StatusCodes.Status201Created)
             .ProducesValidationProblem();
+
+        scoped.MapDelete("/tasks/{taskId:guid}", DeactivateTaskAsync)
+            .Produces<TaskDefinitionResponse>()
+            .Produces(StatusCodes.Status404NotFound);
 
         scoped.MapPost("/tasks/{taskId:guid}/occurrences", ScheduleOccurrenceAsync)
             .Produces<TaskOccurrenceResponse>(StatusCodes.Status201Created)
@@ -64,6 +76,23 @@ internal static class HouseholdEndpoints
             .Produces(StatusCodes.Status404NotFound)
             .ProducesValidationProblem();
 
+        scoped.MapPut("/members/{memberId:guid}/weekly-budget", SetWeeklyBudgetAsync)
+            .Produces<HouseholdMemberResponse>()
+            .Produces(StatusCodes.Status404NotFound)
+            .ProducesValidationProblem();
+
+        scoped.MapPut("/members/{memberId:guid}/role", SetMemberRoleAsync)
+            .Produces<HouseholdMemberResponse>()
+            .Produces(StatusCodes.Status404NotFound);
+
+        scoped.MapGet("/members/{memberId:guid}/preferences", GetPreferenceAsync)
+            .Produces<PreferenceResponse>()
+            .Produces(StatusCodes.Status404NotFound);
+
+        scoped.MapPut("/members/{memberId:guid}/preferences", SetPreferenceAsync)
+            .Produces<PreferenceResponse>()
+            .Produces(StatusCodes.Status404NotFound);
+
         scoped.MapPost("/occurrences/{occurrenceId:guid}/complete", CompleteOccurrenceAsync)
             .Produces<TaskOccurrenceResponse>()
             .Produces(StatusCodes.Status404NotFound);
@@ -72,6 +101,12 @@ internal static class HouseholdEndpoints
             .Produces<TaskOccurrenceResponse>()
             .Produces(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status409Conflict);
+
+        scoped.MapGet("/activity", GetRecentActivityAsync)
+            .Produces<IReadOnlyList<RecentActivityResponse>>();
+
+        scoped.MapGet("/weekly-status", GetWeeklyStatusAsync)
+            .Produces<IReadOnlyList<MemberDayStatusResponse>>();
 
         scoped.MapGet("/members/{memberId:guid}/plan", GetPlanAsync)
             .WithName("GetDailyPlan")
@@ -154,7 +189,7 @@ internal static class HouseholdEndpoints
         var budget = request.WeeklyTimeBudgetMinutes?.ToDomain() ?? WeeklyTimeBudget.Empty;
 
         var member = await addMember.HandleAsync(
-            householdId, request.DisplayName, budget, cancellationToken);
+            householdId, request.DisplayName, budget, cancellationToken, request.Role);
 
         return member is null
             ? Results.NotFound()
@@ -180,6 +215,28 @@ internal static class HouseholdEndpoints
         return area is null
             ? Results.NotFound()
             : Results.Created($"/api/households/{householdId}", ToResponse(area));
+    }
+
+    private static async Task<IResult> DeactivateAreaAsync(
+        Guid householdId,
+        Guid areaId,
+        DeactivateArea deactivateArea,
+        CancellationToken cancellationToken)
+    {
+        var area = await deactivateArea.HandleAsync(householdId, areaId, cancellationToken);
+
+        return area is null ? Results.NotFound() : Results.Ok(ToResponse(area));
+    }
+
+    private static async Task<IResult> DeactivateMemberAsync(
+        Guid householdId,
+        Guid memberId,
+        DeactivateHouseholdMember deactivateMember,
+        CancellationToken cancellationToken)
+    {
+        var member = await deactivateMember.HandleAsync(householdId, memberId, cancellationToken);
+
+        return member is null ? Results.NotFound() : Results.Ok(ToResponse(member));
     }
 
     private static async Task<IResult> ListTasksAsync(
@@ -226,12 +283,26 @@ internal static class HouseholdEndpoints
                 request.PreferredWeekday,
                 request.CanBeDeferred,
                 request.HasRotatingResponsibility,
-                request.RequiresMultiplePeople),
+                request.RequiresMultiplePeople,
+                request.RequiresAdult,
+                request.Recurrence?.ToDomain(),
+                request.StaleAfterDays),
             cancellationToken);
 
         return definition is null
             ? Results.NotFound()
             : Results.Created($"/api/households/{householdId}/tasks", ToResponse(definition));
+    }
+
+    private static async Task<IResult> DeactivateTaskAsync(
+        Guid householdId,
+        Guid taskId,
+        DeactivateTaskDefinition deactivateTask,
+        CancellationToken cancellationToken)
+    {
+        var definition = await deactivateTask.HandleAsync(householdId, taskId, cancellationToken);
+
+        return definition is null ? Results.NotFound() : Results.Ok(ToResponse(definition));
     }
 
     private static async Task<IResult> ScheduleOccurrenceAsync(
@@ -289,6 +360,59 @@ internal static class HouseholdEndpoints
                 availability.MemberId, availability.Date, availability.AvailableMinutes));
     }
 
+    private static async Task<IResult> SetWeeklyBudgetAsync(
+        Guid householdId,
+        Guid memberId,
+        WeeklyTimeBudgetContract request,
+        SetMemberWeeklyBudget setWeeklyBudget,
+        CancellationToken cancellationToken)
+    {
+        var member = await setWeeklyBudget.HandleAsync(
+            householdId, memberId, request.ToDomain(), cancellationToken);
+
+        return member is null ? Results.NotFound() : Results.Ok(ToResponse(member));
+    }
+
+    private static async Task<IResult> SetMemberRoleAsync(
+        Guid householdId,
+        Guid memberId,
+        SetMemberRoleRequest request,
+        SetMemberRole setRole,
+        CancellationToken cancellationToken)
+    {
+        var member = await setRole.HandleAsync(householdId, memberId, request.Role, cancellationToken);
+
+        return member is null ? Results.NotFound() : Results.Ok(ToResponse(member));
+    }
+
+    private static async Task<IResult> GetPreferenceAsync(
+        Guid householdId,
+        Guid memberId,
+        GetMemberPreference getPreference,
+        CancellationToken cancellationToken)
+    {
+        var preference = await getPreference.HandleAsync(householdId, memberId, cancellationToken);
+
+        return preference is null
+            ? Results.NotFound()
+            : Results.Ok(new PreferenceResponse(preference.MemberId, preference.Presentation, preference.Motivation));
+    }
+
+    private static async Task<IResult> SetPreferenceAsync(
+        Guid householdId,
+        Guid memberId,
+        SetPreferenceRequest request,
+        SetMemberPreference setPreference,
+        CancellationToken cancellationToken)
+    {
+        var preference = await setPreference.HandleAsync(
+            householdId, memberId, request.Presentation, request.Motivation, cancellationToken);
+
+        return preference is null
+            ? Results.NotFound()
+            : Results.Ok(new PreferenceResponse(preference.MemberId, preference.Presentation, preference.Motivation));
+    }
+
     private static async Task<IResult> CompleteOccurrenceAsync(
         Guid householdId,
         Guid occurrenceId,
@@ -327,6 +451,39 @@ internal static class HouseholdEndpoints
         return occurrence is null ? Results.NotFound() : Results.Ok(ToResponse(occurrence));
     }
 
+    private static async Task<IResult> GetRecentActivityAsync(
+        Guid householdId,
+        IRecentActivityQuery activity,
+        CancellationToken cancellationToken)
+    {
+        var recent = await activity.FindRecentlyCompletedAsync(householdId, limit: 10, cancellationToken);
+
+        return Results.Ok(recent
+            .Select(a => new RecentActivityResponse(a.OccurrenceId, a.TaskName, a.MemberDisplayName, a.CompletedAt))
+            .ToList());
+    }
+
+    private static async Task<IResult> GetWeeklyStatusAsync(
+        Guid householdId,
+        DateOnly? date,
+        IWeeklyStatusQuery weeklyStatus,
+        TimeProvider timeProvider,
+        CancellationToken cancellationToken)
+    {
+        var anchor = date ?? DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+
+        // ISO week: Monday first. DayOfWeek.Sunday is 0, so it needs its own case rather than
+        // falling out of the (int)DayOfWeek - 1 arithmetic that works for every other day.
+        var offsetFromMonday = anchor.DayOfWeek == DayOfWeek.Sunday ? 6 : (int)anchor.DayOfWeek - 1;
+        var weekStart = anchor.AddDays(-offsetFromMonday);
+
+        var statuses = await weeklyStatus.FindWeeklyStatusAsync(householdId, weekStart, cancellationToken);
+
+        return Results.Ok(statuses
+            .Select(s => new MemberDayStatusResponse(s.MemberId, s.Date, s.Status))
+            .ToList());
+    }
+
     private static async Task<IResult> GetPlanAsync(
         Guid householdId,
         Guid memberId,
@@ -358,7 +515,8 @@ internal static class HouseholdEndpoints
             member.Id,
             member.DisplayName,
             member.IsActive,
-            WeeklyTimeBudgetContract.From(member.WeeklyTimeBudget));
+            WeeklyTimeBudgetContract.From(member.WeeklyTimeBudget),
+            member.Role);
 
     private static AreaResponse ToResponse(Area area) => new(area.Id, area.Name, area.IsActive);
 
@@ -373,7 +531,12 @@ internal static class HouseholdEndpoints
             definition.DefaultResponsibleMemberId,
             definition.PreferredWeekday,
             definition.CanBeDeferred,
-            definition.IsActive);
+            definition.HasRotatingResponsibility,
+            definition.RequiresMultiplePeople,
+            definition.RequiresAdult,
+            definition.IsActive,
+            definition.Recurrence is { } recurrence ? RecurrenceRuleContract.From(recurrence) : null,
+            definition.StaleAfterDays);
 
     private static TaskOccurrenceResponse ToResponse(TaskOccurrence occurrence)
         => new(
@@ -404,12 +567,16 @@ internal static class HouseholdEndpoints
                 item.Candidate.TaskName,
                 item.Candidate.EstimatedMinutes,
                 item.Candidate.Priority,
-                item.IsOverdue))],
+                item.IsOverdue,
+                item.Candidate.AreaName,
+                item.Candidate.Description,
+                item.Candidate.CanBeDeferred))],
             [.. day.Completed.Select(done => new CompletedTaskResponse(
                 done.Occurrence.Id,
                 done.Occurrence.TaskDefinitionId,
                 done.TaskName,
-                done.EstimatedMinutes))],
+                done.EstimatedMinutes,
+                done.AreaName))],
             [.. plan.Unplanned.Select(task => new UnplannedTaskResponse(
                 task.Candidate.Occurrence.Id,
                 task.Candidate.Occurrence.TaskDefinitionId,
@@ -417,6 +584,7 @@ internal static class HouseholdEndpoints
                 task.Candidate.EstimatedMinutes,
                 task.Candidate.Priority,
                 task.Candidate.CanBeDeferred,
-                task.Reason))]);
+                task.Reason,
+                task.Candidate.AreaName))]);
     }
 }

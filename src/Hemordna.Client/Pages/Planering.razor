@@ -1,0 +1,77 @@
+@page "/planering"
+@using Hemordna.Client.Support
+@inject HemordnaApiClient Api
+@inject HemordnaSession Session
+
+<PageTitle>Planering – Hemordna</PageTitle>
+
+@if (!Session.IsLoaded)
+{
+    <p class="muted">Hämtar...</p>
+}
+else if (!Session.IsSignedIn)
+{
+    <Redirect To="logga-in" />
+}
+else if (Session.NeedsHousehold)
+{
+    <SkapaHushall OnCreated="LoadAsync" />
+}
+else if (_member is null)
+{
+    <p class="muted">Hämtar din vecka...</p>
+}
+else
+{
+    <h1>Min vecka</h1>
+    <p class="muted">Hur mycket tid du normalt brukar ha, dag för dag.</p>
+
+    <ul class="list" aria-label="Veckans normala tid">
+        @foreach (var day in Weekdays(_member))
+        {
+            <li class="list-item">
+                <span class="list-name">@day.Label</span>
+                <span class="list-meta muted small">@day.LevelLabel</span>
+            </li>
+        }
+    </ul>
+}
+
+@code {
+    private HouseholdMemberResponse? _member;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Session.EnsureLoadedAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Session.Me is not { HouseholdId: { } householdId, MemberId: { } memberId })
+        {
+            return;
+        }
+
+        var household = await Api.GetHouseholdAsync(householdId);
+        _member = household?.Members.FirstOrDefault(m => m.Id == memberId);
+    }
+
+    private static IEnumerable<(string Label, string LevelLabel)> Weekdays(HouseholdMemberResponse member)
+    {
+        var budget = member.WeeklyTimeBudgetMinutes;
+        yield return ("Måndag", LevelLabelFor(budget.Monday));
+        yield return ("Tisdag", LevelLabelFor(budget.Tuesday));
+        yield return ("Onsdag", LevelLabelFor(budget.Wednesday));
+        yield return ("Torsdag", LevelLabelFor(budget.Thursday));
+        yield return ("Fredag", LevelLabelFor(budget.Friday));
+        yield return ("Lördag", LevelLabelFor(budget.Saturday));
+        yield return ("Söndag", LevelLabelFor(budget.Sunday));
+    }
+
+    private static string LevelLabelFor(int minutes)
+    {
+        var closest = TimeLevel.ClosestMinutes(minutes);
+        return TimeLevel.All.First(level => level.Minutes == closest).Label;
+    }
+}

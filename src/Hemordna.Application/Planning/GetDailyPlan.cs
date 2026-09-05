@@ -1,4 +1,5 @@
 using Hemordna.Application.Households;
+using Hemordna.Application.Tasks;
 
 namespace Hemordna.Application.Planning;
 
@@ -11,17 +12,20 @@ public sealed class GetDailyPlan
     private readonly IHouseholdRepository _households;
     private readonly IMemberAvailabilityRepository _availabilities;
     private readonly IPlanCandidateQuery _candidates;
+    private readonly EnsureOccurrencesGenerated _ensureOccurrencesGenerated;
     private readonly DailyPlanner _planner;
 
     public GetDailyPlan(
         IHouseholdRepository households,
         IMemberAvailabilityRepository availabilities,
         IPlanCandidateQuery candidates,
+        EnsureOccurrencesGenerated ensureOccurrencesGenerated,
         DailyPlanner planner)
     {
         _households = households;
         _availabilities = availabilities;
         _candidates = candidates;
+        _ensureOccurrencesGenerated = ensureOccurrencesGenerated;
         _planner = planner;
     }
 
@@ -35,6 +39,10 @@ public sealed class GetDailyPlan
         DateOnly date,
         CancellationToken cancellationToken)
     {
+        // Recurring tasks are caught up here, on the read path that actually needs them,
+        // rather than in a background job - see EnsureOccurrencesGenerated.
+        await _ensureOccurrencesGenerated.HandleAsync(householdId, date, cancellationToken);
+
         var household = await _households.FindByIdAsync(householdId, cancellationToken);
 
         var member = household?.Members.FirstOrDefault(m => m.Id == memberId);

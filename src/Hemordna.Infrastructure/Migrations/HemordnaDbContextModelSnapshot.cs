@@ -25,7 +25,6 @@ namespace Hemordna.Infrastructure.Migrations
             modelBuilder.Entity("Hemordna.Domain.Areas.Area", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("HouseholdId")
@@ -49,7 +48,6 @@ namespace Hemordna.Infrastructure.Migrations
             modelBuilder.Entity("Hemordna.Domain.Households.Household", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset>("CreatedAt")
@@ -68,7 +66,6 @@ namespace Hemordna.Infrastructure.Migrations
             modelBuilder.Entity("Hemordna.Domain.Households.HouseholdMember", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset>("CreatedAt")
@@ -84,6 +81,9 @@ namespace Hemordna.Infrastructure.Migrations
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
+
+                    b.Property<int?>("Role")
+                        .HasColumnType("integer");
 
                     b.Property<Guid?>("UserId")
                         .HasColumnType("uuid");
@@ -107,7 +107,6 @@ namespace Hemordna.Infrastructure.Migrations
             modelBuilder.Entity("Hemordna.Domain.Households.MemberAvailability", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<int>("AvailableMinutes")
@@ -132,10 +131,61 @@ namespace Hemordna.Infrastructure.Migrations
                     b.ToTable("MemberAvailabilities", (string)null);
                 });
 
+            modelBuilder.Entity("Hemordna.Domain.Households.MemberPreference", b =>
+                {
+                    b.Property<Guid>("MemberId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("HouseholdId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Motivation")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Presentation")
+                        .HasColumnType("integer");
+
+                    b.HasKey("MemberId");
+
+                    b.HasIndex("HouseholdId");
+
+                    b.ToTable("MemberPreferences", (string)null);
+                });
+
+            modelBuilder.Entity("Hemordna.Domain.Tasks.TaskAssignment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("HouseholdId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("MemberId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("ScheduledDate")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("TaskDefinitionId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("HouseholdId");
+
+                    b.HasIndex("MemberId");
+
+                    b.HasIndex("TaskDefinitionId", "ScheduledDate");
+
+                    b.ToTable("TaskAssignments", (string)null);
+                });
+
             modelBuilder.Entity("Hemordna.Domain.Tasks.TaskDefinition", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<Guid?>("AreaId")
@@ -177,8 +227,18 @@ namespace Hemordna.Infrastructure.Migrations
                     b.Property<int>("Priority")
                         .HasColumnType("integer");
 
+                    b.Property<string>("Recurrence")
+                        .HasColumnType("text")
+                        .HasColumnName("Recurrence");
+
+                    b.Property<bool>("RequiresAdult")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("RequiresMultiplePeople")
                         .HasColumnType("boolean");
+
+                    b.Property<int?>("StaleAfterDays")
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 
@@ -194,7 +254,6 @@ namespace Hemordna.Infrastructure.Migrations
             modelBuilder.Entity("Hemordna.Domain.Tasks.TaskOccurrence", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
                     b.Property<Guid?>("AssignedMemberId")
@@ -466,6 +525,30 @@ namespace Hemordna.Infrastructure.Migrations
                     b.HasOne("Hemordna.Domain.Households.HouseholdMember", null)
                         .WithMany()
                         .HasForeignKey("MemberId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Hemordna.Domain.Households.MemberPreference", b =>
+                {
+                    b.HasOne("Hemordna.Domain.Households.HouseholdMember", null)
+                        .WithMany()
+                        .HasForeignKey("MemberId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Hemordna.Domain.Tasks.TaskAssignment", b =>
+                {
+                    b.HasOne("Hemordna.Domain.Households.HouseholdMember", null)
+                        .WithMany()
+                        .HasForeignKey("MemberId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Hemordna.Domain.Tasks.TaskDefinition", null)
+                        .WithMany()
+                        .HasForeignKey("TaskDefinitionId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

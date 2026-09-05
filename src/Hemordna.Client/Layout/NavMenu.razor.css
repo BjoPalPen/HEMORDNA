@@ -104,8 +104,21 @@
     font-size: calc(var(--font-size-base) * .9);
 }
 
-/* Mobile: a bottom bar with the first four destinations. */
+/* Only ever shown on the mobile bottom bar - see the media query below. */
+.nav-more-mobile {
+    display: none;
+}
+
+/* Mobile: a bottom bar with four destinations, the rest behind "Mer". */
 @media (max-width: 900px) {
+    .nav-hide-mobile {
+        display: none;
+    }
+
+    .nav-more-mobile {
+        display: list-item;
+    }
+
     .nav-shell {
         position: fixed;
         bottom: 0;

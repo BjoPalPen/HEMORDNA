@@ -91,6 +91,130 @@ public sealed class HemordnaApiClient
             : null;
     }
 
+    public async Task<IReadOnlyList<TaskDefinitionResponse>> ListTasksAsync(
+        Guid householdId,
+        CancellationToken cancellationToken = default)
+        => await GetAsync<IReadOnlyList<TaskDefinitionResponse>>(
+            $"api/households/{householdId}/tasks", cancellationToken) ?? [];
+
+    public async Task<TaskDefinitionResponse?> CreateTaskAsync(
+        Guid householdId,
+        CreateTaskRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        var httpRequest = await AuthorizedAsync(
+            HttpMethod.Post, $"api/households/{householdId}/tasks", cancellationToken);
+        httpRequest.Content = JsonContent.Create(request);
+
+        var response = await _http.SendAsync(httpRequest, cancellationToken);
+
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<TaskDefinitionResponse>(cancellationToken)
+            : null;
+    }
+
+    /// <summary>Deactivates the task rather than deleting it - see TaskDefinition for why.</summary>
+    public async Task<bool> DeactivateTaskAsync(
+        Guid householdId,
+        Guid taskId,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Delete, $"api/households/{householdId}/tasks/{taskId}", cancellationToken);
+
+        var response = await _http.SendAsync(request, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<bool> ScheduleOccurrenceAsync(
+        Guid householdId,
+        Guid taskId,
+        DateOnly date,
+        Guid? assignToMemberId,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Post, $"api/households/{householdId}/tasks/{taskId}/occurrences", cancellationToken);
+        request.Content = JsonContent.Create(
+            new { date = date.ToString("yyyy-MM-dd"), assignToMemberId });
+
+        var response = await _http.SendAsync(request, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<AreaResponse?> AddAreaAsync(
+        Guid householdId,
+        string name,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(HttpMethod.Post, $"api/households/{householdId}/areas", cancellationToken);
+        request.Content = JsonContent.Create(new AddAreaRequest(name));
+
+        var response = await _http.SendAsync(request, cancellationToken);
+
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<AreaResponse>(cancellationToken)
+            : null;
+    }
+
+    public async Task<HouseholdMemberResponse?> AddMemberAsync(
+        Guid householdId,
+        string displayName,
+        WeeklyTimeBudgetContract? weeklyTimeBudget,
+        string? role = null,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(HttpMethod.Post, $"api/households/{householdId}/members", cancellationToken);
+        request.Content = JsonContent.Create(new AddMemberRequest(displayName, weeklyTimeBudget, role));
+
+        var response = await _http.SendAsync(request, cancellationToken);
+
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<HouseholdMemberResponse>(cancellationToken)
+            : null;
+    }
+
+    /// <summary>Sets or clears a member's role. Independent of their weekly budget - see SetWeeklyBudgetAsync.</summary>
+    public async Task<bool> SetMemberRoleAsync(
+        Guid householdId,
+        Guid memberId,
+        string? role,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Put, $"api/households/{householdId}/members/{memberId}/role", cancellationToken);
+        request.Content = JsonContent.Create(new SetMemberRoleRequest(role));
+
+        var response = await _http.SendAsync(request, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
+    /// <summary>Deactivates the area rather than deleting it - see Area for why.</summary>
+    public async Task<bool> DeactivateAreaAsync(
+        Guid householdId,
+        Guid areaId,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Delete, $"api/households/{householdId}/areas/{areaId}", cancellationToken);
+
+        var response = await _http.SendAsync(request, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
+    /// <summary>Deactivates the member rather than deleting them - see HouseholdMember for why.</summary>
+    public async Task<bool> DeactivateMemberAsync(
+        Guid householdId,
+        Guid memberId,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Delete, $"api/households/{householdId}/members/{memberId}", cancellationToken);
+
+        var response = await _http.SendAsync(request, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
     public async Task<DailyPlanResponse?> GetDailyPlanAsync(
         Guid householdId,
         Guid memberId,
@@ -145,6 +269,58 @@ public sealed class HemordnaApiClient
             cancellationToken);
         request.Content = JsonContent.Create(
             new { date = date.ToString("yyyy-MM-dd"), availableMinutes });
+
+        var response = await _http.SendAsync(request, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
+    /// <summary>Replaces a member's normal weekly time budget - their ordinary week, not a single day.</summary>
+    public async Task<bool> SetWeeklyBudgetAsync(
+        Guid householdId,
+        Guid memberId,
+        WeeklyTimeBudgetContract weeklyTimeBudget,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Put,
+            $"api/households/{householdId}/members/{memberId}/weekly-budget",
+            cancellationToken);
+        request.Content = JsonContent.Create(weeklyTimeBudget);
+
+        var response = await _http.SendAsync(request, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<IReadOnlyList<RecentActivityResponse>> GetRecentActivityAsync(
+        Guid householdId,
+        CancellationToken cancellationToken = default)
+        => await GetAsync<IReadOnlyList<RecentActivityResponse>>(
+            $"api/households/{householdId}/activity", cancellationToken) ?? [];
+
+    public async Task<IReadOnlyList<MemberDayStatusResponse>> GetWeeklyStatusAsync(
+        Guid householdId,
+        DateOnly date,
+        CancellationToken cancellationToken = default)
+        => await GetAsync<IReadOnlyList<MemberDayStatusResponse>>(
+            $"api/households/{householdId}/weekly-status?date={date:yyyy-MM-dd}", cancellationToken) ?? [];
+
+    public async Task<PreferenceResponse?> GetPreferenceAsync(
+        Guid householdId,
+        Guid memberId,
+        CancellationToken cancellationToken = default)
+        => await GetAsync<PreferenceResponse>(
+            $"api/households/{householdId}/members/{memberId}/preferences", cancellationToken);
+
+    public async Task<bool> SetPreferenceAsync(
+        Guid householdId,
+        Guid memberId,
+        string presentation,
+        string motivation,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Put, $"api/households/{householdId}/members/{memberId}/preferences", cancellationToken);
+        request.Content = JsonContent.Create(new { presentation, motivation });
 
         var response = await _http.SendAsync(request, cancellationToken);
         return response.IsSuccessStatusCode;

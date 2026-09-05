@@ -38,9 +38,13 @@ public static class DependencyInjection
         services.AddScoped<IHouseholdRepository, HouseholdRepository>();
         services.AddScoped<IHouseholdMembershipQuery, HouseholdMembershipQuery>();
         services.AddScoped<IMemberAvailabilityRepository, MemberAvailabilityRepository>();
+        services.AddScoped<IMemberPreferenceRepository, MemberPreferenceRepository>();
         services.AddScoped<ITaskDefinitionRepository, TaskDefinitionRepository>();
         services.AddScoped<ITaskOccurrenceRepository, TaskOccurrenceRepository>();
+        services.AddScoped<ITaskAssignmentRepository, TaskAssignmentRepository>();
         services.AddScoped<IPlanCandidateQuery, PlanCandidateQuery>();
+        services.AddScoped<IRecentActivityQuery, RecentActivityQuery>();
+        services.AddScoped<IWeeklyStatusQuery, WeeklyStatusQuery>();
 
         // Identity supplies user storage and password hashing. Hemordna never implements its
         // own password handling.

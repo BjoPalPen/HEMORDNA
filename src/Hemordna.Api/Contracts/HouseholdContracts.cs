@@ -1,3 +1,4 @@
+using Hemordna.Application.Households;
 using Hemordna.Application.Planning;
 using Hemordna.Domain.Households;
 using Hemordna.Domain.Tasks;
@@ -17,11 +18,15 @@ public sealed record HouseholdMemberResponse(
     Guid Id,
     string DisplayName,
     bool IsActive,
-    WeeklyTimeBudgetContract WeeklyTimeBudgetMinutes);
+    WeeklyTimeBudgetContract WeeklyTimeBudgetMinutes,
+    HouseholdRole? Role);
 
 public sealed record AreaResponse(Guid Id, string Name, bool IsActive);
 
-public sealed record AddMemberRequest(string? DisplayName, WeeklyTimeBudgetContract? WeeklyTimeBudgetMinutes);
+public sealed record AddMemberRequest(
+    string? DisplayName, WeeklyTimeBudgetContract? WeeklyTimeBudgetMinutes, HouseholdRole? Role = null);
+
+public sealed record SetMemberRoleRequest(HouseholdRole? Role);
 
 public sealed record AddAreaRequest(string? Name);
 
@@ -71,7 +76,10 @@ public sealed record CreateTaskRequest(
     DayOfWeek? PreferredWeekday = null,
     bool CanBeDeferred = true,
     bool HasRotatingResponsibility = false,
-    bool RequiresMultiplePeople = false);
+    bool RequiresMultiplePeople = false,
+    bool RequiresAdult = false,
+    RecurrenceRuleContract? Recurrence = null,
+    int? StaleAfterDays = null);
 
 public sealed record TaskDefinitionResponse(
     Guid Id,
@@ -83,7 +91,44 @@ public sealed record TaskDefinitionResponse(
     Guid? DefaultResponsibleMemberId,
     DayOfWeek? PreferredWeekday,
     bool CanBeDeferred,
-    bool IsActive);
+    bool HasRotatingResponsibility,
+    bool RequiresMultiplePeople,
+    bool RequiresAdult,
+    bool IsActive,
+    RecurrenceRuleContract? Recurrence,
+    int? StaleAfterDays);
+
+/// <summary>
+/// How a task repeats on its own. Mirrors <see cref="RecurrenceRule"/>'s own public shape -
+/// see it for what each combination means.
+/// </summary>
+public sealed record RecurrenceRuleContract(
+    RecurrenceFrequency Frequency,
+    int Interval,
+    DateOnly StartDate,
+    DayOfWeek? Weekday,
+    WeekOfMonth? MonthlyWeek)
+{
+    internal RecurrenceRule ToDomain() => this switch
+    {
+        { MonthlyWeek: { } which } => RecurrenceRule.MonthlyOnWeekday(StartDate, which, Weekday!.Value, Interval),
+        { Frequency: RecurrenceFrequency.Weekly } => RecurrenceRule.Weekly(StartDate, Weekday!.Value, Interval),
+        { Frequency: RecurrenceFrequency.Monthly } => RecurrenceRule.Monthly(StartDate, Interval),
+        _ => RecurrenceRule.Daily(StartDate, Interval)
+    };
+
+    internal static RecurrenceRuleContract From(RecurrenceRule rule)
+        => new(rule.Frequency, rule.Interval, rule.StartDate, rule.Weekday, rule.MonthlyWeek);
+}
+
+public sealed record SetPreferenceRequest(PresentationMode Presentation, MotivationLevel Motivation);
+
+public sealed record RecentActivityResponse(
+    Guid OccurrenceId, string TaskName, string MemberDisplayName, DateTimeOffset CompletedAt);
+
+public sealed record MemberDayStatusResponse(Guid MemberId, DateOnly Date, DayStatus Status);
+
+public sealed record PreferenceResponse(Guid MemberId, PresentationMode Presentation, MotivationLevel Motivation);
 
 public sealed record ScheduleOccurrenceRequest(DateOnly? Date, Guid? AssignToMemberId);
 
@@ -120,7 +165,8 @@ public sealed record CompletedTaskResponse(
     Guid OccurrenceId,
     Guid TaskDefinitionId,
     string Name,
-    int EstimatedMinutes);
+    int EstimatedMinutes,
+    string? AreaName);
 
 public sealed record PlannedTaskResponse(
     Guid OccurrenceId,
@@ -128,7 +174,10 @@ public sealed record PlannedTaskResponse(
     string Name,
     int EstimatedMinutes,
     TaskPriority Priority,
-    bool IsOverdue);
+    bool IsOverdue,
+    string? AreaName,
+    string? Description,
+    bool CanBeDeferred);
 
 public sealed record UnplannedTaskResponse(
     Guid OccurrenceId,
@@ -137,4 +186,5 @@ public sealed record UnplannedTaskResponse(
     int EstimatedMinutes,
     TaskPriority Priority,
     bool CanBeDeferred,
-    UnplannedReason Reason);
+    UnplannedReason Reason,
+    string? AreaName);

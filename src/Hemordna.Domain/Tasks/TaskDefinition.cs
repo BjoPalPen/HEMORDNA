@@ -11,9 +11,9 @@ namespace Hemordna.Domain.Tasks;
 /// member being away, or a task being skipped once, is handled on
 /// <see cref="TaskOccurrence"/>.
 /// <para>
-/// Recurrence is not modelled yet. <see cref="PreferredWeekday"/> carries the only scheduling
-/// hint the current planner needs; a RecurrenceRule is proposed in docs/ARCHITECTURE.md and
-/// should be added when the first real recurring use case demands it.
+/// <see cref="PreferredWeekday"/> is a soft scheduling hint used when an occurrence is
+/// scheduled manually. <see cref="Recurrence"/> is the separate, self-contained rule an
+/// automatic generator uses to keep occurrences coming without a human scheduling each one.
 /// </para>
 /// </remarks>
 public sealed class TaskDefinition
@@ -66,6 +66,24 @@ public sealed class TaskDefinition
 
     /// <summary>Whether the task realistically needs more than one person.</summary>
     public bool RequiresMultiplePeople { get; private set; }
+
+    /// <summary>
+    /// Whether this task's rotation should skip members whose role is a child - e.g. washing
+    /// windows. Only a soft preference: if every active member is a child, rotation falls back
+    /// to the whole household rather than leaving the task with nobody to assign - see
+    /// RotationPicker.
+    /// </summary>
+    public bool RequiresAdult { get; private set; }
+
+    /// <summary>How this task repeats on its own, or null when occurrences are only scheduled by hand.</summary>
+    public RecurrenceRule? Recurrence { get; private set; }
+
+    /// <summary>
+    /// "As needed": becomes due this many days after it was last completed (or after creation,
+    /// if never completed), instead of on a fixed calendar cadence. Independent of
+    /// <see cref="Recurrence"/> - a task uses one or the other, not both.
+    /// </summary>
+    public int? StaleAfterDays { get; private set; }
 
     public bool IsActive { get; private set; }
 
@@ -143,6 +161,22 @@ public sealed class TaskDefinition
 
     public void SetRequiresMultiplePeople(bool requiresMultiplePeople)
         => RequiresMultiplePeople = requiresMultiplePeople;
+
+    public void SetRequiresAdult(bool requiresAdult) => RequiresAdult = requiresAdult;
+
+    /// <summary>Sets or clears the automatic recurrence. Does not touch occurrences already scheduled.</summary>
+    public void SetRecurrence(RecurrenceRule? recurrence) => Recurrence = recurrence;
+
+    /// <summary>Sets or clears the "as needed" interval. See <see cref="StaleAfterDays"/>.</summary>
+    public void SetStaleAfterDays(int? staleAfterDays)
+    {
+        if (staleAfterDays is { } days)
+        {
+            Guard.AgainstNonPositive(days, nameof(staleAfterDays));
+        }
+
+        StaleAfterDays = staleAfterDays;
+    }
 
     public void Deactivate() => IsActive = false;
 

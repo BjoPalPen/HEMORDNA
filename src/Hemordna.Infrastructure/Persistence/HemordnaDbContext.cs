@@ -35,6 +35,10 @@ public sealed class HemordnaDbContext : IdentityDbContext<HemordnaUser, Identity
 
     public DbSet<TaskOccurrence> TaskOccurrences => Set<TaskOccurrence>();
 
+    public DbSet<TaskAssignment> TaskAssignments => Set<TaskAssignment>();
+
+    public DbSet<MemberPreference> MemberPreferences => Set<MemberPreference>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

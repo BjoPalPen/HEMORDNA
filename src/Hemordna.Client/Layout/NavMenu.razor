@@ -12,13 +12,20 @@
     <ul class="nav-items">
         @foreach (var item in Items)
         {
-            <li>
+            <li class="@(item.MobileOrder is null ? "nav-hide-mobile" : null)"
+                style="@(item.MobileOrder is { } order ? $"order:{order}" : null)">
                 <NavLink class="nav-link" href="@item.Href" Match="@item.Match">
                     <span class="nav-icon" aria-hidden="true">@item.Icon</span>
                     <span class="nav-label">@item.Label</span>
                 </NavLink>
             </li>
         }
+        <li class="nav-more-mobile" style="order:4">
+            <NavLink class="nav-link" href="mer" Match="NavLinkMatch.Prefix">
+                <span class="nav-icon" aria-hidden="true">⋯</span>
+                <span class="nav-label">Mer</span>
+            </NavLink>
+        </li>
     </ul>
 
     @if (Session.Me is { } me)
@@ -33,13 +40,17 @@
 </nav>
 
 @code {
-    private sealed record NavItem(string Href, string Label, string Icon, NavLinkMatch Match);
+    /// <summary>
+    /// <paramref name="MobileOrder"/> null means the item is only in the desktop sidebar - see
+    /// docs/DESIGN.md §8: mobile shows four destinations plus "Mer" for the rest.
+    /// </summary>
+    private sealed record NavItem(string Href, string Label, string Icon, NavLinkMatch Match, int? MobileOrder = null);
 
     private static readonly NavItem[] Items =
     [
-        new("", "Min dag", "☀", NavLinkMatch.All),
-        new("uppgifter", "Uppgifter", "≡", NavLinkMatch.Prefix),
-        new("planering", "Planering", "▦", NavLinkMatch.Prefix),
+        new("", "Min dag", "☀", NavLinkMatch.All, MobileOrder: 1),
+        new("omraden", "Områden", "▤", NavLinkMatch.Prefix, MobileOrder: 2),
+        new("planering", "Planering", "▦", NavLinkMatch.Prefix, MobileOrder: 3),
         new("hushall", "Hushåll", "⌂", NavLinkMatch.Prefix),
         new("installningar", "Inställningar", "⚙", NavLinkMatch.Prefix)
     ];

@@ -1,0 +1,378 @@
+@page "/hushall"
+@implements IDisposable
+@using Hemordna.Client.Support
+@inject HemordnaApiClient Api
+@inject HemordnaSession Session
+@inject TimeProvider TimeProvider
+@inject HouseholdRealtimeClient Realtime
+
+<PageTitle>Hushåll – Hemordna</PageTitle>
+
+@if (!Session.IsLoaded)
+{
+    <p class="muted">Hämtar...</p>
+}
+else if (!Session.IsSignedIn)
+{
+    <Redirect To="logga-in" />
+}
+else if (Session.NeedsHousehold)
+{
+    <SkapaHushall OnCreated="LoadAsync" />
+}
+else if (_household is null)
+{
+    <p class="muted">Hämtar hushållet...</p>
+}
+else
+{
+    <h1>@_household.Name</h1>
+    <p class="muted">@_household.Members.Count(m => m.IsActive) medlemmar · @_household.Areas.Count(a => a.IsActive) områden</p>
+
+    <ul class="list" aria-label="Medlemmar">
+        @foreach (var member in _household.Members.Where(m => m.IsActive))
+        {
+            <li class="list-item">
+                <span class="avatar" aria-hidden="true">@Initial(member.DisplayName)</span>
+                <span class="list-name">@member.DisplayName</span>
+                <select class="role-select" aria-label="@($"Roll för {member.DisplayName}")"
+                        value="@RoleValueFor(member)"
+                        @onchange="e => SetMemberRoleAsync(member.Id, e.Value)">
+                    <option value="" disabled>Anpassad tid</option>
+                    @foreach (var preset in HouseholdRolePresets.All)
+                    {
+                        <option value="@preset.Role">@preset.Label</option>
+                    }
+                </select>
+                <button type="button" class="btn btn-secondary" aria-label="@($"Ta bort {member.DisplayName}")"
+                        disabled="@(_removingMemberId == member.Id)"
+                        @onclick="() => RemoveMemberAsync(member.Id)">
+                    Ta bort
+                </button>
+            </li>
+        }
+    </ul>
+    <p class="muted small">
+        Rollen styr hur mycket tid var och en normalt får för hushållssysslor - inget alla
+        medlemmar behöver tänka på själva.
+    </p>
+
+    <div class="card">
+        <h2>Veckans plan</h2>
+
+        <div class="week-grid-wrap">
+            <table class="week-grid">
+                <thead>
+                    <tr>
+                        <th scope="col"></th>
+                        @foreach (var day in WeekDays)
+                        {
+                            <th scope="col" class="@(day == Today ? "week-grid-today" : null)">
+                                @day.ToString("ddd", SwedishCulture)
+                            </th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var member in _household.Members.Where(m => m.IsActive))
+                    {
+                        <tr>
+                            <th scope="row">@member.DisplayName</th>
+                            @foreach (var day in WeekDays)
+                            {
+                                <td class="@(day == Today ? "week-grid-today" : null)">
+                                    <span class="dot @DotClass(member.Id, day)"
+                                          title="@DotTitle(member.Id, day)"></span>
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>Områden</h2>
+
+        <ul class="list" aria-label="Områden">
+            @foreach (var area in _household.Areas.Where(a => a.IsActive))
+            {
+                <li class="list-item">
+                    <span class="list-name">@area.Name</span>
+                    <span class="list-meta muted small">@TaskCountFor(area.Id) uppgifter</span>
+                </li>
+            }
+        </ul>
+    </div>
+
+    <div class="card">
+        <h2>Senaste händelser</h2>
+
+        @if (_activity.Count == 0)
+        {
+            <p class="muted small">Inget avklarat än.</p>
+        }
+        else
+        {
+            <ul class="list" aria-label="Senaste händelser">
+                @foreach (var activity in _activity)
+                {
+                    <li class="list-item">
+                        <span class="list-name">
+                            @activity.MemberDisplayName markerade "@activity.TaskName" som klar
+                        </span>
+                        <span class="list-meta muted small">@activity.CompletedAt.ToLocalTime().ToString("HH:mm")</span>
+                    </li>
+                }
+            </ul>
+        }
+    </div>
+
+    <div class="card">
+        <h2>Lägg till medlem</h2>
+        <EditForm Model="_form" OnValidSubmit="AddMemberAsync">
+            <label class="field">
+                <span>Namn</span>
+                <InputText @bind-Value="_form.DisplayName" placeholder="T.ex. Bjorn" />
+            </label>
+
+            <div class="field">
+                <span>Vilken roll har personen i hushållet?</span>
+                <div class="level-picker">
+                    @foreach (var preset in HouseholdRolePresets.All)
+                    {
+                        <button type="button"
+                                class="@(_form.Role == preset.Role ? "btn btn-primary" : "btn btn-secondary")"
+                                @onclick="() => SelectRole(preset.Role)">
+                            @preset.Label
+                        </button>
+                    }
+                </div>
+                <p class="muted small">Vi räknar ut en rimlig tid för hushållssysslor utifrån rollen - det går att ändra senare.</p>
+            </div>
+
+            <details class="more-options">
+                <summary>Fler alternativ</summary>
+                <div class="field">
+                    <span>Ange tid manuellt i stället för en roll</span>
+                    <div class="level-picker">
+                        @foreach (var level in TimeLevel.All)
+                        {
+                            <button type="button"
+                                    class="@(_form.Role is null && _form.MinutesPerDay == level.Minutes ? "btn btn-primary" : "btn btn-secondary")"
+                                    @onclick="() => SelectManualLevel(level.Minutes)">
+                                @level.Label
+                            </button>
+                        }
+                    </div>
+                </div>
+            </details>
+
+            @if (_message is { } message)
+            {
+                <div class="notice notice-problem" role="alert">@message</div>
+            }
+
+            <button type="submit" class="btn btn-primary" disabled="@_busy">
+                @(_busy ? "Lägger till..." : "Lägg till medlem")
+            </button>
+        </EditForm>
+    </div>
+}
+
+@code {
+    private sealed class Form
+    {
+        public string DisplayName { get; set; } = string.Empty;
+        public HouseholdRole? Role { get; set; }
+        public int MinutesPerDay { get; set; }
+    }
+
+    private readonly Form _form = new();
+    private HouseholdResponse? _household;
+    private IReadOnlyList<TaskDefinitionResponse> _tasks = [];
+    private IReadOnlyList<RecentActivityResponse> _activity = [];
+    private readonly Dictionary<(Guid MemberId, DateOnly Date), string> _weeklyStatus = [];
+    private string? _message;
+    private bool _busy;
+    private Guid? _removingMemberId;
+
+    private static readonly System.Globalization.CultureInfo SwedishCulture = new("sv-SE");
+
+    private DateOnly Today => DateOnly.FromDateTime(TimeProvider.GetLocalNow().DateTime);
+
+    /// <summary>Monday through Sunday of the week containing today.</summary>
+    private IReadOnlyList<DateOnly> WeekDays
+    {
+        get
+        {
+            var offsetFromMonday = Today.DayOfWeek == DayOfWeek.Sunday ? 6 : (int)Today.DayOfWeek - 1;
+            var monday = Today.AddDays(-offsetFromMonday);
+            return [.. Enumerable.Range(0, 7).Select(monday.AddDays)];
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Session.EnsureLoadedAsync();
+        await LoadAsync();
+
+        if (Session.Me is { HouseholdId: { } householdId })
+        {
+            Realtime.OccurrencesChanged += OnOccurrencesChanged;
+            await Realtime.ConnectAsync(householdId);
+        }
+    }
+
+    private void OnOccurrencesChanged() => InvokeAsync(async () =>
+    {
+        await LoadAsync();
+        StateHasChanged();
+    });
+
+    public void Dispose() => Realtime.OccurrencesChanged -= OnOccurrencesChanged;
+
+    private async Task LoadAsync()
+    {
+        if (Session.Me is not { HouseholdId: { } householdId })
+        {
+            return;
+        }
+
+        _household = await Api.GetHouseholdAsync(householdId);
+        _activity = await Api.GetRecentActivityAsync(householdId);
+        _tasks = await Api.ListTasksAsync(householdId);
+
+        _weeklyStatus.Clear();
+        foreach (var status in await Api.GetWeeklyStatusAsync(householdId, Today))
+        {
+            _weeklyStatus[(status.MemberId, status.Date)] = status.Status;
+        }
+    }
+
+    private int TaskCountFor(Guid areaId) => _tasks.Count(t => t.AreaId == areaId && t.IsActive);
+
+    private static string RoleValueFor(HouseholdMemberResponse member) => member.Role ?? string.Empty;
+
+    private async Task SetMemberRoleAsync(Guid memberId, object? value)
+    {
+        if (Session.Me is not { HouseholdId: { } householdId })
+        {
+            return;
+        }
+
+        if (value is not string text || !Enum.TryParse<HouseholdRole>(text, out var role))
+        {
+            return;
+        }
+
+        // Both calls describe the same pick from the UI's point of view - the role itself, and
+        // the budget the preset implies for it (still freely editable afterwards) - and neither
+        // depends on the other, so they run concurrently rather than doubling the round trip.
+        var roleTask = Api.SetMemberRoleAsync(householdId, memberId, role.ToString());
+        var budgetTask = Api.SetWeeklyBudgetAsync(householdId, memberId, HouseholdRolePresets.BudgetFor(role));
+        await Task.WhenAll(roleTask, budgetTask);
+
+        if (await budgetTask)
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task RemoveMemberAsync(Guid memberId)
+    {
+        if (Session.Me is not { HouseholdId: { } householdId })
+        {
+            return;
+        }
+
+        _removingMemberId = memberId;
+
+        try
+        {
+            await Api.DeactivateMemberAsync(householdId, memberId);
+            await LoadAsync();
+        }
+        finally
+        {
+            _removingMemberId = null;
+        }
+    }
+
+    private string DotClass(Guid memberId, DateOnly date) => _weeklyStatus.GetValueOrDefault((memberId, date)) switch
+    {
+        "Done" => "dot-done",
+        "Planned" => "dot-planned",
+        _ => "dot-none"
+    };
+
+    private string DotTitle(Guid memberId, DateOnly date) => _weeklyStatus.GetValueOrDefault((memberId, date)) switch
+    {
+        "Done" => "Klart",
+        "Planned" => "Planerat",
+        _ => "Inget planerat"
+    };
+
+    private static string Initial(string name)
+        => string.IsNullOrWhiteSpace(name) ? "?" : name.Trim()[..1].ToUpperInvariant();
+
+    private void SelectRole(HouseholdRole role)
+    {
+        _form.Role = role;
+        _form.MinutesPerDay = 0;
+    }
+
+    private void SelectManualLevel(int minutes)
+    {
+        _form.Role = null;
+        _form.MinutesPerDay = minutes;
+    }
+
+    private async Task AddMemberAsync()
+    {
+        if (Session.Me is not { HouseholdId: { } householdId })
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_form.DisplayName))
+        {
+            _message = "Medlemmen behöver ett namn.";
+            return;
+        }
+
+        _busy = true;
+        _message = null;
+
+        try
+        {
+            var budget = _form.Role is { } role
+                ? HouseholdRolePresets.BudgetFor(role)
+                : _form.MinutesPerDay > 0
+                    ? new WeeklyTimeBudgetContract(
+                        _form.MinutesPerDay, _form.MinutesPerDay, _form.MinutesPerDay, _form.MinutesPerDay,
+                        _form.MinutesPerDay, _form.MinutesPerDay, _form.MinutesPerDay)
+                    : null;
+
+            if (await Api.AddMemberAsync(householdId, _form.DisplayName.Trim(), budget, _form.Role?.ToString()) is null)
+            {
+                _message = "Det gick inte att lägga till medlemmen. Försök igen.";
+                return;
+            }
+
+            _form.DisplayName = string.Empty;
+            _form.Role = null;
+            _form.MinutesPerDay = 0;
+            await LoadAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _message = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

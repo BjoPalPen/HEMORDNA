@@ -1,3 +1,4 @@
+using Hemordna.Application.Realtime;
 using Hemordna.Domain.Tasks;
 
 namespace Hemordna.Application.Tasks;
@@ -6,8 +7,13 @@ namespace Hemordna.Application.Tasks;
 public sealed class DeferTaskOccurrence
 {
     private readonly ITaskOccurrenceRepository _occurrences;
+    private readonly IHouseholdNotifier _notifier;
 
-    public DeferTaskOccurrence(ITaskOccurrenceRepository occurrences) => _occurrences = occurrences;
+    public DeferTaskOccurrence(ITaskOccurrenceRepository occurrences, IHouseholdNotifier notifier)
+    {
+        _occurrences = occurrences;
+        _notifier = notifier;
+    }
 
     /// <summary>
     /// Moves the occurrence, or returns <c>null</c> when the household has no such occurrence.
@@ -29,6 +35,7 @@ public sealed class DeferTaskOccurrence
         occurrence.DeferTo(newDate);
 
         await _occurrences.UpdateAsync(occurrence, cancellationToken);
+        await _notifier.NotifyOccurrencesChangedAsync(householdId, cancellationToken);
 
         return occurrence;
     }

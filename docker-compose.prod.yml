@@ -1,0 +1,55 @@
+# Produktionsstack för Hemordna på Hetzner-servern. Fristående (till skillnad från
+# BowlingPlatforms bas+prod-overlay-mönster) eftersom docker-compose.yml här bara är en
+# lokal dev-databas utan api-tjänst att bygga vidare på.
+#
+# api ligger på BÅDA nätverken: det egna (för att nå postgres) och det delade, externa
+# bowling-edge-nätet (så den redan körande, delade Caddy-containern kan nå den vid namn) -
+# samma mönster som BowlingPlatforms testmiljö redan använder. postgres ligger bara på det
+# egna nätverket och exponeras aldrig utåt.
+#
+# Körs med: docker compose -f docker-compose.prod.yml up -d --build
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hemordna-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__Hemordna: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-hemordna};Username=${POSTGRES_USER:-hemordna};Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD maaste saettas i .env}"
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:?JWT_SIGNING_KEY maaste saettas i .env}
+      # Migrations har ingen dotnet-ef CLI i runtime-imagen - se Program.cs. Additiva
+      # migrationer bara (CLAUDE.md), så påslaget är säkert vid varje omstart.
+      RunMigrationsOnStartup: "true"
+    expose:
+      - "8080"
+    networks:
+      - default
+      - bowling-edge
+
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-hemordna}
+      POSTGRES_USER: ${POSTGRES_USER:-hemordna}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD maaste saettas i .env}
+    volumes:
+      - hemordna-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hemordna} -d ${POSTGRES_DB:-hemordna}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - default
+
+volumes:
+  hemordna-postgres-data:
+
+networks:
+  bowling-edge:
+    external: true

@@ -14,27 +14,11 @@ public class MinDagTests
 
     public MinDagTests(HemordnaAppFixture app) => _app = app;
 
-    private static string UniqueEmail() => $"e2e-{Guid.NewGuid():N}@example.com";
+    private static string UniqueEmail() => SignUpHelper.UniqueEmail();
 
-    private const string Password = "Hemordna-E2E-2026!";
+    private const string Password = SignUpHelper.Password;
 
-    /// <summary>Registers, names a household and lands on Min dag.</summary>
-    private static async Task SignUpAsync(IPage page, string displayName)
-    {
-        await page.GotoAsync("/logga-in");
-
-        await page.GetByRole(AriaRole.Tab, new() { Name = "Skapa konto" }).ClickAsync();
-        await page.GetByLabel("Ditt namn").FillAsync(displayName);
-        await page.GetByLabel("E-post").FillAsync(UniqueEmail());
-        await page.GetByLabel("Lösenord").FillAsync(Password);
-        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa konto" }).ClickAsync();
-
-        await page.GetByLabel("Hushållets namn").FillAsync("Familjen Andersson");
-        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa hushåll" }).ClickAsync();
-
-        await page.GetByRole(AriaRole.Heading, new() { Name = $"Hej {displayName}!" })
-            .WaitForAsync(new() { Timeout = 15_000 });
-    }
+    private static Task SignUpAsync(IPage page, string displayName) => SignUpHelper.SignUpAsync(page, displayName);
 
     [Fact]
     public async Task The_sign_in_page_shows_the_brand()

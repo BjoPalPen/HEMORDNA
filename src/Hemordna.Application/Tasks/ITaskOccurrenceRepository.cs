@@ -13,4 +13,30 @@ public interface ITaskOccurrenceRepository
         CancellationToken cancellationToken);
 
     Task UpdateAsync(TaskOccurrence occurrence, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// The <see cref="TaskOccurrence.OriginalScheduledDate"/> of the most recently scheduled
+    /// occurrence for this definition, or null if none exist yet. Used to find where automatic
+    /// recurrence generation left off, regardless of status or later deferrals.
+    /// </summary>
+    Task<DateOnly?> FindMostRecentOriginalDateAsync(
+        Guid householdId,
+        Guid taskDefinitionId,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// When this definition was last marked done, or null if never. Used for "as needed" tasks,
+    /// which become due a fixed number of days after their last completion rather than on a
+    /// calendar cadence - see TaskDefinition.StaleAfterDays.
+    /// </summary>
+    Task<DateTimeOffset?> FindMostRecentCompletedAtAsync(
+        Guid householdId,
+        Guid taskDefinitionId,
+        CancellationToken cancellationToken);
+
+    /// <summary>Whether this definition already has an outstanding (planned, not yet done) occurrence.</summary>
+    Task<bool> HasOutstandingAsync(
+        Guid householdId,
+        Guid taskDefinitionId,
+        CancellationToken cancellationToken);
 }

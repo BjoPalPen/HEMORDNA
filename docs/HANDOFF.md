@@ -1,50 +1,50 @@
 # Överlämning
 
-Lägesbild per 2026-09-04, för en ny session. Arbetssättet styrs av
+Lägesbild per 2026-09-05, för en ny session. Arbetssättet styrs av
 [../CLAUDE.md](../CLAUDE.md), som gäller före detta. Max 50 rader; äldre lägesbilder ligger i
 [handoff/](handoff/), se CLAUDE.md §17.
 
 ## Läge
 
-`main` är aktuell. Inga öppna PR:er, inga omergade brancher. 119 tester gröna, build utan
-varningar. Domän, planering, EF Core mot PostgreSQL, Minimal APIs med JWT och
-`HouseholdAccessFilter`, samt Blazor WASM med `LoggaIn` och `MinDag` – installerbar som PWA,
-svensk kultur. Per-beslut-status finns i [ARCHITECTURE.md](ARCHITECTURE.md), märkt
-`IMPLEMENTED`, `PROPOSED` eller `OPEN`.
+`main` är på `2abb539`, opåverkad. Allt arbete ligger på `feat/tidsbudget-per-medlem`, med
+öppen PR #9 mot `main` (ej mergad).
+
+**Sovrumsmallen har en riktig städrytm** i stället för en enda uppskattning: bädda sängen +
+vädra dagligen, dammsug två gånger i veckan (`TaskFrequency.TwiceWeekly` - byggs som daglig
+regel med 3 dagars intervall, ingen kalenderplats för "2x/vecka" annars - ARCHITECTURE.md §3),
+torka golvet varje vecka, torka lister/tvätta fönster en gång i månaden.
+
+**Roll är nu en sparad egenskap** på `HouseholdMember` (`Role`), inte längre bara gissad från
+budgeten. `TaskDefinition.RequiresAdult` låter en mallad uppgift (sovrummets "Tvätta fönster")
+hoppas över av barn i rotationen - `RotationPicker` faller tillbaka till hela hushållet om
+ingen vuxen är kvar. Ny migration `AddMemberRoleAndTaskRequiresAdult`, applicerad lokalt.
+
+**"Lägg till vanliga hushållssysslor"** (`GeneralTaskTemplates`, Övrigt-kortet) fanns redan
+från förra passet; nu dokumenterad i DESIGN.md §6b.
+
+**Playwright-lärdomar (nya):** (1) klientens lokala, gitignorade
+`appsettings.Development.json` kan peka på LAN-IP:n (för mobiltest) i stället för `localhost` -
+starta då dev-API:t med `--urls "http://*:5199"`, annars svarar det bara på egen bindningsadress.
+(2) Två oberoende `PUT`-anrop i sekvens fördubblar rundresetiden i onödan och gör ett
+tajmningskänsligt test flakigt - kör dem med `Task.WhenAll` (se `Hushall.razor`s rollväljare).
+
+197 tester gröna (Domain 69, Application 90, E2E 38).
 
 ## Köra
 
-Fullständig uppstart: [../README.md](../README.md). Portar: API `5199`, klient `5200`,
-PostgreSQL `5432`. Nyckeln `Jwt:SigningKey` ligger i user secrets, aldrig i repot.
+Fullständig uppstart: [../README.md](../README.md). Portar: API `5199`, klient `5200`.
+**PostgreSQL på port `5433`, inte `5432`** (`.env`). Migrationer: `dotnet ef database update`
+med samma `ConnectionStrings__Hemordna` som API:t.
 
-Två fällor som kostat tid:
-
-- **Codespace kontra lokalt.** Repot har körts i båda parallellt. `pwd` som ger
-  `/workspaces/...` betyder Codespace, `C:\...` eller `E:\...` betyder lokalt.
-- **`--no-launch-profile` ger Production**, user secrets läses inte, och API:t dör med
-  `'Jwt:SigningKey' is not configured`. Kör `dotnet run` utan flaggan.
+**LAN-åtkomst:** binda med `--urls "http://*:PORT"`, inte `0.0.0.0` - det öppnar bara IPv4.
 
 ## Kända brister
 
-- Fyra av fem länkar i `Layout/NavMenu.razor` saknar `@page`-rutt. Bara `/` och `/logga-in`
-  finns; övriga ger Blazors "nothing at this address".
-- E2E-suiten är flaky vid parallellkörning i devcontainern – Chromium kraschar. Kör med
-  `-- xUnit.ParallelizeTestCollections=false`.
-- PWA:n är verifierad i publiceringskedjan, inte i en riktig browser. Att Chrome erbjuder
-  installation och att appen startar utan nätverk är oprövat.
-
-**Rör inte** `BlazorWebAssemblyLoadAllGlobalizationData` i `Hemordna.Client.csproj` för att
-spara nedladdning. Utan den väljer Blazor ICU-data efter browserns språk, en engelsk browser
-får en shard utan svenska, och datumen blir engelska igen. Att sätta kulturen i `Program.cs`
-räcker inte ensamt – båda behövs. Fångas av
-`MinDagTests.The_date_is_Swedish_even_when_the_browser_is_English`.
+PWA:n är overifierad i riktig browser. `HushallTests.Changing_a_members_role_...` var flaky
+under full parallell körning - trolig orsak (sekventiella anrop, se ovan) åtgärdad, men inte
+omtestad under lång tid ännu.
 
 ## Öppna frågor och nästa steg
 
-Från [ARCHITECTURE.md](ARCHITECTURE.md) avsnitt 10: vem som genererar `TaskOccurrence`, hur
-roterande ansvar räknas ut, offline-strategi bortom read-only cache. Auth-scoping är på plats
-och upprätthålls; det som saknas är flera hushåll per användare, vilket är additivt.
-
-1. `RecurrenceRule`, som låser upp occurrence-genereringen och två av de öppna frågorna.
-2. SignalR-hub per hushåll, gruppen `household:{id}`, för realtidssynk.
-3. `.vscode/launch.json` och `tasks.json` så att API och klient startar med F5.
+Väckt men **inte påbörjad**: uppskatta städbehov utifrån antal rum/medlemmar/husdjur.
+**Beslut, inte öppen fråga:** en användare tillhör exakt ett hushåll (ARCHITECTURE.md §4).

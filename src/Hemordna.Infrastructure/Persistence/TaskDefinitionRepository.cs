@@ -33,4 +33,16 @@ internal sealed class TaskDefinitionRepository : ITaskDefinitionRepository
             .Where(definition => definition.HouseholdId == householdId)
             .OrderBy(definition => definition.Name)
             .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<TaskDefinition>> ListActiveByAreaAsync(
+        Guid householdId,
+        Guid areaId,
+        CancellationToken cancellationToken)
+        => await _dbContext.TaskDefinitions
+            .Where(definition =>
+                definition.HouseholdId == householdId && definition.AreaId == areaId && definition.IsActive)
+            .ToListAsync(cancellationToken);
+
+    public Task UpdateAsync(TaskDefinition definition, CancellationToken cancellationToken)
+        => _dbContext.SaveChangesAsync(cancellationToken);
 }

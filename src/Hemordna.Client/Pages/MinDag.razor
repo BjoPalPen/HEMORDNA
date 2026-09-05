@@ -1,8 +1,10 @@
 @page "/"
+@implements IDisposable
 @inject HemordnaApiClient Api
 @inject HemordnaSession Session
 @inject NavigationManager Navigation
 @inject TimeProvider TimeProvider
+@inject HouseholdRealtimeClient Realtime
 
 <PageTitle>Min dag – Hemordna</PageTitle>
 
@@ -20,7 +22,7 @@ else if (Session.NeedsHousehold)
 }
 else
 {
-    <div class="day">
+    <div class="day @(ShowSidebar ? "" : "day-no-sidebar")">
         <div class="day-main">
             <p class="day-date">@DateLabel</p>
             <h1>Hej @Session.Me!.DisplayName! 👋</h1>
@@ -32,16 +34,10 @@ else
             }
             else
             {
-                <div class="card summary">
-                    <ProgressRing Planned="@_day.PlannedMinutes" Available="@_day.AvailableMinutes" />
-
-                    <div class="summary-text">
-                        <p class="summary-minutes">
-                            <strong>@_day.PlannedMinutes av @_day.AvailableMinutes min</strong> planerade
-                        </p>
-                        <p class="muted small">@CountsText</p>
-                    </div>
-                </div>
+                @if (_day.Completed.Count > 0 || _day.Items.Count > 0)
+                {
+                    <p class="muted small day-counts">@CountsText</p>
+                }
 
                 @if (_day.Completed.Count > 0)
                 {
@@ -50,8 +46,13 @@ else
                         {
                             <li class="task task-done">
                                 <span class="task-check task-check-done" aria-hidden="true">✓</span>
-                                <span class="task-name">@done.Name</span>
-                                <span class="task-minutes muted">@done.EstimatedMinutes min</span>
+                                <span class="task-name">
+                                    @done.Name
+                                    @if (done.AreaName is { } doneArea)
+                                    {
+                                        <span class="chip">@doneArea</span>
+                                    }
+                                </span>
                             </li>
                         }
                     </ul>
@@ -70,14 +71,40 @@ else
 
                                 <span class="task-name">
                                     @item.Name
+                                    @if (item.AreaName is { } area)
+                                    {
+                                        <span class="chip">@area</span>
+                                    }
                                     @if (item.IsOverdue)
                                     {
                                         <span class="task-note muted small">sedan tidigare</span>
                                     }
                                 </span>
 
-                                <span class="task-minutes muted">@item.EstimatedMinutes min</span>
+                                <button type="button" class="task-expand"
+                                        aria-label="@($"Mer om {item.Name}")"
+                                        aria-expanded="@(_expandedOccurrence == item.OccurrenceId ? "true" : "false")"
+                                        @onclick="() => ToggleExpand(item.OccurrenceId)">⌄</button>
                             </li>
+
+                            @if (_expandedOccurrence == item.OccurrenceId)
+                            {
+                                <li class="task-details">
+                                    @if (!string.IsNullOrWhiteSpace(item.Description))
+                                    {
+                                        <p class="muted small">@item.Description</p>
+                                    }
+
+                                    @if (item.CanBeDeferred)
+                                    {
+                                        <button type="button" class="btn btn-secondary"
+                                                disabled="@(_busyOccurrence == item.OccurrenceId)"
+                                                @onclick="() => DeferAsync(item.OccurrenceId)">
+                                            Skjut upp till imorgon
+                                        </button>
+                                    }
+                                </li>
+                            }
                         }
                     </ul>
                 }
@@ -98,8 +125,13 @@ else
                             @foreach (var task in _day.Unplanned)
                             {
                                 <li class="task task-rest">
-                                    <span class="task-name">@task.Name</span>
-                                    <span class="task-minutes muted">@task.EstimatedMinutes min</span>
+                                    <span class="task-name">
+                                        @task.Name
+                                        @if (task.AreaName is { } unplannedArea)
+                                        {
+                                            <span class="chip">@unplannedArea</span>
+                                        }
+                                    </span>
                                 </li>
                             }
                         </ul>
@@ -108,43 +140,19 @@ else
             }
         </div>
 
-        <aside class="day-side">
-            @if (_day is not null && EncouragementText is { } encouragement)
-            {
-                <div class="card encouragement">@encouragement</div>
-            }
-
-            <div class="card">
-                <h2>Snabbval</h2>
-                <div class="quick-actions">
-                    <button type="button" class="btn btn-secondary btn-block" @onclick="ToggleTimeEditor">
-                        Lägg till tillfällig tid idag
-                    </button>
-                </div>
-
-                @if (_editingTime)
-                {
-                    <div class="time-editor">
-                        <label class="field">
-                            <span>Minuter idag</span>
-                            <input type="number" min="0" max="600" @bind="_minutesToday" />
-                        </label>
-                        <button type="button" class="btn btn-primary btn-block" @onclick="SaveTimeAsync">
-                            Spara för idag
-                        </button>
-                        <p class="muted small">Din vanliga vecka påverkas inte.</p>
-                    </div>
-                }
-            </div>
-        </aside>
+        @if (ShowSidebar)
+        {
+            <aside class="day-side">
+                <div class="card encouragement">@EncouragementText</div>
+            </aside>
+        }
     </div>
 }
 
 @code {
     private DailyPlanResponse? _day;
     private Guid? _busyOccurrence;
-    private bool _editingTime;
-    private int _minutesToday;
+    private Guid? _expandedOccurrence;
 
     // The date is resolved from an injected clock here at the edge; nothing below reads one.
     // TimeProvider rather than DateTime.Now so the page can be rendered at a fixed date.
@@ -177,6 +185,8 @@ else
         _ => null
     };
 
+    private bool ShowSidebar => _day is not null && EncouragementText is not null;
+
     protected override async Task OnInitializedAsync()
     {
         // Wait for the session before the first render decides what to show, otherwise this
@@ -184,7 +194,22 @@ else
         await Session.EnsureLoadedAsync();
 
         await LoadDayAsync();
+
+        if (Session.Me is { HouseholdId: { } householdId })
+        {
+            Realtime.OccurrencesChanged += OnOccurrencesChanged;
+            await Realtime.ConnectAsync(householdId);
+        }
     }
+
+    /// <summary>Someone else in the household changed something - refresh rather than guess what.</summary>
+    private void OnOccurrencesChanged() => InvokeAsync(async () =>
+    {
+        await LoadDayAsync();
+        StateHasChanged();
+    });
+
+    public void Dispose() => Realtime.OccurrencesChanged -= OnOccurrencesChanged;
 
     /// <summary>Called after creating a household, when membership has changed.</summary>
     private async Task ReloadAsync()
@@ -201,7 +226,6 @@ else
         }
 
         _day = await Api.GetDailyPlanAsync(householdId, memberId, Today);
-        _minutesToday = _day?.AvailableMinutes ?? 0;
     }
 
     private async Task CompleteAsync(Guid occurrenceId)
@@ -227,19 +251,30 @@ else
         }
     }
 
-    private void ToggleTimeEditor() => _editingTime = !_editingTime;
+    private void ToggleExpand(Guid occurrenceId)
+        => _expandedOccurrence = _expandedOccurrence == occurrenceId ? null : occurrenceId;
 
-    private async Task SaveTimeAsync()
+    private async Task DeferAsync(Guid occurrenceId)
     {
-        if (Session.Me is not { HouseholdId: { } householdId, MemberId: { } memberId })
+        if (Session.Me is not { HouseholdId: { } householdId })
         {
             return;
         }
 
-        if (await Api.SetAvailabilityAsync(householdId, memberId, Today, Math.Max(0, _minutesToday)))
+        _busyOccurrence = occurrenceId;
+
+        try
         {
-            _editingTime = false;
-            await LoadDayAsync();
+            if (await Api.DeferOccurrenceAsync(householdId, occurrenceId, Today.AddDays(1)))
+            {
+                _expandedOccurrence = null;
+                await LoadDayAsync();
+            }
+        }
+        finally
+        {
+            _busyOccurrence = null;
         }
     }
+
 }

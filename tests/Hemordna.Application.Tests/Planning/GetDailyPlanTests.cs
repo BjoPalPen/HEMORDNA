@@ -1,6 +1,8 @@
 using Hemordna.Application.Households;
 using Hemordna.Application.Planning;
+using Hemordna.Application.Tasks;
 using Hemordna.Application.Tests.Households;
+using Hemordna.Application.Tests.Tasks;
 using Hemordna.Domain.Households;
 using Hemordna.Domain.Tasks;
 
@@ -18,7 +20,17 @@ public class GetDailyPlanTests
     private readonly InMemoryPlanCandidateQuery _candidates = new();
 
     private GetDailyPlan CreateUseCase()
-        => new(_households, _availabilities, _candidates, new DailyPlanner());
+        => new(
+            _households,
+            _availabilities,
+            _candidates,
+            new EnsureOccurrencesGenerated(
+                _households,
+                new InMemoryTaskDefinitionRepository(),
+                new InMemoryTaskOccurrenceRepository(),
+                new InMemoryTaskAssignmentRepository(),
+                new FixedTimeProvider(Now)),
+            new DailyPlanner());
 
     private async Task<(Guid HouseholdId, HouseholdMember Member)> ArrangeHouseholdAsync(int fridayMinutes)
     {
@@ -160,7 +172,17 @@ public class MemberDayCompletionTests
     private readonly InMemoryPlanCandidateQuery _candidates = new();
 
     private GetDailyPlan CreateUseCase()
-        => new(_households, _availabilities, _candidates, new DailyPlanner());
+        => new(
+            _households,
+            _availabilities,
+            _candidates,
+            new EnsureOccurrencesGenerated(
+                _households,
+                new InMemoryTaskDefinitionRepository(),
+                new InMemoryTaskOccurrenceRepository(),
+                new InMemoryTaskAssignmentRepository(),
+                new FixedTimeProvider(Now)),
+            new DailyPlanner());
 
     private async Task<(Guid HouseholdId, HouseholdMember Member)> ArrangeAsync()
     {

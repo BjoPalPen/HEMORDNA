@@ -1,0 +1,138 @@
+@page "/installningar"
+@inject HemordnaApiClient Api
+@inject HemordnaSession Session
+
+<PageTitle>Inställningar – Hemordna</PageTitle>
+
+@if (!Session.IsLoaded)
+{
+    <p class="muted">Hämtar...</p>
+}
+else if (!Session.IsSignedIn)
+{
+    <Redirect To="logga-in" />
+}
+else if (Session.NeedsHousehold)
+{
+    <SkapaHushall OnCreated="LoadAsync" />
+}
+else
+{
+    <h1>Min visning</h1>
+    <p class="muted">
+        Det här är din personliga inställning och påverkar inte andra i hushållet.
+    </p>
+
+    @if (_presentation is null)
+    {
+        <p class="muted">Hämtar...</p>
+    }
+    else
+    {
+        <div class="card">
+            <h2>Hur vill du se dina uppgifter?</h2>
+
+            <div class="notice">
+                Detta är din personliga inställning och påverkar inte andra i hushållet.
+            </div>
+
+            @foreach (var option in PresentationOptions)
+            {
+                <label class="field field-check">
+                    <input type="radio" name="presentation" value="@option.Value"
+                           checked="@(_presentation == option.Value)"
+                           @onchange="() => _presentation = option.Value" />
+                    <span>@option.Label</span>
+                </label>
+            }
+
+            <h2>Motivation</h2>
+
+            @foreach (var option in MotivationOptions)
+            {
+                <label class="field field-check">
+                    <input type="radio" name="motivation" value="@option.Value"
+                           checked="@(_motivation == option.Value)"
+                           @onchange="() => _motivation = option.Value" />
+                    <span>@option.Label</span>
+                </label>
+            }
+
+            @if (_message is { } message)
+            {
+                <div class="notice notice-problem" role="alert">@message</div>
+            }
+
+            <button type="button" class="btn btn-primary" disabled="@_busy" @onclick="SaveAsync">
+                @(_busy ? "Sparar..." : "Spara")
+            </button>
+        </div>
+    }
+}
+
+@code {
+    private static readonly (string Value, string Label)[] PresentationOptions =
+    [
+        ("Text", "Text (standard) - kompakt lista"),
+        ("ImageAndText", "Bild + text - med bilder för tydlighet"),
+        ("LargeText", "Stor text - större och tydligare"),
+        ("OneAtATime", "En uppgift åt gången - fokusläge")
+    ];
+
+    private static readonly (string Value, string Label)[] MotivationOptions =
+    [
+        ("None", "Ingen - bara fakta"),
+        ("Calm", "Lugn - en vänlig kommentar då och då")
+    ];
+
+    private string? _presentation;
+    private string? _motivation;
+    private string? _message;
+    private bool _busy;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Session.EnsureLoadedAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (Session.Me is not { HouseholdId: { } householdId, MemberId: { } memberId })
+        {
+            return;
+        }
+
+        var preference = await Api.GetPreferenceAsync(householdId, memberId);
+        _presentation = preference?.Presentation ?? "Text";
+        _motivation = preference?.Motivation ?? "None";
+    }
+
+    private async Task SaveAsync()
+    {
+        if (Session.Me is not { HouseholdId: { } householdId, MemberId: { } memberId }
+            || _presentation is null || _motivation is null)
+        {
+            return;
+        }
+
+        _busy = true;
+        _message = null;
+
+        try
+        {
+            if (!await Api.SetPreferenceAsync(householdId, memberId, _presentation, _motivation))
+            {
+                _message = "Det gick inte att spara. Försök igen.";
+            }
+        }
+        catch (HttpRequestException)
+        {
+            _message = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}
