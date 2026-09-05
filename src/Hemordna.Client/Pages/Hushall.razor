@@ -48,6 +48,20 @@ else
     </ul>
 
     <div class="card">
+        <h2>Områden</h2>
+
+        <ul class="list" aria-label="Områden">
+            @foreach (var area in _household.Areas.Where(a => a.IsActive))
+            {
+                <li class="list-item">
+                    <span class="list-name">@area.Name</span>
+                    <span class="list-meta muted small">@TaskCountFor(area.Id) uppgifter</span>
+                </li>
+            }
+        </ul>
+    </div>
+
+    <div class="card">
         <h2>Senaste händelser</h2>
 
         @if (_activity.Count == 0)
@@ -107,6 +121,7 @@ else
     private readonly Form _form = new();
     private HouseholdResponse? _household;
     private readonly Dictionary<Guid, TodayMinutes> _todayMinutes = [];
+    private IReadOnlyList<TaskDefinitionResponse> _tasks = [];
     private IReadOnlyList<RecentActivityResponse> _activity = [];
     private string? _message;
     private bool _busy;
@@ -142,6 +157,7 @@ else
 
         _household = await Api.GetHouseholdAsync(householdId);
         _activity = await Api.GetRecentActivityAsync(householdId);
+        _tasks = await Api.ListTasksAsync(householdId);
 
         if (_household is null)
         {
@@ -160,6 +176,8 @@ else
             }
         }
     }
+
+    private int TaskCountFor(Guid areaId) => _tasks.Count(t => t.AreaId == areaId && t.IsActive);
 
     private static string Initial(string name)
         => string.IsNullOrWhiteSpace(name) ? "?" : name.Trim()[..1].ToUpperInvariant();

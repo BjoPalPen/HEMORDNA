@@ -9,7 +9,8 @@ namespace Hemordna.Application.Planning;
 /// </summary>
 public sealed record PlanCandidate
 {
-    public PlanCandidate(TaskOccurrence occurrence, string taskName)
+    public PlanCandidate(
+        TaskOccurrence occurrence, string taskName, string? areaName = null, string? description = null)
     {
         ArgumentNullException.ThrowIfNull(occurrence);
 
@@ -20,11 +21,18 @@ public sealed record PlanCandidate
 
         Occurrence = occurrence;
         TaskName = taskName.Trim();
+        AreaName = areaName;
+        Description = description;
     }
 
     public TaskOccurrence Occurrence { get; }
 
     public string TaskName { get; }
+
+    /// <summary>The area this work belongs to, when it has one - display only.</summary>
+    public string? AreaName { get; }
+
+    public string? Description { get; }
 
     public int EstimatedMinutes => Occurrence.EstimatedMinutes;
 

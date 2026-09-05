@@ -52,7 +52,13 @@ else
                         {
                             <li class="task task-done">
                                 <span class="task-check task-check-done" aria-hidden="true">✓</span>
-                                <span class="task-name">@done.Name</span>
+                                <span class="task-name">
+                                    @done.Name
+                                    @if (done.AreaName is { } doneArea)
+                                    {
+                                        <span class="chip">@doneArea</span>
+                                    }
+                                </span>
                                 <span class="task-minutes muted">@done.EstimatedMinutes min</span>
                             </li>
                         }
@@ -72,6 +78,10 @@ else
 
                                 <span class="task-name">
                                     @item.Name
+                                    @if (item.AreaName is { } area)
+                                    {
+                                        <span class="chip">@area</span>
+                                    }
                                     @if (item.IsOverdue)
                                     {
                                         <span class="task-note muted small">sedan tidigare</span>
@@ -79,7 +89,31 @@ else
                                 </span>
 
                                 <span class="task-minutes muted">@item.EstimatedMinutes min</span>
+
+                                <button type="button" class="task-expand"
+                                        aria-label="@($"Mer om {item.Name}")"
+                                        aria-expanded="@(_expandedOccurrence == item.OccurrenceId ? "true" : "false")"
+                                        @onclick="() => ToggleExpand(item.OccurrenceId)">⌄</button>
                             </li>
+
+                            @if (_expandedOccurrence == item.OccurrenceId)
+                            {
+                                <li class="task-details">
+                                    @if (!string.IsNullOrWhiteSpace(item.Description))
+                                    {
+                                        <p class="muted small">@item.Description</p>
+                                    }
+
+                                    @if (item.CanBeDeferred)
+                                    {
+                                        <button type="button" class="btn btn-secondary"
+                                                disabled="@(_busyOccurrence == item.OccurrenceId)"
+                                                @onclick="() => DeferAsync(item.OccurrenceId)">
+                                            Skjut upp till imorgon
+                                        </button>
+                                    }
+                                </li>
+                            }
                         }
                     </ul>
                 }
@@ -100,7 +134,13 @@ else
                             @foreach (var task in _day.Unplanned)
                             {
                                 <li class="task task-rest">
-                                    <span class="task-name">@task.Name</span>
+                                    <span class="task-name">
+                                        @task.Name
+                                        @if (task.AreaName is { } unplannedArea)
+                                        {
+                                            <span class="chip">@unplannedArea</span>
+                                        }
+                                    </span>
                                     <span class="task-minutes muted">@task.EstimatedMinutes min</span>
                                 </li>
                             }
@@ -183,6 +223,7 @@ else
 
     private DailyPlanResponse? _day;
     private Guid? _busyOccurrence;
+    private Guid? _expandedOccurrence;
     private bool _editingTime;
     private int _minutesToday;
     private Dictionary<DayOfWeek, int>? _weekBudget;
@@ -274,6 +315,32 @@ else
             // Safe to repeat: the server keeps the first completion.
             if (await Api.CompleteOccurrenceAsync(householdId, occurrenceId))
             {
+                await LoadDayAsync();
+            }
+        }
+        finally
+        {
+            _busyOccurrence = null;
+        }
+    }
+
+    private void ToggleExpand(Guid occurrenceId)
+        => _expandedOccurrence = _expandedOccurrence == occurrenceId ? null : occurrenceId;
+
+    private async Task DeferAsync(Guid occurrenceId)
+    {
+        if (Session.Me is not { HouseholdId: { } householdId })
+        {
+            return;
+        }
+
+        _busyOccurrence = occurrenceId;
+
+        try
+        {
+            if (await Api.DeferOccurrenceAsync(householdId, occurrenceId, Today.AddDays(1)))
+            {
+                _expandedOccurrence = null;
                 await LoadDayAsync();
             }
         }

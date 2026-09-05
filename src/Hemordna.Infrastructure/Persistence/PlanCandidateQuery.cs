@@ -50,9 +50,18 @@ internal sealed class PlanCandidateQuery : IPlanCandidateQuery
                 _dbContext.TaskDefinitions.AsNoTracking(),
                 occurrence => occurrence.TaskDefinitionId,
                 definition => definition.Id,
-                (occurrence, definition) => new { Occurrence = occurrence, definition.Name })
+                (occurrence, definition) => new { Occurrence = occurrence, definition.Name, definition.AreaId, definition.Description })
+            // Left join: not every task belongs to an area.
+            .GroupJoin(
+                _dbContext.Areas.AsNoTracking(),
+                row => row.AreaId,
+                area => area.Id,
+                (row, areas) => new { row, areas })
+            .SelectMany(
+                joined => joined.areas.DefaultIfEmpty(),
+                (joined, area) => new { joined.row.Occurrence, joined.row.Name, joined.row.Description, AreaName = area != null ? area.Name : null })
             .ToListAsync(cancellationToken);
 
-        return [.. rows.Select(row => new PlanCandidate(row.Occurrence, row.Name))];
+        return [.. rows.Select(row => new PlanCandidate(row.Occurrence, row.Name, row.AreaName, row.Description))];
     }
 }

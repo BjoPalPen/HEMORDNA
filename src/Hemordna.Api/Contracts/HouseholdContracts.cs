@@ -154,7 +154,8 @@ public sealed record CompletedTaskResponse(
     Guid OccurrenceId,
     Guid TaskDefinitionId,
     string Name,
-    int EstimatedMinutes);
+    int EstimatedMinutes,
+    string? AreaName);
 
 public sealed record PlannedTaskResponse(
     Guid OccurrenceId,
@@ -162,7 +163,10 @@ public sealed record PlannedTaskResponse(
     string Name,
     int EstimatedMinutes,
     TaskPriority Priority,
-    bool IsOverdue);
+    bool IsOverdue,
+    string? AreaName,
+    string? Description,
+    bool CanBeDeferred);
 
 public sealed record UnplannedTaskResponse(
     Guid OccurrenceId,
@@ -171,4 +175,5 @@ public sealed record UnplannedTaskResponse(
     int EstimatedMinutes,
     TaskPriority Priority,
     bool CanBeDeferred,
-    UnplannedReason Reason);
+    UnplannedReason Reason,
+    string? AreaName);

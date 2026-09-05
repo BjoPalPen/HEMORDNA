@@ -38,4 +38,27 @@ public class HushallTests
         // 30 minutes every day of the week is 210 minutes total.
         await Assertions.Expect(row).ToContainTextAsync("210 min/vecka");
     }
+
+    [Fact]
+    public async Task Shows_an_areas_task_count()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Greta");
+
+        await page.GotoAsync("/omraden");
+        await page.GetByLabel("Nytt område").FillAsync("Kök");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Lägg till område" }).ClickAsync();
+        await Assertions.Expect(page.Locator(".list-item", new() { HasText = "Kök" })).ToBeVisibleAsync();
+
+        await page.GotoAsync("/uppgifter");
+        await page.GetByLabel("Namn").FillAsync("Diska");
+        await page.GetByLabel("Område").SelectOptionAsync(new SelectOptionValue { Label = "Kök" });
+        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa uppgift" }).ClickAsync();
+        await Assertions.Expect(page.Locator(".list-item", new() { HasText = "Diska" })).ToBeVisibleAsync();
+
+        await page.GotoAsync("/hushall");
+
+        var areaRow = page.Locator(".list-item", new() { HasText = "Kök" });
+        await Assertions.Expect(areaRow).ToContainTextAsync("1 uppgifter");
+    }
 }

@@ -477,12 +477,16 @@ internal static class HouseholdEndpoints
                 item.Candidate.TaskName,
                 item.Candidate.EstimatedMinutes,
                 item.Candidate.Priority,
-                item.IsOverdue))],
+                item.IsOverdue,
+                item.Candidate.AreaName,
+                item.Candidate.Description,
+                item.Candidate.CanBeDeferred))],
             [.. day.Completed.Select(done => new CompletedTaskResponse(
                 done.Occurrence.Id,
                 done.Occurrence.TaskDefinitionId,
                 done.TaskName,
-                done.EstimatedMinutes))],
+                done.EstimatedMinutes,
+                done.AreaName))],
             [.. plan.Unplanned.Select(task => new UnplannedTaskResponse(
                 task.Candidate.Occurrence.Id,
                 task.Candidate.Occurrence.TaskDefinitionId,
@@ -490,6 +494,7 @@ internal static class HouseholdEndpoints
                 task.Candidate.EstimatedMinutes,
                 task.Candidate.Priority,
                 task.Candidate.CanBeDeferred,
-                task.Reason))]);
+                task.Reason,
+                task.Candidate.AreaName))]);
     }
 }
