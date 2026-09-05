@@ -56,6 +56,29 @@ public class OmradenTests
     }
 
     [Fact]
+    public async Task Shows_a_running_total_across_every_room()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Hedda");
+
+        await page.GotoAsync("/omraden");
+        await page.GetByRole(AriaRole.Heading, new() { Name = "Områden", Exact = true }).WaitForAsync();
+
+        await page.GetByLabel("Rumstyp").SelectOptionAsync(new SelectOptionValue { Label = "Litet wc" });
+        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa" }).ClickAsync();
+        await AreaCard(page, "Litet wc").WaitForAsync();
+
+        await page.GetByLabel("Rumstyp").SelectOptionAsync(new SelectOptionValue { Label = "Kök" });
+        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa" }).ClickAsync();
+        await AreaCard(page, "Kök").WaitForAsync();
+
+        // Not just the two rooms' own totals (17 + 28) - a household-wide sum shown once,
+        // above the room list, so the answer to "how much time is this whole setup?" does not
+        // require adding up every card by hand.
+        await Assertions.Expect(page.GetByText("Totalt: 12 uppgifter · 45 min")).ToBeVisibleAsync();
+    }
+
+    [Fact]
     public async Task Asking_for_several_of_a_room_type_numbers_them_and_summarises_the_time()
     {
         var page = await _app.NewPageAsync();

@@ -140,6 +140,8 @@ else
     }
     else
     {
+        <p class="muted small">Totalt: @TotalTaskCount uppgifter · @TotalMinutes min</p>
+
         @foreach (var area in _areas)
         {
             <div class="card" @key="area.Id">
@@ -232,6 +234,11 @@ else
 
     private int TotalMinutesFor(Guid areaId)
         => _tasks.Where(t => t.AreaId == areaId && t.IsActive).Sum(t => t.EstimatedMinutes);
+
+    /// <summary>Every room plus "Övrigt" - the same rooms-and-planning exception to hiding time as §6a describes.</summary>
+    private int TotalTaskCount => _tasks.Count(t => t.IsActive);
+
+    private int TotalMinutes => _tasks.Where(t => t.IsActive).Sum(t => t.EstimatedMinutes);
 
     private async Task RemoveAreaAsync(Guid areaId)
     {

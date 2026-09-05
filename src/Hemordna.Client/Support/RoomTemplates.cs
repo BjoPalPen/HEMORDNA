@@ -118,12 +118,38 @@ public static class RoomTemplates
             new("Plocka undan", 5, TaskFrequency.Weekly),
             new("Vädra rummet", 1, TaskFrequency.AsNeeded)
         ]),
+        new("FamilyRoom", "Allrum",
+        [
+            new("Dammsug golvet", 5, TaskFrequency.Weekly),
+            new("Damma ytor", 5, TaskFrequency.AsNeeded),
+            new("Plocka undan", 5, TaskFrequency.Weekly),
+            new("Vädra rummet", 1, TaskFrequency.AsNeeded)
+        ]),
+        new("DiningRoom", "Matrum",
+        [
+            new("Torka av bordet", 2, TaskFrequency.Daily),
+            new("Dammsug golvet", 5, TaskFrequency.Weekly),
+            new("Damma ytor", 3, TaskFrequency.AsNeeded)
+        ]),
         new("Hallway", "Hall",
         [
             new("Dammsug eller sopa golvet", 3, TaskFrequency.Weekly),
             new("Torka golvet", 3, TaskFrequency.Weekly),
             new("Ställ i ordning skorna", 2, TaskFrequency.AsNeeded),
             new("Släng gammal post och reklam", 2, TaskFrequency.AsNeeded)
+        ]),
+        new("LaundryRoom", "Tvättstuga",
+        [
+            new("Dammsug golvet", 3, TaskFrequency.Weekly),
+            new("Torka golvet", 3, TaskFrequency.Weekly),
+            new("Töm luddfiltret i torktumlaren", 1, TaskFrequency.Weekly),
+            new("Rengör tvättmaskinens tvättmedelsfack", 2, TaskFrequency.Monthly)
+        ]),
+        new("Office", "Kontor",
+        [
+            new("Dammsug golvet", 5, TaskFrequency.Weekly),
+            new("Damma ytor", 3, TaskFrequency.AsNeeded),
+            new("Plocka undan skrivbordet", 5, TaskFrequency.Weekly)
         ])
     ];
 }
