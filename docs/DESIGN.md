@@ -109,6 +109,13 @@ bara när det finns något avklarat att uppmuntra – annars ingen sidopanel all
 "Snabbval" för dagens tillfälliga avvikelse är borttaget: även ett litet, kvalitativt tidsval
 visade sig kännas rörigt och stressande på sidan alla öppnar varje dag (produktfeedback).
 
+### Uppgifter (hantera uppgifter)
+
+Formulär för att skapa enstaka uppgifter för hand (se §6a för tidsfältet), följt av listan
+över hushållets uppgifter. Ett filter, "Filtrera efter område", begränsar listan till ett
+rum och visar en sammanfattningsrad: `<Rum>: N uppgifter · M min uppskattad tid totalt`.
+Detta är ett medvetet undantag från §6a - se §6b.
+
 ### Uppgiftsdetalj
 
 Bild, namn, områdeschip, återkommande, beskrivning, ansvarig, växlarna *Kan skjutas
@@ -134,10 +141,10 @@ till skillnad från Min dag som alla öppnar varje dag.
 
 ### Områden
 
-Lista över hemmets delar. Formuläret "Lägg till rum från mall" (se §6b) är förstahandsvägen;
-ett tomt, namnlöst område ligger bakom disclosuren "Lägg till ett tomt område i stället", för
+Lista över hemmets delar. Formuläret "Lägg till en våning" (se §6b) är förstahandsvägen; ett
+tomt, namnlöst område ligger bakom disclosuren "Lägg till ett tomt område i stället", för
 grupperingar som inte är ett rum (t.ex. "Hund", "Garage"). Varje område visar sitt antal
-uppgifter.
+uppgifter och total uppskattad tid.
 
 ### 6a. Tid hanteras i bakgrunden, visas aldrig
 
@@ -174,6 +181,15 @@ någon namnger vilken typ av rum de lägger till (t.ex. "Litet wc" ger handfat, 
 spegel, hyllor, golv) i stället för att användaren ska hitta på och skriva in varje uppgift
 för hand. Genererade uppgifter upprepas varje vecka och roterar mellan hushållets medlemmar,
 samma mönster som redan används för den seedade uppgiften "Dammsug vardagsrum".
+
+Formuläret på Områden går längre än ett rum i taget: en valfri **våning** (fritext, t.ex.
+"Våning 1") kan konfigureras med flera rumstyper på en gång, var och en med ett **antal**,
+så tre sovrum skapas i ett svep i stället för att formuläret fylls i tre gånger. Fler än ett
+av samma typ numreras ("Sovrum 1", "Sovrum 2", ...); en angiven våning blir en prefix på
+varje rums namn ("Våning 1 – Kök"). Direkt efter skapandet visas en sammanfattning per rum
+med `RoomTemplate.TotalMinutes` och en totalsumma - ett medvetet undantag från §6a: under
+planering av hemmet är frågan "hur lång tid tar det här rummet?" rimlig att svara på med en
+siffra, till skillnad från den dagliga vyn där samma siffra bara stressar.
 
 ### Inställningar – Min visning
 

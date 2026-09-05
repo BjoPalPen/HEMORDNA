@@ -31,6 +31,28 @@ public class UppgifterTests
     }
 
     [Fact]
+    public async Task Filtering_by_area_summarises_its_estimated_time()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Greta");
+
+        // A room template gives a known, fixed set of tasks and minutes to filter down to -
+        // see RoomTemplates.Kitchen.
+        await page.GotoAsync("/omraden");
+        await page.GetByLabel("Rumstyp").SelectOptionAsync(new SelectOptionValue { Label = "Kök" });
+        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa" }).ClickAsync();
+        // Scoped to the areas list: the "just created" summary also renders a "Kök" row.
+        await page.Locator("ul[aria-label='Områden'] .list-item", new() { HasText = "Kök" }).WaitForAsync();
+
+        await page.GotoAsync("/uppgifter");
+        await page.GetByLabel("Filtrera efter område").SelectOptionAsync(new SelectOptionValue { Label = "Kök" });
+
+        // Kitchen template: 15+5+10+5+10+10 minutes across its six tasks.
+        await Assertions.Expect(page.GetByText("Kök: 6 uppgifter · 55 min uppskattad tid totalt"))
+            .ToBeVisibleAsync();
+    }
+
+    [Fact]
     public async Task A_task_without_a_name_is_rejected_without_calling_the_server()
     {
         var page = await _app.NewPageAsync();

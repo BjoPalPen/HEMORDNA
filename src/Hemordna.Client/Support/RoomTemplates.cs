@@ -3,7 +3,11 @@ namespace Hemordna.Client.Support;
 /// <summary>One item a room template generates. The minutes travel to the API but are never shown - see TimeLevel.</summary>
 public sealed record RoomTemplateTask(string Name, int EstimatedMinutes);
 
-public sealed record RoomTemplate(string Key, string Label, IReadOnlyList<RoomTemplateTask> Tasks);
+public sealed record RoomTemplate(string Key, string Label, IReadOnlyList<RoomTemplateTask> Tasks)
+{
+    /// <summary>What the room's whole checklist should take - shown during setup planning, never during daily use.</summary>
+    public int TotalMinutes => Tasks.Sum(task => task.EstimatedMinutes);
+}
 
 /// <summary>
 /// Naming a room's type gives a ready-made checklist for keeping it tidy, instead of everyone

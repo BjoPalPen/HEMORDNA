@@ -9,6 +9,10 @@ public class OmradenTests
 
     public OmradenTests(HemordnaAppFixture app) => _app = app;
 
+    // The areas list and the "just created" summary both render .list-item rows with the same
+    // room names, so tests need to scope to one or the other rather than search the whole page.
+    private static ILocator AreaList(IPage page) => page.Locator("ul[aria-label='Områden']");
+
     [Fact]
     public async Task Adding_an_area_lists_it_immediately()
     {
@@ -24,7 +28,7 @@ public class OmradenTests
         await page.GetByLabel("Nytt område").FillAsync("Tvättstuga");
         await page.GetByRole(AriaRole.Button, new() { Name = "Lägg till område" }).ClickAsync();
 
-        await Assertions.Expect(page.Locator(".list-item", new() { HasText = "Tvättstuga" }))
+        await Assertions.Expect(AreaList(page).Locator(".list-item", new() { HasText = "Tvättstuga" }))
             .ToBeVisibleAsync();
     }
 
@@ -37,16 +41,59 @@ public class OmradenTests
         await page.GotoAsync("/omraden");
         await page.GetByRole(AriaRole.Heading, new() { Name = "Områden" }).WaitForAsync();
 
-        await page.GetByLabel("Typ av rum").SelectOptionAsync(new SelectOptionValue { Label = "Litet wc" });
-        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa rum med uppgifter" }).ClickAsync();
+        await page.GetByLabel("Rumstyp").SelectOptionAsync(new SelectOptionValue { Label = "Litet wc" });
+        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa" }).ClickAsync();
 
-        // The name field was left blank, so the room takes the template's own label.
-        var areaRow = page.Locator(".list-item", new() { HasText = "Litet wc" });
+        // No floor name and a single room, so the area takes the template's own label.
+        var areaRow = AreaList(page).Locator(".list-item", new() { HasText = "Litet wc" });
         await areaRow.WaitForAsync();
-        await Assertions.Expect(areaRow).ToContainTextAsync("6 uppgifter");
+        // 5+10+5+5+5+5 minutes across the template's six tasks.
+        await Assertions.Expect(areaRow).ToContainTextAsync("6 uppgifter · 35 min");
 
         await page.GotoAsync("/uppgifter");
         await Assertions.Expect(page.Locator(".list-item", new() { HasText = "Rengör toalettstolen" }))
+            .ToBeVisibleAsync();
+    }
+
+    [Fact]
+    public async Task Asking_for_several_of_a_room_type_numbers_them_and_summarises_the_time()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Elin");
+
+        await page.GotoAsync("/omraden");
+        await page.GetByRole(AriaRole.Heading, new() { Name = "Områden" }).WaitForAsync();
+
+        // Three bedrooms in one go, instead of repeating the single-room form three times.
+        await page.GetByLabel("Rumstyp").SelectOptionAsync(new SelectOptionValue { Label = "Sovrum" });
+        await page.GetByLabel("Antal").FillAsync("3");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa" }).ClickAsync();
+
+        await AreaList(page).Locator(".list-item", new() { HasText = "Sovrum 1" }).WaitForAsync();
+        await Assertions.Expect(AreaList(page).Locator(".list-item", new() { HasText = "Sovrum 2" })).ToBeVisibleAsync();
+        await Assertions.Expect(AreaList(page).Locator(".list-item", new() { HasText = "Sovrum 3" })).ToBeVisibleAsync();
+
+        // Bedroom template: 5+10+5+5+10 = 35 minutes, repeated for each of the three rooms.
+        var summary = page.Locator(".notice", new() { HasText = "Skapat, uppskattad tid per rum" });
+        await Assertions.Expect(summary.Locator(".list-item", new() { HasText = "Sovrum 1" }))
+            .ToContainTextAsync("35 min");
+        await Assertions.Expect(summary).ToContainTextAsync("Totalt: 105 min");
+    }
+
+    [Fact]
+    public async Task Naming_a_floor_prefixes_each_of_its_rooms()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Fredrik");
+
+        await page.GotoAsync("/omraden");
+        await page.GetByRole(AriaRole.Heading, new() { Name = "Områden" }).WaitForAsync();
+
+        await page.GetByLabel("Våning (valfritt)").FillAsync("Våning 1");
+        await page.GetByLabel("Rumstyp").SelectOptionAsync(new SelectOptionValue { Label = "Kök" });
+        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa" }).ClickAsync();
+
+        await Assertions.Expect(AreaList(page).Locator(".list-item", new() { HasText = "Våning 1 – Kök" }))
             .ToBeVisibleAsync();
     }
 }

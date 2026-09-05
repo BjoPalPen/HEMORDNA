@@ -119,30 +119,48 @@ else
     {
         <p class="muted">Hämtar uppgifter...</p>
     }
-    else if (_tasks.Count == 0)
-    {
-        <div class="notice">Inga uppgifter ännu.</div>
-    }
     else
     {
-        <ul class="list" aria-label="Hushållets uppgifter">
-            @foreach (var task in _tasks)
-            {
-                <li class="list-item">
-                    <span class="list-name">
-                        @task.Name
-                        @if (task.Recurrence is { } recurrence)
-                        {
-                            <span class="muted small">@RecurrenceLabel(recurrence)</span>
-                        }
-                        @if (task.HasRotatingResponsibility)
-                        {
-                            <span class="muted small">roterar</span>
-                        }
-                    </span>
-                </li>
-            }
-        </ul>
+        <label class="field">
+            <span>Filtrera efter område</span>
+            <select @bind="_filterAreaId">
+                <option value="">Alla områden</option>
+                @foreach (var area in _areas)
+                {
+                    <option value="@area.Id">@area.Name</option>
+                }
+            </select>
+        </label>
+
+        <p class="muted small">@FilterSummaryText(FilteredTasks)</p>
+
+        @if (FilteredTasks.Count == 0)
+        {
+            <div class="notice">
+                @(string.IsNullOrEmpty(_filterAreaId) ? "Inga uppgifter ännu." : "Inga uppgifter i det här området.")
+            </div>
+        }
+        else
+        {
+            <ul class="list" aria-label="Hushållets uppgifter">
+                @foreach (var task in FilteredTasks)
+                {
+                    <li class="list-item">
+                        <span class="list-name">
+                            @task.Name
+                            @if (task.Recurrence is { } recurrence)
+                            {
+                                <span class="muted small">@RecurrenceLabel(recurrence)</span>
+                            }
+                            @if (task.HasRotatingResponsibility)
+                            {
+                                <span class="muted small">roterar</span>
+                            }
+                        </span>
+                    </li>
+                }
+            </ul>
+        }
     }
 }
 
@@ -164,8 +182,14 @@ else
     private IReadOnlyList<TaskDefinitionResponse>? _tasks;
     private IReadOnlyList<AreaResponse> _areas = [];
     private IReadOnlyList<HouseholdMemberResponse> _members = [];
+    private string _filterAreaId = string.Empty;
     private string? _message;
     private bool _busy;
+
+    /// <summary>Active tasks in the chosen area, or all of them - see FilterSummaryText for the total time this implies.</summary>
+    private List<TaskDefinitionResponse> FilteredTasks => (_tasks ?? [])
+        .Where(t => t.IsActive && (string.IsNullOrEmpty(_filterAreaId) || t.AreaId?.ToString() == _filterAreaId))
+        .ToList();
 
     private DateOnly Today => DateOnly.FromDateTime(TimeProvider.GetLocalNow().DateTime);
 
@@ -186,6 +210,15 @@ else
         _areas = household?.Areas.Where(area => area.IsActive).ToList() ?? [];
         _members = household?.Members.Where(member => member.IsActive).ToList() ?? [];
         _tasks = await Api.ListTasksAsync(householdId);
+    }
+
+    private string FilterSummaryText(IReadOnlyCollection<TaskDefinitionResponse> filtered)
+    {
+        var label = string.IsNullOrEmpty(_filterAreaId)
+            ? "Alla områden"
+            : _areas.FirstOrDefault(a => a.Id.ToString() == _filterAreaId)?.Name ?? "Området";
+
+        return $"{label}: {filtered.Count} uppgifter · {filtered.Sum(t => t.EstimatedMinutes)} min uppskattad tid totalt";
     }
 
     private static string RecurrenceLabel(RecurrenceRuleContract recurrence) => recurrence.Frequency switch

@@ -24,35 +24,68 @@ else
     <p class="muted">Delar av hemmet, eller andra grupperingar hushållet väljer. En uppgift behöver inte höra till ett rum.</p>
 
     <div class="card">
-        <h2>Lägg till rum från mall</h2>
-        <p class="muted small">Välj typ av rum, så skapas en färdig checklista för att hålla det snyggt.</p>
+        <h2>Lägg till en våning</h2>
+        <p class="muted small">
+            Namnge våningen (valfritt) och lägg till de rumstyper som finns där - varje rum får
+            en färdig checklista. Ange fler än ett för att skapa flera likadana rum på en gång,
+            t.ex. tre sovrum, i stället för att göra det ett i taget.
+        </p>
 
-        <EditForm Model="_templateForm" OnValidSubmit="CreateFromTemplateAsync">
+        <EditForm Model="_floorForm" OnValidSubmit="CreateFloorAsync">
             <label class="field">
-                <span>Typ av rum</span>
-                <select @bind="_templateForm.TemplateKey">
-                    <option value="">Välj...</option>
-                    @foreach (var template in RoomTemplates.All)
-                    {
-                        <option value="@template.Key">@template.Label</option>
-                    }
-                </select>
+                <span>Våning (valfritt)</span>
+                <InputText @bind-Value="_floorForm.FloorName" placeholder="T.ex. Våning 1" />
             </label>
 
-            <label class="field">
-                <span>Namn på rummet</span>
-                <InputText @bind-Value="_templateForm.Name" placeholder="T.ex. Kök" />
-            </label>
-
-            @if (_templateMessage is { } templateMessage)
+            @foreach (var row in _floorForm.Rooms)
             {
-                <div class="notice notice-problem" role="alert">@templateMessage</div>
+                <div class="floor-room-row" @key="row">
+                    <select @bind="row.TemplateKey" aria-label="Rumstyp">
+                        <option value="">Välj rumstyp...</option>
+                        @foreach (var template in RoomTemplates.All)
+                        {
+                            <option value="@template.Key">@template.Label</option>
+                        }
+                    </select>
+                    <input type="number" min="1" max="20" @bind="row.Count" aria-label="Antal" />
+                    @if (_floorForm.Rooms.Count > 1)
+                    {
+                        <button type="button" class="btn btn-secondary" aria-label="Ta bort rummet"
+                                @onclick="() => RemoveRoomRow(row)">✕</button>
+                    }
+                </div>
             }
 
-            <button type="submit" class="btn btn-primary" disabled="@_templateBusy">
-                @(_templateBusy ? "Skapar..." : "Skapa rum med uppgifter")
-            </button>
+            <button type="button" class="btn btn-secondary" @onclick="AddRoomRow">+ Lägg till fler rum</button>
+
+            @if (_floorMessage is { } floorMessage)
+            {
+                <div class="notice notice-problem" role="alert">@floorMessage</div>
+            }
+
+            <div class="floor-submit">
+                <button type="submit" class="btn btn-primary" disabled="@_floorBusy">
+                    @(_floorBusy ? "Skapar..." : "Skapa")
+                </button>
+            </div>
         </EditForm>
+
+        @if (_createdRooms.Count > 0)
+        {
+            <div class="notice">
+                <p><strong>Skapat, uppskattad tid per rum:</strong></p>
+                <ul class="list" aria-label="Skapade rum">
+                    @foreach (var created in _createdRooms)
+                    {
+                        <li class="list-item">
+                            <span class="list-name">@created.Name</span>
+                            <span class="list-meta muted small">@created.Minutes min</span>
+                        </li>
+                    }
+                </ul>
+                <p class="muted small">Totalt: @_createdRooms.Sum(r => r.Minutes) min</p>
+            </div>
+        }
     </div>
 
     <details class="more-options">
@@ -92,7 +125,7 @@ else
             {
                 <li class="list-item">
                     <span class="list-name">@area.Name</span>
-                    <span class="list-meta muted small">@TaskCountFor(area.Id) uppgifter</span>
+                    <span class="list-meta muted small">@TaskCountFor(area.Id) uppgifter · @TotalMinutesFor(area.Id) min</span>
                 </li>
             }
         </ul>
@@ -105,20 +138,27 @@ else
         public string Name { get; set; } = string.Empty;
     }
 
-    private sealed class TemplateForm
+    private sealed class FloorRoomRow
     {
         public string TemplateKey { get; set; } = string.Empty;
-        public string Name { get; set; } = string.Empty;
+        public int Count { get; set; } = 1;
+    }
+
+    private sealed class FloorForm
+    {
+        public string FloorName { get; set; } = string.Empty;
+        public List<FloorRoomRow> Rooms { get; set; } = [new()];
     }
 
     private readonly Form _form = new();
-    private readonly TemplateForm _templateForm = new();
+    private readonly FloorForm _floorForm = new();
     private IReadOnlyList<AreaResponse>? _areas;
     private IReadOnlyList<TaskDefinitionResponse> _tasks = [];
     private string? _message;
     private bool _busy;
-    private string? _templateMessage;
-    private bool _templateBusy;
+    private string? _floorMessage;
+    private bool _floorBusy;
+    private List<(string Name, int Minutes)> _createdRooms = [];
 
     private DateOnly Today => DateOnly.FromDateTime(TimeProvider.GetLocalNow().DateTime);
 
@@ -141,6 +181,9 @@ else
     }
 
     private int TaskCountFor(Guid areaId) => _tasks.Count(t => t.AreaId == areaId && t.IsActive);
+
+    private int TotalMinutesFor(Guid areaId)
+        => _tasks.Where(t => t.AreaId == areaId && t.IsActive).Sum(t => t.EstimatedMinutes);
 
     private async Task CreateAsync()
     {
@@ -179,65 +222,90 @@ else
         }
     }
 
-    private async Task CreateFromTemplateAsync()
+    private void AddRoomRow() => _floorForm.Rooms.Add(new FloorRoomRow());
+
+    private void RemoveRoomRow(FloorRoomRow row) => _floorForm.Rooms.Remove(row);
+
+    private async Task CreateFloorAsync()
     {
         if (Session.Me is not { HouseholdId: { } householdId })
         {
             return;
         }
 
-        var template = RoomTemplates.All.FirstOrDefault(t => t.Key == _templateForm.TemplateKey);
+        var rows = _floorForm.Rooms.Where(r => !string.IsNullOrEmpty(r.TemplateKey)).ToList();
 
-        if (template is null)
+        if (rows.Count == 0)
         {
-            _templateMessage = "Välj en typ av rum.";
+            _floorMessage = "Lägg till minst en rumstyp.";
             return;
         }
 
-        var name = string.IsNullOrWhiteSpace(_templateForm.Name) ? template.Label : _templateForm.Name.Trim();
-
-        _templateBusy = true;
-        _templateMessage = null;
+        _floorBusy = true;
+        _floorMessage = null;
+        var created = new List<(string Name, int Minutes)>();
 
         try
         {
-            var area = await Api.AddAreaAsync(householdId, name);
-
-            if (area is null)
-            {
-                _templateMessage = "Det gick inte att skapa rummet. Försök igen.";
-                return;
-            }
-
             var recurrence = new RecurrenceRuleContract("Weekly", 1, Today, Today.DayOfWeek.ToString(), null);
+            var floor = _floorForm.FloorName.Trim();
 
-            foreach (var task in template.Tasks)
+            foreach (var row in rows)
             {
-                await Api.CreateTaskAsync(householdId, new CreateTaskRequest(
-                    task.Name,
-                    task.EstimatedMinutes,
-                    Description: null,
-                    AreaId: area.Id,
-                    Priority: "Normal",
-                    DefaultResponsibleMemberId: null,
-                    PreferredWeekday: null,
-                    CanBeDeferred: true,
-                    HasRotatingResponsibility: true,
-                    RequiresMultiplePeople: false,
-                    Recurrence: recurrence));
+                var template = RoomTemplates.All.First(t => t.Key == row.TemplateKey);
+                var count = Math.Clamp(row.Count, 1, 20);
+
+                for (var i = 1; i <= count; i++)
+                {
+                    // A single instance of a room type keeps just its type as the name; more
+                    // than one gets numbered so "3 sovrum" does not collide as three "Sovrum".
+                    var name = (floor.Length > 0, count > 1) switch
+                    {
+                        (true, true) => $"{floor} – {template.Label} {i}",
+                        (true, false) => $"{floor} – {template.Label}",
+                        (false, true) => $"{template.Label} {i}",
+                        (false, false) => template.Label
+                    };
+
+                    var area = await Api.AddAreaAsync(householdId, name);
+
+                    if (area is null)
+                    {
+                        continue;
+                    }
+
+                    foreach (var task in template.Tasks)
+                    {
+                        await Api.CreateTaskAsync(householdId, new CreateTaskRequest(
+                            task.Name,
+                            task.EstimatedMinutes,
+                            Description: null,
+                            AreaId: area.Id,
+                            Priority: "Normal",
+                            DefaultResponsibleMemberId: null,
+                            PreferredWeekday: null,
+                            CanBeDeferred: true,
+                            HasRotatingResponsibility: true,
+                            RequiresMultiplePeople: false,
+                            Recurrence: recurrence));
+                    }
+
+                    created.Add((name, template.TotalMinutes));
+                }
             }
 
-            _templateForm.TemplateKey = string.Empty;
-            _templateForm.Name = string.Empty;
+            _createdRooms = created;
+            _floorForm.FloorName = string.Empty;
+            _floorForm.Rooms = [new()];
             await LoadAsync();
         }
         catch (HttpRequestException)
         {
-            _templateMessage = "Vi når inte servern just nu. Försök igen om en stund.";
+            _floorMessage = "Vi når inte servern just nu. Försök igen om en stund.";
         }
         finally
         {
-            _templateBusy = false;
+            _floorBusy = false;
         }
     }
 }

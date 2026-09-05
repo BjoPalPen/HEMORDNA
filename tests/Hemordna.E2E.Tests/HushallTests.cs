@@ -103,7 +103,9 @@ public class HushallTests
 
         await page.GotoAsync("/uppgifter");
         await page.GetByLabel("Namn").FillAsync("Diska");
-        await page.GetByLabel("Område").SelectOptionAsync(new SelectOptionValue { Label = "Kök" });
+        // Scoped to the create-task form: Uppgifter also has a "Filtrera efter område" select
+        // outside it, which GetByLabel's substring match would otherwise also pick up.
+        await page.Locator("form").GetByLabel("Område").SelectOptionAsync(new SelectOptionValue { Label = "Kök" });
         await page.GetByRole(AriaRole.Button, new() { Name = "Skapa uppgift" }).ClickAsync();
         await Assertions.Expect(page.Locator(".list-item", new() { HasText = "Diska" })).ToBeVisibleAsync();
 
