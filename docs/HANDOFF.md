@@ -10,10 +10,10 @@ Lägesbild per 2026-09-05, för en ny session. Arbetssättet styrs av
 öppen PR #9 mot `main` (ej mergad). Utöver tidsbudget per medlem: `RecurrenceRule`, roterande
 ansvar, `MemberPreference`, riktig realtidssynk via SignalR - se
 [ARCHITECTURE.md](ARCHITECTURE.md) §3/§5. Klienten har alla fem sidor från `NavMenu` plus
-`Inställningar`. Visuell layout matchar nu docs/DESIGN.md §6 tydligare: områdeschip och
-expanderbar rad (beskrivning + skjut upp) på Min dag, Områden-lista med uppgiftsantal och
-"Senaste händelser" på Hushåll, "Ändra tid idag" på Planering. 169 tester gröna (Domain 66,
-Application 78, E2E 28 - alla mot en riktig webbläsare).
+`Inställningar` och `Mer` (mobil). Visuell layout matchar nu docs/DESIGN.md §6/§8 fullt ut:
+områdeschip, expanderbar rad, Hushållsöversiktens veckomatris (prickar per medlem/dag) och
+Områden/Senaste händelser, "Ändra tid idag" på Planering, mobilens fyra-plus-Mer-bottennav.
+172 tester gröna (Domain 66, Application 78, E2E 30 - alla mot en riktig webbläsare).
 
 ## Köra
 
@@ -29,8 +29,7 @@ rätt env **innan** E2E körs, så återanvänder fixturen dem.
 ## Kända brister
 
 - PWA:n är verifierad i publiceringskedjan, inte i en riktig browser.
-- Hushållsöversiktens veckomatris (prickar per medlem/dag, mockupen) är inte byggd.
-- Mobilens bottennav visar alla sex sidor, inte fyra + "Mer" som DESIGN.md §8 beskriver.
+- Ikoner är text/symboler, inte den riktiga ikonuppsättningen från mockupen.
 
 **Rör inte** `BlazorWebAssemblyLoadAllGlobalizationData` - se
 `MinDagTests.The_date_is_Swedish_even_when_the_browser_is_English`.
@@ -41,10 +40,9 @@ queryable-kedja kan ge `InvalidOperationException` vid körning, inte kompilerin
 
 ## Öppna frågor och nästa steg
 
-Endast offline-strategi kvarstår som `OPEN` i ARCHITECTURE.md §10.
-
-1. Hushållsöversiktens veckomatris, och mobilens "Mer"-meny - resten av
-   docs/DESIGN.md §6/§8.
+Endast offline-strategi kvarstår som `OPEN` i ARCHITECTURE.md §10. Mockupen (docs/DESIGN.md)
+är nu byggd i sin helhet, funktionellt - kvar är bara finpolering (riktiga ikoner, bilder på
+uppgifter) om det prioriteras.
 
 **Beslut, inte öppen fråga:** en användare tillhör exakt ett hushåll. Flera hushåll per
 användare ska **inte** byggas - se ARCHITECTURE.md §4.
