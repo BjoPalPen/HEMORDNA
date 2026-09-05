@@ -21,7 +21,10 @@ else if (Session.NeedsHousehold)
 else
 {
     <h1>Områden</h1>
-    <p class="muted">Delar av hemmet, eller andra grupperingar hushållet väljer. En uppgift behöver inte höra till ett rum.</p>
+    <p class="muted">
+        Hemmets rum och deras uppgifter samlade på ett ställe - lägg till, ta bort och se vad
+        som gäller för varje rum här.
+    </p>
 
     <div class="card">
         <h2>Lägg till en våning</h2>
@@ -40,7 +43,7 @@ else
             @foreach (var row in _floorForm.Rooms)
             {
                 <div class="floor-room-row" @key="row">
-                    <select @bind="row.TemplateKey" @bind:after="() => row.ExcludedTasks.Clear()" aria-label="Rumstyp">
+                    <select @bind="row.TemplateKey" @bind:after="() => OnTemplateChanged(row)" aria-label="Rumstyp">
                         <option value="">Välj rumstyp...</option>
                         @foreach (var template in RoomTemplates.All)
                         {
@@ -62,12 +65,18 @@ else
                         @foreach (var task in chosenTemplate.Tasks)
                         {
                             <label class="field-check">
-                                <input type="checkbox" checked="@(!row.ExcludedTasks.Contains(task.Name))"
-                                       @onchange="e => ToggleTask(row, task.Name, (bool)e.Value!)" />
+                                <input type="checkbox" @bind="row.TaskIncluded[task.Name]" />
                                 <span>@task.Name</span>
                             </label>
                         }
                     </div>
+
+                    @if (chosenTemplate.Key == "Bedroom")
+                    {
+                        <BedroomOwnerPicker Count="@Math.Clamp(row.Count, 1, 20)"
+                                             OwnerMemberId="row.InstanceOwnerMemberId"
+                                             Members="@_members" />
+                    }
                 }
             }
 
@@ -129,26 +138,33 @@ else
     {
         <p class="muted">Hämtar områden...</p>
     }
-    else if (_areas.Count == 0)
-    {
-        <div class="notice">Inga områden ännu.</div>
-    }
     else
     {
-        <ul class="list" aria-label="Områden">
-            @foreach (var area in _areas)
-            {
-                <li class="list-item">
-                    <span class="list-name">@area.Name</span>
-                    <span class="list-meta muted small">@TaskCountFor(area.Id) uppgifter · @TotalMinutesFor(area.Id) min</span>
+        @foreach (var area in _areas)
+        {
+            <div class="card" @key="area.Id">
+                <div class="area-card-header">
+                    <h2>@area.Name</h2>
                     <button type="button" class="btn btn-secondary" aria-label="@($"Ta bort {area.Name}")"
                             disabled="@(_removingAreaId == area.Id)"
                             @onclick="() => RemoveAreaAsync(area.Id)">
-                        Ta bort
+                        Ta bort rum
                     </button>
-                </li>
-            }
-        </ul>
+                </div>
+                <p class="muted small">@TaskCountFor(area.Id) uppgifter · @TotalMinutesFor(area.Id) min</p>
+
+                <RoomTasks HouseholdId="@_householdId" AreaId="@area.Id" Label="@area.Name"
+                           AllTasks="@_tasks" Members="@_members" OnChanged="LoadAsync" />
+            </div>
+        }
+
+        <div class="card">
+            <h2>Övrigt</h2>
+            <p class="muted small">Uppgifter som inte hör till ett särskilt rum.</p>
+
+            <RoomTasks HouseholdId="@_householdId" Label="Övrigt"
+                       AllTasks="@_tasks" Members="@_members" OnChanged="LoadAsync" />
+        </div>
     }
 }
 
@@ -163,8 +179,11 @@ else
         public string TemplateKey { get; set; } = string.Empty;
         public int Count { get; set; } = 1;
 
-        /// <summary>Template tasks left unchecked - everything else is included by default.</summary>
-        public HashSet<string> ExcludedTasks { get; } = [];
+        /// <summary>Whether each template task (by name) is included - true unless unchecked.</summary>
+        public Dictionary<string, bool> TaskIncluded { get; } = [];
+
+        /// <summary>1-based bedroom instance number -> owner member id. Empty means shared/rotating.</summary>
+        public Dictionary<int, string> InstanceOwnerMemberId { get; } = [];
     }
 
     private sealed class FloorForm
@@ -175,8 +194,11 @@ else
 
     private readonly Form _form = new();
     private readonly FloorForm _floorForm = new();
+
+    private Guid _householdId;
     private IReadOnlyList<AreaResponse>? _areas;
     private IReadOnlyList<TaskDefinitionResponse> _tasks = [];
+    private IReadOnlyList<HouseholdMemberResponse> _members = [];
     private string? _message;
     private bool _busy;
     private string? _floorMessage;
@@ -199,8 +221,10 @@ else
             return;
         }
 
+        _householdId = householdId;
         var household = await Api.GetHouseholdAsync(householdId);
         _areas = household?.Areas.Where(area => area.IsActive).ToList() ?? [];
+        _members = household?.Members.Where(member => member.IsActive).ToList() ?? [];
         _tasks = await Api.ListTasksAsync(householdId);
     }
 
@@ -270,15 +294,17 @@ else
 
     private void RemoveRoomRow(FloorRoomRow row) => _floorForm.Rooms.Remove(row);
 
-    private static void ToggleTask(FloorRoomRow row, string taskName, bool included)
+    private static void OnTemplateChanged(FloorRoomRow row)
     {
-        if (included)
+        row.TaskIncluded.Clear();
+        row.InstanceOwnerMemberId.Clear();
+
+        if (RoomTemplates.All.FirstOrDefault(t => t.Key == row.TemplateKey) is { } template)
         {
-            row.ExcludedTasks.Remove(taskName);
-        }
-        else
-        {
-            row.ExcludedTasks.Add(taskName);
+            foreach (var task in template.Tasks)
+            {
+                row.TaskIncluded[task.Name] = true;
+            }
         }
     }
 
@@ -308,8 +334,9 @@ else
             foreach (var row in rows)
             {
                 var template = RoomTemplates.All.First(t => t.Key == row.TemplateKey);
-                var selectedTasks = template.Tasks.Where(t => !row.ExcludedTasks.Contains(t.Name)).ToList();
+                var selectedTasks = template.Tasks.Where(t => row.TaskIncluded.GetValueOrDefault(t.Name, true)).ToList();
                 var count = Math.Clamp(row.Count, 1, 20);
+                var isBedroom = template.Key == "Bedroom";
 
                 for (var i = 1; i <= count; i++)
                 {
@@ -330,6 +357,12 @@ else
                         continue;
                     }
 
+                    Guid? ownerId = isBedroom
+                        && row.InstanceOwnerMemberId.TryGetValue(i, out var ownerText)
+                        && !string.IsNullOrEmpty(ownerText)
+                            ? Guid.Parse(ownerText)
+                            : null;
+
                     foreach (var task in selectedTasks)
                     {
                         var (recurrence, staleAfterDays) = task.ToScheduling(Today);
@@ -340,10 +373,10 @@ else
                             Description: null,
                             AreaId: area.Id,
                             Priority: "Normal",
-                            DefaultResponsibleMemberId: null,
+                            DefaultResponsibleMemberId: ownerId,
                             PreferredWeekday: null,
                             CanBeDeferred: true,
-                            HasRotatingResponsibility: true,
+                            HasRotatingResponsibility: ownerId is null,
                             RequiresMultiplePeople: false,
                             Recurrence: recurrence,
                             StaleAfterDays: staleAfterDays));

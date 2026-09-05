@@ -51,54 +51,56 @@ public static class RoomTemplates
     [
         new("SmallToilet", "Litet wc",
         [
-            new("Torka av handfatet", 5, TaskFrequency.Weekly),
-            new("Rengör toalettstolen", 10, TaskFrequency.Weekly),
-            new("Putsa spegeln", 5, TaskFrequency.AsNeeded),
-            new("Damma hyllor", 5, TaskFrequency.AsNeeded),
-            new("Dammsug golvet", 5, TaskFrequency.Weekly),
-            new("Torka golvet", 5, TaskFrequency.Weekly)
+            new("Torka av handfatet", 2, TaskFrequency.Weekly),
+            new("Rengör toalettstolen", 5, TaskFrequency.Weekly),
+            new("Putsa spegeln", 2, TaskFrequency.AsNeeded),
+            new("Damma hyllor", 2, TaskFrequency.AsNeeded),
+            new("Dammsug golvet", 3, TaskFrequency.Weekly),
+            new("Torka golvet", 3, TaskFrequency.Weekly)
         ]),
         new("Bathroom", "Badrum",
         [
-            new("Torka av handfatet", 5, TaskFrequency.Weekly),
-            new("Rengör toalettstolen", 10, TaskFrequency.Weekly),
-            new("Skrubba dusch eller badkar", 15, TaskFrequency.Weekly),
-            new("Putsa spegeln", 5, TaskFrequency.AsNeeded),
-            new("Damma hyllor", 5, TaskFrequency.AsNeeded),
-            new("Byt handdukar", 5, TaskFrequency.Weekly),
-            new("Dammsug golvet", 5, TaskFrequency.Weekly),
-            new("Torka golvet", 10, TaskFrequency.Weekly)
+            new("Torka av handfatet", 2, TaskFrequency.Weekly),
+            new("Rengör toalettstolen", 5, TaskFrequency.Weekly),
+            new("Skrubba dusch eller badkar", 8, TaskFrequency.Weekly),
+            new("Putsa spegeln", 2, TaskFrequency.AsNeeded),
+            new("Damma hyllor", 2, TaskFrequency.AsNeeded),
+            new("Byt handdukar", 1, TaskFrequency.Weekly),
+            new("Dammsug golvet", 3, TaskFrequency.Weekly),
+            new("Torka golvet", 5, TaskFrequency.Weekly)
         ]),
         new("Kitchen", "Kök",
         [
-            new("Diska eller töm diskmaskinen", 15, TaskFrequency.Daily),
-            new("Torka av bänkarna", 5, TaskFrequency.Daily),
-            new("Rengör spisen", 10, TaskFrequency.Weekly),
-            new("Töm soptunnan", 5, TaskFrequency.Weekly),
-            new("Dammsug golvet", 10, TaskFrequency.Weekly),
-            new("Torka golvet", 10, TaskFrequency.Weekly)
+            new("Diska eller töm diskmaskinen", 8, TaskFrequency.Daily),
+            new("Torka av bänkarna", 3, TaskFrequency.Daily),
+            new("Rengör spisen", 5, TaskFrequency.Weekly),
+            new("Töm soptunnan", 2, TaskFrequency.Weekly),
+            new("Dammsug golvet", 5, TaskFrequency.Weekly),
+            new("Torka golvet", 5, TaskFrequency.Weekly)
         ]),
         new("Bedroom", "Sovrum",
         [
-            new("Bädda sängen", 5, TaskFrequency.Daily),
-            new("Dammsug golvet", 10, TaskFrequency.Weekly),
-            new("Damma ytor", 5, TaskFrequency.AsNeeded),
-            new("Vädra rummet", 5, TaskFrequency.AsNeeded),
-            new("Plocka undan kläder", 10, TaskFrequency.Weekly)
+            new("Bädda sängen", 2, TaskFrequency.Daily),
+            new("Dammsug golvet", 5, TaskFrequency.Weekly),
+            new("Damma ytor", 3, TaskFrequency.AsNeeded),
+            // Opening a window and closing it again - barely any active effort, but still
+            // worth a reminder, so it keeps a token, near-zero estimate rather than 0.
+            new("Vädra rummet", 1, TaskFrequency.AsNeeded),
+            new("Plocka undan kläder", 5, TaskFrequency.Weekly)
         ]),
         new("LivingRoom", "Vardagsrum",
         [
-            new("Dammsug golvet", 15, TaskFrequency.Weekly),
-            new("Damma ytor", 10, TaskFrequency.AsNeeded),
-            new("Plocka undan", 10, TaskFrequency.Weekly),
-            new("Vädra rummet", 5, TaskFrequency.AsNeeded)
+            new("Dammsug golvet", 5, TaskFrequency.Weekly),
+            new("Damma ytor", 5, TaskFrequency.AsNeeded),
+            new("Plocka undan", 5, TaskFrequency.Weekly),
+            new("Vädra rummet", 1, TaskFrequency.AsNeeded)
         ]),
         new("Hallway", "Hall",
         [
-            new("Dammsug eller sopa golvet", 5, TaskFrequency.Weekly),
-            new("Torka golvet", 5, TaskFrequency.Weekly),
-            new("Ställ i ordning skorna", 5, TaskFrequency.AsNeeded),
-            new("Släng gammal post och reklam", 5, TaskFrequency.AsNeeded)
+            new("Dammsug eller sopa golvet", 3, TaskFrequency.Weekly),
+            new("Torka golvet", 3, TaskFrequency.Weekly),
+            new("Ställ i ordning skorna", 2, TaskFrequency.AsNeeded),
+            new("Släng gammal post och reklam", 2, TaskFrequency.AsNeeded)
         ])
     ];
 }

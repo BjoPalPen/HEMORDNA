@@ -19,12 +19,12 @@ public class MobileNavTests
 
         var nav = page.GetByRole(AriaRole.Navigation, new() { Name = "Huvudmeny" });
 
-        foreach (var visible in new[] { "Min dag", "Uppgifter", "Planering", "Mer" })
+        foreach (var visible in new[] { "Min dag", "Områden", "Planering", "Mer" })
         {
             await Assertions.Expect(nav.GetByRole(AriaRole.Link, new() { Name = visible })).ToBeVisibleAsync();
         }
 
-        foreach (var hidden in new[] { "Områden", "Hushåll", "Inställningar" })
+        foreach (var hidden in new[] { "Hushåll", "Inställningar" })
         {
             await Assertions.Expect(nav.GetByRole(AriaRole.Link, new() { Name = hidden })).ToBeHiddenAsync();
         }
@@ -32,7 +32,7 @@ public class MobileNavTests
         await nav.GetByRole(AriaRole.Link, new() { Name = "Mer" }).ClickAsync();
         await page.GetByRole(AriaRole.Heading, new() { Name = "Mer" }).WaitForAsync();
 
-        foreach (var link in new[] { "Områden", "Hushåll", "Inställningar" })
+        foreach (var link in new[] { "Hushåll", "Inställningar" })
         {
             await Assertions.Expect(page.GetByRole(AriaRole.Link, new() { Name = link })).ToBeVisibleAsync();
         }

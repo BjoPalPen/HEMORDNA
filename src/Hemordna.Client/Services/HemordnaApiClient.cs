@@ -113,6 +113,19 @@ public sealed class HemordnaApiClient
             : null;
     }
 
+    /// <summary>Deactivates the task rather than deleting it - see TaskDefinition for why.</summary>
+    public async Task<bool> DeactivateTaskAsync(
+        Guid householdId,
+        Guid taskId,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Delete, $"api/households/{householdId}/tasks/{taskId}", cancellationToken);
+
+        var response = await _http.SendAsync(request, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
     public async Task<bool> ScheduleOccurrenceAsync(
         Guid householdId,
         Guid taskId,

@@ -119,15 +119,18 @@ public class HushallTests
         await page.GetByText("Lägg till ett tomt område i stället").ClickAsync();
         await page.GetByLabel("Nytt område").FillAsync("Kök");
         await page.GetByRole(AriaRole.Button, new() { Name = "Lägg till område" }).ClickAsync();
-        await Assertions.Expect(page.Locator(".list-item", new() { HasText = "Kök" })).ToBeVisibleAsync();
 
-        await page.GotoAsync("/uppgifter");
-        await page.GetByLabel("Namn").FillAsync("Diska");
-        // Scoped to the create-task form: Uppgifter also has a "Filtrera efter område" select
-        // outside it, which GetByLabel's substring match would otherwise also pick up.
-        await page.Locator("form").GetByLabel("Område").SelectOptionAsync(new SelectOptionValue { Label = "Kök" });
-        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa uppgift" }).ClickAsync();
-        await Assertions.Expect(page.Locator(".list-item", new() { HasText = "Diska" })).ToBeVisibleAsync();
+        // "Kök" is also a <option> in the wizard's own room-type select, so a card matched by
+        // HasText alone would ambiguously catch that card too - filter by the actual heading.
+        var kitchenCard = page.Locator(".card")
+            .Filter(new() { Has = page.GetByRole(AriaRole.Heading, new() { Name = "Kök", Exact = true }) });
+        await kitchenCard.WaitForAsync();
+
+        // Task management lives inline on each room's own card now - see OmradenTests.
+        await kitchenCard.GetByText("Lägg till en uppgift i Kök").ClickAsync();
+        await kitchenCard.GetByLabel("Namn").FillAsync("Diska");
+        await kitchenCard.GetByRole(AriaRole.Button, new() { Name = "Lägg till uppgift" }).ClickAsync();
+        await Assertions.Expect(kitchenCard.Locator(".list-item", new() { HasText = "Diska" })).ToBeVisibleAsync();
 
         await page.GotoAsync("/hushall");
 

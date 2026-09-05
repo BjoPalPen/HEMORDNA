@@ -53,3 +53,15 @@
 .floor-room-tasks p {
     margin: 0 0 var(--space-1);
 }
+
+.area-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+}
+
+.area-card-header h2 {
+    margin: 0;
+}

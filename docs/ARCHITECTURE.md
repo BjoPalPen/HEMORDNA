@@ -150,17 +150,24 @@ Klienten sätter för närvarande ett fast standardintervall (21 dagar,
 `RoomTemplateTask.AsNeededDefaultDays`) i stället för att fråga efter ett antal dagar - se
 DESIGN.md §6b för samma resonemang som bär `HouseholdRolePresets` och `RoomTemplates`.
 
-### Beslut: `Area`/`HouseholdMember` kan tas bort — `IMPLEMENTED`
+### Beslut: `Area`/`HouseholdMember`/`TaskDefinition` kan tas bort — `IMPLEMENTED`
 
-Båda hade redan `Deactivate()`/`Reactivate()` i domänen (och `IsActive` i kontraktet) sen
-tidigare, men ingen use case eller endpoint exponerade det. `DeactivateArea` och
-`DeactivateHouseholdMember` (Application, `Households`-mappen) följer samma mönster som
-`SetMemberWeeklyBudget`: hämta hushållet, hitta raden, mutera, `UpdateAsync`. `DeactivateArea`
-kaskaderar till rummets egna aktiva uppgifter (`ITaskDefinitionRepository.
-ListActiveByAreaAsync` + `UpdateAsync`) - annars skulle en borttagen station lämna kvar
-uppgifter som fortsätter dyka upp varje vecka. `DeactivateHouseholdMember` kaskaderar inte:
-`RotationPicker` filtrerar redan bort inaktiva medlemmar och återställer rotationen från
-början om den senast tilldelade inte längre är aktiv.
+Alla tre hade redan `Deactivate()`/`Reactivate()` i domänen (och `IsActive` i kontraktet) sen
+tidigare, men ingen use case eller endpoint exponerade det. `DeactivateArea`,
+`DeactivateHouseholdMember` och `DeactivateTaskDefinition` (Application) följer samma mönster
+som `SetMemberWeeklyBudget`: hämta raden, mutera, `UpdateAsync`. `DeactivateArea` kaskaderar
+till rummets egna aktiva uppgifter (`ITaskDefinitionRepository.ListActiveByAreaAsync` +
+`UpdateAsync`) - annars skulle en borttagen station lämna kvar uppgifter som fortsätter dyka
+upp varje vecka. `DeactivateHouseholdMember` kaskaderar inte: `RotationPicker` filtrerar redan
+bort inaktiva medlemmar och återställer rotationen från början om den senast tilldelade inte
+längre är aktiv. `DeactivateTaskDefinition` har inget att kaskadera till - en uppgift har inga
+egna barn-entiteter.
+
+Efterfrågat konkret: `Områden`-sidan absorberade hela den tidigare `Uppgifter`-sidan (nu
+borttagen, se `RoomTasks.razor`/HANDOFF.md), eftersom uppgifter i praktiken alltid hör till ett rum.
+Varje rumskort listar och hanterar sina egna uppgifter inline; ett `TaskDefinition`-borttag var
+den saknade pusselbiten för att kunna rätta ett rum som redan skapats, inte bara filtrera bort
+en mall-uppgift innan skapandet (se `RoomTemplates`-kryssrutorna, §6b i DESIGN.md).
 
 ### Beslut: `MemberPreference` — `IMPLEMENTED` (domän och API) / `PROPOSED` (UI)
 

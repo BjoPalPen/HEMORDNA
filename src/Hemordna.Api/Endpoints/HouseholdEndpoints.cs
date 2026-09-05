@@ -63,6 +63,10 @@ internal static class HouseholdEndpoints
             .Produces<TaskDefinitionResponse>(StatusCodes.Status201Created)
             .ProducesValidationProblem();
 
+        scoped.MapDelete("/tasks/{taskId:guid}", DeactivateTaskAsync)
+            .Produces<TaskDefinitionResponse>()
+            .Produces(StatusCodes.Status404NotFound);
+
         scoped.MapPost("/tasks/{taskId:guid}/occurrences", ScheduleOccurrenceAsync)
             .Produces<TaskOccurrenceResponse>(StatusCodes.Status201Created)
             .Produces(StatusCodes.Status404NotFound);
@@ -283,6 +287,17 @@ internal static class HouseholdEndpoints
         return definition is null
             ? Results.NotFound()
             : Results.Created($"/api/households/{householdId}/tasks", ToResponse(definition));
+    }
+
+    private static async Task<IResult> DeactivateTaskAsync(
+        Guid householdId,
+        Guid taskId,
+        DeactivateTaskDefinition deactivateTask,
+        CancellationToken cancellationToken)
+    {
+        var definition = await deactivateTask.HandleAsync(householdId, taskId, cancellationToken);
+
+        return definition is null ? Results.NotFound() : Results.Ok(ToResponse(definition));
     }
 
     private static async Task<IResult> ScheduleOccurrenceAsync(

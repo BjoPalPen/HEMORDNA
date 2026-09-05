@@ -1,0 +1,35 @@
+.floor-room-owners {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin: 0 0 var(--space-4) var(--space-4);
+    padding: var(--space-2) 0 var(--space-2) var(--space-3);
+    border-left: 2px solid var(--color-border);
+}
+
+.floor-room-owners p {
+    margin: 0 0 var(--space-1);
+}
+
+.floor-owner-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.floor-owner-row span {
+    flex: none;
+    width: 6em;
+}
+
+.floor-owner-row select {
+    flex: 1;
+    min-width: 0;
+    min-height: 44px;
+    padding: 0 var(--space-3);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-control);
+    background: var(--color-surface);
+    font: inherit;
+    color: inherit;
+}

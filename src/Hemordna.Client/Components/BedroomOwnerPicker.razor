@@ -1,0 +1,37 @@
+@* Isolated in its own component: nesting this many dynamic loops directly inside the floor
+   wizard's own EditForm caused its submit button to silently stop firing (see HANDOFF.md). *@
+<div class="floor-room-owners">
+    <p class="muted small">
+        Vems rum är det? Den personen får då ensamt ansvar för det rummet - ingen rotation.
+        Lämna som "Delat ansvar" annars.
+    </p>
+    @for (var i = 1; i <= Count; i++)
+    {
+        var instance = i;
+        <div class="floor-owner-row">
+            <span>@(Count > 1 ? $"Sovrum {instance}" : "Sovrum")</span>
+            <select value="@OwnerMemberId.GetValueOrDefault(instance, string.Empty)"
+                    aria-label="@($"Vems {(Count > 1 ? $"Sovrum {instance}" : "sovrum")}")"
+                    @onchange="e => SetOwner(instance, (string)e.Value!)">
+                <option value="">Delat ansvar</option>
+                @foreach (var member in Members)
+                {
+                    <option value="@member.Id">@member.DisplayName</option>
+                }
+            </select>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public int Count { get; set; }
+
+    [Parameter, EditorRequired]
+    public Dictionary<int, string> OwnerMemberId { get; set; } = [];
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<HouseholdMemberResponse> Members { get; set; } = [];
+
+    private void SetOwner(int instance, string memberId) => OwnerMemberId[instance] = memberId;
+}

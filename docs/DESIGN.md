@@ -109,13 +109,6 @@ bara när det finns något avklarat att uppmuntra – annars ingen sidopanel all
 "Snabbval" för dagens tillfälliga avvikelse är borttaget: även ett litet, kvalitativt tidsval
 visade sig kännas rörigt och stressande på sidan alla öppnar varje dag (produktfeedback).
 
-### Uppgifter (hantera uppgifter)
-
-Formulär för att skapa enstaka uppgifter för hand (se §6a för tidsfältet), följt av listan
-över hushållets uppgifter. Ett filter, "Filtrera efter område", begränsar listan till ett
-rum och visar en sammanfattningsrad: `<Rum>: N uppgifter · M min uppskattad tid totalt`.
-Detta är ett medvetet undantag från §6a - se §6b.
-
 ### Uppgiftsdetalj
 
 Bild, namn, områdeschip, återkommande, beskrivning, ansvarig, växlarna *Kan skjutas
@@ -141,10 +134,19 @@ till skillnad från Min dag som alla öppnar varje dag.
 
 ### Områden
 
-Lista över hemmets delar. Formuläret "Lägg till en våning" (se §6b) är förstahandsvägen; ett
-tomt, namnlöst område ligger bakom disclosuren "Lägg till ett tomt område i stället", för
-grupperingar som inte är ett rum (t.ex. "Hund", "Garage"). Varje område visar sitt antal
-uppgifter och total uppskattad tid.
+Hemmets rum, och all uppgiftshantering, samlat på ett ställe - det finns ingen egen
+"Uppgifter"-sida längre (produktfeedback: kändes konstigt att hantera uppgifter någon
+annanstans än i rummet de redan hör till). Formuläret "Lägg till en våning" (se §6b) är
+förstahandsvägen till nya rum; ett tomt, namnlöst område ligger bakom disclosuren "Lägg till
+ett tomt område i stället", för grupperingar som inte är ett rum (t.ex. "Hund", "Garage").
+
+Varje befintligt rum är ett eget kort: namn, antal uppgifter och total uppskattad tid, en
+"Ta bort rum"-knapp, listan över rummets egna uppgifter (var och en med sin frekvens och en
+egen "Ta bort"-knapp), och en dold "Lägg till en uppgift i `<rum>`"-disclosure för att lägga
+till fler för hand. Ett sista kort, "Övrigt", samlar uppgifter som inte hör till något
+särskilt rum. Att kunna ta bort en enskild uppgift - inte bara hela rummet - är i sig ett
+direkt svar på feedback: annars fanns inget sätt att bli av med en uppgift i ett redan
+skapat rum.
 
 ### 6a. Tid hanteras i bakgrunden, visas aldrig
 
@@ -204,13 +206,21 @@ att den som lägger till rummet ska behöva svara på det för var och en av upp
 uppgifter. "Vid behov" är inte en kalendercykel: uppgiften dyker upp igen ett fast antal dagar
 (`RoomTemplateTask.AsNeededDefaultDays`, 21) efter den senast blev avklarad, inte på ett givet
 datum - se ARCHITECTURE.md §3 för `TaskDefinition.StaleAfterDays`. Samma frekvensval finns
-även i den manuella uppgiftsformuläret på Uppgifter, för den som skapar en uppgift för hand.
+även i det manuella "Lägg till en uppgift i `<rum>`"-formuläret på Områden.
 
-**Rum och medlemmar kan tas bort.** Ett rum kan ha skapats fel, eller en medlem kan ha flyttat.
-Båda knapparna heter "Ta bort" och avaktiverar (`Area`/`HouseholdMember.Deactivate`) snarare än
-raderar - historiken (avklarade uppgifter, vem som gjorde vad) pekar fortfarande på en riktig
-rad. Att ta bort ett rum avaktiverar även rummets egna uppgifter, så en borttagen "Sovrum 2"
-inte fortsätter dyka upp i någons dag.
+**Rum och medlemmar kan tas bort**, liksom enskilda uppgifter. Ett rum kan ha skapats fel,
+eller en medlem kan ha flyttat. Knapparna heter "Ta bort" och avaktiverar
+(`Area`/`HouseholdMember`/`TaskDefinition.Deactivate`) snarare än raderar - historiken
+(avklarade uppgifter, vem som gjorde vad) pekar fortfarande på en riktig rad. Att ta bort ett
+rum avaktiverar även rummets egna uppgifter, så en borttagen "Sovrum 2" inte fortsätter dyka
+upp i någons dag.
+
+Alla uppgifter delas som standard mellan hushållets medlemmar (roterande ansvar). Ett sovrum
+är det enda undantaget som byggts hittills: vid "Sovrum" i våningsguiden går det att välja
+vilken medlem varje enskild instans tillhör ("Delat ansvar" som standard) - den personen får
+då ensamt, icke-roterande ansvar för just det rummets uppgifter. Valet erbjuds bara för
+sovrum, inte andra rumstyper, och listan med vem man kan välja kommer alltid från det egna
+hushållets medlemmar.
 
 ### Inställningar – Min visning
 
@@ -241,9 +251,9 @@ Lägena ska byta *presentation* av samma data – inte vilken data som visas.
 
 | Yta | Mönster |
 |---|---|
-| Dator | Vänster sidopanel: Min dag, Uppgifter, Områden, Planering, Hushåll, Inställningar. Användarkort längst ned |
+| Dator | Vänster sidopanel: Min dag, Områden, Planering, Hushåll, Inställningar. Användarkort längst ned |
 | Platta | Sidopanel eller topprad beroende på bredd |
-| Mobil | Bottenrad: Min dag, Uppgifter, Planering, Mer |
+| Mobil | Bottenrad: Min dag, Områden, Planering, Mer |
 
 Min dag är alltid första valet och startvyn.
 
