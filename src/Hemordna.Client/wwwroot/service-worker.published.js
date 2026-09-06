@@ -22,6 +22,11 @@ async function onInstall() {
         .map(asset => new Request(asset.url, { integrity: asset.hash, cache: 'no-cache' }));
 
     await caches.open(cacheName).then(cache => cache.addAll(assetsRequests));
+
+    // Without this, a newly installed worker sits "waiting" until every open tab of the site
+    // is closed - a deployed asset change (like a new logo) would otherwise stay invisible to
+    // anyone who already has the app open, with no obvious reason why.
+    self.skipWaiting();
 }
 
 async function onActivate() {
@@ -30,6 +35,10 @@ async function onActivate() {
     await Promise.all(cacheKeys
         .filter(key => key.startsWith(cacheNamePrefix) && key !== cacheName)
         .map(key => caches.delete(key)));
+
+    // Pairs with skipWaiting() above: takes control of already-open tabs immediately
+    // instead of only on their next full navigation.
+    await self.clients.claim();
 }
 
 async function onFetch(event) {
