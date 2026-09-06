@@ -1,3 +1,5 @@
+using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.Playwright;
 
 namespace Hemordna.E2E.Tests;
@@ -14,6 +16,25 @@ public class OmradenTests
     // actual <h2> heading (options carry no heading role) finds only the room's own card.
     private static ILocator AreaCard(IPage page, string name)
         => page.Locator(".card").Filter(new() { Has = page.GetByRole(AriaRole.Heading, new() { Name = name, Exact = true }) });
+
+    /// <summary>The household's own tasks, straight from the API - for asserting on scheduling
+    /// details (which weekday a task lands on) that the UI itself never displays.</summary>
+    private async Task<JsonElement> FetchTasksAsync(IPage page)
+    {
+        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
+        http.DefaultRequestHeaders.Authorization = new("Bearer", token);
+
+        var me = await (await http.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
+        var householdId = me.GetProperty("householdId").GetGuid();
+
+        return await (await http.GetAsync($"/api/households/{householdId}/tasks")).Content.ReadFromJsonAsync<JsonElement>();
+    }
+
+    private static string? WeekdayOf(JsonElement tasks, string name)
+        => tasks.EnumerateArray()
+            .Single(t => t.GetProperty("name").GetString() == name)
+            .GetProperty("recurrence").GetProperty("weekday").GetString();
 
     [Fact]
     public async Task Adding_an_area_lists_it_immediately()
@@ -270,5 +291,74 @@ public class OmradenTests
 
         // Only the checked chore was created - the rest of the list is still just suggestions.
         await Assertions.Expect(page.Locator(".list-item", new() { HasText = "Handla mat" })).Not.ToBeVisibleAsync();
+    }
+
+    [Fact]
+    public async Task A_rooms_weekly_tasks_share_a_weekday_but_a_second_room_lands_on_a_different_one()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Hilda");
+
+        await page.GotoAsync("/omraden");
+        await page.GetByLabel("Rumstyp").SelectOptionAsync(new SelectOptionValue { Label = "Litet wc" });
+        await page.GetByText("+ Lägg till fler rum").ClickAsync();
+        await page.GetByLabel("Rumstyp").Nth(1).SelectOptionAsync(new SelectOptionValue { Label = "Kök" });
+        // Selecting the second room's type renders its own checklist, shifting the layout below
+        // it - wait for that to settle before the submit click lands on a stable target.
+        await page.GetByLabel("Rengör spisen").WaitForAsync();
+        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa" }).ClickAsync();
+
+        await AreaCard(page, "Litet wc").WaitForAsync();
+        await AreaCard(page, "Kök").WaitForAsync();
+
+        var tasks = await FetchTasksAsync(page);
+
+        // Two of "Litet wc"'s own weekly tasks stay together on the same day...
+        Assert.Equal(WeekdayOf(tasks, "Torka av handfatet"), WeekdayOf(tasks, "Rengör toalettstolen"));
+
+        // ...but the other room's weekly task lands on a different day entirely.
+        Assert.NotEqual(WeekdayOf(tasks, "Torka av handfatet"), WeekdayOf(tasks, "Rengör spisen"));
+    }
+
+    [Fact]
+    public async Task Rebalancing_spreads_out_two_rooms_whose_weekly_tasks_collided_on_the_same_day()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Ivar");
+
+        await page.GotoAsync("/omraden");
+        await page.GetByLabel("Rumstyp").SelectOptionAsync(new SelectOptionValue { Label = "Litet wc" });
+        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa" }).ClickAsync();
+        await AreaCard(page, "Litet wc").WaitForAsync();
+
+        // The manual add-a-task form (unlike the room wizard) always anchors a new weekly task
+        // to today - simulating the real-world case this feature exists for: tasks added to
+        // different rooms over time that happen to collide on the same weekday.
+        await page.GetByText("Lägg till ett tomt område i stället").ClickAsync();
+        await page.GetByLabel("Nytt område").FillAsync("Tvättstuga");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Lägg till område" }).ClickAsync();
+        await AreaCard(page, "Tvättstuga").WaitForAsync();
+
+        // Every room's own "Lägg till en uppgift"-form exists in the DOM at once (just
+        // collapsed), so the fields must be scoped to Tvättstuga's card specifically - a bare
+        // GetByLabel("Namn") would match all of them at once.
+        var tvattstugaCard = AreaCard(page, "Tvättstuga");
+        await tvattstugaCard.GetByText("Lägg till en uppgift i Tvättstuga").ClickAsync();
+        await tvattstugaCard.GetByLabel("Namn").FillAsync("Byt handdukar");
+        await tvattstugaCard.GetByLabel("Upprepning").SelectOptionAsync("Weekly");
+        await tvattstugaCard.GetByRole(AriaRole.Button, new() { Name = "Lägg till uppgift" }).ClickAsync();
+        await page.Locator(".list-item", new() { HasText = "Byt handdukar" }).WaitForAsync();
+
+        var beforeTasks = await FetchTasksAsync(page);
+        Assert.Equal(WeekdayOf(beforeTasks, "Torka av handfatet"), WeekdayOf(beforeTasks, "Byt handdukar"));
+
+        await page.GetByText("Ser fördelningen skev ut?").ClickAsync();
+        await page.GetByRole(AriaRole.Button, new() { Name = "Sprid ut över veckan" }).ClickAsync();
+        // Confirms the rebalance actually reported moving something, not just that the button
+        // did nothing quietly.
+        await Assertions.Expect(page.GetByText("flyttades", new() { Exact = false })).ToBeVisibleAsync();
+
+        var afterTasks = await FetchTasksAsync(page);
+        Assert.NotEqual(WeekdayOf(afterTasks, "Torka av handfatet"), WeekdayOf(afterTasks, "Byt handdukar"));
     }
 }

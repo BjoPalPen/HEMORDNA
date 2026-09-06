@@ -165,6 +165,24 @@ public sealed class HemordnaApiClient
         return response.IsSuccessStatusCode;
     }
 
+    /// <summary>
+    /// Re-anchors already-created recurring tasks so they spread across the week instead of
+    /// clustering on whichever day they were created - see RebalanceSchedule.
+    /// </summary>
+    public async Task<RebalanceScheduleResponse?> RebalanceScheduleAsync(
+        Guid householdId,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Post, $"api/households/{householdId}/tasks/rebalance-schedule", cancellationToken);
+
+        var response = await _http.SendAsync(request, cancellationToken);
+
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<RebalanceScheduleResponse>(cancellationToken)
+            : null;
+    }
+
     public async Task<bool> ScheduleOccurrenceAsync(
         Guid householdId,
         Guid taskId,

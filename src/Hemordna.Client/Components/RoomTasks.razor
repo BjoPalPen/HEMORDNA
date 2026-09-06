@@ -258,9 +258,12 @@ else
 
         try
         {
-            foreach (var task in selected)
+            // Each one gets its own spread position: unlike a room's tasks (Omraden.razor),
+            // these do not belong to a place worth visiting as one sitting, so there is no
+            // reason to keep any two of them on the same day.
+            foreach (var (task, index) in selected.Select((task, index) => (task, index)))
             {
-                var (recurrence, staleAfterDays) = task.ToScheduling(Today);
+                var (recurrence, staleAfterDays) = task.ToScheduling(Today, index);
 
                 await Api.CreateTaskAsync(HouseholdId, new CreateTaskRequest(
                     task.Name,

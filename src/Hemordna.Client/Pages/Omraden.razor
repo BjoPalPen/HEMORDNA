@@ -142,6 +142,25 @@ else
     {
         <p class="muted small">Totalt: @TotalTaskCount uppgifter · @TotalMinutes min</p>
 
+        <details class="more-options">
+            <summary>Ser fördelningen skev ut?</summary>
+            <p class="muted small">
+                Sprider om återkommande uppgifter över veckans (eller månadens) dagar, så inte
+                allt landar samma dag - t.ex. för att flera rum sattes upp i samma veva.
+                Uppgifter i samma rum hålls ihop på sin egen dag; det är bara vilken dag som
+                ändras, redan schemalagda uppgifter påverkas inte.
+            </p>
+
+            @if (_rebalanceMessage is { } rebalanceMessage)
+            {
+                <div class="notice" role="status">@rebalanceMessage</div>
+            }
+
+            <button type="button" class="btn btn-secondary" disabled="@_rebalancing" @onclick="RebalanceScheduleAsync">
+                @(_rebalancing ? "Sprider ut..." : "Sprid ut över veckan")
+            </button>
+        </details>
+
         @foreach (var area in _areas)
         {
             <div class="card" @key="area.Id">
@@ -207,6 +226,8 @@ else
     private bool _floorBusy;
     private List<(string Name, int Minutes)> _createdRooms = [];
     private Guid? _removingAreaId;
+    private string? _rebalanceMessage;
+    private bool _rebalancing;
 
     private DateOnly Today => DateOnly.FromDateTime(TimeProvider.GetLocalNow().DateTime);
 
@@ -239,6 +260,35 @@ else
     private int TotalTaskCount => _tasks.Count(t => t.IsActive);
 
     private int TotalMinutes => _tasks.Where(t => t.IsActive).Sum(t => t.EstimatedMinutes);
+
+    private async Task RebalanceScheduleAsync()
+    {
+        if (Session.Me is not { HouseholdId: { } householdId })
+        {
+            return;
+        }
+
+        _rebalancing = true;
+        _rebalanceMessage = null;
+
+        try
+        {
+            if (await Api.RebalanceScheduleAsync(householdId) is { } result)
+            {
+                _rebalanceMessage = result.ChangedTaskCount switch
+                {
+                    0 => "Redan bra utspritt - ingenting att ändra.",
+                    1 => "En uppgift flyttades till en annan dag.",
+                    _ => $"{result.ChangedTaskCount} uppgifter flyttades till andra dagar."
+                };
+                await LoadAsync();
+            }
+        }
+        finally
+        {
+            _rebalancing = false;
+        }
+    }
 
     private async Task RemoveAreaAsync(Guid areaId)
     {
@@ -338,6 +388,15 @@ else
         {
             var floor = _floorForm.FloorName.Trim();
 
+            // One value per room/area instance, shared by every task created for it (not one
+            // per task) - so a room's own weekly/monthly tasks land together on the same
+            // occasion ("the kitchen day" stays one sitting), while different rooms still land
+            // on different days from each other. See RoomTemplateTask.ToScheduling. Starting
+            // from the household's current area count, not 0, so a second floor set up in its
+            // own later submission keeps spreading from where the first one left off, instead
+            // of both floors' first rooms colliding on the same day.
+            var roomSpreadIndex = _areas?.Count ?? 0;
+
             foreach (var row in rows)
             {
                 var template = RoomTemplates.All.First(t => t.Key == row.TemplateKey);
@@ -370,9 +429,11 @@ else
                             ? Guid.Parse(ownerText)
                             : null;
 
+                    var thisRoomsSpreadIndex = roomSpreadIndex++;
+
                     foreach (var task in selectedTasks)
                     {
-                        var (recurrence, staleAfterDays) = task.ToScheduling(Today);
+                        var (recurrence, staleAfterDays) = task.ToScheduling(Today, thisRoomsSpreadIndex);
 
                         await Api.CreateTaskAsync(householdId, new CreateTaskRequest(
                             task.Name,

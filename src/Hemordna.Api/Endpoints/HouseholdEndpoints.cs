@@ -73,6 +73,9 @@ internal static class HouseholdEndpoints
             .Produces<TaskDefinitionResponse>()
             .Produces(StatusCodes.Status404NotFound);
 
+        scoped.MapPost("/tasks/rebalance-schedule", RebalanceScheduleAsync)
+            .Produces<RebalanceScheduleResponse>();
+
         scoped.MapPost("/tasks/{taskId:guid}/occurrences", ScheduleOccurrenceAsync)
             .Produces<TaskOccurrenceResponse>(StatusCodes.Status201Created)
             .Produces(StatusCodes.Status404NotFound);
@@ -362,6 +365,16 @@ internal static class HouseholdEndpoints
         var definition = await deactivateTask.HandleAsync(householdId, taskId, cancellationToken);
 
         return definition is null ? Results.NotFound() : Results.Ok(ToResponse(definition));
+    }
+
+    private static async Task<IResult> RebalanceScheduleAsync(
+        Guid householdId,
+        RebalanceSchedule rebalanceSchedule,
+        CancellationToken cancellationToken)
+    {
+        var changed = await rebalanceSchedule.HandleAsync(householdId, cancellationToken);
+
+        return changed is null ? Results.NotFound() : Results.Ok(new RebalanceScheduleResponse(changed.Value));
     }
 
     private static async Task<IResult> ScheduleOccurrenceAsync(

@@ -43,6 +43,7 @@ builder.Services.AddScoped<SetMemberPreference>();
 builder.Services.AddScoped<GetMemberPreference>();
 builder.Services.AddScoped<CreateTaskDefinition>();
 builder.Services.AddScoped<DeactivateTaskDefinition>();
+builder.Services.AddScoped<RebalanceSchedule>();
 builder.Services.AddScoped<ScheduleTaskOccurrence>();
 builder.Services.AddScoped<CompleteTaskOccurrence>();
 builder.Services.AddScoped<DeferTaskOccurrence>();

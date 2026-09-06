@@ -31,6 +31,8 @@ public sealed record AddMemberRequest(
 
 public sealed record SetMemberRoleRequest(HouseholdRole? Role);
 
+public sealed record RebalanceScheduleResponse(int ChangedTaskCount);
+
 public sealed record AddAreaRequest(string? Name);
 
 /// <summary>

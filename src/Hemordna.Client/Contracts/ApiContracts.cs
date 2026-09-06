@@ -127,6 +127,8 @@ public sealed record TaskDefinitionResponse(
     RecurrenceRuleContract? Recurrence,
     int? StaleAfterDays);
 
+public sealed record RebalanceScheduleResponse(int ChangedTaskCount);
+
 /// <summary>
 /// How a task repeats. Enum-shaped fields travel as plain strings - see the file header for
 /// why the client keeps its own primitive-only copy of the wire contract.

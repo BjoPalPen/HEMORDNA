@@ -36,16 +36,32 @@ public sealed record RoomTemplateTask(
     /// </summary>
     private const int TwiceWeeklyIntervalDays = 3;
 
-    /// <summary>The recurrence and/or stale-after-days pair to send when creating this task.</summary>
-    public (RecurrenceRuleContract? Recurrence, int? StaleAfterDays) ToScheduling(DateOnly today) => Frequency switch
+    /// <summary>
+    /// The recurrence and/or stale-after-days pair to send when creating this task.
+    /// <paramref name="spreadIndex"/> is this task's position within a batch of tasks created
+    /// together (a whole room, or several rooms in one floor) - without it, every weekly task
+    /// set up in the same sitting anchors to the SAME weekday (today's), and every monthly one
+    /// to the same day-of-month, so a household ends up with one overloaded day and several
+    /// empty ones instead of a spread week. Each increase in <paramref name="spreadIndex"/>
+    /// moves the anchor to a different weekday (Weekly) or day-of-month/cycle-phase
+    /// (Monthly/TwiceWeekly); Daily and AsNeeded have no anchor to spread.
+    /// </summary>
+    public (RecurrenceRuleContract? Recurrence, int? StaleAfterDays) ToScheduling(DateOnly today, int spreadIndex = 0)
     {
-        TaskFrequency.Daily => (new RecurrenceRuleContract("Daily", 1, today, null, null), null),
-        TaskFrequency.TwiceWeekly => (new RecurrenceRuleContract("Daily", TwiceWeeklyIntervalDays, today, null, null), null),
-        TaskFrequency.Weekly => (new RecurrenceRuleContract("Weekly", 1, today, today.DayOfWeek.ToString(), null), null),
-        TaskFrequency.Monthly => (new RecurrenceRuleContract("Monthly", 1, today, null, null), null),
-        TaskFrequency.AsNeeded => (null, AsNeededDefaultDays),
-        _ => (null, null)
-    };
+        var shiftedAnchor = today.AddDays(spreadIndex);
+
+        return Frequency switch
+        {
+            TaskFrequency.Daily => (new RecurrenceRuleContract("Daily", 1, today, null, null), null),
+            TaskFrequency.TwiceWeekly
+                => (new RecurrenceRuleContract("Daily", TwiceWeeklyIntervalDays, shiftedAnchor, null, null), null),
+            TaskFrequency.Weekly
+                => (new RecurrenceRuleContract("Weekly", 1, today, shiftedAnchor.DayOfWeek.ToString(), null), null),
+            TaskFrequency.Monthly => (new RecurrenceRuleContract("Monthly", 1, shiftedAnchor, null, null), null),
+            TaskFrequency.AsNeeded => (null, AsNeededDefaultDays),
+            _ => (null, null)
+        };
+    }
 }
 
 public sealed record RoomTemplate(string Key, string Label, IReadOnlyList<RoomTemplateTask> Tasks)
