@@ -36,6 +36,12 @@ services:
       Resend__ApiKey: ${RESEND_API_KEY:-}
       Resend__FromAddress: ${RESEND_FROM_ADDRESS:-no-reply@hemordna.se}
       App__PublicUrl: "https://app.hemordna.se"
+      # Persists the Data Protection key ring across redeploys - see Program.cs. Without this,
+      # a password-reset link issued right before a deploy stops working the moment the
+      # container is recreated, even though it has not actually expired.
+      DataProtection__KeyPath: /keys
+    volumes:
+      - hemordna-dataprotection-keys:/keys
     expose:
       - "8080"
     networks:
@@ -61,6 +67,7 @@ services:
 
 volumes:
   hemordna-postgres-data:
+  hemordna-dataprotection-keys:
 
 networks:
   bowling-edge:

@@ -28,8 +28,13 @@ COPY --from=build-api /app/api .
 # UseStaticFiles/MapFallbackToFile - so Caddy only needs one upstream per domain.
 COPY --from=build-client /app/client/wwwroot ./wwwroot
 
+# /keys backs the Data Protection key ring (see Program.cs's DataProtection:KeyPath) - created
+# and owned by 'app' here so the named volume mounted over it in docker-compose.prod.yml
+# inherits that ownership instead of Docker's default root:root on first use.
+RUN mkdir -p /keys
+
 # Non-root, matching the aspnet image's predefined 'app' user (UID 1654).
-RUN chown -R app:app /app
+RUN chown -R app:app /app /keys
 USER app
 
 EXPOSE 8080

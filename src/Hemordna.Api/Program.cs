@@ -12,6 +12,7 @@ using Hemordna.Infrastructure;
 using Hemordna.Infrastructure.Email;
 using Hemordna.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
@@ -107,6 +108,20 @@ if (allowedOrigins.Length > 0)
         .WithOrigins(allowedOrigins)
         .AllowAnyHeader()
         .AllowAnyMethod()));
+}
+
+var dataProtectionKeyPath = builder.Configuration["DataProtection:KeyPath"];
+
+if (!string.IsNullOrWhiteSpace(dataProtectionKeyPath))
+{
+    // Without this, the key that encrypts Identity's password-reset tokens lives only in the
+    // container's own ephemeral filesystem - every redeploy silently invalidates every reset
+    // link issued since the last one, even though it has not actually expired. Opt-in via
+    // config (set in docker-compose.prod.yml) rather than always-on, since a plain dev run
+    // outside a container has no matching persistent path to point at.
+    builder.Services.AddDataProtection()
+        .SetApplicationName("Hemordna")
+        .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeyPath));
 }
 
 builder.Services.AddExceptionHandler<DomainExceptionHandler>();
