@@ -413,6 +413,15 @@ Utfallet `Unplanned` heter medvetet inte `Deferred`: även en icke uppskjutbar u
 hamna där, eftersom planeraren inte kan skapa tid. En anropare som vill lyfta fram sådant
 filtrerar på `Candidate.CanBeDeferred`.
 
+**"Lägg till en extra uppgift" (Min dag) respekterar samma regel i stället för att kringgå
+den.** En uppgift som läggs till för att göras i dag skapas utan upprepning (samma form som
+`RoomTasks.razor`s "Ingen - schemaläggs för hand") och schemaläggs direkt för dagens datum -
+men för att den garanterat ska hamna i `Items` i stället för att tyst glida till "till en annan
+dag" (en nyskapad medlem börjar på noll minuter/dag) höjs dagens tillgängliga tid med exakt
+uppgiftens uppskattade tid (`SetMemberAvailability`, samma mekanism som "mindre tid i dag"
+används åt andra hållet). Planeraren ljuger därmed aldrig om hur mycket tid som faktiskt finns,
+se `MinDag.razor.AddExtraTaskAsync`.
+
 ---
 
 ## 7. Persistence — `IMPLEMENTED`
