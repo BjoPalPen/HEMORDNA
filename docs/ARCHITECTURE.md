@@ -126,9 +126,22 @@ bakgrundstjänst. Generering är begränsad till det som redan är förfallet (u
 med ett hårt tak (366) som skydd mot en flodvåg av uteblivet arbete efter lång frånvaro - inte
 avsett att någonsin nås i normal drift.
 
-**Hur roterande ansvar räknas ut (löser §10):** `RotationPicker` cyklar genom hushållets
-aktiva medlemmar, ordnade efter `CreatedAt` och sen `Id`. Utan tidigare tilldelning används
-`DefaultResponsibleMemberId` om satt, annars den som gick med först.
+**Hur roterande ansvar räknas ut (löser §10):** `RotationPicker` väljer, för varje ny
+tilldelning, den aktiva medlem som just nu ligger längst under sin rimliga andel av
+hushållets roterande arbete - andel räknat mot `WeeklyTimeBudget.TotalWeeklyMinutes`, inte ett
+enkelt "nästa i tur". Detta ersatte ett tidigare, enklare schema ("den som gjorde det senast →
+nästa i join-ordning, annars den som gick med först") som gick sönder på två sätt en riktig
+körning träffade direkt: (1) en definition utan historik föll alltid tillbaka på den som gick
+med först - ett hushåll som skapar många roterande uppgifter i samma sittning (det normala
+sättet att sätta upp Områden) fick dem ALLA på samma person, eftersom ingen av dem hade
+historik än; (2) strikt växelvis tilldelning antar att alla kan avvara lika mycket tid, vilket
+inte stämmer för en heltidsarbetande bredvid en pensionär. `EnsureOccurrencesGenerated`
+uppdaterar en delad, i minnet hållen "tilldelade minuter per medlem"-tabell efter varje
+tilldelning inom samma körning - annars skulle problem (1) bara flytta sig till nästa uppgift
+i samma batch. Se `EnsureOccurrencesGeneratedTests` för den faktiska matematiken.
+`TaskAssignment.EstimatedMinutes` är ett snapshot (samma resonemang som
+`TaskOccurrence`s egna snapshots) så en senare ändring av en uppgifts tidsuppskattning aldrig
+retroaktivt ändrar hur mycket en redan gjord tilldelning räknades som.
 
 ### Beslut: `TaskDefinition.StaleAfterDays` för "vid behov" — `IMPLEMENTED`
 
@@ -516,6 +529,16 @@ Allt under `/api/households/{householdId}` kräver token och körs bakom
 | `POST` | `/api/households/{householdId}/tasks/{taskId}/occurrences` | `201` med den schemalagda instansen |
 | `PUT` | `/api/households/{householdId}/members/{memberId}/availability` | `200` med dagens tidsbudget |
 | `GET` | `/api/households/{householdId}/members/{memberId}/plan?date=` | `200` med Min dag |
+
+`memberId` i vägen ovan var redan fritt valbart bland hushållets egna medlemmar - endpointen
+kräver bara att anroparen tillhör hushållet, inte att `memberId` är anroparens eget. "Tjuvkika
+på ett schema" (Min dag) är därför ett rent klient-tillägg: en medlem- och dagväljare
+(`?date=` accepterar redan valfritt datum) som återanvänder samma anrop skrivskyddat - inga
+bock- eller uppskjut-knappar, se `MinDag.razor`s `_peekDay`. Ett datum i framtiden (t.ex.
+imorgon) genererar också dagens utestående förfallna uppgifter i samma veva, eftersom
+`GetDailyPlan` skickar det efterfrågade datumet rakt in i `EnsureOccurrencesGenerated` som
+"idag" - se dess egen kommentar om varför det är avsiktligt begränsat till ett håll (upp till
+angivet datum), inte en bakgrundsprocess som springer långt före verkligheten.
 
 Enum-värden serialiseras som namn, inte siffror: en klient som läser
 `"ExceedsRemainingTime"` behöver ingen uppslagstabell, och en ny enum-medlem kan inte tyst

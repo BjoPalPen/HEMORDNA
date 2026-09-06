@@ -201,4 +201,63 @@ public class EnsureOccurrencesGeneratedTests
         var last = await _assignments.FindMostRecentAsync(household.Id, definition.Id, CancellationToken.None);
         Assert.Equal(bjorn.Id, last!.MemberId);
     }
+
+    [Fact]
+    public async Task Many_new_rotating_tasks_created_together_split_evenly_between_equally_available_members()
+    {
+        // The actual production bug this fixes: setting up Områden creates dozens of rotating
+        // task definitions in one sitting, all due on the same day with no assignment history
+        // yet - the old "no history -> earliest-joined member" fallback sent every single one
+        // of them to the same person. See docs/ARCHITECTURE.md §6.
+        var household = await new CreateHousehold(_households, new FixedTimeProvider(Now))
+            .HandleAsync("Familjen", Guid.NewGuid(), "Anna", CancellationToken.None);
+        var anna = household.Members.Single();
+        anna.ChangeWeeklyTimeBudget(WeeklyTimeBudget.Uniform(30));
+        var bjorn = household.AddMember("Bjorn", WeeklyTimeBudget.Uniform(30), Now.AddMinutes(1));
+        await _households.UpdateAsync(household, CancellationToken.None);
+
+        for (var i = 0; i < 10; i++)
+        {
+            var definition = TaskDefinition.Create(household.Id, $"Uppgift {i}", 20, Now);
+            definition.SetRecurrence(RecurrenceRule.Daily(Monday));
+            definition.SetRotatingResponsibility(true);
+            _definitions.Seed(definition);
+        }
+
+        await CreateUseCase().HandleAsync(household.Id, Monday, CancellationToken.None);
+
+        var totals = await _assignments.GetAssignedMinutesByMemberAsync(household.Id, CancellationToken.None);
+        Assert.Equal(100, totals[anna.Id]);
+        Assert.Equal(100, totals[bjorn.Id]);
+    }
+
+    [Fact]
+    public async Task Rotation_favors_the_member_with_more_available_time()
+    {
+        var household = await new CreateHousehold(_households, new FixedTimeProvider(Now))
+            .HandleAsync("Familjen", Guid.NewGuid(), "Anna", CancellationToken.None);
+        var anna = household.Members.Single();
+        anna.ChangeWeeklyTimeBudget(WeeklyTimeBudget.Uniform(60 / 7)); // works full time: little time to spare
+        var bjorn = household.AddMember(
+            "Bjorn", WeeklyTimeBudget.Uniform(300 / 7), Now.AddMinutes(1)); // retired: five times the free time
+        await _households.UpdateAsync(household, CancellationToken.None);
+
+        for (var i = 0; i < 10; i++)
+        {
+            var definition = TaskDefinition.Create(household.Id, $"Uppgift {i}", 20, Now);
+            definition.SetRecurrence(RecurrenceRule.Daily(Monday));
+            definition.SetRotatingResponsibility(true);
+            _definitions.Seed(definition);
+        }
+
+        await CreateUseCase().HandleAsync(household.Id, Monday, CancellationToken.None);
+
+        var totals = await _assignments.GetAssignedMinutesByMemberAsync(household.Id, CancellationToken.None);
+
+        // Five times the free time should mean noticeably more of the rotating work - not
+        // exactly 5x (the picks are discrete, and both start tied at zero), but not a close
+        // split either.
+        Assert.True(totals[bjorn.Id] > totals.GetValueOrDefault(anna.Id));
+        Assert.True(totals[bjorn.Id] >= totals.GetValueOrDefault(anna.Id) * 2);
+    }
 }

@@ -189,6 +189,73 @@ else
                         </button>
                     </EditForm>
                 </details>
+
+                <details class="more-options" @ontoggle="OnPeekToggled">
+                    <summary>Tjuvkika på ett schema</summary>
+                    <p class="muted small">
+                        En titt på i morgon, eller på någon annans dag - bara för att se, inget
+                        går att bocka av eller skjuta upp härifrån.
+                    </p>
+
+                    @if (_householdMembers is { Count: > 0 })
+                    {
+                        <label class="field">
+                            <span>Vems dag?</span>
+                            <select @bind="_peekMemberId" @bind:after="LoadPeekDayAsync">
+                                @foreach (var member in _householdMembers)
+                                {
+                                    <option value="@member.Id">
+                                        @(member.Id == Session.Me!.MemberId ? "Jag" : member.DisplayName)
+                                    </option>
+                                }
+                            </select>
+                        </label>
+
+                        <label class="field">
+                            <span>Vilken dag?</span>
+                            <select @bind="_peekDayOffset" @bind:after="LoadPeekDayAsync">
+                                <option value="0">Idag</option>
+                                <option value="1">Imorgon</option>
+                            </select>
+                        </label>
+
+                        @if (_peekBusy)
+                        {
+                            <p class="muted small">Hämtar...</p>
+                        }
+                        else if (_peekDay is { } peekDay)
+                        {
+                            @if (peekDay.Items.Count == 0 && peekDay.Completed.Count == 0)
+                            {
+                                <div class="notice">Inget inplanerat den dagen.</div>
+                            }
+                            else
+                            {
+                                <ul class="task-list" aria-label="Tjuvkikad dag">
+                                    @foreach (var done in peekDay.Completed)
+                                    {
+                                        <li class="task task-done">
+                                            <span class="task-check task-check-done" aria-hidden="true">✓</span>
+                                            <span class="task-name">@done.Name</span>
+                                        </li>
+                                    }
+                                    @foreach (var item in peekDay.Items)
+                                    {
+                                        <li class="task">
+                                            <span class="task-name">
+                                                @item.Name
+                                                @if (item.AreaName is { } peekArea)
+                                                {
+                                                    <span class="chip">@peekArea</span>
+                                                }
+                                            </span>
+                                        </li>
+                                    }
+                                </ul>
+                            }
+                        }
+                    }
+                </details>
             }
         </div>
 
@@ -216,6 +283,12 @@ else
     private readonly ExtraTaskForm _extraForm = new();
     private string? _extraTaskMessage;
     private bool _extraTaskBusy;
+
+    private IReadOnlyList<HouseholdMemberResponse>? _householdMembers;
+    private Guid _peekMemberId;
+    private int _peekDayOffset;
+    private DailyPlanResponse? _peekDay;
+    private bool _peekBusy;
 
     // "Bild + text" - an individual preference (PRODUCT.md §7), not a household setting.
     private bool ShowIcons => _presentation == "ImageAndText";
@@ -407,6 +480,42 @@ else
         finally
         {
             _extraTaskBusy = false;
+        }
+    }
+
+    /// <summary>
+    /// Loads the household's member list the first time the "Tjuvkika" details is opened,
+    /// rather than on every visit to Min dag - most people will never open it.
+    /// </summary>
+    private async Task OnPeekToggled()
+    {
+        if (_householdMembers is not null || Session.Me is not { HouseholdId: { } householdId, MemberId: { } memberId })
+        {
+            return;
+        }
+
+        var household = await Api.GetHouseholdAsync(householdId);
+        _householdMembers = household?.Members.Where(member => member.IsActive).ToList() ?? [];
+        _peekMemberId = memberId;
+        await LoadPeekDayAsync();
+    }
+
+    private async Task LoadPeekDayAsync()
+    {
+        if (Session.Me is not { HouseholdId: { } householdId } || _peekMemberId == Guid.Empty)
+        {
+            return;
+        }
+
+        _peekBusy = true;
+
+        try
+        {
+            _peekDay = await Api.GetDailyPlanAsync(householdId, _peekMemberId, Today.AddDays(_peekDayOffset));
+        }
+        finally
+        {
+            _peekBusy = false;
         }
     }
 }

@@ -50,6 +50,12 @@ public sealed class EnsureOccurrencesGenerated
 
         var definitions = await _definitions.ListByHouseholdAsync(householdId, cancellationToken);
 
+        // A mutable snapshot, updated in place as each rotating pick is made below - see
+        // RotationPicker's remarks on why this must reflect the whole batch, not just what is
+        // already in the database when this method started.
+        var assignedMinutesByMember = new Dictionary<Guid, int>(
+            await _assignments.GetAssignedMinutesByMemberAsync(householdId, cancellationToken));
+
         foreach (var definition in definitions)
         {
             if (!definition.IsActive)
@@ -59,11 +65,13 @@ public sealed class EnsureOccurrencesGenerated
 
             if (definition.Recurrence is { } recurrence)
             {
-                await GenerateOnScheduleAsync(household, definition, recurrence, today, cancellationToken);
+                await GenerateOnScheduleAsync(
+                    household, definition, recurrence, today, assignedMinutesByMember, cancellationToken);
             }
             else if (definition.StaleAfterDays is { } staleAfterDays)
             {
-                await GenerateIfStaleAsync(household, definition, staleAfterDays, today, cancellationToken);
+                await GenerateIfStaleAsync(
+                    household, definition, staleAfterDays, today, assignedMinutesByMember, cancellationToken);
             }
         }
     }
@@ -73,6 +81,7 @@ public sealed class EnsureOccurrencesGenerated
         TaskDefinition definition,
         RecurrenceRule recurrence,
         DateOnly today,
+        Dictionary<Guid, int> assignedMinutesByMember,
         CancellationToken cancellationToken)
     {
         var lastDate = await _occurrences.FindMostRecentOriginalDateAsync(
@@ -83,7 +92,8 @@ public sealed class EnsureOccurrencesGenerated
 
         while (next <= today && generated < MaxCatchUpPerDefinition)
         {
-            await ScheduleGeneratedOccurrenceAsync(household, definition, next, cancellationToken);
+            await ScheduleGeneratedOccurrenceAsync(
+                household, definition, next, assignedMinutesByMember, cancellationToken);
             generated++;
             next = recurrence.NextOnOrAfter(next.AddDays(1));
         }
@@ -98,6 +108,7 @@ public sealed class EnsureOccurrencesGenerated
         TaskDefinition definition,
         int staleAfterDays,
         DateOnly today,
+        Dictionary<Guid, int> assignedMinutesByMember,
         CancellationToken cancellationToken)
     {
         if (await _occurrences.HasOutstandingAsync(household.Id, definition.Id, cancellationToken))
@@ -117,13 +128,14 @@ public sealed class EnsureOccurrencesGenerated
             return;
         }
 
-        await ScheduleGeneratedOccurrenceAsync(household, definition, today, cancellationToken);
+        await ScheduleGeneratedOccurrenceAsync(household, definition, today, assignedMinutesByMember, cancellationToken);
     }
 
     private async Task ScheduleGeneratedOccurrenceAsync(
         Household household,
         TaskDefinition definition,
         DateOnly date,
+        Dictionary<Guid, int> assignedMinutesByMember,
         CancellationToken cancellationToken)
     {
         var occurrence = definition.ScheduleFor(date, _timeProvider.GetUtcNow());
@@ -131,16 +143,18 @@ public sealed class EnsureOccurrencesGenerated
 
         if (definition.HasRotatingResponsibility)
         {
-            var last = await _assignments.FindMostRecentAsync(
-                household.Id, definition.Id, cancellationToken);
-            memberId = RotationPicker.PickNext(household, definition, last);
+            memberId = RotationPicker.PickNext(household, definition, assignedMinutesByMember);
 
             if (memberId is { } rotatingMemberId)
             {
                 await _assignments.AddAsync(
                     TaskAssignment.Create(
-                        household.Id, definition.Id, rotatingMemberId, date, _timeProvider.GetUtcNow()),
+                        household.Id, definition.Id, rotatingMemberId, date, _timeProvider.GetUtcNow(),
+                        definition.EstimatedMinutes),
                     cancellationToken);
+
+                assignedMinutesByMember[rotatingMemberId] =
+                    assignedMinutesByMember.GetValueOrDefault(rotatingMemberId) + definition.EstimatedMinutes;
             }
         }
 

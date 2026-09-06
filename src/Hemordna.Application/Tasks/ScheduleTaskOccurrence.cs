@@ -70,15 +70,18 @@ public sealed class ScheduleTaskOccurrence
 
                 if (household is not null)
                 {
-                    var last = await _assignments.FindMostRecentAsync(householdId, taskDefinitionId, cancellationToken);
-                    memberId = RotationPicker.PickNext(household, definition, last);
+                    var assignedMinutesByMember = await _assignments.GetAssignedMinutesByMemberAsync(
+                        householdId, cancellationToken);
+                    memberId = RotationPicker.PickNext(household, definition, assignedMinutesByMember);
                 }
             }
 
             if (memberId is { } rotatingMemberId)
             {
                 await _assignments.AddAsync(
-                    TaskAssignment.Create(householdId, taskDefinitionId, rotatingMemberId, date, _timeProvider.GetUtcNow()),
+                    TaskAssignment.Create(
+                        householdId, taskDefinitionId, rotatingMemberId, date, _timeProvider.GetUtcNow(),
+                        definition.EstimatedMinutes),
                     cancellationToken);
             }
         }

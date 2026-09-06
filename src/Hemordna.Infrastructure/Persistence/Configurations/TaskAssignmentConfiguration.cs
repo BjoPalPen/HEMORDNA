@@ -21,12 +21,16 @@ internal sealed class TaskAssignmentConfiguration : IEntityTypeConfiguration<Tas
         builder.Property(assignment => assignment.MemberId).IsRequired();
         builder.Property(assignment => assignment.ScheduledDate).IsRequired();
         builder.Property(assignment => assignment.CreatedAt).IsRequired();
+        builder.Property(assignment => assignment.EstimatedMinutes).IsRequired();
 
         // Rotation always asks for "the most recent assignment for this definition" - the
         // natural query this history exists to serve.
         builder.HasIndex(assignment => new { assignment.TaskDefinitionId, assignment.ScheduledDate });
 
         builder.HasIndex(assignment => assignment.HouseholdId);
+
+        // RotationPicker's fairness query: total assigned minutes per member, household-wide.
+        builder.HasIndex(assignment => new { assignment.HouseholdId, assignment.MemberId });
 
         builder.HasOne<TaskDefinition>()
             .WithMany()

@@ -16,7 +16,8 @@ public sealed class TaskAssignment
         Guid taskDefinitionId,
         Guid memberId,
         DateOnly scheduledDate,
-        DateTimeOffset createdAt)
+        DateTimeOffset createdAt,
+        int estimatedMinutes)
     {
         Id = id;
         HouseholdId = householdId;
@@ -24,6 +25,7 @@ public sealed class TaskAssignment
         MemberId = memberId;
         ScheduledDate = scheduledDate;
         CreatedAt = createdAt;
+        EstimatedMinutes = estimatedMinutes;
     }
 
     public Guid Id { get; private set; }
@@ -39,17 +41,28 @@ public sealed class TaskAssignment
 
     public DateTimeOffset CreatedAt { get; private set; }
 
+    /// <summary>
+    /// Snapshot of the definition's estimated time when this assignment was made - same
+    /// reasoning as <see cref="TaskOccurrence"/>'s own snapshots: a later edit to the
+    /// definition's estimate must not retroactively change how much load this assignment
+    /// counted for when <see cref="RotationPicker"/> balances work across members.
+    /// </summary>
+    public int EstimatedMinutes { get; private set; }
+
     public static TaskAssignment Create(
         Guid householdId,
         Guid taskDefinitionId,
         Guid memberId,
         DateOnly scheduledDate,
-        DateTimeOffset createdAt)
+        DateTimeOffset createdAt,
+        int estimatedMinutes)
     {
         Guard.AgainstEmpty(householdId, nameof(householdId));
         Guard.AgainstEmpty(taskDefinitionId, nameof(taskDefinitionId));
         Guard.AgainstEmpty(memberId, nameof(memberId));
+        Guard.AgainstNegative(estimatedMinutes, nameof(estimatedMinutes));
 
-        return new TaskAssignment(Guid.NewGuid(), householdId, taskDefinitionId, memberId, scheduledDate, createdAt);
+        return new TaskAssignment(
+            Guid.NewGuid(), householdId, taskDefinitionId, memberId, scheduledDate, createdAt, estimatedMinutes);
     }
 }

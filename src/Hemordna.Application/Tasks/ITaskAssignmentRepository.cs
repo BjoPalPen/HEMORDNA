@@ -12,4 +12,14 @@ public interface ITaskAssignmentRepository
         Guid householdId,
         Guid taskDefinitionId,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Total assigned minutes per member, summed across every assignment this household has
+    /// ever recorded - what <see cref="RotationPicker"/> weighs against each member's
+    /// available time to decide who is next. A member with no assignments yet is simply absent
+    /// from the result, not present with zero.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, int>> GetAssignedMinutesByMemberAsync(
+        Guid householdId,
+        CancellationToken cancellationToken);
 }

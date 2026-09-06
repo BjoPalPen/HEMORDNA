@@ -14,18 +14,24 @@ public class TaskAssignmentTests
         var taskDefinitionId = Guid.NewGuid();
         var memberId = Guid.NewGuid();
 
-        var assignment = TaskAssignment.Create(householdId, taskDefinitionId, memberId, Monday, Now);
+        var assignment = TaskAssignment.Create(householdId, taskDefinitionId, memberId, Monday, Now, 20);
 
         Assert.Equal(householdId, assignment.HouseholdId);
         Assert.Equal(taskDefinitionId, assignment.TaskDefinitionId);
         Assert.Equal(memberId, assignment.MemberId);
         Assert.Equal(Monday, assignment.ScheduledDate);
         Assert.Equal(Now, assignment.CreatedAt);
+        Assert.Equal(20, assignment.EstimatedMinutes);
         Assert.NotEqual(Guid.Empty, assignment.Id);
     }
 
     [Fact]
     public void Rejects_an_empty_member_id()
         => Assert.Throws<ArgumentException>(
-            () => TaskAssignment.Create(Guid.NewGuid(), Guid.NewGuid(), Guid.Empty, Monday, Now));
+            () => TaskAssignment.Create(Guid.NewGuid(), Guid.NewGuid(), Guid.Empty, Monday, Now, 20));
+
+    [Fact]
+    public void Rejects_a_negative_estimate()
+        => Assert.Throws<ArgumentOutOfRangeException>(
+            () => TaskAssignment.Create(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), Monday, Now, -1));
 }

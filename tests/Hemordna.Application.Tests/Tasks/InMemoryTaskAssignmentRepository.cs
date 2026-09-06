@@ -21,4 +21,11 @@ internal sealed class InMemoryTaskAssignmentRepository : ITaskAssignmentReposito
             .Where(a => a.HouseholdId == householdId && a.TaskDefinitionId == taskDefinitionId)
             .OrderByDescending(a => a.ScheduledDate)
             .FirstOrDefault());
+
+    public Task<IReadOnlyDictionary<Guid, int>> GetAssignedMinutesByMemberAsync(
+        Guid householdId, CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyDictionary<Guid, int>>(_assignments
+            .Where(a => a.HouseholdId == householdId)
+            .GroupBy(a => a.MemberId)
+            .ToDictionary(g => g.Key, g => g.Sum(a => a.EstimatedMinutes)));
 }
