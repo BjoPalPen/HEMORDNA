@@ -1,5 +1,6 @@
 @page "/mer"
 @inject HemordnaSession Session
+@inject NavigationManager Navigation
 
 <PageTitle>Mer – Hemordna</PageTitle>
 
@@ -25,6 +26,10 @@ else
             </li>
         }
     </ul>
+
+    <button type="button" class="btn btn-secondary btn-block" @onclick="SignOutAsync">
+        Logga ut
+    </button>
 }
 
 @code {
@@ -35,4 +40,16 @@ else
         new("hushall", "Hushåll", "⌂"),
         new("installningar", "Inställningar", "⚙")
     ];
+
+    // Every other page calls this; Mer.razor never did, so it only ever rendered past
+    // "Hämtar..." by relying on some other page having already loaded the session first in
+    // the same SPA lifetime. A hard reload or a fresh navigation straight to /mer - exactly
+    // what an installed PWA does on relaunch - left it stuck on "Hämtar..." forever.
+    protected override async Task OnInitializedAsync() => await Session.EnsureLoadedAsync();
+
+    private async Task SignOutAsync()
+    {
+        await Session.SignOutAsync();
+        Navigation.NavigateTo("logga-in");
+    }
 }

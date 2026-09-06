@@ -112,40 +112,48 @@ else
         </EditForm>
     </div>
 
-    @if (_passkeySupported)
+    @if (_passkeyCheckDone)
     {
         <div class="card">
             <h2>Biometrisk inloggning</h2>
-            <p class="muted">
-                Logga in med Face ID, Touch ID, Windows Hello eller fingeravtryck i stället för
-                lösenordet, på den här enheten.
-            </p>
 
-            @if (_passkeys is { Count: > 0 })
+            @if (!_passkeySupported)
             {
-                <ul class="list" aria-label="Registrerade enheter">
-                    @foreach (var passkey in _passkeys)
-                    {
-                        <li class="list-item">
-                            <span class="list-name">@passkey.DeviceLabel</span>
-                            <button type="button" class="btn btn-secondary"
-                                    disabled="@(_busyPasskeyId == passkey.Id)"
-                                    @onclick="() => RemovePasskeyAsync(passkey.Id)">
-                                Ta bort
-                            </button>
-                        </li>
-                    }
-                </ul>
+                <p class="muted">Den här enheten eller webbläsaren stödjer inte biometrisk inloggning.</p>
             }
-
-            @if (_passkeyMessage is { } passkeyMessage)
+            else
             {
-                <div class="notice notice-problem" role="alert">@passkeyMessage</div>
-            }
+                <p class="muted">
+                    Logga in med Face ID, Touch ID, Windows Hello eller fingeravtryck i stället för
+                    lösenordet, på den här enheten.
+                </p>
 
-            <button type="button" class="btn btn-primary" disabled="@_passkeyBusy" @onclick="AddPasskeyAsync">
-                @(_passkeyBusy ? "Ett ögonblick…" : "Lägg till den här enheten")
-            </button>
+                @if (_passkeys is { Count: > 0 })
+                {
+                    <ul class="list" aria-label="Registrerade enheter">
+                        @foreach (var passkey in _passkeys)
+                        {
+                            <li class="list-item">
+                                <span class="list-name">@passkey.DeviceLabel</span>
+                                <button type="button" class="btn btn-secondary"
+                                        disabled="@(_busyPasskeyId == passkey.Id)"
+                                        @onclick="() => RemovePasskeyAsync(passkey.Id)">
+                                    Ta bort
+                                </button>
+                            </li>
+                        }
+                    </ul>
+                }
+
+                @if (_passkeyMessage is { } passkeyMessage)
+                {
+                    <div class="notice notice-problem" role="alert">@passkeyMessage</div>
+                }
+
+                <button type="button" class="btn btn-primary" disabled="@_passkeyBusy" @onclick="AddPasskeyAsync">
+                    @(_passkeyBusy ? "Ett ögonblick…" : "Lägg till den här enheten")
+                </button>
+            }
         </div>
     }
 }
@@ -183,6 +191,7 @@ else
     private bool _passwordChanged;
 
     private bool _passkeySupported;
+    private bool _passkeyCheckDone;
     private IReadOnlyList<PasskeyResponse>? _passkeys;
     private string? _passkeyMessage;
     private bool _passkeyBusy;
@@ -193,11 +202,25 @@ else
         await Session.EnsureLoadedAsync();
         await LoadAsync();
 
-        _passkeySupported = await WebAuthn.IsAvailableAsync();
-
-        if (_passkeySupported)
+        // Never let a failure here (a flaky network call, an unsupported browser quirk) break
+        // the rest of the page - this whole block used to run unguarded and could silently take
+        // the "Byt lösenord" card above down with it if ListPasskeysAsync threw.
+        try
         {
-            _passkeys = await Api.ListPasskeysAsync();
+            _passkeySupported = await WebAuthn.IsAvailableAsync();
+
+            if (_passkeySupported)
+            {
+                _passkeys = await Api.ListPasskeysAsync();
+            }
+        }
+        catch (HttpRequestException)
+        {
+            _passkeyMessage = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _passkeyCheckDone = true;
         }
     }
 

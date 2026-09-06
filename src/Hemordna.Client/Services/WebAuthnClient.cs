@@ -19,8 +19,12 @@ public sealed class WebAuthnClient
         {
             return await _js.InvokeAsync<bool>("hemordnaWebAuthn.isAvailable");
         }
-        catch (JSException)
+        catch (Exception)
         {
+            // A capability probe must never take its caller down with it - an unsupported
+            // browser, a blocked script, or an interop hiccup should all just read as "no",
+            // not crash the page that asked. See Installningar.razor's OnInitializedAsync,
+            // which used to have exactly that failure mode.
             return false;
         }
     }
@@ -33,7 +37,7 @@ public sealed class WebAuthnClient
         {
             return await _js.InvokeAsync<string>("hemordnaWebAuthn.register", optionsJson);
         }
-        catch (JSException)
+        catch (Exception)
         {
             return null;
         }
@@ -48,7 +52,7 @@ public sealed class WebAuthnClient
         {
             return await _js.InvokeAsync<string>("hemordnaWebAuthn.authenticate", optionsJson);
         }
-        catch (JSException)
+        catch (Exception)
         {
             return null;
         }
