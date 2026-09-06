@@ -290,10 +290,11 @@ Min dag är alltid första valet och startvyn.
 
 ## 9. Logotyp
 
-Ett hus omgivet av en bladkrans, i skifferblått `#3F6191`. Signalerar hem och lugn, inte
-effektivitet.
+Ett hus omgivet av en bladkrans, i blått. Signalerar hem och lugn, inte effektivitet.
 
-Ligger i `src/Hemordna.Client/wwwroot/brand/`. Används i sidhuvud och som app-ikon.
+`logo.png` ligger i `src/Hemordna.Client/wwwroot/brand/`. Används i sidhuvud, inloggningssidan
+och laddningsskärmen. `icon-192.png`/`icon-512.png` (PWA-manifestet, hemskärmsikon) och
+`favicon.png` (webbläsarfliken) är nedskalade kopior av samma bild, direkt i `wwwroot/`.
 Byt aldrig färg på märket; placera det på ljus bakgrund.
 
 Ordbild: **Hemordna**, med underraden *Ett enklare hem, en lugnare vardag*.

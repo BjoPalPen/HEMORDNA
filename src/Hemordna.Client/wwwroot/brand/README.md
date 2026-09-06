@@ -1,9 +1,9 @@
 # Varumärkesresurser
 
-`logo.svg` är en **tolkning** av Hemordnas logotyp, ritad utifrån mockupen: hus omgivet av
-en bladkrans i skifferblått `#3F6191`.
+`logo.png` är Hemordnas logotyp: ett hus omgivet av en bladkrans, i blått. Ersätter den
+tidigare, egenritade tolkningen (`logo.svg`).
 
-Den är inte originalfilen. Ersätt den med den riktiga vektorfilen när den finns – filnamnet
-och färgen ska behållas, så behöver ingen kod ändras.
+`icon-192.png`/`icon-512.png` (i wwwroot, inte här i `brand/`) och `favicon.png` är
+nedskalade kopior av samma bild, för PWA-manifestet respektive webbläsarfliken.
 
 Riktlinjer finns i [docs/DESIGN.md](../../../../docs/DESIGN.md) §9.
