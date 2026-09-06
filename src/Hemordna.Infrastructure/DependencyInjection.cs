@@ -60,6 +60,8 @@ public static class DependencyInjection
             // this, GeneratePasswordResetTokenAsync throws instead of issuing a token.
             .AddDefaultTokenProviders();
 
+        services.AddScoped<IPasskeyCredentialStore, PasskeyCredentialStore>();
+
         services.Configure<ResendOptions>(configuration.GetSection(ResendOptions.SectionName));
         services.AddSingleton<DevEmailOutbox>();
 

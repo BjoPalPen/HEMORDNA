@@ -39,6 +39,8 @@ public sealed class HemordnaDbContext : IdentityDbContext<HemordnaUser, Identity
 
     public DbSet<MemberPreference> MemberPreferences => Set<MemberPreference>();
 
+    public DbSet<PasskeyCredential> PasskeyCredentials => Set<PasskeyCredential>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

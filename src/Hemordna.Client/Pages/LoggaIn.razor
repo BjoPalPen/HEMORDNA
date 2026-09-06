@@ -3,6 +3,7 @@
 @inject HemordnaApiClient Api
 @inject HemordnaSession Session
 @inject NavigationManager Navigation
+@inject WebAuthnClient WebAuthn
 
 <PageTitle>Logga in – Hemordna</PageTitle>
 
@@ -103,6 +104,14 @@
                     </button>
                 }
 
+                @if (_mode == Mode.SignIn && _passkeySupported)
+                {
+                    <button type="button" class="btn btn-secondary btn-block" disabled="@_busy"
+                            @onclick="LoginWithPasskeyAsync">
+                        Använd Face ID / fingeravtryck i stället
+                    </button>
+                }
+
                 @if (_messages.Count > 0)
                 {
                     <div class="notice notice-problem" role="alert">
@@ -138,6 +147,9 @@
     private Mode _mode = Mode.SignIn;
     private bool _busy;
     private bool _forgotPasswordSent;
+    private bool _passkeySupported;
+
+    protected override async Task OnInitializedAsync() => _passkeySupported = await WebAuthn.IsAvailableAsync();
 
     private void SetMode(Mode mode)
     {
@@ -187,6 +199,54 @@
             {
                 // Deliberately does not say which of the two was wrong.
                 _messages = ["E-postadressen eller lösenordet stämmer inte."];
+                return;
+            }
+
+            await Session.RefreshAsync();
+            Navigation.NavigateTo("");
+        }
+        catch (HttpRequestException)
+        {
+            _messages = ["Vi når inte servern just nu. Försök igen om en stund."];
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task LoginWithPasskeyAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_form.Email))
+        {
+            _messages = ["Ange din e-postadress först."];
+            return;
+        }
+
+        _busy = true;
+        _messages = [];
+
+        try
+        {
+            var optionsJson = await Api.GetPasskeyLoginOptionsAsync(_form.Email);
+
+            if (optionsJson is null)
+            {
+                _messages = ["Vi når inte servern just nu. Försök igen om en stund."];
+                return;
+            }
+
+            var assertionJson = await WebAuthn.AuthenticateAsync(optionsJson);
+
+            if (assertionJson is null)
+            {
+                _messages = ["Det gick inte att logga in med Face ID/fingeravtryck. Prova lösenordet i stället."];
+                return;
+            }
+
+            if (!await Api.LoginWithPasskeyAsync(_form.Email, assertionJson))
+            {
+                _messages = ["Det gick inte att logga in med Face ID/fingeravtryck. Prova lösenordet i stället."];
                 return;
             }
 

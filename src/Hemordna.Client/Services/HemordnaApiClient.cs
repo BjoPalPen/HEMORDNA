@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text;
 using Hemordna.Client.Contracts;
 
 namespace Hemordna.Client.Services;
@@ -103,6 +104,84 @@ public sealed class HemordnaApiClient
         return response.IsSuccessStatusCode
             ? []
             : await ReadProblemMessagesAsync(response, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<PasskeyResponse>> ListPasskeysAsync(CancellationToken cancellationToken = default)
+        => await GetAsync<IReadOnlyList<PasskeyResponse>>("api/auth/passkeys/", cancellationToken) ?? [];
+
+    /// <summary>The raw options JSON for <see cref="WebAuthnClient.RegisterAsync"/> - opaque
+    /// to this layer, see its own remarks.</summary>
+    public async Task<string?> GetPasskeyRegisterOptionsAsync(CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(HttpMethod.Post, "api/auth/passkeys/register/options", cancellationToken);
+        var response = await _http.SendAsync(request, cancellationToken);
+
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadAsStringAsync(cancellationToken)
+            : null;
+    }
+
+    /// <summary>Completes a passkey registration. <paramref name="attestationJson"/> is the
+    /// opaque JSON <see cref="WebAuthnClient.RegisterAsync"/> returned, sent as-is: the server
+    /// deserializes it itself, deliberately bypassing this app's own JSON options - see
+    /// PasskeyEndpoints.Fido2JsonOptions for why.</summary>
+    public async Task<IReadOnlyList<string>> VerifyPasskeyRegisterAsync(
+        string attestationJson, CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(HttpMethod.Post, "api/auth/passkeys/register/verify", cancellationToken);
+        request.Content = new StringContent(attestationJson, Encoding.UTF8, "application/json");
+
+        var response = await _http.SendAsync(request, cancellationToken);
+
+        return response.IsSuccessStatusCode
+            ? []
+            : await ReadProblemMessagesAsync(response, cancellationToken);
+    }
+
+    public async Task<bool> DeletePasskeyAsync(string credentialId, CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(HttpMethod.Delete, $"api/auth/passkeys/{credentialId}", cancellationToken);
+        var response = await _http.SendAsync(request, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
+    /// <summary>The raw options JSON for <see cref="WebAuthnClient.AuthenticateAsync"/> - null
+    /// only on a network problem, never to signal "unknown e-mail" (see PasskeyEndpoints).</summary>
+    public async Task<string?> GetPasskeyLoginOptionsAsync(string email, CancellationToken cancellationToken = default)
+    {
+        var response = await _http.PostAsJsonAsync("api/auth/passkeys/login/options", new { email }, cancellationToken);
+
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadAsStringAsync(cancellationToken)
+            : null;
+    }
+
+    /// <summary>Signs in with a passkey and stores the token, mirroring
+    /// <see cref="LoginAsync(string, string, CancellationToken)"/>. <paramref name="assertionJson"/> is the
+    /// opaque JSON <see cref="WebAuthnClient.AuthenticateAsync"/> returned, sent as-is - see
+    /// VerifyPasskeyRegisterAsync's remarks.</summary>
+    public async Task<bool> LoginWithPasskeyAsync(
+        string email, string assertionJson, CancellationToken cancellationToken = default)
+    {
+        var response = await _http.PostAsync(
+            $"api/auth/passkeys/login/verify?email={Uri.EscapeDataString(email)}",
+            new StringContent(assertionJson, Encoding.UTF8, "application/json"),
+            cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            return false;
+        }
+
+        var token = await response.Content.ReadFromJsonAsync<AccessTokenResponse>(cancellationToken);
+
+        if (token is null)
+        {
+            return false;
+        }
+
+        await _tokens.SetAsync(token.Token);
+        return true;
     }
 
     public async Task SignOutAsync() => await _tokens.ClearAsync();

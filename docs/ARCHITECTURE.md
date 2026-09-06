@@ -243,6 +243,32 @@ claim** – den skulle bli gammal i samma stund medlemskapet ändras. Den slås 
   `Development`) – det är så lokala körningar och E2E-tester återställningsflödet utan ett
   riktigt Resend-konto.
 
+### Passkeys (WebAuthn)
+
+Ett alternativ till lösenord, aldrig en ersättning – registreras bara från en redan
+inloggad session (Inställningar), inte vid kontoregistrering.
+
+- `Fido2NetLib` (paket `Fido2`) sköter själva WebAuthn-ceremonin. `Fido2:ServerDomain`/
+  `Fido2:Origin` (miljövariabler i produktion, se docker-compose.prod.yml) MÅSTE matcha sidans
+  verkliga ursprung exakt – webbläsaren avvisar annars ceremonin. Standardvärdet i kod pekar på
+  `http://localhost:5200`, samma som E2E-fixturens klient, medvetet skilt från `App:PublicUrl`.
+- `PasskeyCredentials`-tabellen lagrar bara credential-id + publik nyckel + en räknare per
+  registrerad enhet – den privata nyckeln lämnar aldrig personens enhet.
+- Varje ceremoni är två anrop (utmaning, sedan svar); utmaningen mellanlagras i `IMemoryCache`
+  några minuter (en instans räcker, se ovan) – se `PasskeyEndpoints`.
+- **Viktig fälla**: `Results.Ok(options)` fungerar INTE för Fido2NetLibs egna typer – appens
+  globalt registrerade `JsonStringEnumConverter` (ConfigureHttpJsonOptions i Program.cs)
+  krockar med Fido2NetLibs egna per-property `[JsonConverter]`-attribut och producerar fel
+  wire-värden (`"None"` i stället för `"none"`, `"PublicKey"` i stället för `"public-key"`).
+  Utgående svar använder därför Fido2NetLibs egen `.ToJson()`; inkommande attestation/assertion
+  läses som rå request body och deserialiseras med en egen, omodifierad `JsonSerializerOptions`
+  – aldrig som en bunden minimal-API-parameter av typen ovanpå appens globala JSON-inställningar.
+- `wwwroot/js/webauthn.js` + `Hemordna.Client.Services.WebAuthnClient` konverterar mellan
+  webbläsarens `ArrayBuffer`-baserade WebAuthn-API och base64url-strängarna Fido2NetLib
+  förväntar sig.
+- E2E-testerna (`PasskeyTests.cs`) driver en riktig ceremoni via Chromiums virtuella
+  autentiserare (CDP:s `WebAuthn`-domän) – ingen riktig Face ID/Touch ID-hårdvara behövs.
+
 ### Håndhävande av scoping
 
 `HouseholdAccessFilter` är ett endpoint-filter på routegruppen
@@ -446,6 +472,12 @@ Allt under `/api/households/{householdId}` kräver token och körs bakom
 | `POST` | `/api/auth/forgot-password` | `200` alltid (se ovan). Anonym |
 | `POST` | `/api/auth/reset-password` | `200`, annars `400` med felmeddelanden. Anonym |
 | `POST` | `/api/auth/change-password` | `200`, annars `400`/`401`. Kräver token |
+| `GET` | `/api/auth/passkeys` | Lista registrerade passkeys. Kräver token |
+| `POST` | `/api/auth/passkeys/register/options` | Utmaning för att registrera en passkey. Kräver token |
+| `POST` | `/api/auth/passkeys/register/verify` | `200`, annars `400`. Kräver token |
+| `DELETE` | `/api/auth/passkeys/{credentialId}` | `200`, annars `404`. Kräver token |
+| `POST` | `/api/auth/passkeys/login/options` | Utmaning för att logga in med en passkey. Anonym |
+| `POST` | `/api/auth/passkeys/login/verify?email=` | `200` med bearer-token, annars `401`. Anonym |
 | `GET` | `/api/me` | Den inloggades identitet och hushållstillhörighet |
 | `POST` | `/api/households` | `201` med den skapade resursen, `409` om användaren redan har ett hushåll |
 | `GET` | `/api/households/{householdId}` | `200`, annars `404` |

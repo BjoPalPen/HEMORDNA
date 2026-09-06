@@ -10,6 +10,7 @@ using Hemordna.Application.Realtime;
 using Hemordna.Application.Tasks;
 using Hemordna.Infrastructure;
 using Hemordna.Infrastructure.Email;
+using Fido2NetLib;
 using Hemordna.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
@@ -124,6 +125,24 @@ if (!string.IsNullOrWhiteSpace(dataProtectionKeyPath))
         .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeyPath));
 }
 
+// Passkeys (WebAuthn). Origin/domain default to the E2E fixture's own localhost:5200 - a
+// browser rejects any RP ID that isn't a registrable domain suffix of the page's real origin,
+// so these must be overridden in production (see docker-compose.prod.yml) to match
+// app.hemordna.se, and can never be the same "App:PublicUrl" default used for reset-e-mail
+// links above, which stays production-shaped even in local dev.
+var fido2Origin = builder.Configuration["Fido2:Origin"] ?? "http://localhost:5200";
+var fido2Domain = builder.Configuration["Fido2:ServerDomain"] ?? new Uri(fido2Origin).Host;
+builder.Services.AddSingleton<IFido2>(new Fido2(new Fido2Configuration
+{
+    ServerDomain = fido2Domain,
+    ServerName = "Hemordna",
+    Origins = new HashSet<string> { fido2Origin }
+}));
+// Bridges the two calls each passkey ceremony needs (options, then verify): the challenge
+// issued in the first call must be re-checked, unmodified, in the second. A short-lived cache
+// entry is enough for that - see PasskeyEndpoints.
+builder.Services.AddMemoryCache();
+
 builder.Services.AddExceptionHandler<DomainExceptionHandler>();
 builder.Services.AddProblemDetails();
 
@@ -189,6 +208,7 @@ app.UseAuthorization();
 app.MapHealthChecks("/health").AllowAnonymous();
 
 app.MapAuthEndpoints();
+app.MapPasskeyEndpoints();
 app.MapHouseholdEndpoints();
 app.MapHub<HouseholdHub>("/hubs/household").RequireAuthorization();
 

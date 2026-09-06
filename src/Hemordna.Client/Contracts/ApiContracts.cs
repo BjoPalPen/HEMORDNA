@@ -6,6 +6,8 @@ namespace Hemordna.Client.Contracts;
 /// </summary>
 public sealed record AccessTokenResponse(string Token, DateTimeOffset ExpiresAt);
 
+public sealed record PasskeyResponse(string Id, string DeviceLabel, DateTimeOffset CreatedAt);
+
 public sealed record MeResponse(
     Guid UserId,
     string Email,

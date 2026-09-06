@@ -1,6 +1,7 @@
 @page "/installningar"
 @inject HemordnaApiClient Api
 @inject HemordnaSession Session
+@inject WebAuthnClient WebAuthn
 
 <PageTitle>Inställningar – Hemordna</PageTitle>
 
@@ -110,6 +111,43 @@ else
             </button>
         </EditForm>
     </div>
+
+    @if (_passkeySupported)
+    {
+        <div class="card">
+            <h2>Biometrisk inloggning</h2>
+            <p class="muted">
+                Logga in med Face ID, Touch ID, Windows Hello eller fingeravtryck i stället för
+                lösenordet, på den här enheten.
+            </p>
+
+            @if (_passkeys is { Count: > 0 })
+            {
+                <ul class="list" aria-label="Registrerade enheter">
+                    @foreach (var passkey in _passkeys)
+                    {
+                        <li class="list-item">
+                            <span class="list-name">@passkey.DeviceLabel</span>
+                            <button type="button" class="btn btn-secondary"
+                                    disabled="@(_busyPasskeyId == passkey.Id)"
+                                    @onclick="() => RemovePasskeyAsync(passkey.Id)">
+                                Ta bort
+                            </button>
+                        </li>
+                    }
+                </ul>
+            }
+
+            @if (_passkeyMessage is { } passkeyMessage)
+            {
+                <div class="notice notice-problem" role="alert">@passkeyMessage</div>
+            }
+
+            <button type="button" class="btn btn-primary" disabled="@_passkeyBusy" @onclick="AddPasskeyAsync">
+                @(_passkeyBusy ? "Ett ögonblick…" : "Lägg till den här enheten")
+            </button>
+        </div>
+    }
 }
 
 @code {
@@ -144,10 +182,23 @@ else
     private bool _passwordBusy;
     private bool _passwordChanged;
 
+    private bool _passkeySupported;
+    private IReadOnlyList<PasskeyResponse>? _passkeys;
+    private string? _passkeyMessage;
+    private bool _passkeyBusy;
+    private string? _busyPasskeyId;
+
     protected override async Task OnInitializedAsync()
     {
         await Session.EnsureLoadedAsync();
         await LoadAsync();
+
+        _passkeySupported = await WebAuthn.IsAvailableAsync();
+
+        if (_passkeySupported)
+        {
+            _passkeys = await Api.ListPasskeysAsync();
+        }
     }
 
     private async Task LoadAsync()
@@ -225,6 +276,75 @@ else
         finally
         {
             _passwordBusy = false;
+        }
+    }
+
+    private async Task AddPasskeyAsync()
+    {
+        _passkeyBusy = true;
+        _passkeyMessage = null;
+
+        try
+        {
+            var optionsJson = await Api.GetPasskeyRegisterOptionsAsync();
+
+            if (optionsJson is null)
+            {
+                _passkeyMessage = "Vi når inte servern just nu. Försök igen om en stund.";
+                return;
+            }
+
+            var attestationJson = await WebAuthn.RegisterAsync(optionsJson);
+
+            if (attestationJson is null)
+            {
+                _passkeyMessage = "Det gick inte att lägga till enheten.";
+                return;
+            }
+
+            var errors = await Api.VerifyPasskeyRegisterAsync(attestationJson);
+
+            if (errors.Count > 0)
+            {
+                _passkeyMessage = errors[0];
+                return;
+            }
+
+            _passkeys = await Api.ListPasskeysAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _passkeyMessage = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _passkeyBusy = false;
+        }
+    }
+
+    private async Task RemovePasskeyAsync(string credentialId)
+    {
+        _busyPasskeyId = credentialId;
+        _passkeyMessage = null;
+
+        try
+        {
+            if (await Api.DeletePasskeyAsync(credentialId))
+            {
+                _passkeys = await Api.ListPasskeysAsync();
+            }
+            else
+            {
+                _passkeyMessage = "Det gick inte att ta bort enheten. Försök igen.";
+            }
+        }
+        catch (HttpRequestException)
+        {
+            _passkeyMessage = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _busyPasskeyId = null;
         }
     }
 }
