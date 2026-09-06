@@ -1,5 +1,6 @@
 @page "/"
 @implements IDisposable
+@using Hemordna.Client.Support
 @inject HemordnaApiClient Api
 @inject HemordnaSession Session
 @inject NavigationManager Navigation
@@ -46,6 +47,10 @@ else
                         {
                             <li class="task task-done">
                                 <span class="task-check task-check-done" aria-hidden="true">✓</span>
+                                @if (ShowIcons)
+                                {
+                                    <img class="task-icon" src="@IconSrc(done.Name, done.AreaName)" alt="" width="24" height="24" />
+                                }
                                 <span class="task-name">
                                     @done.Name
                                     @if (done.AreaName is { } doneArea)
@@ -68,6 +73,11 @@ else
                                         aria-label="@($"Markera {item.Name} som klar")"
                                         disabled="@(_busyOccurrence == item.OccurrenceId)"
                                         @onclick="() => CompleteAsync(item.OccurrenceId)"></button>
+
+                                @if (ShowIcons)
+                                {
+                                    <img class="task-icon" src="@IconSrc(item.Name, item.AreaName)" alt="" width="24" height="24" />
+                                }
 
                                 <span class="task-name">
                                     @item.Name
@@ -125,6 +135,10 @@ else
                             @foreach (var task in _day.Unplanned)
                             {
                                 <li class="task task-rest">
+                                    @if (ShowIcons)
+                                    {
+                                        <img class="task-icon" src="@IconSrc(task.Name, task.AreaName)" alt="" width="24" height="24" />
+                                    }
                                     <span class="task-name">
                                         @task.Name
                                         @if (task.AreaName is { } unplannedArea)
@@ -153,6 +167,12 @@ else
     private DailyPlanResponse? _day;
     private Guid? _busyOccurrence;
     private Guid? _expandedOccurrence;
+    private string? _presentation;
+
+    // "Bild + text" - an individual preference (PRODUCT.md §7), not a household setting.
+    private bool ShowIcons => _presentation == "ImageAndText";
+
+    private static string IconSrc(string taskName, string? areaName) => $"icons/tasks/{TaskIcons.For(taskName, areaName)}.svg";
 
     // The date is resolved from an injected clock here at the edge; nothing below reads one.
     // TimeProvider rather than DateTime.Now so the page can be rendered at a fixed date.
@@ -195,8 +215,11 @@ else
 
         await LoadDayAsync();
 
-        if (Session.Me is { HouseholdId: { } householdId })
+        if (Session.Me is { HouseholdId: { } householdId, MemberId: { } memberId })
         {
+            var preference = await Api.GetPreferenceAsync(householdId, memberId);
+            _presentation = preference?.Presentation;
+
             Realtime.OccurrencesChanged += OnOccurrencesChanged;
             await Realtime.ConnectAsync(householdId);
         }

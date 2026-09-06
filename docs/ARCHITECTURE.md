@@ -192,13 +192,21 @@ som tidigare, bara sant lagrat i stället för återskapat via gissning.
 rundresetiden till servern helt i onödan, eftersom de inte beror på varandra, och gjorde ett
 redan tajmningskänsligt E2E-test (`HushallTests.Changing_a_members_role_...`) flakigare.
 
-### Beslut: `MemberPreference` — `IMPLEMENTED` (domän och API) / `PROPOSED` (UI)
+### Beslut: `MemberPreference` — `IMPLEMENTED`
 
 Individuell presentation (`PresentationMode`: text / bild+text / stor text / en uppgift åt
 gången, plus `ImageOnly`/`ReadAloud` förberedda) och motivationsnivå (`MotivationLevel`: Ingen
 / Lugn) finns som `MemberPreference`, en rad per medlem, satt via
-`PUT .../members/{id}/preferences`. En egen inställningssida i klienten är medvetet
-uppskjuten - se HANDOFF.md.
+`PUT .../members/{id}/preferences` och redigerbar i `Installningar.razor`.
+
+`ImageAndText` läses av `MinDag.razor` (`ShowIcons`): en ikon per uppgift, gissad från
+uppgiftens namn (`Hemordna.Client.Support.TaskIcons.For`) med området som reserv om inget
+nyckelord i namnet träffar. Inga riktiga foton - en fri text-uppgift som "Diska köket" har
+inget foto att matcha mot, så det blev Google Material Symbols (Apache 2.0,
+`wwwroot/icons/tasks/*.svg`, se NOTICE.txt där) i stället: självhämtade SVG:er, fungerar
+offline, ingen licens att hålla reda på per bild. Listan med nyckelord är medvetet liten - ny
+ikon krävs bara när ett vanligt förekommande ord saknar träff, inte i förväg för varje tänkbar
+uppgift.
 
 ### Identifierare
 

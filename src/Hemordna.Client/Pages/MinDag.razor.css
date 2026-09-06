@@ -62,6 +62,10 @@
     border-color: var(--color-primary);
 }
 
+.task-icon {
+    flex-shrink: 0;
+}
+
 .task-check:disabled {
     opacity: .5;
     cursor: default;
