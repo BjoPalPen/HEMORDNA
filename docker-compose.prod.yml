@@ -30,6 +30,12 @@ services:
       # Migrations har ingen dotnet-ef CLI i runtime-imagen - se Program.cs. Additiva
       # migrationer bara (CLAUDE.md), så påslaget är säkert vid varje omstart.
       RunMigrationsOnStartup: "true"
+      # Utan en Resend-nyckel loggas återställningsmejl bara till serverloggen i stället för
+      # att skickas - se LoggingEmailSender. Tomt är alltså ett giltigt, om än ofullständigt,
+      # läge innan Resend-kontot och DNS-posterna är på plats.
+      Resend__ApiKey: ${RESEND_API_KEY:-}
+      Resend__FromAddress: ${RESEND_FROM_ADDRESS:-no-reply@hemordna.se}
+      App__PublicUrl: "https://app.hemordna.se"
     expose:
       - "8080"
     networks:

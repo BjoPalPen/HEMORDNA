@@ -68,6 +68,48 @@ else
             </button>
         </div>
     }
+
+    <div class="card">
+        <h2>Byt lösenord</h2>
+
+        <EditForm Model="_passwordForm" OnValidSubmit="ChangePasswordAsync">
+            <label class="field">
+                <span>Nuvarande lösenord</span>
+                <InputText @bind-Value="_passwordForm.CurrentPassword" type="password" autocomplete="current-password" />
+            </label>
+
+            <label class="field">
+                <span>Nytt lösenord</span>
+                <InputText @bind-Value="_passwordForm.NewPassword" type="password" autocomplete="new-password" />
+            </label>
+
+            <label class="field">
+                <span>Bekräfta nytt lösenord</span>
+                <InputText @bind-Value="_passwordForm.ConfirmPassword" type="password" autocomplete="new-password" />
+            </label>
+
+            @if (_passwordChanged)
+            {
+                <div class="notice">Lösenordet är bytt.</div>
+            }
+
+            @if (_passwordMessages.Count > 0)
+            {
+                <div class="notice notice-problem" role="alert">
+                    <ul class="message-list">
+                        @foreach (var message in _passwordMessages)
+                        {
+                            <li>@message</li>
+                        }
+                    </ul>
+                </div>
+            }
+
+            <button type="submit" class="btn btn-primary" disabled="@_passwordBusy">
+                @(_passwordBusy ? "Byter..." : "Byt lösenord")
+            </button>
+        </EditForm>
+    </div>
 }
 
 @code {
@@ -85,10 +127,22 @@ else
         ("Calm", "Lugn - en vänlig kommentar då och då")
     ];
 
+    private sealed class PasswordForm
+    {
+        public string CurrentPassword { get; set; } = string.Empty;
+        public string NewPassword { get; set; } = string.Empty;
+        public string ConfirmPassword { get; set; } = string.Empty;
+    }
+
     private string? _presentation;
     private string? _motivation;
     private string? _message;
     private bool _busy;
+
+    private readonly PasswordForm _passwordForm = new();
+    private List<string> _passwordMessages = [];
+    private bool _passwordBusy;
+    private bool _passwordChanged;
 
     protected override async Task OnInitializedAsync()
     {
@@ -133,6 +187,44 @@ else
         finally
         {
             _busy = false;
+        }
+    }
+
+    private async Task ChangePasswordAsync()
+    {
+        _passwordChanged = false;
+        _passwordMessages = [];
+
+        if (_passwordForm.NewPassword != _passwordForm.ConfirmPassword)
+        {
+            _passwordMessages = ["De nya lösenorden stämmer inte överens."];
+            return;
+        }
+
+        _passwordBusy = true;
+
+        try
+        {
+            var errors = await Api.ChangePasswordAsync(_passwordForm.CurrentPassword, _passwordForm.NewPassword);
+
+            if (errors.Count > 0)
+            {
+                _passwordMessages = [.. errors];
+                return;
+            }
+
+            _passwordChanged = true;
+            _passwordForm.CurrentPassword = string.Empty;
+            _passwordForm.NewPassword = string.Empty;
+            _passwordForm.ConfirmPassword = string.Empty;
+        }
+        catch (HttpRequestException)
+        {
+            _passwordMessages = ["Vi når inte servern just nu. Försök igen om en stund."];
+        }
+        finally
+        {
+            _passwordBusy = false;
         }
     }
 }

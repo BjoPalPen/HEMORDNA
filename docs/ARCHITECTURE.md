@@ -228,6 +228,21 @@ lösenordshashning – Hemordna implementerar aldrig egen lösenordshantering.
 Token bär bara vem den anropande är. **Hushållstillhörighet ligger medvetet inte i en
 claim** – den skulle bli gammal i samma stund medlemskapet ändras. Den slås upp per anrop.
 
+### Lösenordsbyte och glömt lösenord
+
+- `POST /api/auth/change-password` (kräver inloggning) verifierar nuvarande lösenord via
+  Identitys `ChangePasswordAsync` innan det nya sparas.
+- `POST /api/auth/forgot-password` svarar `200` oavsett om adressen finns, av samma skäl som
+  login ovan. Finns kontot genereras en Identity-återställningstoken och ett mejl skickas med
+  en länk till `/aterstall-losenord`.
+- `POST /api/auth/reset-password` tar emot e-post + token + nytt lösenord och anropar
+  Identitys `ResetPasswordAsync`.
+- E-post skickas via `IEmailSender` (`Hemordna.Infrastructure.Email`). `ResendEmailSender`
+  används när `Resend:ApiKey` är satt (produktion); annars loggas mejlet till `DevEmailOutbox`
+  i stället för att skickas, och kan läsas tillbaka via `GET /api/auth/dev/last-email` (endast
+  `Development`) – det är så lokala körningar och E2E-tester återställningsflödet utan ett
+  riktigt Resend-konto.
+
 ### Håndhävande av scoping
 
 `HouseholdAccessFilter` är ett endpoint-filter på routegruppen
@@ -428,6 +443,9 @@ Allt under `/api/households/{householdId}` kräver token och körs bakom
 | `GET` | `/health` | Processen och databasanslutningen. Anonym |
 | `POST` | `/api/auth/register` | `201` med bearer-token. Anonym |
 | `POST` | `/api/auth/login` | `200` med bearer-token, annars `401`. Anonym |
+| `POST` | `/api/auth/forgot-password` | `200` alltid (se ovan). Anonym |
+| `POST` | `/api/auth/reset-password` | `200`, annars `400` med felmeddelanden. Anonym |
+| `POST` | `/api/auth/change-password` | `200`, annars `400`/`401`. Kräver token |
 | `GET` | `/api/me` | Den inloggades identitet och hushållstillhörighet |
 | `POST` | `/api/households` | `201` med den skapade resursen, `409` om användaren redan har ett hushåll |
 | `GET` | `/api/households/{householdId}` | `200`, annars `404` |

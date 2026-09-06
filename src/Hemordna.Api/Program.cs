@@ -9,6 +9,7 @@ using Hemordna.Application.Planning;
 using Hemordna.Application.Realtime;
 using Hemordna.Application.Tasks;
 using Hemordna.Infrastructure;
+using Hemordna.Infrastructure.Email;
 using Hemordna.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -135,6 +136,13 @@ app.UseExceptionHandler();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+
+    // Dev/test-only: no real Resend account is configured locally, so ForgotPasswordAsync logs
+    // the e-mail to DevEmailOutbox instead of sending it. This is how a local run (or an E2E
+    // test) recovers the reset link without a real inbox - see LoggingEmailSender.
+    app.MapGet("/api/auth/dev/last-email", (string email, DevEmailOutbox outbox) =>
+        outbox.LastBodyFor(email) is { } body ? Results.Text(body, "text/html") : Results.NotFound())
+        .WithTags("Auth");
 }
 
 app.UseHttpsRedirection();

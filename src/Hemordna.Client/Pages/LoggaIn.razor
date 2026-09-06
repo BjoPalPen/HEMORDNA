@@ -14,58 +14,117 @@
             <p class="muted">Ett enklare hem, en lugnare vardag</p>
         </div>
 
-        <div class="tabs" role="tablist">
-            <button type="button" role="tab" class="tab @(_mode == Mode.SignIn ? "tab-active" : "")"
-                    aria-selected="@(_mode == Mode.SignIn)" @onclick="() => SetMode(Mode.SignIn)">
-                Logga in
-            </button>
-            <button type="button" role="tab" class="tab @(_mode == Mode.Register ? "tab-active" : "")"
-                    aria-selected="@(_mode == Mode.Register)" @onclick="() => SetMode(Mode.Register)">
-                Skapa konto
-            </button>
-        </div>
+        @if (_mode != Mode.ForgotPassword)
+        {
+            <div class="tabs" role="tablist">
+                <button type="button" role="tab" class="tab @(_mode == Mode.SignIn ? "tab-active" : "")"
+                        aria-selected="@(_mode == Mode.SignIn)" @onclick="() => SetMode(Mode.SignIn)">
+                    Logga in
+                </button>
+                <button type="button" role="tab" class="tab @(_mode == Mode.Register ? "tab-active" : "")"
+                        aria-selected="@(_mode == Mode.Register)" @onclick="() => SetMode(Mode.Register)">
+                    Skapa konto
+                </button>
+            </div>
+        }
 
-        <EditForm Model="_form" OnValidSubmit="SubmitAsync">
-            @if (_mode == Mode.Register)
+        @if (_mode == Mode.ForgotPassword)
+        {
+            <h2>Glömt lösenord</h2>
+
+            @if (_forgotPasswordSent)
             {
-                <label class="field">
-                    <span>Ditt namn</span>
-                    <InputText @bind-Value="_form.DisplayName" autocomplete="name" />
-                </label>
-            }
-
-            <label class="field">
-                <span>E-post</span>
-                <InputText @bind-Value="_form.Email" type="email" autocomplete="username" />
-            </label>
-
-            <label class="field">
-                <span>Lösenord</span>
-                <InputText @bind-Value="_form.Password" type="password"
-                           autocomplete="@(_mode == Mode.Register ? "new-password" : "current-password")" />
-            </label>
-
-            @if (_messages.Count > 0)
-            {
-                <div class="notice notice-problem" role="alert">
-                    <ul class="message-list">
-                        @foreach (var message in _messages)
-                        {
-                            <li>@message</li>
-                        }
-                    </ul>
+                <div class="notice">
+                    Om adressen finns hos oss har vi skickat en länk för att välja ett nytt lösenord.
                 </div>
-            }
 
-            <button type="submit" class="btn btn-primary btn-block" disabled="@_busy">
-                @(_busy ? "Ett ögonblick…" : _mode == Mode.SignIn ? "Logga in" : "Skapa konto")
-            </button>
-        </EditForm>
+                <button type="button" class="btn btn-link" @onclick="() => SetMode(Mode.SignIn)">
+                    Tillbaka till inloggning
+                </button>
+            }
+            else
+            {
+                <p class="muted">Ange din e-postadress så skickar vi en länk för att välja ett nytt lösenord.</p>
+
+                <EditForm Model="_form" OnValidSubmit="SendForgotPasswordAsync">
+                    <label class="field">
+                        <span>E-post</span>
+                        <InputText @bind-Value="_form.Email" type="email" autocomplete="username" />
+                    </label>
+
+                    @if (_messages.Count > 0)
+                    {
+                        <div class="notice notice-problem" role="alert">
+                            <ul class="message-list">
+                                @foreach (var message in _messages)
+                                {
+                                    <li>@message</li>
+                                }
+                            </ul>
+                        </div>
+                    }
+
+                    <button type="submit" class="btn btn-primary btn-block" disabled="@_busy">
+                        @(_busy ? "Ett ögonblick…" : "Skicka återställningslänk")
+                    </button>
+
+                    <button type="button" class="btn btn-link" @onclick="() => SetMode(Mode.SignIn)">
+                        Tillbaka till inloggning
+                    </button>
+                </EditForm>
+            }
+        }
+        else
+        {
+            <EditForm Model="_form" OnValidSubmit="SubmitAsync">
+                @if (_mode == Mode.Register)
+                {
+                    <label class="field">
+                        <span>Ditt namn</span>
+                        <InputText @bind-Value="_form.DisplayName" autocomplete="name" />
+                    </label>
+                }
+
+                <label class="field">
+                    <span>E-post</span>
+                    <InputText @bind-Value="_form.Email" type="email" autocomplete="username" />
+                </label>
+
+                <label class="field">
+                    <span>Lösenord</span>
+                    <InputText @bind-Value="_form.Password" type="password"
+                               autocomplete="@(_mode == Mode.Register ? "new-password" : "current-password")" />
+                </label>
+
+                @if (_mode == Mode.SignIn)
+                {
+                    <button type="button" class="btn btn-link" @onclick="() => SetMode(Mode.ForgotPassword)">
+                        Glömt lösenord?
+                    </button>
+                }
+
+                @if (_messages.Count > 0)
+                {
+                    <div class="notice notice-problem" role="alert">
+                        <ul class="message-list">
+                            @foreach (var message in _messages)
+                            {
+                                <li>@message</li>
+                            }
+                        </ul>
+                    </div>
+                }
+
+                <button type="submit" class="btn btn-primary btn-block" disabled="@_busy">
+                    @(_busy ? "Ett ögonblick…" : _mode == Mode.SignIn ? "Logga in" : "Skapa konto")
+                </button>
+            </EditForm>
+        }
     </div>
 </div>
 
 @code {
-    private enum Mode { SignIn, Register }
+    private enum Mode { SignIn, Register, ForgotPassword }
 
     private sealed class Form
     {
@@ -78,11 +137,33 @@
     private List<string> _messages = [];
     private Mode _mode = Mode.SignIn;
     private bool _busy;
+    private bool _forgotPasswordSent;
 
     private void SetMode(Mode mode)
     {
         _mode = mode;
         _messages = [];
+        _forgotPasswordSent = false;
+    }
+
+    private async Task SendForgotPasswordAsync()
+    {
+        _busy = true;
+        _messages = [];
+
+        try
+        {
+            await Api.ForgotPasswordAsync(_form.Email);
+            _forgotPasswordSent = true;
+        }
+        catch (HttpRequestException)
+        {
+            _messages = ["Vi når inte servern just nu. Försök igen om en stund."];
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 
     private async Task SubmitAsync()

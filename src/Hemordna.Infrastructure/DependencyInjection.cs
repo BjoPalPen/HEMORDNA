@@ -1,6 +1,7 @@
 using Hemordna.Application.Households;
 using Hemordna.Application.Planning;
 using Hemordna.Application.Tasks;
+using Hemordna.Infrastructure.Email;
 using Hemordna.Infrastructure.Identity;
 using Hemordna.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Identity;
@@ -54,7 +55,27 @@ public static class DependencyInjection
                 options.Password.RequiredLength = 12;
             })
             .AddRoles<IdentityRole<Guid>>()
-            .AddEntityFrameworkStores<HemordnaDbContext>();
+            .AddEntityFrameworkStores<HemordnaDbContext>()
+            // The password-reset token is one of Identity's "default" token providers - without
+            // this, GeneratePasswordResetTokenAsync throws instead of issuing a token.
+            .AddDefaultTokenProviders();
+
+        services.Configure<ResendOptions>(configuration.GetSection(ResendOptions.SectionName));
+        services.AddSingleton<DevEmailOutbox>();
+
+        var resendApiKey = configuration[$"{ResendOptions.SectionName}:ApiKey"];
+
+        if (string.IsNullOrWhiteSpace(resendApiKey))
+        {
+            // No Resend account configured (local dev, and the E2E test fixture) - log the
+            // e-mail instead of sending it, via DevEmailOutbox, rather than fail outright.
+            services.AddSingleton<IEmailSender, LoggingEmailSender>();
+        }
+        else
+        {
+            services.AddHttpClient<IEmailSender, ResendEmailSender>(
+                client => client.BaseAddress = new Uri("https://api.resend.com/"));
+        }
 
         return services;
     }

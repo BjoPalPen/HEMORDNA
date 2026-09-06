@@ -1,0 +1,112 @@
+@page "/aterstall-losenord"
+@layout EmptyLayout
+@inject HemordnaApiClient Api
+@inject NavigationManager Navigation
+
+<PageTitle>Återställ lösenord – Hemordna</PageTitle>
+
+<div class="signin-page">
+    <div class="signin-card card">
+        <div class="signin-brand">
+            <img src="brand/logo.png" alt="" width="56" height="56" />
+            <h1>Hemordna</h1>
+        </div>
+
+        @if (string.IsNullOrWhiteSpace(Email) || string.IsNullOrWhiteSpace(Token))
+        {
+            <div class="notice notice-problem" role="alert">
+                Länken är ogiltig eller har gått ut.
+            </div>
+            <a class="btn btn-secondary btn-block" href="logga-in">Tillbaka till inloggning</a>
+        }
+        else if (_done)
+        {
+            <div class="notice">Lösenordet är bytt. Du kan nu logga in med det.</div>
+            <a class="btn btn-primary btn-block" href="logga-in">Logga in</a>
+        }
+        else
+        {
+            <h2>Välj ett nytt lösenord</h2>
+
+            <EditForm Model="_form" OnValidSubmit="SubmitAsync">
+                <label class="field">
+                    <span>Nytt lösenord</span>
+                    <InputText @bind-Value="_form.NewPassword" type="password" autocomplete="new-password" />
+                </label>
+
+                <label class="field">
+                    <span>Bekräfta nytt lösenord</span>
+                    <InputText @bind-Value="_form.ConfirmPassword" type="password" autocomplete="new-password" />
+                </label>
+
+                @if (_messages.Count > 0)
+                {
+                    <div class="notice notice-problem" role="alert">
+                        <ul class="message-list">
+                            @foreach (var message in _messages)
+                            {
+                                <li>@message</li>
+                            }
+                        </ul>
+                    </div>
+                }
+
+                <button type="submit" class="btn btn-primary btn-block" disabled="@_busy">
+                    @(_busy ? "Ett ögonblick…" : "Byt lösenord")
+                </button>
+            </EditForm>
+        }
+    </div>
+</div>
+
+@code {
+    [SupplyParameterFromQuery]
+    private string? Email { get; set; }
+
+    [SupplyParameterFromQuery]
+    private string? Token { get; set; }
+
+    private sealed class Form
+    {
+        public string NewPassword { get; set; } = string.Empty;
+        public string ConfirmPassword { get; set; } = string.Empty;
+    }
+
+    private readonly Form _form = new();
+    private List<string> _messages = [];
+    private bool _busy;
+    private bool _done;
+
+    private async Task SubmitAsync()
+    {
+        if (_form.NewPassword != _form.ConfirmPassword)
+        {
+            _messages = ["Lösenorden stämmer inte överens."];
+            return;
+        }
+
+        _busy = true;
+        _messages = [];
+
+        try
+        {
+            var errors = await Api.ResetPasswordAsync(Email!, Token!, _form.NewPassword);
+
+            if (errors.Count > 0)
+            {
+                _messages = [.. errors];
+                return;
+            }
+
+            _done = true;
+        }
+        catch (HttpRequestException)
+        {
+            _messages = ["Vi når inte servern just nu. Försök igen om en stund."];
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

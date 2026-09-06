@@ -6,6 +6,16 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- AddDefaultTokenProviders() (needed for password-reset tokens) lives in the ASP.NET
+         Core shared framework's Identity assembly, not in the portable Identity Core NuGet
+         packages below. Infrastructure is server-side only - the Blazor Client never
+         references it - so depending on the full framework here is safe. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Microsoft.Extensions.Http (AddHttpClient) ships as part of the shared framework
+         above, so it needs no separate PackageReference here. -->
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.11" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
   </ItemGroup>

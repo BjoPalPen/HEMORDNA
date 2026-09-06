@@ -66,6 +66,45 @@ public sealed class HemordnaApiClient
         return await ReadProblemMessagesAsync(response, cancellationToken);
     }
 
+    /// <summary>
+    /// Requests a password-reset e-mail. Always looks like it succeeded to the caller - the
+    /// API gives the same response whether or not the address has an account, so this cannot
+    /// be used to find out which e-mail addresses are registered.
+    /// </summary>
+    public async Task ForgotPasswordAsync(string email, CancellationToken cancellationToken = default)
+        => await _http.PostAsJsonAsync("api/auth/forgot-password", new { email }, cancellationToken);
+
+    /// <summary>Sets a new password from a reset link. Returns the API's messages on failure.</summary>
+    public async Task<IReadOnlyList<string>> ResetPasswordAsync(
+        string email,
+        string token,
+        string newPassword,
+        CancellationToken cancellationToken = default)
+    {
+        var response = await _http.PostAsJsonAsync(
+            "api/auth/reset-password", new { email, token, newPassword }, cancellationToken);
+
+        return response.IsSuccessStatusCode
+            ? []
+            : await ReadProblemMessagesAsync(response, cancellationToken);
+    }
+
+    /// <summary>Changes the signed-in user's password. Returns the API's messages on failure.</summary>
+    public async Task<IReadOnlyList<string>> ChangePasswordAsync(
+        string currentPassword,
+        string newPassword,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(HttpMethod.Post, "api/auth/change-password", cancellationToken);
+        request.Content = JsonContent.Create(new { currentPassword, newPassword });
+
+        var response = await _http.SendAsync(request, cancellationToken);
+
+        return response.IsSuccessStatusCode
+            ? []
+            : await ReadProblemMessagesAsync(response, cancellationToken);
+    }
+
     public async Task SignOutAsync() => await _tokens.ClearAsync();
 
     /// <summary>The signed-in user, or <c>null</c> when the token is missing or no longer valid.</summary>
