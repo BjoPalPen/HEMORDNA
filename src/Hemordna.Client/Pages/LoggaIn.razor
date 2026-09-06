@@ -77,6 +77,16 @@
         }
         else
         {
+            @if (_mode == Mode.SignIn && _passkeySupported)
+            {
+                <button type="button" class="btn btn-secondary btn-block" disabled="@_busy"
+                        @onclick="LoginWithPasskeyAsync">
+                    Fortsätt med Face ID / fingeravtryck
+                </button>
+
+                <p class="muted small" style="text-align:center">eller logga in med lösenord</p>
+            }
+
             <EditForm Model="_form" OnValidSubmit="SubmitAsync">
                 @if (_mode == Mode.Register)
                 {
@@ -101,14 +111,6 @@
                 {
                     <button type="button" class="btn btn-link" @onclick="() => SetMode(Mode.ForgotPassword)">
                         Glömt lösenord?
-                    </button>
-                }
-
-                @if (_mode == Mode.SignIn && _passkeySupported)
-                {
-                    <button type="button" class="btn btn-secondary btn-block" disabled="@_busy"
-                            @onclick="LoginWithPasskeyAsync">
-                        Använd Face ID / fingeravtryck i stället
                     </button>
                 }
 
@@ -217,26 +219,20 @@
 
     private async Task LoginWithPasskeyAsync()
     {
-        if (string.IsNullOrWhiteSpace(_form.Email))
-        {
-            _messages = ["Ange din e-postadress först."];
-            return;
-        }
-
         _busy = true;
         _messages = [];
 
         try
         {
-            var optionsJson = await Api.GetPasskeyLoginOptionsAsync(_form.Email);
+            var options = await Api.GetPasskeyLoginOptionsAsync();
 
-            if (optionsJson is null)
+            if (options is null)
             {
                 _messages = ["Vi når inte servern just nu. Försök igen om en stund."];
                 return;
             }
 
-            var assertionJson = await WebAuthn.AuthenticateAsync(optionsJson);
+            var assertionJson = await WebAuthn.AuthenticateAsync(options.OptionsJson);
 
             if (assertionJson is null)
             {
@@ -244,7 +240,7 @@
                 return;
             }
 
-            if (!await Api.LoginWithPasskeyAsync(_form.Email, assertionJson))
+            if (!await Api.LoginWithPasskeyAsync(options.FlowId, assertionJson))
             {
                 _messages = ["Det gick inte att logga in med Face ID/fingeravtryck. Prova lösenordet i stället."];
                 return;

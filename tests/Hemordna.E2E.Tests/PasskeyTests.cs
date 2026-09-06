@@ -57,13 +57,13 @@ public class PasskeyTests
         await page.GetByRole(AriaRole.Button, new() { Name = "Lägg till den här enheten" }).ClickAsync();
         await page.GetByRole(AriaRole.Button, new() { Name = "Ta bort" }).WaitForAsync(new() { Timeout = 10_000 });
 
-        // No sign-out button in the app yet - see InstallningarTests's change-password test for
-        // the same workaround.
-        await page.EvaluateAsync("() => localStorage.removeItem('hemordna.token')");
+        await page.GotoAsync("/mer");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Logga ut" }).ClickAsync();
+        await page.GetByRole(AriaRole.Tab, new() { Name = "Logga in" }).WaitForAsync();
 
-        await page.GotoAsync("/logga-in");
-        await page.GetByLabel("E-post").FillAsync(email);
-        await page.GetByRole(AriaRole.Button, new() { Name = "Använd Face ID / fingeravtryck i stället" })
+        // No e-mail entered anywhere - the whole point is that the browser offers the
+        // discoverable passkey itself, without asking who is signing in first.
+        await page.GetByRole(AriaRole.Button, new() { Name = "Fortsätt med Face ID / fingeravtryck" })
             .ClickAsync();
 
         await page.GetByRole(AriaRole.Heading, new() { Name = "Hej Nyckel Persson!" })
@@ -95,11 +95,11 @@ public class PasskeyTests
 
         await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Ta bort" })).Not.ToBeVisibleAsync();
 
-        await page.EvaluateAsync("() => localStorage.removeItem('hemordna.token')");
+        await page.GotoAsync("/mer");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Logga ut" }).ClickAsync();
+        await page.GetByRole(AriaRole.Tab, new() { Name = "Logga in" }).WaitForAsync();
 
-        await page.GotoAsync("/logga-in");
-        await page.GetByLabel("E-post").FillAsync(email);
-        await page.GetByRole(AriaRole.Button, new() { Name = "Använd Face ID / fingeravtryck i stället" })
+        await page.GetByRole(AriaRole.Button, new() { Name = "Fortsätt med Face ID / fingeravtryck" })
             .ClickAsync();
 
         await page.GetByText("Det gick inte att logga in med Face ID/fingeravtryck. Prova lösenordet i stället.")

@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
+using System.Text.Json;
 using Hemordna.Client.Contracts;
 
 namespace Hemordna.Client.Services;
@@ -145,15 +146,28 @@ public sealed class HemordnaApiClient
         return response.IsSuccessStatusCode;
     }
 
-    /// <summary>The raw options JSON for <see cref="WebAuthnClient.AuthenticateAsync"/> - null
-    /// only on a network problem, never to signal "unknown e-mail" (see PasskeyEndpoints).</summary>
-    public async Task<string?> GetPasskeyLoginOptionsAsync(string email, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// No e-mail or username needed - the server hands back an empty-allow-list challenge and
+    /// lets the browser itself offer whichever discoverable passkey it has for this site, plus
+    /// a flow id that ties this challenge to the matching <see cref="LoginWithPasskeyAsync"/>
+    /// call. <c>null</c> only on a network problem.
+    /// </summary>
+    public async Task<PasskeyLoginOptions?> GetPasskeyLoginOptionsAsync(CancellationToken cancellationToken = default)
     {
-        var response = await _http.PostAsJsonAsync("api/auth/passkeys/login/options", new { email }, cancellationToken);
+        var response = await _http.PostAsync("api/auth/passkeys/login/options", content: null, cancellationToken);
 
-        return response.IsSuccessStatusCode
-            ? await response.Content.ReadAsStringAsync(cancellationToken)
-            : null;
+        if (!response.IsSuccessStatusCode)
+        {
+            return null;
+        }
+
+        // The envelope PasskeyEndpoints.GetLoginOptionsAsync hand-builds: {"flowId":"...",
+        // "options":{...}} - "options" is pulled back out as raw text so WebAuthnClient still
+        // sees exactly the same JSON shape it always has, untouched by this unwrapping.
+        var envelope = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken);
+        return new PasskeyLoginOptions(
+            envelope.GetProperty("flowId").GetString()!,
+            envelope.GetProperty("options").GetRawText());
     }
 
     /// <summary>Signs in with a passkey and stores the token, mirroring
@@ -161,10 +175,10 @@ public sealed class HemordnaApiClient
     /// opaque JSON <see cref="WebAuthnClient.AuthenticateAsync"/> returned, sent as-is - see
     /// VerifyPasskeyRegisterAsync's remarks.</summary>
     public async Task<bool> LoginWithPasskeyAsync(
-        string email, string assertionJson, CancellationToken cancellationToken = default)
+        string flowId, string assertionJson, CancellationToken cancellationToken = default)
     {
         var response = await _http.PostAsync(
-            $"api/auth/passkeys/login/verify?email={Uri.EscapeDataString(email)}",
+            $"api/auth/passkeys/login/verify?flowId={Uri.EscapeDataString(flowId)}",
             new StringContent(assertionJson, Encoding.UTF8, "application/json"),
             cancellationToken);
 
@@ -585,3 +599,6 @@ public sealed record JoinHouseholdOutcome(HouseholdResponse? Household, JoinHous
 
     public static JoinHouseholdOutcome ForFailure(JoinHouseholdError error) => new(null, error);
 }
+
+/// <summary>See <see cref="HemordnaApiClient.GetPasskeyLoginOptionsAsync"/>.</summary>
+public sealed record PasskeyLoginOptions(string FlowId, string OptionsJson);

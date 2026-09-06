@@ -256,6 +256,14 @@ inloggad session (Inställningar), inte vid kontoregistrering.
   registrerad enhet – den privata nyckeln lämnar aldrig personens enhet.
 - Varje ceremoni är två anrop (utmaning, sedan svar); utmaningen mellanlagras i `IMemoryCache`
   några minuter (en instans räcker, se ovan) – se `PasskeyEndpoints`.
+- **Inloggning är helt användarlös** – ingen e-post eller användarnamn efterfrågas.
+  Registrering kräver `ResidentKeyRequirement.Required` (en "discoverable" nyckel), så
+  `login/options` kan skicka en TOM `allowCredentials`-lista och låta webbläsaren själv visa
+  vilken passkey den har för sidan. Vem det är avgörs först i `login/verify`, via
+  `credential.RawId → PasskeyCredentials.UserId` – ett `flowId` (inte e-post, inte
+  användar-id) knyter ihop de två anropen, eftersom identiteten inte är känd förrän efteråt.
+  E-post krävs fortfarande för att registrera en ny passkey (Inställningar, redan inloggad) och
+  finns kvar som fallback-inloggning via lösenord om enheten saknar en passkey.
 - **Viktig fälla**: `Results.Ok(options)` fungerar INTE för Fido2NetLibs egna typer – appens
   globalt registrerade `JsonStringEnumConverter` (ConfigureHttpJsonOptions i Program.cs)
   krockar med Fido2NetLibs egna per-property `[JsonConverter]`-attribut och producerar fel
@@ -476,8 +484,8 @@ Allt under `/api/households/{householdId}` kräver token och körs bakom
 | `POST` | `/api/auth/passkeys/register/options` | Utmaning för att registrera en passkey. Kräver token |
 | `POST` | `/api/auth/passkeys/register/verify` | `200`, annars `400`. Kräver token |
 | `DELETE` | `/api/auth/passkeys/{credentialId}` | `200`, annars `404`. Kräver token |
-| `POST` | `/api/auth/passkeys/login/options` | Utmaning för att logga in med en passkey. Anonym |
-| `POST` | `/api/auth/passkeys/login/verify?email=` | `200` med bearer-token, annars `401`. Anonym |
+| `POST` | `/api/auth/passkeys/login/options` | Utmaning + `flowId`, ingen e-post krävs. Anonym |
+| `POST` | `/api/auth/passkeys/login/verify?flowId=` | `200` med bearer-token, annars `401`. Anonym |
 | `GET` | `/api/me` | Den inloggades identitet och hushållstillhörighet |
 | `POST` | `/api/households` | `201` med den skapade resursen, `409` om användaren redan har ett hushåll |
 | `GET` | `/api/households/{householdId}` | `200`, annars `404` |

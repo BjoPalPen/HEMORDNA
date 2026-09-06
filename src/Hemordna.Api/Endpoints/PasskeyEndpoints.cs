@@ -66,8 +66,7 @@ internal static class PasskeyEndpoints
         passkeys.MapPost("/login/options", GetLoginOptionsAsync)
             .WithName("GetPasskeyLoginOptions")
             .AllowAnonymous()
-            .Produces(StatusCodes.Status200OK)
-            .ProducesValidationProblem();
+            .Produces(StatusCodes.Status200OK);
 
         passkeys.MapPost("/login/verify", VerifyLoginAsync)
             .WithName("VerifyPasskeyLogin")
@@ -123,7 +122,15 @@ internal static class PasskeyEndpoints
                 DisplayName = user.DisplayName
             },
             ExcludeCredentials = excludeCredentials,
-            AuthenticatorSelection = AuthenticatorSelection.Default,
+            // Required, not merely preferred: a resident/discoverable credential is what lets
+            // GetLoginOptionsAsync skip asking for an e-mail address up front - the browser can
+            // list "who has a passkey for this site" itself. Every platform authenticator in
+            // real use (iCloud Keychain, Windows Hello, Android) supports this.
+            AuthenticatorSelection = new AuthenticatorSelection
+            {
+                ResidentKey = ResidentKeyRequirement.Required,
+                UserVerification = UserVerificationRequirement.Preferred
+            },
             AttestationPreference = AttestationConveyancePreference.None,
             PubKeyCredParams = PubKeyCredParam.Defaults
         });
@@ -230,49 +237,33 @@ internal static class PasskeyEndpoints
         return await store.RemoveAsync(rawId, userId, cancellationToken) ? Results.Ok() : Results.NotFound();
     }
 
-    private static async Task<IResult> GetLoginOptionsAsync(
-        PasskeyLoginOptionsRequest request,
-        UserManager<HemordnaUser> users,
-        IPasskeyCredentialStore store,
-        IFido2 fido2,
-        IMemoryCache cache,
-        CancellationToken cancellationToken)
+    /// <summary>
+    /// No e-mail, no username - an empty allow-list tells the browser to show whatever
+    /// discoverable passkey it has for this site itself. Anonymous by nature: there is nothing
+    /// yet to say "unauthorized" about.
+    /// </summary>
+    private static IResult GetLoginOptionsAsync(IFido2 fido2, IMemoryCache cache)
     {
-        if (string.IsNullOrWhiteSpace(request.Email))
-        {
-            return Results.ValidationProblem(new Dictionary<string, string[]>
-            {
-                ["Email"] = ["E-post krävs."]
-            });
-        }
-
-        var email = request.Email.Trim();
-        var allowedCredentials = new List<PublicKeyCredentialDescriptor>();
-
-        if (await users.FindByEmailAsync(email) is { } user)
-        {
-            allowedCredentials = (await store.ListByUserIdAsync(user.Id, cancellationToken))
-                .Select(credential => new PublicKeyCredentialDescriptor(credential.CredentialId))
-                .ToList();
-        }
-
-        // Same shape whether the address is unknown or just has no passkeys - an empty
-        // allow-list makes the browser itself say "no matching passkey", so this endpoint
-        // cannot be used to find out which e-mail addresses are registered (see LoginAsync).
         var options = fido2.GetAssertionOptions(new GetAssertionOptionsParams
         {
-            AllowedCredentials = allowedCredentials,
+            AllowedCredentials = [],
             UserVerification = UserVerificationRequirement.Preferred
         });
 
-        cache.Set(LoginCacheKey(email), options, ChallengeLifetime);
+        // The flow id (not an e-mail address, not the user - neither is known yet) is what
+        // lets VerifyLoginAsync find the exact challenge this call issued.
+        var flowId = Guid.NewGuid().ToString("N");
+        cache.Set(LoginCacheKey(flowId), options, ChallengeLifetime);
 
-        // See the identical comment in GetRegisterOptionsAsync.
-        return Results.Text(options.ToJson(), "application/json");
+        // A hand-built envelope, not a bound response type: options.ToJson() (see the identical
+        // comment in GetRegisterOptionsAsync) already returns a complete, correctly-shaped JSON
+        // string, so wrapping it in a small string template - rather than parsing it back into
+        // an object just to re-serialize it - keeps that shape untouched.
+        return Results.Text($$"""{"flowId":"{{flowId}}","options":{{options.ToJson()}}}""", "application/json");
     }
 
     private static async Task<IResult> VerifyLoginAsync(
-        string? email,
+        string? flowId,
         HttpContext httpContext,
         UserManager<HemordnaUser> users,
         IPasskeyCredentialStore store,
@@ -281,19 +272,14 @@ internal static class PasskeyEndpoints
         IMemoryCache cache,
         CancellationToken cancellationToken)
     {
-        if (string.IsNullOrWhiteSpace(email))
+        if (string.IsNullOrWhiteSpace(flowId)
+            || !cache.TryGetValue(LoginCacheKey(flowId), out AssertionOptions? options)
+            || options is null)
         {
             return Results.Unauthorized();
         }
 
-        email = email.Trim();
-
-        if (!cache.TryGetValue(LoginCacheKey(email), out AssertionOptions? options) || options is null)
-        {
-            return Results.Unauthorized();
-        }
-
-        cache.Remove(LoginCacheKey(email));
+        cache.Remove(LoginCacheKey(flowId));
 
         AuthenticatorAssertionRawResponse? assertion;
         try
@@ -306,12 +292,13 @@ internal static class PasskeyEndpoints
             assertion = null;
         }
 
+        // The credential id in the assertion is how the person is identified at all here - no
+        // e-mail or username ever enters this flow. See the same reasoning in LoginAsync for
+        // why an unknown credential and a wrong password look identical to the caller.
         if (assertion is null
-            || await users.FindByEmailAsync(email) is not { } user
             || await store.FindByCredentialIdAsync(assertion.RawId, cancellationToken) is not { } credential
-            || credential.UserId != user.Id)
+            || await users.FindByIdAsync(credential.UserId.ToString()) is not { } user)
         {
-            // Same response as a wrong password - see LoginAsync.
             return Results.Unauthorized();
         }
 
@@ -342,7 +329,7 @@ internal static class PasskeyEndpoints
 
     private static string RegisterCacheKey(Guid userId) => $"passkey-register:{userId}";
 
-    private static string LoginCacheKey(string email) => $"passkey-login:{email.ToLowerInvariant()}";
+    private static string LoginCacheKey(string flowId) => $"passkey-login:{flowId}";
 
     /// <summary>A rough, cosmetic label so a person can tell their registered passkeys apart -
     /// never used for anything security-relevant.</summary>
