@@ -13,27 +13,40 @@ namespace Hemordna.Application.Tasks;
 /// Tasks that share an <see cref="TaskDefinition.AreaId"/> (the same room) are re-anchored
 /// together, to the same day - the point is to spread *rooms* across the week, not to scatter
 /// one room's own tasks away from each other. A task with no area (an "Övrigt" chore) has
-/// nothing to stay grouped with, so each becomes its own group. Only <see
-/// cref="TaskDefinition.Recurrence"/> is touched; already-generated, outstanding occurrences
-/// keep their original date - see <see cref="TaskDefinition.SetRecurrence"/>.
+/// nothing to stay grouped with, so each becomes its own group.
+/// <para>
+/// Two things move, not just one: <see cref="TaskDefinition.Recurrence"/>, for occurrences not
+/// generated yet, AND any already-generated, still-outstanding occurrence due today or earlier
+/// - otherwise a household whose first-ever occurrences were all generated before this feature
+/// existed (or before it was last run) would stay clustered forever, since a defintion's own
+/// recurrence rule only governs occurrences generated <em>after</em> it changes. An occurrence
+/// already due in the future, or already completed/skipped, is left alone - see
+/// <see cref="TaskOccurrence.DeferTo"/>.
+/// </para>
 /// </remarks>
 public sealed class RebalanceSchedule
 {
     private readonly IHouseholdRepository _households;
     private readonly ITaskDefinitionRepository _definitions;
+    private readonly ITaskOccurrenceRepository _occurrences;
     private readonly TimeProvider _timeProvider;
 
     public RebalanceSchedule(
-        IHouseholdRepository households, ITaskDefinitionRepository definitions, TimeProvider timeProvider)
+        IHouseholdRepository households,
+        ITaskDefinitionRepository definitions,
+        ITaskOccurrenceRepository occurrences,
+        TimeProvider timeProvider)
     {
         _households = households;
         _definitions = definitions;
+        _occurrences = occurrences;
         _timeProvider = timeProvider;
     }
 
     /// <summary>
     /// Re-anchors the household's recurring tasks, or returns <c>null</c> if the household does
-    /// not exist. Returns how many task definitions were changed.
+    /// not exist. Returns how many task definitions were touched - either their own future
+    /// recurrence changed, an already-generated occurrence of theirs moved, or both.
     /// </summary>
     public async Task<int?> HandleAsync(Guid householdId, CancellationToken cancellationToken)
     {
@@ -43,9 +56,9 @@ public sealed class RebalanceSchedule
         }
 
         // Read-only planning pass: ListByHouseholdAsync returns untracked snapshots (cheap for
-        // the common read-only callers, like the task list endpoint), so any definition that
-        // actually needs a new anchor is re-fetched below through FindByIdAsync instead, which
-        // returns a tracked instance SaveChanges can actually persist.
+        // the common read-only callers, like the task list endpoint), so anything that actually
+        // needs a change is re-fetched below through FindByIdAsync instead, which returns a
+        // tracked instance SaveChanges can actually persist.
         var definitions = await _definitions.ListByHouseholdAsync(householdId, cancellationToken);
         var today = DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime);
 
@@ -59,32 +72,63 @@ public sealed class RebalanceSchedule
             .OrderBy(group => group.Min(definition => definition.Id))
             .ToList();
 
-        var changed = 0;
+        var touchedDefinitionIds = new HashSet<Guid>();
 
         for (var groupIndex = 0; groupIndex < groups.Count; groupIndex++)
         {
             foreach (var definition in groups[groupIndex])
             {
-                if (Reanchor(definition.Recurrence!, today, groupIndex) is not { } reanchored
-                    || reanchored.Equals(definition.Recurrence))
+                if (Reanchor(definition.Recurrence!, today, groupIndex) is not { } reanchored)
                 {
                     continue;
                 }
 
-                var tracked = await _definitions.FindByIdAsync(householdId, definition.Id, cancellationToken);
-
-                if (tracked is null)
+                if (!reanchored.Equals(definition.Recurrence)
+                    && await _definitions.FindByIdAsync(householdId, definition.Id, cancellationToken) is { } tracked)
                 {
-                    continue;
+                    tracked.SetRecurrence(reanchored);
+                    await _definitions.UpdateAsync(tracked, cancellationToken);
+                    touchedDefinitionIds.Add(definition.Id);
                 }
 
-                tracked.SetRecurrence(reanchored);
-                await _definitions.UpdateAsync(tracked, cancellationToken);
-                changed++;
+                if (await RescheduleBacklogAsync(householdId, definition.Id, reanchored.StartDate, today, cancellationToken))
+                {
+                    touchedDefinitionIds.Add(definition.Id);
+                }
             }
         }
 
-        return changed;
+        return touchedDefinitionIds.Count;
+    }
+
+    /// <summary>
+    /// Moves this definition's already-generated, outstanding occurrences due on or before
+    /// <paramref name="today"/> to <paramref name="targetDate"/> - the same date its recurrence
+    /// now anchors to. Returns whether anything actually moved.
+    /// </summary>
+    private async Task<bool> RescheduleBacklogAsync(
+        Guid householdId, Guid definitionId, DateOnly targetDate, DateOnly today, CancellationToken cancellationToken)
+    {
+        var backlog = await _occurrences.ListOutstandingOnOrBeforeAsync(
+            householdId, definitionId, today, cancellationToken);
+        var rescheduledAny = false;
+
+        foreach (var occurrence in backlog)
+        {
+            // DeferTo only accepts a strictly later date (and only when CanBeDeferred) - an
+            // occurrence already sitting exactly on the target, or one that cannot be pushed at
+            // all, is left as-is rather than attempted and failing.
+            if (!occurrence.CanBeDeferred || targetDate <= occurrence.ScheduledDate)
+            {
+                continue;
+            }
+
+            occurrence.DeferTo(targetDate);
+            await _occurrences.UpdateAsync(occurrence, cancellationToken);
+            rescheduledAny = true;
+        }
+
+        return rescheduledAny;
     }
 
     /// <summary>

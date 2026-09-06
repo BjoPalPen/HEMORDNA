@@ -54,4 +54,10 @@ internal sealed class InMemoryTaskOccurrenceRepository : ITaskOccurrenceReposito
         Guid householdId, Guid taskDefinitionId, CancellationToken cancellationToken)
         => Task.FromResult(_occurrences.Any(o => o.HouseholdId == householdId
             && o.TaskDefinitionId == taskDefinitionId && o.Status == TaskOccurrenceStatus.Planned));
+
+    public Task<IReadOnlyList<TaskOccurrence>> ListOutstandingOnOrBeforeAsync(
+        Guid householdId, Guid taskDefinitionId, DateOnly onOrBefore, CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<TaskOccurrence>>([.. _occurrences.Where(o =>
+            o.HouseholdId == householdId && o.TaskDefinitionId == taskDefinitionId
+            && o.Status == TaskOccurrenceStatus.Planned && o.ScheduledDate <= onOrBefore)]);
 }

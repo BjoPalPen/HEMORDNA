@@ -12,9 +12,15 @@ public class RebalanceScheduleTests
 
     private readonly InMemoryHouseholdRepository _households = new();
     private readonly InMemoryTaskDefinitionRepository _definitions = new();
+    private readonly InMemoryTaskOccurrenceRepository _occurrences = new();
 
+    // DateOnly.ToDateTime returns Kind=Unspecified, which the implicit DateTime->DateTimeOffset
+    // conversion treats as LOCAL time - shifting "today" by the machine's UTC offset and
+    // silently landing on the wrong calendar date on any non-UTC machine. An explicit
+    // TimeSpan.Zero offset pins it to UTC regardless of where this runs.
     private RebalanceSchedule CreateUseCase()
-        => new(_households, _definitions, new FixedTimeProvider(Today.ToDateTime(TimeOnly.MinValue)));
+        => new(_households, _definitions, _occurrences,
+            new FixedTimeProvider(new DateTimeOffset(Today.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero)));
 
     private async Task<Household> SeedHouseholdAsync()
     {
@@ -176,5 +182,68 @@ public class RebalanceScheduleTests
         var secondRunChanged = await CreateUseCase().HandleAsync(household.Id, CancellationToken.None);
 
         Assert.Equal(0, secondRunChanged);
+    }
+
+    [Fact]
+    public async Task An_already_generated_outstanding_occurrence_due_today_moves_with_its_definition()
+    {
+        // The scenario this exists for: a household set up before this feature existed (or
+        // before it was last run) already has a first occurrence generated under the old,
+        // clustered anchor - rebalancing the definition's future recurrence alone would never
+        // fix what is already sitting on someone's day right now.
+        var household = await SeedHouseholdAsync();
+        var kitchen = SeedTask(household, "Diska", RecurrenceRule.Weekly(Today, Today.DayOfWeek), Guid.NewGuid());
+        SeedTask(household, "Skrubba badkar", RecurrenceRule.Weekly(Today, Today.DayOfWeek), Guid.NewGuid());
+        var occurrence = kitchen.ScheduleFor(Today, CreatedAt);
+        _occurrences.Seed(occurrence);
+
+        await CreateUseCase().HandleAsync(household.Id, CancellationToken.None);
+
+        Assert.Equal(kitchen.Recurrence!.StartDate, occurrence.ScheduledDate);
+    }
+
+    [Fact]
+    public async Task An_occurrence_already_scheduled_in_the_future_is_left_alone()
+    {
+        var household = await SeedHouseholdAsync();
+        var kitchen = SeedTask(household, "Diska", RecurrenceRule.Weekly(Today, Today.DayOfWeek), Guid.NewGuid());
+        SeedTask(household, "Skrubba badkar", RecurrenceRule.Weekly(Today, Today.DayOfWeek), Guid.NewGuid());
+        var farFuture = Today.AddDays(30);
+        var occurrence = kitchen.ScheduleFor(farFuture, CreatedAt);
+        _occurrences.Seed(occurrence);
+
+        await CreateUseCase().HandleAsync(household.Id, CancellationToken.None);
+
+        Assert.Equal(farFuture, occurrence.ScheduledDate);
+    }
+
+    [Fact]
+    public async Task A_completed_occurrence_is_left_alone()
+    {
+        var household = await SeedHouseholdAsync();
+        var kitchen = SeedTask(household, "Diska", RecurrenceRule.Weekly(Today, Today.DayOfWeek), Guid.NewGuid());
+        SeedTask(household, "Skrubba badkar", RecurrenceRule.Weekly(Today, Today.DayOfWeek), Guid.NewGuid());
+        var occurrence = kitchen.ScheduleFor(Today, CreatedAt);
+        occurrence.Complete(Guid.NewGuid(), CreatedAt);
+        _occurrences.Seed(occurrence);
+
+        await CreateUseCase().HandleAsync(household.Id, CancellationToken.None);
+
+        Assert.Equal(Today, occurrence.ScheduledDate);
+    }
+
+    [Fact]
+    public async Task An_occurrence_that_cannot_be_deferred_is_left_alone()
+    {
+        var household = await SeedHouseholdAsync();
+        var kitchen = SeedTask(household, "Diska", RecurrenceRule.Weekly(Today, Today.DayOfWeek), Guid.NewGuid());
+        SeedTask(household, "Skrubba badkar", RecurrenceRule.Weekly(Today, Today.DayOfWeek), Guid.NewGuid());
+        kitchen.SetCanBeDeferred(false);
+        var occurrence = kitchen.ScheduleFor(Today, CreatedAt);
+        _occurrences.Seed(occurrence);
+
+        await CreateUseCase().HandleAsync(household.Id, CancellationToken.None);
+
+        Assert.Equal(Today, occurrence.ScheduledDate);
     }
 }

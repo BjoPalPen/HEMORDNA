@@ -39,4 +39,15 @@ public interface ITaskOccurrenceRepository
         Guid householdId,
         Guid taskDefinitionId,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Outstanding occurrences of this definition scheduled on or before <paramref name="onOrBefore"/>,
+    /// tracked so a caller can reschedule them (see <see cref="TaskOccurrence.DeferTo"/>) and
+    /// save the change - unlike the other lookups here, which only ever read.
+    /// </summary>
+    Task<IReadOnlyList<TaskOccurrence>> ListOutstandingOnOrBeforeAsync(
+        Guid householdId,
+        Guid taskDefinitionId,
+        DateOnly onOrBefore,
+        CancellationToken cancellationToken);
 }
