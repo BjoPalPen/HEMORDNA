@@ -1,5 +1,4 @@
 @page "/planering"
-@using Hemordna.Client.Support
 @inject HemordnaApiClient Api
 @inject HemordnaSession Session
 
@@ -31,7 +30,7 @@ else
         {
             <li class="list-item">
                 <span class="list-name">@day.Label</span>
-                <span class="list-meta muted small">@day.LevelLabel</span>
+                <span class="list-meta muted small">@day.MinutesLabel</span>
             </li>
         }
     </ul>
@@ -57,21 +56,17 @@ else
         _member = household?.Members.FirstOrDefault(m => m.Id == memberId);
     }
 
-    private static IEnumerable<(string Label, string LevelLabel)> Weekdays(HouseholdMemberResponse member)
+    private static IEnumerable<(string Label, string MinutesLabel)> Weekdays(HouseholdMemberResponse member)
     {
         var budget = member.WeeklyTimeBudgetMinutes;
-        yield return ("Måndag", LevelLabelFor(budget.Monday));
-        yield return ("Tisdag", LevelLabelFor(budget.Tuesday));
-        yield return ("Onsdag", LevelLabelFor(budget.Wednesday));
-        yield return ("Torsdag", LevelLabelFor(budget.Thursday));
-        yield return ("Fredag", LevelLabelFor(budget.Friday));
-        yield return ("Lördag", LevelLabelFor(budget.Saturday));
-        yield return ("Söndag", LevelLabelFor(budget.Sunday));
+        yield return ("Måndag", MinutesLabelFor(budget.Monday));
+        yield return ("Tisdag", MinutesLabelFor(budget.Tuesday));
+        yield return ("Onsdag", MinutesLabelFor(budget.Wednesday));
+        yield return ("Torsdag", MinutesLabelFor(budget.Thursday));
+        yield return ("Fredag", MinutesLabelFor(budget.Friday));
+        yield return ("Lördag", MinutesLabelFor(budget.Saturday));
+        yield return ("Söndag", MinutesLabelFor(budget.Sunday));
     }
 
-    private static string LevelLabelFor(int minutes)
-    {
-        var closest = TimeLevel.ClosestMinutes(minutes);
-        return TimeLevel.All.First(level => level.Minutes == closest).Label;
-    }
+    private static string MinutesLabelFor(int minutes) => minutes == 0 ? "Ingen tid" : $"{minutes} min";
 }

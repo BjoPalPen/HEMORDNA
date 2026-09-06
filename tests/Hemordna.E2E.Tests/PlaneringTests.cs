@@ -10,7 +10,7 @@ public class PlaneringTests
     public PlaneringTests(HemordnaAppFixture app) => _app = app;
 
     [Fact]
-    public async Task Shows_a_qualitative_row_for_every_weekday()
+    public async Task Shows_a_minutes_row_for_every_weekday()
     {
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Johanna");
@@ -20,7 +20,7 @@ public class PlaneringTests
 
         await Assertions.Expect(page.Locator(".list-item")).ToHaveCountAsync(7);
         // A fresh household starts its creator at zero minutes a day - see CreateHousehold.
-        // No number anywhere - "Ingen tid" is the qualitative equivalent.
+        // Zero reads as "Ingen tid" rather than "0 min".
         await Assertions.Expect(page.Locator(".list-item").First).ToContainTextAsync("Ingen tid");
     }
 }
