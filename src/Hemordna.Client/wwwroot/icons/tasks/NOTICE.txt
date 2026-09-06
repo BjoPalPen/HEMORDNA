@@ -7,3 +7,51 @@ https://www.apache.org/licenses/LICENSE-2.0
 
 Unmodified, outlined style, 24px, fetched from:
 https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/{icon_name}/materialsymbolsoutlined/{icon_name}_24px.svg
+
+Only air.svg and shopping_cart.svg remain from this set (no suitable Mulberry
+Symbols match was found for those two concepts - see below).
+
+----------------------------------------------------------------------
+
+The following icons are from the Mulberry Symbols set:
+https://mulberrysymbols.org
+https://github.com/mulberrysymbols/mulberry-symbols
+
+Copyright 2018-2026 Steve Lee. Licensed under Creative Commons
+Attribution-ShareAlike 4.0 International (CC BY-SA 4.0):
+https://creativecommons.org/licenses/by-sa/4.0/
+
+NOTE: The repository's own LICENSE.txt and the mulberrysymbols.org site both
+state CC BY-SA 4.0 (not the CC BY-SA 2.0 UK: England & Wales variant that was
+assumed when this icon set was chosen). Confirm this is acceptable before
+relying on the earlier assumption elsewhere in the project.
+
+Attribution suggested by the rights holder: "Mulberry Symbols by Steve Lee
+are licensed under the Creative Commons Attribution-ShareAlike 4.0 License.
+See https://mulberrysymbols.org for details"
+
+Unmodified, fetched from:
+https://raw.githubusercontent.com/mulberrysymbols/mulberry-symbols/master/EN/{mulberry_symbol_name}.svg
+
+Mapping of app concept_key to the Mulberry symbol name it was sourced from:
+  restaurant.svg              <- "wash up, to"
+  cleaning_services.svg       <- "cleaner spray"
+  kitchen.svg                 <- "cooker"
+  delete.svg                  <- "wheelie bin"
+  window.svg                  <- "window"
+  bed.svg                     <- "double bed"
+  checkroom.svg               <- "wardrobe"
+  local_laundry_service.svg   <- "washing machine"
+  wc.svg                      <- "toilet"
+  wash.svg                    <- "wash hands, to"
+  shower.svg                  <- "shower"
+  bathtub.svg                 <- "bath"
+  mail.svg                    <- "letter"
+  desk.svg                    <- "desk"
+  table_restaurant.svg        <- "dining table"
+  pets.svg                    <- "dog"
+  yard.svg                    <- "back garden"
+  directions_car.svg          <- "car"
+  weekend.svg                 <- "settee 1"
+  door_front.svg              <- "front door"
+  task_alt.svg                <- "correct"

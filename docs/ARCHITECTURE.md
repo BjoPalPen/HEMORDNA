@@ -202,11 +202,14 @@ gången, plus `ImageOnly`/`ReadAloud` förberedda) och motivationsnivå (`Motiva
 `ImageAndText` läses av `MinDag.razor` (`ShowIcons`): en ikon per uppgift, gissad från
 uppgiftens namn (`Hemordna.Client.Support.TaskIcons.For`) med området som reserv om inget
 nyckelord i namnet träffar. Inga riktiga foton - en fri text-uppgift som "Diska köket" har
-inget foto att matcha mot, så det blev Google Material Symbols (Apache 2.0,
-`wwwroot/icons/tasks/*.svg`, se NOTICE.txt där) i stället: självhämtade SVG:er, fungerar
-offline, ingen licens att hålla reda på per bild. Listan med nyckelord är medvetet liten - ny
-ikon krävs bara när ett vanligt förekommande ord saknar träff, inte i förväg för varje tänkbar
-uppgift.
+inget foto att matcha mot, så det blev självhämtade SVG-pictogram i stället (fungerar offline,
+ingen bildhantering per uppgift). Bildkällan är medvetet ett riktigt AAC-pictogramsystem
+(Mulberry Symbols, CC BY-SA 4.0, inget kommersiellt förbud) snarare än en generisk ikonuppsättning,
+se `wwwroot/icons/tasks/NOTICE.txt` för attribution och exakt vilken symbol varje fil kommer
+från. Två koncept (`air`, `shopping_cart`) saknar en bra Mulberry-motsvarighet och är kvar som
+Google Material Symbols (Apache 2.0) - blandade licenser i samma mapp är avsiktligt, se
+NOTICE.txt. Listan med nyckelord är medvetet liten - ny ikon krävs bara när ett vanligt
+förekommande ord saknar träff, inte i förväg för varje tänkbar uppgift.
 
 ### Identifierare
 
