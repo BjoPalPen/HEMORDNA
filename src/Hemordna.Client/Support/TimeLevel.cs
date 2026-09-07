@@ -10,9 +10,9 @@ public static class TimeLevel
     public static readonly (string Label, int Minutes)[] All =
     [
         ("Ingen tid", 0),
-        ("Lite tid", 15),
-        ("Lagom tid", 30),
-        ("Gott om tid", 60)
+        ("Lite tid", 5),
+        ("Lagom tid", 15),
+        ("Lång tid", 30)
     ];
 
     /// <summary>The closest level to a stored minute value, for pre-selecting an editor.</summary>

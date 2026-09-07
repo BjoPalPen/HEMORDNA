@@ -24,13 +24,25 @@ public class ChangeTaskEstimatedMinutesTests
     }
 
     [Fact]
-    public async Task Rejects_a_non_positive_estimate()
+    public async Task Accepts_zero_as_a_deliberate_choice()
+    {
+        var task = TaskDefinition.Create(Guid.NewGuid(), "Dammsug vardagsrum", 15, Now);
+        _definitions.Seed(task);
+
+        var result = await CreateUseCase().HandleAsync(
+            task.HouseholdId, task.Id, estimatedMinutes: 0, CancellationToken.None);
+
+        Assert.Equal(0, result!.EstimatedMinutes);
+    }
+
+    [Fact]
+    public async Task Rejects_a_negative_estimate()
     {
         var task = TaskDefinition.Create(Guid.NewGuid(), "Dammsug vardagsrum", 15, Now);
         _definitions.Seed(task);
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => CreateUseCase().HandleAsync(
-            task.HouseholdId, task.Id, estimatedMinutes: 0, CancellationToken.None));
+            task.HouseholdId, task.Id, estimatedMinutes: -15, CancellationToken.None));
     }
 
     [Fact]

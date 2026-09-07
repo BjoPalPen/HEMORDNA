@@ -329,12 +329,6 @@
 
     private async Task SaveTimeAsync()
     {
-        if (_estimatedMinutes <= 0)
-        {
-            _message = "Välj ungefär hur mycket tid uppgiften tar.";
-            return;
-        }
-
         _busy = true;
         _message = null;
 

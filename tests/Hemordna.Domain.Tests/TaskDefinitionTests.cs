@@ -23,18 +23,30 @@ public class TaskDefinitionTests
         Assert.Equal(HouseholdId, definition.HouseholdId);
     }
 
-    [Theory]
-    [InlineData(0)]
-    [InlineData(-15)]
-    public void An_estimate_must_be_greater_than_zero(int estimatedMinutes)
-        => Assert.Throws<ArgumentOutOfRangeException>(() => CreateDefinition(estimatedMinutes));
+    [Fact]
+    public void An_estimate_of_zero_is_a_deliberate_choice_not_an_error()
+        => Assert.Equal(0, CreateDefinition(0).EstimatedMinutes);
 
     [Fact]
-    public void ChangeEstimatedMinutes_rejects_a_non_positive_estimate()
+    public void An_estimate_must_not_be_negative()
+        => Assert.Throws<ArgumentOutOfRangeException>(() => CreateDefinition(-15));
+
+    [Fact]
+    public void ChangeEstimatedMinutes_accepts_zero()
     {
         var definition = CreateDefinition();
 
-        Assert.Throws<ArgumentOutOfRangeException>(() => definition.ChangeEstimatedMinutes(0));
+        definition.ChangeEstimatedMinutes(0);
+
+        Assert.Equal(0, definition.EstimatedMinutes);
+    }
+
+    [Fact]
+    public void ChangeEstimatedMinutes_rejects_a_negative_estimate()
+    {
+        var definition = CreateDefinition();
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => definition.ChangeEstimatedMinutes(-15));
         Assert.Equal(10, definition.EstimatedMinutes);
     }
 

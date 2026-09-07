@@ -1137,15 +1137,44 @@ användaren innan implementation (samma "stanna och rapportera"-princip som CLAU
 nya Api-fält).
 
 - **`Application.Tasks.ChangeTaskEstimatedMinutes`** följer `SetTaskRequiresAdult`s exakta
-  mönster. **`PUT .../tasks/{id}/estimated-minutes`** i samma stil som de fyra andra raderna,
-  med samma `<= 0`-validering (`ValidationProblem`) som skapande-endpointen redan hade.
+  mönster. **`PUT .../tasks/{id}/estimated-minutes`** i samma stil som de fyra andra raderna.
 - **Ny "Tid"-rad** i `TaskOptionsSheet`, mellan "Vem gör det" och "Rum" - samma
-  `TimeLevel`-knappar (`Ingen/Lite/Lagom/Gott om tid`) som "Lägg till uppgift" redan använder,
-  förvalda på närmaste nivå (`TimeLevel.ClosestMinutes`). Samma `> 0`-krav som vid skapande
-  ("Välj ungefär hur mycket tid uppgiften tar") - en uppgift på "Ingen tid" är inte en
-  meningsfull redigering, bara ett oavsiktligt förval.
+  `TimeLevel`-knappar som "Lägg till uppgift" redan använder, förvalda på närmaste nivå
+  (`TimeLevel.ClosestMinutes`).
 - Inget brott mot §6a: `TaskOptionsSheet` öppnas bara från Rum (planeringsläge), aldrig från
   Idag - samma undantag som redan gäller `RoomTile`/`RoomSheet`s egna minutsiffror.
+
+**Uppföljning på uppföljningen, samma dag:** produktfeedback att skalan kändes fel - "Ingen tid"
+borde faktiskt gå att spara (en uppgift som knappt tar någon tid alls är en rimlig, avsiktlig
+beskrivning, inte ett oifyllt fält), och de tre andra nivåerna för höga. `TimeLevel.All` är:
+
+| Nivå | Tidigare | Nu |
+|---|---|---|
+| Ingen tid | 0 min (gick inte att spara) | 0 min (giltigt val) |
+| Lite tid | 15 min | 5 min |
+| Lagom tid | 30 min | 15 min |
+| Gott om tid → **Lång tid** | 60 min | 30 min |
+
+`TimeLevel` är delad av `RoomSheet`/`TaskOptionsSheet` (uppgifters tid), `MemberSheet`/
+`Hushall.razor` (en medlems anpassade veckotid, dag för dag) och `MinDag.razor`s "Extra
+uppgift" - samma skala används överallt en tid väljs kvalitativt, medvetet, snarare än att
+duplicera fyra separata skalor för fyra separata sammanhang.
+
+Att göra 0 giltigt krävde att lätta på valideringen i tre lager, inte bara byta siffror i
+klienten - annars hade "Ingen tid" fortfarande kastats ut:
+
+- **Domain**: `TaskDefinition.Create`/`ChangeEstimatedMinutes` bytte `Guard.AgainstNonPositive`
+  → `Guard.AgainstNegative` - samma guard `TaskAssignment`/`WeeklyTimeBudget`/
+  `MemberAvailability` redan använde för minutfält, så definitionen blev konsekvent med resten
+  av domänen snarare än en egen, strängare regel.
+- **Api**: båda `<= 0`-valideringarna (skapa uppgift, ändra tid) bytte till `< 0` - felmeddelandet
+  blev "Uppskattad tid kan inte vara negativ" i stället för "...måste vara större än noll".
+- **Klient**: `RoomSheet.AddTaskAsync`/`TaskOptionsSheet.SaveTimeAsync`s egna
+  "Välj ungefär hur mycket tid..."-spärrar togs bort - alla fyra knappvärden är nu giltiga, det
+  finns inget kvarvarande ogiltigt läge att spärra mot.
+- Ingen delning-med-noll-risk: sökt igenom Application/Client efter `EstimatedMinutes` -
+  bara `Sum`/multiplikation någonstans (`DailyPlan`, `TaskWorkload`, `RebalanceTaskAssignments`
+  m.fl.), aldrig division.
 
 ---
 

@@ -269,8 +269,8 @@ lista (namn, upprepning, minuter, "roterar"/medlemsnamn, "endast vuxna"), en "Ru
 (⋯) med "Ändra frekvens för hela rummet"/"Byt namn"/"Ta bort rum", och en "+ Lägg till
 uppgift"-rad. Att trycka på en uppgift öppnar `Components/TaskOptionsSheet.razor`:
 Upprepning/Vem gör det/Tid/Rum som varsin rad som drillar ner till ett eget litet formulär inuti
-samma ark ("Tid" med samma kvalitativa knappar - Ingen/Lite/Lagom/Gott om tid - som "Lägg till
-uppgift" redan använder), en "Kräver vuxen"-växel, och "Ta bort uppgiften" i rönn-ink längst
+samma ark ("Tid" med samma kvalitativa knappar - Ingen/Lite/Lagom/Lång tid, se §6a - som
+"Lägg till uppgift" redan använder), en "Kräver vuxen"-växel, och "Ta bort uppgiften" i rönn-ink längst
 ner. "+ Nytt rum" öppnar ett ark med rumsmalls-väljaren (namnge våning, rumstyp, antal - se §6b) och en
 disclosure "Lägg till ett tomt rum i stället" för grupperingar som inte är ett rum (t.ex.
 "Hund", "Garage").
@@ -290,7 +290,8 @@ Domänen räknar fortfarande i minuter (uppskattad tid, veckobudget, `availableM
 API:t) – det är vad `RecurrenceRule`, `DailyPlanner` och rotationslogiken behöver för att
 räkna ut vad som får plats en given dag. Men inget UI-lager visar den siffran. Klienten
 mappar minuter till fyra kvalitativa lägen (`Hemordna.Client.Support.TimeLevel`: Ingen tid/
-Lite tid/Lagom tid/Gott om tid → 0/15/30/60 min) och visar bara läget, aldrig talet.
+Lite tid/Lagom tid/Lång tid → 0/5/15/30 min - "Ingen tid" är ett giltigt, sparbart val, inte
+bara ett tomt förval) och visar bara läget, aldrig talet.
 
 Bakgrund: alltför mycket tidsvisning (minuträknare, progress-ringar, stapeldiagram) skapar
 stress snarare än lugn – motsatsen till appens syfte. Uppgiften och bocken räcker; tiden är

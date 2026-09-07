@@ -96,7 +96,7 @@ public sealed class TaskDefinition
         DateTimeOffset createdAt)
     {
         Guard.AgainstEmpty(householdId, nameof(householdId));
-        Guard.AgainstNonPositive(estimatedMinutes, nameof(estimatedMinutes));
+        Guard.AgainstNegative(estimatedMinutes, nameof(estimatedMinutes));
 
         return new TaskDefinition(
             Guid.NewGuid(),
@@ -112,7 +112,7 @@ public sealed class TaskDefinition
         => Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
 
     public void ChangeEstimatedMinutes(int estimatedMinutes)
-        => EstimatedMinutes = Guard.AgainstNonPositive(estimatedMinutes, nameof(estimatedMinutes));
+        => EstimatedMinutes = Guard.AgainstNegative(estimatedMinutes, nameof(estimatedMinutes));
 
     public void ChangePriority(TaskPriority priority)
     {

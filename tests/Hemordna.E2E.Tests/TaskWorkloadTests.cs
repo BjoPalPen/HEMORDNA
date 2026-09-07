@@ -30,15 +30,15 @@ public class TaskWorkloadTests
         await room.GetByRole(AriaRole.Button, new() { Name = "Lägg till uppgift" }).ClickAsync();
         var addSheet = page.GetByRole(AriaRole.Dialog, new() { Name = "Lägg till uppgift i Kök" });
         await addSheet.GetByLabel("Namn").FillAsync("Diska");
-        await addSheet.GetByRole(AriaRole.Button, new() { Name = "Lite tid" }).ClickAsync(); // 15 min
+        await addSheet.GetByRole(AriaRole.Button, new() { Name = "Lite tid" }).ClickAsync(); // 5 min
         await addSheet.GetByLabel("Upprepning").SelectOptionAsync("Daily");
         await addSheet.GetByRole(AriaRole.Button, new() { Name = "Lägg till uppgift" }).ClickAsync();
         await room.GetByRole(AriaRole.Button, new() { Name = "Diska" }).WaitForAsync();
         await room.GetByRole(AriaRole.Button, new() { Name = "Stäng" }).ClickAsync();
 
-        // A daily 15-minute task is ~105 min/week (15 * 7) - very different from the flat,
-        // frequency-blind "Totalt: ... min" figure, which would only ever show 15.
-        await Assertions.Expect(page.GetByText("Ungefär 105 min/vecka")).ToBeVisibleAsync();
+        // A daily 5-minute task is ~35 min/week (5 * 7) - very different from the flat,
+        // frequency-blind "Totalt: ... min" figure, which would only ever show 5.
+        await Assertions.Expect(page.GetByText("Ungefär 35 min/vecka")).ToBeVisibleAsync();
 
         // A fresh household's creator starts at zero weekly capacity (see CreateHousehold) -
         // so any real task should immediately flag as more than the household can cover yet.
@@ -67,11 +67,11 @@ public class TaskWorkloadTests
         await room.GetByRole(AriaRole.Button, new() { Name = "Lägg till uppgift" }).ClickAsync();
         var addSheet = page.GetByRole(AriaRole.Dialog, new() { Name = "Lägg till uppgift i Kök" });
         await addSheet.GetByLabel("Namn").FillAsync("Diska");
-        await addSheet.GetByRole(AriaRole.Button, new() { Name = "Lite tid" }).ClickAsync(); // 15 min
+        await addSheet.GetByRole(AriaRole.Button, new() { Name = "Lite tid" }).ClickAsync(); // 5 min
         await addSheet.GetByRole(AriaRole.Button, new() { Name = "Lägg till uppgift" }).ClickAsync();
 
         var taskRow = room.GetByRole(AriaRole.Button, new() { Name = "Diska" });
-        await Assertions.Expect(taskRow).ToContainTextAsync("15 min");
+        await Assertions.Expect(taskRow).ToContainTextAsync("5 min");
 
         // Time was only ever settable at creation until TaskOptionsSheet grew its own "Tid" row -
         // TaskDefinition.ChangeEstimatedMinutes already existed, unused, same gap steg 3 found
@@ -79,11 +79,11 @@ public class TaskWorkloadTests
         await taskRow.ClickAsync();
         var taskSheet = page.GetByRole(AriaRole.Dialog, new() { Name = "Diska" });
         await taskSheet.GetByRole(AriaRole.Button, new() { Name = "Tid" }).ClickAsync();
-        await taskSheet.GetByRole(AriaRole.Button, new() { Name = "Gott om tid" }).ClickAsync(); // 60 min
+        await taskSheet.GetByRole(AriaRole.Button, new() { Name = "Lång tid" }).ClickAsync(); // 30 min
         await taskSheet.GetByRole(AriaRole.Button, new() { Name = "Spara" }).ClickAsync();
         await taskSheet.GetByRole(AriaRole.Button, new() { Name = "Stäng" }).ClickAsync();
 
-        await Assertions.Expect(taskRow).ToContainTextAsync("60 min");
-        await Assertions.Expect(taskRow).Not.ToContainTextAsync("15 min");
+        await Assertions.Expect(taskRow).ToContainTextAsync("30 min");
+        await Assertions.Expect(taskRow).Not.ToContainTextAsync("5 min");
     }
 }

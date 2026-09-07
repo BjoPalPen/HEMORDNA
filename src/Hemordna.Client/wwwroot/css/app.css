@@ -347,7 +347,7 @@ a {
     min-height: 0;
 }
 
-/* A row of qualitative choices (Ingen/Lite/Lagom/Gott om tid) standing in for a minute count -
+/* A row of qualitative choices (Ingen/Lite/Lagom/Lång tid) standing in for a minute count -
    see Hemordna.Client.Support.TimeLevel for why nothing in the app asks for a number instead. */
 .level-picker {
     display: flex;

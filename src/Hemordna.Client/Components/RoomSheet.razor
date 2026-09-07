@@ -269,7 +269,7 @@
     private sealed class AddTaskForm
     {
         public string Name { get; set; } = string.Empty;
-        public int EstimatedMinutes { get; set; } = 30;
+        public int EstimatedMinutes { get; set; } = 15;
         public string Recurrence { get; set; } = string.Empty;
         public int Interval { get; set; } = 1;
         public bool RequiresAdult { get; set; }
@@ -451,12 +451,6 @@
         if (string.IsNullOrWhiteSpace(_addForm.Name))
         {
             _addMessage = "Uppgiften behöver ett namn.";
-            return;
-        }
-
-        if (_addForm.EstimatedMinutes <= 0)
-        {
-            _addMessage = "Välj ungefär hur mycket tid uppgiften tar.";
             return;
         }
 

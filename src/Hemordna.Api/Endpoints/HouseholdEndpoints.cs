@@ -390,11 +390,11 @@ internal static class HouseholdEndpoints
             });
         }
 
-        if (request.EstimatedMinutes <= 0)
+        if (request.EstimatedMinutes < 0)
         {
             return Results.ValidationProblem(new Dictionary<string, string[]>
             {
-                [nameof(request.EstimatedMinutes)] = ["Uppskattad tid måste vara större än noll."]
+                [nameof(request.EstimatedMinutes)] = ["Uppskattad tid kan inte vara negativ."]
             });
         }
 
@@ -490,11 +490,11 @@ internal static class HouseholdEndpoints
         ChangeTaskEstimatedMinutes changeTaskEstimatedMinutes,
         CancellationToken cancellationToken)
     {
-        if (request.EstimatedMinutes <= 0)
+        if (request.EstimatedMinutes < 0)
         {
             return Results.ValidationProblem(new Dictionary<string, string[]>
             {
-                [nameof(request.EstimatedMinutes)] = ["Uppskattad tid måste vara större än noll."]
+                [nameof(request.EstimatedMinutes)] = ["Uppskattad tid kan inte vara negativ."]
             });
         }
 
