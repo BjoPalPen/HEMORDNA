@@ -1,0 +1,76 @@
+.sheet-scrim {
+    position: fixed;
+    inset: 0;
+    background: rgba(34, 40, 46, .35);
+    z-index: 20;
+}
+
+.sheet-shell {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 21;
+    max-height: 85vh;
+    overflow-y: auto;
+    background: var(--surface);
+    border-radius: 22px 22px 0 0;
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, .18);
+    padding: var(--space-2) var(--space-4) var(--space-5);
+}
+
+.sheet-handle {
+    width: 36px;
+    height: 4px;
+    margin: 0 auto var(--space-3);
+    border-radius: var(--pill);
+    background: var(--line);
+}
+
+.sheet-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+}
+
+.sheet-header h2 {
+    font-size: calc(var(--font-size-base) * 1.1);
+}
+
+.sheet-close {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 0 var(--space-3);
+    border: none;
+    border-radius: var(--radius-sm);
+    background: var(--surface-2);
+    color: var(--sot);
+    font: inherit;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.sheet-close:hover {
+    background: var(--aska-soft);
+}
+
+/* Desktop: the same component renders as a centered dialog, not an edge-anchored sheet. */
+@media (min-width: 640px) {
+    .sheet-shell {
+        left: 50%;
+        right: auto;
+        bottom: auto;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        width: min(480px, calc(100vw - var(--space-6)));
+        max-height: 80vh;
+        border-radius: var(--radius);
+        padding: var(--space-4) var(--space-5) var(--space-5);
+    }
+
+    .sheet-handle {
+        display: none;
+    }
+}

@@ -4,7 +4,7 @@
     justify-content: center;
     min-height: 100vh;
     padding: var(--space-4);
-    background: var(--color-bg);
+    background: var(--kalk);
 }
 
 .signin-card {
@@ -19,7 +19,7 @@
 
 .signin-brand h1 {
     margin-top: var(--space-2);
-    color: var(--color-brand);
+    color: var(--gustav-ink);
     font-size: calc(var(--font-size-base) * 1.7);
 }
 
@@ -28,8 +28,8 @@
     gap: var(--space-1);
     padding: var(--space-1);
     margin-bottom: var(--space-5);
-    background: var(--color-secondary-soft);
-    border-radius: var(--radius-control);
+    background: var(--aska-soft);
+    border-radius: var(--radius-sm);
 }
 
 .tab {
@@ -39,13 +39,13 @@
     border-radius: 8px;
     background: transparent;
     font: inherit;
-    color: var(--color-text-soft);
+    color: var(--sot-soft);
     cursor: pointer;
 }
 
 .tab-active {
-    background: var(--color-surface);
-    color: var(--color-text);
+    background: var(--surface);
+    color: var(--sot);
     font-weight: 600;
 }
 

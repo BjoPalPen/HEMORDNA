@@ -5,6 +5,7 @@
 @inject HemordnaSession Session
 @inject TimeProvider TimeProvider
 @inject HouseholdRealtimeClient Realtime
+@inject NavigationManager Navigation
 
 <PageTitle>Hushåll – Hemordna</PageTitle>
 
@@ -305,6 +306,18 @@ else
             </button>
         </EditForm>
     </div>
+
+    @* Tillfälligt tills steg 4 (Hushåll/Vecka), som ger de här raderna sin riktiga plats
+       bland hushållets sällanhandlingar - se docs/DESIGN.md "Navigation". Utan detta hade
+       /mer → /hushall lämnat Inställningar och Logga ut oåtkomliga. *@
+    <ul class="list" aria-label="Konto">
+        <li class="list-item">
+            <a href="installningar" class="list-name">Inställningar ›</a>
+        </li>
+        <li class="list-item">
+            <button type="button" class="btn-link" @onclick="SignOutAsync">Logga ut</button>
+        </li>
+    </ul>
 }
 
 @code {
@@ -693,5 +706,11 @@ else
         {
             _busy = false;
         }
+    }
+
+    private async Task SignOutAsync()
+    {
+        await Session.SignOutAsync();
+        Navigation.NavigateTo("logga-in");
     }
 }

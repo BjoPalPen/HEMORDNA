@@ -17,8 +17,8 @@
 .chart-bar {
     width: 100%;
     max-width: 40px;
-    border-radius: var(--radius-control) var(--radius-control) 0 0;
-    background: var(--color-primary);
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+    background: var(--gustav);
 }
 
 .chart-value {

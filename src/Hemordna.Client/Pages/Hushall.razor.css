@@ -2,12 +2,12 @@
     flex-shrink: 0;
     min-height: 36px;
     padding: 0 var(--space-2);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-control);
-    background: var(--color-surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
     font: inherit;
     font-size: calc(var(--font-size-base) * .85);
-    color: var(--color-text-soft);
+    color: var(--sot-soft);
 }
 
 .avatar {
@@ -17,9 +17,9 @@
     width: 32px;
     height: 32px;
     flex-shrink: 0;
-    border-radius: var(--radius-pill);
-    background: var(--color-primary-soft);
-    color: var(--color-primary-strong);
+    border-radius: var(--pill);
+    background: var(--gustav-soft);
+    color: var(--gustav-ink);
     font-weight: 600;
 }
 
@@ -39,7 +39,7 @@
 }
 
 .week-grid thead th {
-    color: var(--color-text-soft);
+    color: var(--sot-soft);
     font-weight: 500;
     font-size: calc(var(--font-size-base) * .8);
     text-transform: capitalize;
@@ -52,25 +52,25 @@
 }
 
 .week-grid-today {
-    background: var(--color-primary-soft);
-    border-radius: var(--radius-control);
+    background: var(--gustav-soft);
+    border-radius: var(--radius-sm);
 }
 
 .dot {
     display: inline-block;
     width: 12px;
     height: 12px;
-    border-radius: var(--radius-pill);
-    background: var(--color-border);
+    border-radius: var(--pill);
+    background: var(--line);
 }
 
 .dot-done {
-    background: var(--color-primary);
+    background: var(--gustav);
 }
 
 .dot-planned {
-    background: var(--color-surface);
-    border: 2px solid var(--color-primary);
+    background: var(--surface);
+    border: 2px solid var(--gustav);
 }
 
 .activity-day {
@@ -107,13 +107,13 @@
 
 .day-ring-track {
     fill: none;
-    stroke: var(--color-border);
+    stroke: var(--line);
     stroke-width: 3;
 }
 
 .day-ring-fill {
     fill: none;
-    stroke: var(--color-primary);
+    stroke: var(--gustav);
     stroke-width: 3;
     stroke-linecap: round;
     transition: stroke-dasharray .3s ease;
@@ -122,8 +122,8 @@
 .invite-code {
     display: inline-block;
     padding: var(--space-3) var(--space-5);
-    background: var(--color-primary-soft);
-    border-radius: var(--radius-control);
+    background: var(--gustav-soft);
+    border-radius: var(--radius-sm);
     font-family: ui-monospace, "Cascadia Code", "SF Mono", Consolas, monospace;
     font-size: 1.25rem;
     font-weight: 600;

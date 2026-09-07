@@ -1,6 +1,7 @@
 # Hemordna – Design
 
-Visuell riktning och gränssnittsprinciper. Fastställd utifrån mockup 2026-09-04.
+Visuell riktning och gränssnittsprinciper. Grunden lades om 2026-09-07 ("Ny form" – se
+[ARCHITECTURE.md](ARCHITECTURE.md) för varför); mockupen från 2026-09-04 är ersatt.
 
 Produktreglerna som styr designen finns i [PRODUCT.md](PRODUCT.md) – särskilt §4 (Min dag
 som huvudskärm), §7 (individuell presentation) och §8 (motivation utan skuldbeläggning).
@@ -21,45 +22,82 @@ Designen får aldrig få användaren att känna sig sen, granskad eller jämför
 
 ## 2. Färger
 
+Gustaviansk blå – den blågrå tonen från svenska 1700-talsinteriörer – är identiteten. Grönt
+förekommer inte längre någonstans i appen. Saffran är den enda varma accenten och används
+uteslutande för att markera "idag". Svenska namn i koden (`--kalk`, `--gustav` osv. i
+`wwwroot/css/app.css`) – se `docs/handoff` eller `app.css` för de fullständiga
+CSS-variabelnamnen.
+
 | Roll | Namn | Värde | Används till |
 |---|---|---|---|
-| Primär | Lugn grön | `#4E9D74` | Knappar, aktiv navigation, progress, bockar |
-| Primär stark | | `#3C7E5B` | Hover, tryckt läge |
-| Primär mjuk | | `#E8F3EC` | Aktiv navigationsrad, mjuka fyllningar |
-| Sekundär | Varm beige | `#E5DAC8` | Sekundära ytor, chips |
-| Sekundär mjuk | | `#F5EFE5` | Kortbakgrund med värme |
-| Accent | Mjuk blå | `#5B8CC4` | Informationsmarkeringar, sekundära ikoner |
-| Varning | Varm orange | `#E07A5F` | Endast för faktiska problem – aldrig för "sent" |
-| Bakgrund | Ljus och luftig | `#FBFAF7` | Sidbakgrund |
+| Bakgrund | Kalk | `#F5F3EE` | Sidbakgrund |
 | Yta | | `#FFFFFF` | Kort och paneler |
-| Text | | `#2C3330` | Brödtext och rubriker |
-| Text mjuk | | `#6B7570` | Sekundär text, lägesetiketter, områdesetiketter |
-| Ram | | `#E6E4DE` | Kortkanter, avdelare |
-| Logotyp | Skifferblå | `#3F6191` | Endast logotypen |
+| Yta 2 | | `#ECE9E2` | Sekundära ytor, chips, `btn-secondary` |
+| Text | Sot | `#22282E` | Brödtext och rubriker |
+| Text mjuk | | `#5C666E` | Sekundär text, etiketter |
+| Linje | | `#DDDAD2` | Kortkanter, avdelare |
+| Primär | Gustaviansk | `#4A6C8C` | Knappar, aktiv navigation, klar-bock |
+| Primär stark | | `#3A5670` | Hover, tryckt läge, aktiv navigationstext |
+| Primär mjuk | | `#DFE7EF` | Aktiv navigationsrad, primära chips |
+| Accent | Saffran | `#E9B44C` | **Endast** "idag"-markering (veckogrid, dagens kolumn) |
+| Accent mjuk | | `#FBEFD2` | Bakgrund för "idag"-markering |
+| Sekundär | Aska | `#9AA3A8` | Fokusring, sekundära ikoner |
+| Sekundär mjuk | | `#E9ECEE` | Sekundära ytor (hover) |
+| Varning/ta bort | Rönn | `#C25A4A` | Ramar och ikoner för destruktiva val – **inte text**, se nedan |
+| Varning/ta bort, text | | `#A04128` (`--ronn-ink`) | Text på destruktiva knappar/länkar |
+| Varning/ta bort, mjuk | | `#F6E1DD` | Bakgrund för destruktiva knappar |
+| Logotyp | Skifferblå | `#3F6191` | Endast logotypen (oförändrad, se §9) |
 
-Varningsfärgen är medvetet varm och används sparsamt. En försenad uppgift är **inte** ett
-fel – den markeras med ord ("sedan i tisdags"), inte med rött.
+En försenad uppgift är **inte** ett fel – den markeras med ord ("sedan tidigare"), inte med
+rönn. Rönn är förbehållet faktiska destruktiva val ("Ta bort").
 
-Alla färgpar ska klara WCAG AA för text.
+Alla färgpar ska klara WCAG AA för text. `--ronn` (`#C25A4A`) klarar det **inte** som text mot
+vare sig `--kalk` (3.90:1) eller `--ronn-soft` (3.45:1) – därför finns `--ronn-ink` (`#A04128`,
+5.77:1 respektive 5.10:1) som den faktiska textfärgen på destruktiva knappar och länkar; `--ronn`
+används bara till ramar och ikoner. Uppmätta värden för de tre par som är explicit
+verifieringskrav: `--gustav` på `--kalk` 4.96:1, vit på `--gustav` 5.50:1, `--sot-soft` på
+`--kalk` 5.29:1.
+
+Mörkt läge är **ritat, inte inverterat** och planerat till ett senare steg (dark-tokens,
+`data-theme`-växel i Inställningar) – se ARCHITECTURE.md "Ny form".
 
 ## 3. Form
 
-- Radie: `12px` på kort, `10px` på knappar och fält, `999px` på chips och avatarer.
-- Skugga: mycket subtil, `0 1px 2px rgba(44,51,48,.06)`. Djup skapas med ramar och luft.
-- Avstånd bygger på en 4px-skala: 4, 8, 12, 16, 24, 32, 48.
+- Radie: `--radius` (14px) på kort, `--radius-sm` (10px) på knappar och fält (utom piller),
+  `--pill` (999px) på knappar, chips och avatarer.
+- Skugga: mycket subtil, `0 1px 2px rgba(34,40,46,.06)`. Djup skapas med ramar och luft.
+- Avstånd bygger på en 4px-skala: 4, 8, 12, 16, 24, 32, 48 (`--space-1`…`--space-7`,
+  oförändrade).
 
 ## 4. Typografi
 
-Systemtypsnitt – snabbt, lokalt, inga externa anrop.
+Två självhostade typsnitt i `wwwroot/fonts/` (SIL OFL, licensfiler bredvid), förcachade av
+service workern för offline-start – ingen extern font-CDN.
+
+| Roll | Typsnitt | Används till |
+|---|---|---|
+| Rubriker, navigation, knappar, chips, etiketter | Familjen Grotesk (400/500/600/700) | `--font-display` |
+| Brödtext, uppgiftsbeskrivningar, hela Stor text-läget | Atkinson Hyperlegible (400/700) | `--font-body` |
 
 | Roll | Storlek | Vikt |
 |---|---|---|
-| Sidrubrik ("Hej Anna!") | 28–32px | 600 |
-| Sektionsrubrik | 18px | 600 |
-| Brödtext | 15px | 400 |
-| Sekundär | 13px | 400 |
+| Sidrubrik ("Hej Anna!") | 28–32px | 700, Familjen Grotesk |
+| Sektionsrubrik | 18px | 600, Familjen Grotesk |
+| Brödtext | 15px | 400, Atkinson Hyperlegible |
+| Sekundär | 13px | 400, Atkinson Hyperlegible |
 
-Stor text-läget (se §7) skalar upp bastexten – det är inte en egen typografi.
+Stor text-läget (se §7) skalar upp bastexten – det är inte en egen typografi. Atkinson
+Hyperlegible är i sig format för läsare med nedsatt syn, så Stor text-läget får ett typsnitt
+byggt för det snarare än bara en större siffra.
+
+## 4a. Ikoner och komponenter
+
+Inline-SVG (stroke 1.9, round caps) via `Components/Icon.razor` – inga Unicode-tecken som
+ikoner. Namngivna ikoner: `sun`, `grid`, `calendar`, `people`, `chevron-right`, `plus`, `check`.
+
+`Components/BottomSheet.razor`: ark från botten på mobil (scrim, drag-handtag, stängs med Esc,
+scrim-tryck eller "Stäng", fokus flyttas in vid öppning och tillbaka vid stängning), centrerad
+dialog på skärmar ≥ 640px. Används av formulär/valmenyer som byggs i senare steg.
 
 ---
 
@@ -278,13 +316,25 @@ Lägena ska byta *presentation* av samma data – inte vilken data som visas.
 
 ## 8. Navigation
 
+Fyra flikar, samma ordning, samma innehåll på mobil och dator – ingen enhet visar fler eller
+färre destinationer än någon annan:
+
+| Flik | Route | Ikon | Ersätter |
+|---|---|---|---|
+| Idag | `/` | `sun` | Min dag |
+| Rum | `/rum` | `grid` | Områden (`/omraden` omdirigerar hit) |
+| Vecka | `/vecka` | `calendar` | Planering (`/planering` omdirigerar hit) |
+| Hushåll | `/hushall` | `people` | oförändrad |
+
+Inställningar och "Mer" är inte längre flikar – `/mer` omdirigerar till `/hushall`, och
+Inställningar samt Logga ut nås som listrader längst ned på Hushåll (se `Hushall.razor`).
+
 | Yta | Mönster |
 |---|---|
-| Dator | Vänster sidopanel: Min dag, Områden, Planering, Hushåll, Inställningar. Användarkort längst ned |
-| Platta | Sidopanel eller topprad beroende på bredd |
-| Mobil | Bottenrad: Min dag, Områden, Planering, Mer |
+| Dator (≥ 900 px) | Smal vänster rail (~72 px, ikon + etikett, inget 260 px-sidofält). Innehåll centrerat, max 640 px |
+| Mobil (< 900 px) | Bottenrad med samma fyra flikar |
 
-Min dag är alltid första valet och startvyn.
+Idag är alltid första valet och startvyn.
 
 ---
 

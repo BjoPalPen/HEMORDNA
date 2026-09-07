@@ -1,90 +1,74 @@
+/* Desktop default: a narrow rail, not a 260px sidebar - see docs/DESIGN.md §8 and
+   "Beslut: Ny form" in docs/ARCHITECTURE.md. Overridden for mobile below. */
 .nav-shell {
     display: flex;
     flex-direction: column;
-    width: 260px;
+    align-items: center;
+    width: 72px;
     flex-shrink: 0;
-    padding: var(--space-5) var(--space-4);
-    background: var(--color-surface);
-    border-right: 1px solid var(--color-border);
+    padding: var(--space-4) var(--space-2);
+    background: var(--surface);
+    border-right: 1px solid var(--line);
 }
 
 .brand {
     display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    padding: 0 var(--space-2) var(--space-5);
-}
-
-.brand-mark {
-    flex-shrink: 0;
+    justify-content: center;
+    padding-bottom: var(--space-4);
 }
 
 .brand-text {
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-}
-
-.brand-name {
-    font-size: calc(var(--font-size-base) * 1.25);
-    font-weight: 600;
-    color: var(--color-brand);
-}
-
-.brand-tagline {
-    font-size: calc(var(--font-size-base) * .72);
-    color: var(--color-text-soft);
+    display: none;
 }
 
 .nav-items {
     list-style: none;
     margin: 0;
     padding: 0;
+    width: 100%;
     display: flex;
     flex-direction: column;
-    gap: var(--space-1);
-    flex: 1;
+    align-items: center;
+    gap: var(--space-2);
 }
 
 ::deep .nav-link {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    gap: var(--space-3);
-    min-height: 44px;
-    padding: 0 var(--space-3);
-    border-radius: var(--radius-control);
-    color: var(--color-text);
+    justify-content: center;
+    gap: 4px;
+    width: 100%;
+    min-height: 56px;
+    padding: var(--space-1);
+    border-radius: var(--radius-sm);
+    color: var(--sot-soft);
     text-decoration: none;
+    font-size: calc(var(--font-size-base) * .7);
+    font-weight: 600;
+    text-align: center;
 }
 
 ::deep .nav-link:hover {
-    background: var(--color-secondary-soft);
+    background: var(--aska-soft);
 }
 
-/* Active state carries both colour and weight, never colour alone. */
+/* Active state carries both colour and background, never colour alone. */
 ::deep .nav-link.active {
-    background: var(--color-primary-soft);
-    color: var(--color-primary-strong);
-    font-weight: 600;
-}
-
-.nav-icon {
-    width: 20px;
-    text-align: center;
-    color: var(--color-text-soft);
-}
-
-::deep .nav-link.active .nav-icon {
-    color: var(--color-primary-strong);
+    background: var(--gustav-soft);
+    color: var(--gustav-ink);
 }
 
 .nav-user {
+    margin-top: auto;
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--line);
     display: flex;
-    align-items: center;
-    gap: var(--space-3);
-    padding: var(--space-3) var(--space-2) 0;
-    border-top: 1px solid var(--color-border);
-    margin-top: var(--space-4);
+    justify-content: center;
+}
+
+.nav-user-text {
+    display: none;
 }
 
 .avatar {
@@ -93,32 +77,15 @@
     justify-content: center;
     width: 32px;
     height: 32px;
-    border-radius: var(--radius-pill);
-    background: var(--color-primary-soft);
-    color: var(--color-primary-strong);
+    border-radius: var(--pill);
+    background: var(--gustav-soft);
+    color: var(--gustav-ink);
     font-weight: 600;
     flex-shrink: 0;
 }
 
-.nav-user-name {
-    font-size: calc(var(--font-size-base) * .9);
-}
-
-/* Only ever shown on the mobile bottom bar - see the media query below. */
-.nav-more-mobile {
-    display: none;
-}
-
-/* Mobile: a bottom bar with four destinations, the rest behind "Mer". */
+/* Mobile: a bottom bar with all four destinations, same order as the rail. */
 @media (max-width: 900px) {
-    .nav-hide-mobile {
-        display: none;
-    }
-
-    .nav-more-mobile {
-        display: list-item;
-    }
-
     .nav-shell {
         position: fixed;
         bottom: 0;
@@ -129,7 +96,7 @@
         width: auto;
         padding: var(--space-2) var(--space-2) max(var(--space-2), env(safe-area-inset-bottom));
         border-right: none;
-        border-top: 1px solid var(--color-border);
+        border-top: 1px solid var(--line);
     }
 
     .brand,
@@ -149,12 +116,7 @@
     }
 
     ::deep .nav-link {
-        flex-direction: column;
-        gap: 2px;
-        justify-content: center;
         min-height: 52px;
-        padding: var(--space-1);
         font-size: calc(var(--font-size-base) * .72);
-        text-align: center;
     }
 }

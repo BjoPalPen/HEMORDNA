@@ -1,0 +1,27 @@
+Familjen Grotesk (familjen-grotesk.woff2)
+https://github.com/Familjen-Sthlm/Familjen-Grotesk
+
+Copyright 2021 The Familjen Grotesk Project Authors. Licensed under the SIL
+Open Font License, Version 1.1 - see OFL-FamiljenGrotesk.txt.
+
+Variable font (weight axis 400-700), fetched via the Google Fonts CSS2 API
+(the "latin" subset, which covers Swedish å/ä/ö - U+0000-00FF) from:
+https://fonts.gstatic.com/s/familjengrotesk/v11/Qw3GZR9ZHiDnImG6-NEMQ41wby8WbHoEjw.woff2
+
+One file serves all four weights used in the app (400/500/600/700) - each
+@font-face in app.css declares a single font-weight against the same file,
+and the browser renders the correct instance via the file's own variable
+weight axis.
+
+----------------------------------------------------------------------
+
+Atkinson Hyperlegible (atkinson-hyperlegible-400.woff2, -700.woff2)
+https://github.com/googlefonts/atkinson-hyperlegible
+
+Copyright 2020 Braille Institute of America, Inc. Licensed under the SIL
+Open Font License, Version 1.1 - see OFL-AtkinsonHyperlegible.txt.
+
+Static weights 400 and 700, fetched via the Google Fonts CSS2 API (the
+"latin" subset, U+0000-00FF) from:
+https://fonts.gstatic.com/s/atkinsonhyperlegible/v12/9Bt23C1KxNDXMspQ1lPyU89-1h6ONRlW45G04pIo.woff2
+https://fonts.gstatic.com/s/atkinsonhyperlegible/v12/9Bt73C1KxNDXMspQ1lPyU89-1h6ONRlW45G8Wbc9dCWP.woff2

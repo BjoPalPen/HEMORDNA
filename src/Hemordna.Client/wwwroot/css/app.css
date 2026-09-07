@@ -1,26 +1,82 @@
 /* Hemordna designsystem. Värden och regler: docs/DESIGN.md */
 
+@font-face {
+    font-family: "Familjen Grotesk";
+    src: url("../fonts/familjen-grotesk.woff2") format("woff2");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Familjen Grotesk";
+    src: url("../fonts/familjen-grotesk.woff2") format("woff2");
+    font-weight: 500;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Familjen Grotesk";
+    src: url("../fonts/familjen-grotesk.woff2") format("woff2");
+    font-weight: 600;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Familjen Grotesk";
+    src: url("../fonts/familjen-grotesk.woff2") format("woff2");
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Atkinson Hyperlegible";
+    src: url("../fonts/atkinson-hyperlegible-400.woff2") format("woff2");
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "Atkinson Hyperlegible";
+    src: url("../fonts/atkinson-hyperlegible-700.woff2") format("woff2");
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+}
+
 :root {
-    --color-primary: #4E9D74;
-    --color-primary-strong: #3C7E5B;
-    --color-primary-soft: #E8F3EC;
-    --color-secondary: #E5DAC8;
-    --color-secondary-soft: #F5EFE5;
-    --color-accent: #5B8CC4;
-    --color-accent-soft: #E9F0F8;
-    --color-warning: #E07A5F;
-    --color-bg: #FBFAF7;
-    --color-surface: #FFFFFF;
-    --color-text: #2C3330;
-    --color-text-soft: #6B7570;
-    --color-border: #E6E4DE;
-    --color-brand: #3F6191;
+    /* Gustaviansk blå - den blågrå tonen från svenska 1700-talsinteriörer. Grönt är borta,
+       se "Beslut: Ny form" i docs/ARCHITECTURE.md. */
+    --kalk: #F5F3EE;
+    --surface: #FFFFFF;
+    --surface-2: #ECE9E2;
+    --sot: #22282E;
+    --sot-soft: #5C666E;
+    --line: #DDDAD2;
+    --gustav: #4A6C8C;
+    --gustav-ink: #3A5670;
+    --gustav-soft: #DFE7EF;
+    --saffran: #E9B44C;
+    --saffran-soft: #FBEFD2;
+    --aska: #9AA3A8;
+    --aska-soft: #E9ECEE;
+    --ronn: #C25A4A;
+    --ronn-soft: #F6E1DD;
+    /* #C25A4A itself is only AA-safe as a border/icon colour, not as text - 3.45:1 on
+       --ronn-soft and 3.90:1 on --kalk, both under the 4.5:1 WCAG AA floor for normal text
+       (DESIGN.md §10/CLAUDE.md §12 keep this a hard requirement). This darker shade is what
+       destructive button/link TEXT uses instead - same family, same intent, actually readable. */
+    --ronn-ink: #A04128;
 
-    --radius-card: 12px;
-    --radius-control: 10px;
-    --radius-pill: 999px;
+    --radius: 14px;
+    --radius-sm: 10px;
+    --pill: 999px;
 
-    --shadow-card: 0 1px 2px rgba(44, 51, 48, .06);
+    --shadow-card: 0 1px 2px rgba(34, 40, 46, .06);
 
     --space-1: 4px;
     --space-2: 8px;
@@ -33,7 +89,9 @@
     /* Scaled by the "Stor text" presentation mode. */
     --font-size-base: 15px;
 
-    --font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --font-display: "Familjen Grotesk", "Segoe UI", system-ui, sans-serif;
+    --font-body: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-family: var(--font-body);
 }
 
 /* Presentation mode: larger text. Individual preference, never a household setting. */
@@ -51,8 +109,8 @@ html, body {
 }
 
 body {
-    background: var(--color-bg);
-    color: var(--color-text);
+    background: var(--kalk);
+    color: var(--sot);
     font-family: var(--font-family);
     font-size: var(--font-size-base);
     line-height: 1.5;
@@ -61,36 +119,57 @@ body {
 
 h1, h2, h3 {
     margin: 0;
-    line-height: 1.25;
+    line-height: 1.2;
+    font-family: var(--font-display);
     font-weight: 600;
+    letter-spacing: -0.01em;
 }
 
-h1 { font-size: calc(var(--font-size-base) * 1.9); }
+h1 { font-size: calc(var(--font-size-base) * 1.9); font-weight: 700; }
 h2 { font-size: calc(var(--font-size-base) * 1.2); }
 
 a {
-    color: var(--color-primary-strong);
+    color: var(--gustav-ink);
 }
 
 /* Focus is always visible - never removed. */
 :focus-visible {
-    outline: 2px solid var(--color-accent);
+    outline: 3px solid var(--aska);
     outline-offset: 2px;
     border-radius: 4px;
+}
+
+/* Inline SVG icons via Icon.razor - never Unicode characters as icons. */
+.icon {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.9;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    flex-shrink: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+        scroll-behavior: auto !important;
+    }
 }
 
 /* ---------- Surfaces ---------- */
 
 .card {
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-card);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
     box-shadow: var(--shadow-card);
     padding: var(--space-5);
 }
 
 .muted {
-    color: var(--color-text-soft);
+    color: var(--sot-soft);
 }
 
 .small {
@@ -106,31 +185,43 @@ a {
     gap: var(--space-2);
     min-height: 44px;
     padding: 0 var(--space-5);
-    border-radius: var(--radius-control);
+    border-radius: var(--pill);
     border: 1px solid transparent;
     font: inherit;
-    font-weight: 500;
+    font-family: var(--font-display);
+    font-weight: 600;
     cursor: pointer;
     transition: background-color .12s ease, border-color .12s ease;
 }
 
 .btn-primary {
-    background: var(--color-primary);
+    background: var(--gustav);
     color: #fff;
 }
 
 .btn-primary:hover:not(:disabled) {
-    background: var(--color-primary-strong);
+    background: var(--gustav-ink);
 }
 
 .btn-secondary {
-    background: var(--color-surface);
-    border-color: var(--color-border);
-    color: var(--color-text);
+    background: var(--surface-2);
+    border-color: transparent;
+    color: var(--sot);
 }
 
 .btn-secondary:hover:not(:disabled) {
-    background: var(--color-secondary-soft);
+    background: var(--aska-soft);
+}
+
+.btn-danger {
+    background: var(--ronn-soft);
+    border-color: transparent;
+    color: var(--ronn-ink);
+}
+
+.btn-danger:hover:not(:disabled) {
+    background: var(--ronn-soft);
+    filter: brightness(0.97);
 }
 
 .btn:disabled {
@@ -148,14 +239,14 @@ a {
     padding: 0;
     background: none;
     border: none;
-    color: var(--color-primary-strong);
+    color: var(--gustav-ink);
     font: inherit;
     text-decoration: underline;
     cursor: pointer;
 }
 
 .btn-link:hover {
-    color: var(--color-primary);
+    color: var(--gustav);
 }
 
 .btn-block {
@@ -171,7 +262,7 @@ a {
     display: block;
     margin-bottom: var(--space-2);
     font-size: calc(var(--font-size-base) * .87);
-    color: var(--color-text-soft);
+    color: var(--sot-soft);
 }
 
 .field input,
@@ -179,9 +270,9 @@ a {
     width: 100%;
     min-height: 44px;
     padding: 0 var(--space-3);
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-control);
-    background: var(--color-surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
     font: inherit;
     color: inherit;
 }
@@ -214,7 +305,7 @@ a {
 
 .more-options summary {
     cursor: pointer;
-    color: var(--color-text-soft);
+    color: var(--sot-soft);
     font-size: calc(var(--font-size-base) * .9);
     padding: var(--space-2) 0;
     margin-bottom: var(--space-2);
@@ -226,9 +317,9 @@ a {
     list-style: none;
     margin: 0 0 var(--space-4);
     padding: 0;
-    border: 1px solid var(--color-border);
-    border-radius: var(--radius-card);
-    background: var(--color-surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
     overflow: hidden;
 }
 
@@ -238,7 +329,7 @@ a {
     flex-wrap: wrap;
     gap: var(--space-3);
     padding: var(--space-3) var(--space-4);
-    border-bottom: 1px solid var(--color-border);
+    border-bottom: 1px solid var(--line);
 }
 
 .list-item:last-child {
@@ -251,7 +342,7 @@ a {
        which for a 0%-basis item is always 0 - so a real .list-item-actions sibling always
        "fit" beside it and the row itself never wrapped; instead .list-name (still free to
        shrink below this once the line is actually laid out) got crushed to near-nothing and
-       its text wrapped internally underneath the actions instead. A non-zero basis makes the
+       its text wrapped internally underneath the actions. A non-zero basis makes the
        row wrap as a whole once there truly is not room for both. */
     flex: 1 1 100px;
     min-width: 0;
@@ -277,26 +368,38 @@ a {
 }
 
 .chip {
-    display: inline-block;
-    padding: 2px var(--space-2);
-    border-radius: var(--radius-pill);
-    background: var(--color-secondary-soft);
-    color: var(--color-text-soft);
+    display: inline-flex;
+    align-items: center;
+    padding: 2px var(--space-3);
+    border-radius: var(--pill);
+    background: var(--surface-2);
+    color: var(--sot);
     font-size: calc(var(--font-size-base) * .8);
+    font-weight: 600;
     white-space: nowrap;
+}
+
+.chip-primary {
+    background: var(--gustav-soft);
+    color: var(--gustav-ink);
+}
+
+.chip-today {
+    background: var(--saffran-soft);
+    color: var(--sot);
 }
 
 /* Never the only carrier of meaning - always paired with text. */
 .notice {
     padding: var(--space-3) var(--space-4);
-    border-radius: var(--radius-control);
-    background: var(--color-accent-soft);
-    color: var(--color-text);
+    border-radius: var(--radius-sm);
+    background: var(--gustav-soft);
+    color: var(--sot);
     font-size: calc(var(--font-size-base) * .9);
 }
 
 .notice-problem {
-    background: #FBEBE6;
+    background: var(--ronn-soft);
 }
 
 /* ---------- Boot and error states ---------- */
@@ -308,7 +411,8 @@ a {
     justify-content: center;
     gap: var(--space-3);
     min-height: 100vh;
-    color: var(--color-brand);
+    color: var(--gustav-ink);
+    font-family: var(--font-display);
     font-weight: 600;
 }
 
@@ -320,9 +424,9 @@ a {
     right: 0;
     z-index: 1000;
     padding: var(--space-3) var(--space-4);
-    background: var(--color-secondary-soft);
-    border-top: 1px solid var(--color-secondary);
-    box-shadow: 0 -1px 2px rgba(44, 51, 48, .08);
+    background: var(--ronn-soft);
+    border-top: 1px solid var(--ronn);
+    box-shadow: 0 -1px 2px rgba(34, 40, 46, .08);
 }
 
 #blazor-error-ui .dismiss {

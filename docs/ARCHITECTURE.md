@@ -833,7 +833,86 @@ Integrationstester mot en verklig PostgreSQL införs när persistence byggs – 
 
 ---
 
-## 10. Beslut som ännu inte är fattade — `OPEN`
+## 10. Beslut: Ny form — `IMPLEMENTED` (steg 1) / `PROPOSED` (steg 2–5)
+
+Klienten byggs om skärm för skärm till ett nytt visuellt uttryck och en enklare navigation -
+enbart `Hemordna.Client` och dokumentation, ingen ändring i Domain/Application/Infrastructure/
+Api eller i `DailyPlanner`s urval, ordning eller tidsbudget.
+
+**Varför.** Konkreta problem med det tidigare gränssnittet, upptäckta i användning: Områden
+hade två knappar per uppgift och kunde bli över 5000px hög på mobil redan med tre rum (~22
+uppgifter gav 44 knappar på en sida); navigationen använde Unicode-tecken (`☀ ▤ ▦ ⌂ ⚙`) i
+stället för ritade ikoner, vilket varken skalar konsekvent mellan plattformar eller bär mening
+utan text bredvid; en tom Min dag visade en blå informationsruta i stället för ett lugnt,
+avsiktligt tomt-läge; den gröna identiteten (`#4E9D74`) var en platshållarfärg utan förankring
+i produktens ton ("ett enklare hem, en lugnare vardag").
+
+**Vad som medvetet INTE ändrats:** `DailyPlanner`s sortering/urval/tidsbudget, produktreglerna
+i PRODUCT.md (Min dag som startsida, ingen hushållsbacklogg som förstaskärm, individuell
+presentation, ingen skuldbeläggning/gamification), och sidornas faktiska innehåll och funktion
+i de steg som ännu inte genomförts - se arbetsordningen nedan.
+
+### Steg 1 (`feat/ny-form-grund`) — `IMPLEMENTED`
+
+- **Designtokens** i `wwwroot/css/app.css`: gustaviansk blå (`--gustav`) ersätter grönt helt,
+  saffran (`--saffran`) reserverad för "idag"-markeringar, nya radienamn (`--radius`,
+  `--radius-sm`, `--pill`). Alla befintliga komponentklasser (`.btn`, `.card`, `.chip`,
+  `.list-item` m.fl.) mappar om till de nya tokennamnen. Mörkt läge är **inte** del av detta
+  steg - `PROPOSED` till steg 5.
+  - `--ronn` (`#C25A4A`, destruktiv/varning) klarar inte WCAG AA som text mot `--kalk` (3.90:1)
+    eller `--ronn-soft` (3.45:1) - en ny token, `--ronn-ink` (`#A04128`), används i stället för
+    all destruktiv knapp-/länktext (5.10–5.77:1). En medveten, dokumenterad avvikelse från
+    konceptartefaktens exakta färgpar, eftersom DESIGN.md §10:s kontrastkrav är hårt.
+- **Typsnitt**: Familjen Grotesk och Atkinson Hyperlegible, båda SIL OFL, självhostade som
+  woff2 i `wwwroot/fonts/` (licensfiler och NOTICE.txt bredvid, samma mönster som
+  `wwwroot/icons/tasks/`). Ingen Google Fonts-CDN i appen - kravet är att den ska starta
+  offline. Familjen Grotesk hämtades som en enda variabel woff2-fil (weight-axel 400–700);
+  fyra `@font-face`-regler (400/500/600/700) pekar på samma fil och webbläsaren renderar rätt
+  vikt via filens egen axel.
+- **`Icon.razor`**: inline-SVG, inga Unicode-ikoner längre. **`BottomSheet.razor`**: ark från
+  botten (mobil) / centrerad dialog (≥ 640px), byggd men oanvänd till steg 3–4 tar den i bruk.
+- **Navigation**: fyra flikar (Idag/Rum/Vecka/Hushåll), identisk ordning på mobil och dator -
+  se DESIGN.md §8. `/omraden`, `/planering`, `/mer` lever kvar som omdirigerande sidor
+  (`OmradenRedirect.razor` m.fl.) så inga befintliga länkar bryts. Inställningar och Logga ut
+  har inte längre egna flikar - tills vidare två listrader längst ned på `Hushall.razor`
+  (samma mönster `TaskOptionsSheet`/`MemberSheet` ersätter i steg 3–4), eftersom `/mer` annars
+  hade blivit en återvändsgränd.
+- **Desktop-rail**: `MainLayout`/`NavMenu` byter den gamla 260px-sidopanelen mot en ~72px rail
+  och centrerar sidinnehållet på max 640px.
+
+**Bugg hittad under obligatorisk skärmbildsgranskning, fixad (utanför den ursprungliga
+steg-1-listan, men ett rent CSS-fel som gjorde varje ocheckad uppgift på Min dag oanvändbar):**
+`Components/TaskListItem.razor` saknade en egen `.razor.css`. Blazors CSS-isolering ger bara en
+underkomponents **rotelement** den anropande sidans scope-attribut - element som är nästlade
+djupare inuti underkomponentens egen markup (bocken, ikonen, namnet, pil-knappen) fick inget
+scope alls och renderades helt ostylade (en hopklämd standardknapp i stället för en 24×24px
+cirkel). Introducerades när `TaskListItem.razor` bröts ut ur `MinDag.razor` (se §6, "Beslut:
+Rumsgruppering på Min dag", 2026-09-07) utan att en motsvarande `.css`-fil skapades - synligt
+först nu eftersom det inte fanns någon skärmbild av en Min dag med riktiga, ocheckade uppgifter
+förrän detta stegs verifiering krävde en. `Components/TaskListItem.razor.css` är nu
+självförsörjande: den upprepar `.task`/`.task-details` (som redan fungerade via
+scope-propagering) tillsammans med de tidigare ostylade nästlade reglerna, snarare än att lita
+på att `Pages/MinDag.razor.css` täcker dem.
+
+**Upptäckt, inte fixad (utanför scope för detta steg): "Stor text" och "En uppgift åt gången"
+sparas korrekt som `MemberPreference.Presentation` i Inställningar, men `MinDag.razor` läser
+bara `ImageAndText` (`ShowIcons`) - `data-text-size="large"` sätts aldrig, och det finns ingen
+fokusläges-vy. Skärmbilder av båda lägena är därför visuellt identiska med textläget. Detta är
+inte en regression i detta steg (ingen kod i `MinDag.razor` rördes) utan en sedan tidigare
+ofärdig del av MVP:t - relevant för steg 2 ("Idag-skärmen") vars verifieringskrav uttryckligen
+omfattar alla presentationslägen.
+
+### Steg 2–5 — `PROPOSED`
+
+`feat/ny-form-idag` (Min dag → Idag), `feat/ny-form-rum` (Områden → Rum, `RoomTile`,
+`RoomSheet`, `TaskOptionsSheet`), `feat/ny-form-hushall-vecka` (Hushåll, `MemberSheet`,
+Planering → Vecka), `feat/ny-form-morkt-lage` (dark-tokens, `data-theme`-växel, bock-animation
+och haptik under `prefers-reduced-motion`). Varje steg lämnar appen fullt fungerande och alla
+tester gröna innan nästa påbörjas.
+
+---
+
+## 11. Beslut som ännu inte är fattade — `OPEN`
 
 | Fråga | Varför den väntar |
 |---|---|

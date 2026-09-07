@@ -2,7 +2,8 @@ using Microsoft.Playwright;
 
 namespace Hemordna.E2E.Tests;
 
-/// <summary>docs/DESIGN.md §8: mobile shows four destinations plus "Mer" for the rest.</summary>
+/// <summary>docs/DESIGN.md §8: the same four destinations, same order, on mobile and desktop -
+/// no "Mer" tab. Inställningar and Logga ut are reached from Hushåll instead.</summary>
 [Collection(HemordnaAppCollection.Name)]
 public class MobileNavTests
 {
@@ -11,7 +12,7 @@ public class MobileNavTests
     public MobileNavTests(HemordnaAppFixture app) => _app = app;
 
     [Fact]
-    public async Task Shows_four_destinations_and_a_Mer_link_that_lists_the_rest()
+    public async Task Shows_the_same_four_destinations_on_mobile_as_desktop()
     {
         var page = await _app.NewPageAsync();
         await page.SetViewportSizeAsync(390, 844);
@@ -19,22 +20,16 @@ public class MobileNavTests
 
         var nav = page.GetByRole(AriaRole.Navigation, new() { Name = "Huvudmeny" });
 
-        foreach (var visible in new[] { "Min dag", "Områden", "Planering", "Mer" })
+        foreach (var visible in new[] { "Idag", "Rum", "Vecka", "Hushåll" })
         {
             await Assertions.Expect(nav.GetByRole(AriaRole.Link, new() { Name = visible })).ToBeVisibleAsync();
         }
 
-        foreach (var hidden in new[] { "Hushåll", "Inställningar" })
-        {
-            await Assertions.Expect(nav.GetByRole(AriaRole.Link, new() { Name = hidden })).ToBeHiddenAsync();
-        }
+        await Assertions.Expect(nav.GetByRole(AriaRole.Link, new() { Name = "Mer" })).Not.ToBeVisibleAsync();
 
-        await nav.GetByRole(AriaRole.Link, new() { Name = "Mer" }).ClickAsync();
-        await page.GetByRole(AriaRole.Heading, new() { Name = "Mer" }).WaitForAsync();
+        await nav.GetByRole(AriaRole.Link, new() { Name = "Hushåll" }).ClickAsync();
+        await page.GetByRole(AriaRole.Heading, new() { Name = "Familjen Andersson" }).WaitForAsync();
 
-        foreach (var link in new[] { "Hushåll", "Inställningar" })
-        {
-            await Assertions.Expect(page.GetByRole(AriaRole.Link, new() { Name = link })).ToBeVisibleAsync();
-        }
+        await Assertions.Expect(page.GetByRole(AriaRole.Link, new() { Name = "Inställningar ›" })).ToBeVisibleAsync();
     }
 }

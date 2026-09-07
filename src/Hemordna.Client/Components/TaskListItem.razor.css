@@ -1,0 +1,89 @@
+/* Once a component has its own scoped stylesheet, none of a parent's scoped rules match its
+   markup any more - not even the component's own root element(s). Pages/MinDag.razor.css still
+   carries its own copies of ".task"/".task-check"/etc for the completed and "unplanned" rows it
+   writes directly, but this component needs a fully self-contained copy of everything it
+   renders itself (found via required screenshot review: without this file at all, the checkbox
+   rendered as an unstyled default button; adding only the nested-element rules left the row
+   itself unstyled instead, once this file existed). */
+
+.task {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--line);
+}
+
+.task:last-child {
+    border-bottom: none;
+}
+
+.task-check {
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+    padding: 0;
+    border: 2px solid var(--line);
+    border-radius: 6px;
+    background: var(--surface);
+    cursor: pointer;
+}
+
+.task-check:hover:not(:disabled) {
+    border-color: var(--gustav);
+}
+
+.task-check:disabled {
+    opacity: .5;
+    cursor: default;
+}
+
+.task-icon {
+    flex-shrink: 0;
+}
+
+.task-name {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.task-name .chip {
+    margin-top: var(--space-1);
+    align-self: flex-start;
+}
+
+.task-note {
+    font-style: normal;
+}
+
+.task-expand {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--sot-soft);
+    cursor: pointer;
+    font-size: calc(var(--font-size-base) * 1.1);
+}
+
+.task-expand:hover {
+    color: var(--sot);
+}
+
+.task-details {
+    padding: 0 var(--space-4) var(--space-3);
+    border-bottom: 1px solid var(--line);
+    background: var(--kalk);
+}
+
+.task-details:last-child {
+    border-bottom: none;
+}
+
+.task-details p {
+    margin: 0 0 var(--space-2);
+}
