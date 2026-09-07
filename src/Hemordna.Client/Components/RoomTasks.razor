@@ -62,6 +62,14 @@ else
                         </select>
                     </label>
 
+                    @if (IntervalLabel(_editRecurrence) is { } editIntervalLabel)
+                    {
+                        <label class="field">
+                            <span>@editIntervalLabel</span>
+                            <input type="number" min="1" max="52" @bind="_editInterval" />
+                        </label>
+                    }
+
                     @if (_editMessage is { } editMessage)
                     {
                         <div class="notice notice-problem" role="alert">@editMessage</div>
@@ -78,6 +86,43 @@ else
             }
         }
     </ul>
+
+    <details class="more-options">
+        <summary>Ändra frekvens för hela @Label</summary>
+        <p class="muted small">
+            Sätter samma upprepning på alla @VisibleTasks.Count uppgifter i @Label på en gång -
+            bra för ett rum som används mer sällan än andra, i stället för att ändra varje
+            uppgift för sig.
+        </p>
+
+        <label class="field">
+            <span>Ny upprepning för hela @Label</span>
+            <select @bind="_bulkRecurrence">
+                <option value="">Ingen - schemaläggs för hand</option>
+                <option value="Daily">Varje dag</option>
+                <option value="Weekly">Varje vecka</option>
+                <option value="Monthly">Varje månad</option>
+                <option value="AsNeeded">Vid behov</option>
+            </select>
+        </label>
+
+        @if (IntervalLabel(_bulkRecurrence) is { } bulkIntervalLabel)
+        {
+            <label class="field">
+                <span>@bulkIntervalLabel</span>
+                <input type="number" min="1" max="52" @bind="_bulkInterval" />
+            </label>
+        }
+
+        @if (_bulkMessage is { } bulkMessage)
+        {
+            <div class="notice" role="status">@bulkMessage</div>
+        }
+
+        <button type="button" class="btn btn-secondary" disabled="@_bulkBusy" @onclick="SaveBulkFrequencyAsync">
+            @(_bulkBusy ? "Sparar..." : $"Spara för alla {VisibleTasks.Count} uppgifter")
+        </button>
+    </details>
 }
 
 @if (ShowSuggestions)
@@ -136,6 +181,14 @@ else
             </select>
         </label>
 
+        @if (IntervalLabel(_form.Recurrence) is { } formIntervalLabel)
+        {
+            <label class="field">
+                <span>@formIntervalLabel</span>
+                <input type="number" min="1" max="52" @bind="_form.Interval" />
+            </label>
+        }
+
         <label class="field-check">
             <input type="checkbox" @bind="_form.RequiresAdult" />
             <span>Bara vuxna ska tilldelas den här</span>
@@ -183,6 +236,7 @@ else
         public string Name { get; set; } = string.Empty;
         public int EstimatedMinutes { get; set; } = 30;
         public string Recurrence { get; set; } = string.Empty;
+        public int Interval { get; set; } = 1;
         public bool RequiresAdult { get; set; }
     }
 
@@ -193,8 +247,14 @@ else
 
     private Guid? _editingTaskId;
     private string _editRecurrence = string.Empty;
+    private int _editInterval = 1;
     private string? _editMessage;
     private bool _editBusy;
+
+    private string _bulkRecurrence = string.Empty;
+    private int _bulkInterval = 1;
+    private string? _bulkMessage;
+    private bool _bulkBusy;
 
     private readonly Dictionary<string, bool> _suggestedSelected =
         GeneralTaskTemplates.All.ToDictionary(task => task.Name, _ => false);
@@ -214,29 +274,36 @@ else
         // RoomTemplateTask.ToScheduling. There is no calendar slot for "twice a week" as such.
         { Frequency: "Daily", Interval: > 1 } => $"ungefär var {recurrence.Interval}:e dag",
         { Frequency: "Daily" } => "varje dag",
+        { Frequency: "Weekly", Interval: > 1 } => $"var {recurrence.Interval}:e vecka",
         { Frequency: "Weekly" } => "varje vecka",
+        { Frequency: "Monthly", Interval: > 1 } => $"var {recurrence.Interval}:e månad",
         { Frequency: "Monthly" } => "varje månad",
         _ => "återkommer"
     };
 
-    /// <summary>
-    /// Shared by creation and by editing an existing task's frequency. <paramref name="existing"/>
-    /// (only ever passed when editing) preserves a "Daily" recurrence's interval when the
-    /// household leaves the dropdown on "Varje dag" - a template task set up as "twice weekly"
-    /// (see RoomTemplateTask.ToScheduling) is stored as Daily with Interval 3, and that interval
-    /// has no dropdown option of its own, so re-saving without touching the selection must not
-    /// silently flatten it to a literal daily task.
-    /// </summary>
-    private static RecurrenceRuleContract? BuildRecurrence(
-        string recurrenceOption, DateOnly today, RecurrenceRuleContract? existing = null)
-        => recurrenceOption switch
+    /// <summary>The label for the "how many X between each time" field this frequency choice
+    /// needs, or <c>null</c> when it has no interval to set ("Ingen"/"Vid behov").</summary>
+    private static string? IntervalLabel(string recurrenceOption) => recurrenceOption switch
+    {
+        "Daily" => "Hur många dagar mellan varje gång?",
+        "Weekly" => "Hur många veckor mellan varje gång?",
+        "Monthly" => "Hur många månader mellan varje gång?",
+        _ => null
+    };
+
+    /// <summary>Shared by creation, per-task editing, and the whole-room bulk edit.</summary>
+    private static RecurrenceRuleContract? BuildRecurrence(string recurrenceOption, DateOnly today, int interval)
+    {
+        var safeInterval = Math.Max(1, interval);
+
+        return recurrenceOption switch
         {
-            "Daily" => new RecurrenceRuleContract(
-                "Daily", existing is { Frequency: "Daily" } ? existing.Interval : 1, today, null, null),
-            "Weekly" => new RecurrenceRuleContract("Weekly", 1, today, today.DayOfWeek.ToString(), null),
-            "Monthly" => new RecurrenceRuleContract("Monthly", 1, today, null, null),
+            "Daily" => new RecurrenceRuleContract("Daily", safeInterval, today, null, null),
+            "Weekly" => new RecurrenceRuleContract("Weekly", safeInterval, today, today.DayOfWeek.ToString(), null),
+            "Monthly" => new RecurrenceRuleContract("Monthly", safeInterval, today, null, null),
             _ => null
         };
+    }
 
     /// <summary>Which dropdown option matches this task's current frequency, so opening the
     /// edit form shows what is actually set rather than starting blank.</summary>
@@ -259,6 +326,7 @@ else
 
         _editingTaskId = task.Id;
         _editRecurrence = RecurrenceOptionFor(task);
+        _editInterval = task.Recurrence?.Interval ?? 1;
         _editMessage = null;
     }
 
@@ -269,7 +337,7 @@ else
 
         try
         {
-            var recurrence = BuildRecurrence(_editRecurrence, Today, task.Recurrence);
+            var recurrence = BuildRecurrence(_editRecurrence, Today, _editInterval);
             var staleAfterDays = _editRecurrence == "AsNeeded" ? RoomTemplateTask.AsNeededDefaultDays : (int?)null;
 
             if (await Api.UpdateTaskFrequencyAsync(HouseholdId, task.Id, recurrence, staleAfterDays) is null)
@@ -310,7 +378,7 @@ else
 
         try
         {
-            var recurrence = BuildRecurrence(_form.Recurrence, Today);
+            var recurrence = BuildRecurrence(_form.Recurrence, Today, _form.Interval);
             var staleAfterDays = _form.Recurrence == "AsNeeded" ? RoomTemplateTask.AsNeededDefaultDays : (int?)null;
 
             var request = new CreateTaskRequest(
@@ -337,6 +405,7 @@ else
             _form.Name = string.Empty;
             _form.EstimatedMinutes = 30;
             _form.Recurrence = string.Empty;
+            _form.Interval = 1;
             _form.RequiresAdult = false;
             await OnChanged.InvokeAsync();
         }
@@ -347,6 +416,50 @@ else
         finally
         {
             _busy = false;
+        }
+    }
+
+    /// <summary>
+    /// Applies one chosen frequency to every visible task in this room at once - for a room
+    /// used much less than others, rather than editing each of its tasks one by one. Each
+    /// task's own anchor date is staggered by its position in the room (same spreading idea as
+    /// RoomTemplateTask.ToScheduling), so a whole room moving to e.g. "every 4 weeks" does not
+    /// pile every one of its tasks onto the same day.
+    /// </summary>
+    private async Task SaveBulkFrequencyAsync()
+    {
+        _bulkBusy = true;
+        _bulkMessage = null;
+
+        try
+        {
+            var staleAfterDays = _bulkRecurrence == "AsNeeded" ? RoomTemplateTask.AsNeededDefaultDays : (int?)null;
+            var tasks = VisibleTasks;
+            var failedCount = 0;
+
+            foreach (var (task, index) in tasks.Select((task, index) => (task, index)))
+            {
+                var recurrence = BuildRecurrence(_bulkRecurrence, Today.AddDays(index), _bulkInterval);
+
+                if (await Api.UpdateTaskFrequencyAsync(HouseholdId, task.Id, recurrence, staleAfterDays) is null)
+                {
+                    failedCount++;
+                }
+            }
+
+            _bulkMessage = failedCount == 0
+                ? $"Uppdaterade {tasks.Count} uppgifter."
+                : $"{tasks.Count - failedCount} av {tasks.Count} uppgifter uppdaterades - försök igen för resten.";
+
+            await OnChanged.InvokeAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _bulkMessage = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _bulkBusy = false;
         }
     }
 

@@ -93,4 +93,78 @@ public class TaskFrequencyTests
         await page.ReloadAsync();
         await Assertions.Expect(completeButton).Not.ToBeVisibleAsync();
     }
+
+    [Fact]
+    public async Task An_interval_can_be_set_for_a_weekly_task_and_is_shown_back()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Ingrid");
+
+        await page.GotoAsync("/omraden");
+        await page.GetByText("Lägg till ett tomt område i stället").ClickAsync();
+        await page.GetByLabel("Nytt område").FillAsync("Tvättstuga");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Lägg till område" }).ClickAsync();
+
+        var card = page.Locator(".card")
+            .Filter(new() { Has = page.GetByRole(AriaRole.Heading, new() { Name = "Tvättstuga", Exact = true }) });
+        await card.WaitForAsync();
+
+        await card.GetByText("Lägg till en uppgift i Tvättstuga").ClickAsync();
+        await card.GetByLabel("Namn").FillAsync("Rengör filter");
+        await card.GetByLabel("Upprepning").SelectOptionAsync("Weekly");
+        await card.GetByLabel("Hur många veckor mellan varje gång?").FillAsync("4");
+        await card.GetByRole(AriaRole.Button, new() { Name = "Lägg till uppgift" }).ClickAsync();
+
+        var taskRow = card.Locator(".list-item:has(button[aria-label=\"Ändra frekvens för Rengör filter\"])");
+        await Assertions.Expect(taskRow).ToContainTextAsync("var 4:e vecka");
+
+        // Reopening the edit form shows the interval that was actually saved, not a blank field.
+        await taskRow.GetByRole(AriaRole.Button, new() { Name = "Ändra frekvens för Rengör filter" }).ClickAsync();
+        await Assertions.Expect(card.GetByLabel("Hur många veckor mellan varje gång?")).ToHaveValueAsync("4");
+    }
+
+    [Fact]
+    public async Task Changing_frequency_for_the_whole_room_updates_every_task_in_it()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Karl");
+
+        await page.GotoAsync("/omraden");
+        await page.GetByText("Lägg till ett tomt område i stället").ClickAsync();
+        await page.GetByLabel("Nytt område").FillAsync("Sovrum 2");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Lägg till område" }).ClickAsync();
+
+        var card = page.Locator(".card")
+            .Filter(new() { Has = page.GetByRole(AriaRole.Heading, new() { Name = "Sovrum 2", Exact = true }) });
+        await card.WaitForAsync();
+
+        await card.GetByText("Lägg till en uppgift i Sovrum 2").ClickAsync();
+
+        // Scoped to the create-task <form>: once the first task exists, the whole-room bulk
+        // section below also renders its own "Ny upprepning för hela ..." select outside any
+        // form, and a <select>'s accessible name includes its currently-selected option's own
+        // text (e.g. "Upprepning Ingen - schemaläggs för hand") - so neither a plain substring
+        // nor an Exact match on "Upprepning" alone disambiguates the two.
+        var addTaskForm = card.Locator("form");
+
+        foreach (var name in new[] { "Dammsug golvet", "Vädra rummet" })
+        {
+            await addTaskForm.GetByLabel("Namn").FillAsync(name);
+            await addTaskForm.GetByLabel("Upprepning").SelectOptionAsync("Weekly");
+            await addTaskForm.GetByRole(AriaRole.Button, new() { Name = "Lägg till uppgift" }).ClickAsync();
+            await Assertions.Expect(card.Locator(".list-item", new() { HasText = name })).ToBeVisibleAsync();
+        }
+
+        await card.GetByText("Ändra frekvens för hela Sovrum 2").ClickAsync();
+        await card.GetByLabel("Ny upprepning för hela Sovrum 2").SelectOptionAsync("Monthly");
+        await card.GetByRole(AriaRole.Button, new() { Name = "Spara för alla 2 uppgifter" }).ClickAsync();
+
+        await Assertions.Expect(card.GetByText("Uppdaterade 2 uppgifter.")).ToBeVisibleAsync();
+
+        foreach (var name in new[] { "Dammsug golvet", "Vädra rummet" })
+        {
+            var row = card.Locator($".list-item:has(button[aria-label=\"Ändra frekvens för {name}\"])");
+            await Assertions.Expect(row).ToContainTextAsync("varje månad");
+        }
+    }
 }

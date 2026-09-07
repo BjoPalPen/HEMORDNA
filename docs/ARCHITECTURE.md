@@ -223,12 +223,28 @@ DESIGN.md §6b för samma resonemang som bär `HouseholdRolePresets` och `RoomTe
 .../tasks/{taskId}/frequency`, `RoomTasks.razor`s "Ändra frekvens") - hur ofta samma syssla ska
 göras varierar mycket mellan hushåll, och tidigare gick det bara att sätta en gång, vid
 skapandet; att ändra krävde att ta bort och skapa om uppgiften. Precis som vid skapande är
-`Recurrence`/`StaleAfterDays` ömsesidigt uteslutande - att sätta det ena rensar alltid det
-andra. En "Daily"-uppgift med `Interval > 1` (mallarnas "två gånger i veckan", se
-`RoomTemplateTask.ToScheduling`) syns inte som ett eget val i redigeringens dropdown (samma
-fem alternativ som vid skapande), så att spara utan att röra valet måste återanvända
-uppgiftens befintliga intervall i stället för att tyst platta till den till en bokstavlig
-daglig uppgift - se `RoomTasks.razor`s `BuildRecurrence`.
+`Recurrence`/`StaleAfterDays` ömsesidigt uteslutande - att sätta det ena rensar alltid det andra.
+
+**Intervallet (var N:e dag/vecka/månad) är nu ett synligt, redigerbart fält** (2026-09-07) -
+tidigare hårdkodade `RoomTasks.razor`s `BuildRecurrence` alltid `Interval: 1` för Daily/Weekly/
+Monthly, med ett särfall som bevarade (men aldrig visade) en malluppgifts dolda intervall (t.ex.
+mallarnas "två gånger i veckan", lagrat som Daily med `Interval: 3` - se
+`RoomTemplateTask.ToScheduling`). Efterfrågat konkret: hushåll vill kunna sätta "varannan
+vecka" eller "var tredje månad" för rum som används mer sällan, inte bara `RecurrenceFrequency`
+själv. `BuildRecurrence` tar nu intervallet som en explicit parameter i stället för att gissa det
+- fältet visas (med rätt enhet: dagar/veckor/månader) närhelst en frekvens med ett intervall är
+vald, både vid skapande och redigering, och förifylls med uppgiftens faktiska intervall när man
+öppnar redigeringen. Det gamla särfallet för att bevara en dold mall-intervall behövs inte
+längre, eftersom intervallet aldrig är dolt nu.
+
+**Ändra frekvens för ett helt rum på en gång** (`RoomTasks.razor`s "Ändra frekvens för hela
+[rum]") - ett rum som används mycket mer sällan än andra (efterfrågat konkret: sällananvända
+sovrum, jämfört med en tvättstuga/hall som används varje dag) behöver ofta samma nya frekvens på
+alla sina uppgifter, och att göra det uppgift för uppgift är omständligt. Ren klientsidig
+loop över `UpdateTaskFrequencyAsync`, en gång per synlig uppgift i rummet - ingen ny endpoint,
+eftersom mängden uppgifter per rum alltid är litet. Varje uppgifts ankardag förskjuts med sin
+position i rummet (samma spridningsidé som `RoomTemplateTask.ToScheduling`), så att en hel
+rumsomläggning till t.ex. "var 4:e vecka" inte klumpar ihop alla rummets uppgifter på samma dag.
 
 **Bugg hittad i produktion (2026-09-07), fixad:** att ändra frekvens flyttar bara definitionens
 framtida schema - en redan skapad, ännu ej avklarad occurrence från den GAMLA regeln blev kvar
