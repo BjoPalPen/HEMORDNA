@@ -63,6 +63,18 @@ internal sealed class TaskOccurrenceRepository : ITaskOccurrenceRepository
                 && occurrence.TaskDefinitionId == taskDefinitionId
                 && occurrence.Status == TaskOccurrenceStatus.Planned, cancellationToken);
 
+    public Task<bool> HasOutstandingOnDateAsync(
+        Guid householdId,
+        Guid taskDefinitionId,
+        DateOnly date,
+        CancellationToken cancellationToken)
+        => _dbContext.TaskOccurrences
+            .AsNoTracking()
+            .AnyAsync(occurrence => occurrence.HouseholdId == householdId
+                && occurrence.TaskDefinitionId == taskDefinitionId
+                && occurrence.Status == TaskOccurrenceStatus.Planned
+                && occurrence.ScheduledDate == date, cancellationToken);
+
     public async Task<IReadOnlyList<TaskOccurrence>> ListOutstandingOnOrBeforeAsync(
         Guid householdId,
         Guid taskDefinitionId,

@@ -41,6 +41,20 @@ public interface ITaskOccurrenceRepository
         CancellationToken cancellationToken);
 
     /// <summary>
+    /// Whether this definition already has an outstanding occurrence currently sitting ON
+    /// <paramref name="date"/> - regardless of what date it was originally generated for. Used
+    /// to guard calendar-recurrence generation against creating a second occurrence for a slot
+    /// an existing one has already been moved onto (e.g. by <c>RebalanceSchedule</c>, or a
+    /// household member manually deferring it there) - see
+    /// <see cref="Hemordna.Application.Tasks.EnsureOccurrencesGenerated"/>.
+    /// </summary>
+    Task<bool> HasOutstandingOnDateAsync(
+        Guid householdId,
+        Guid taskDefinitionId,
+        DateOnly date,
+        CancellationToken cancellationToken);
+
+    /// <summary>
     /// Outstanding occurrences of this definition scheduled on or before <paramref name="onOrBefore"/>,
     /// tracked so a caller can reschedule them (see <see cref="TaskOccurrence.DeferTo"/>) and
     /// save the change - unlike the other lookups here, which only ever read.

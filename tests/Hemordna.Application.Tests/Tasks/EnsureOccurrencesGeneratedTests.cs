@@ -262,6 +262,33 @@ public class EnsureOccurrencesGeneratedTests
     }
 
     [Fact]
+    public async Task Does_not_generate_a_duplicate_for_a_date_an_existing_occurrence_was_moved_onto()
+    {
+        // Simulates RebalanceSchedule re-anchoring a definition's recurrence to a new weekday
+        // AFTER it already had an outstanding occurrence, which RebalanceSchedule moves
+        // (DeferTo) onto the new weekday rather than duplicating. FindMostRecentOriginalDateAsync
+        // still reports the OLD, immutable original date as the cursor, so without a guard the
+        // generator would not know the new weekday is already covered and would create a second,
+        // genuinely duplicate occurrence for it once that date arrives.
+        var householdId = await ArrangeHouseholdAsync();
+        var definition = TaskDefinition.Create(householdId, "Torka golvet", 20, Now);
+        definition.SetRecurrence(RecurrenceRule.Weekly(Monday, DayOfWeek.Monday));
+        _definitions.Seed(definition);
+
+        var original = definition.ScheduleFor(Monday, Now);
+        _occurrences.Seed(original);
+
+        // Re-anchor to Wednesday, and move the existing occurrence onto it - exactly what
+        // RebalanceSchedule does.
+        definition.SetRecurrence(RecurrenceRule.Weekly(Monday, DayOfWeek.Wednesday));
+        original.DeferTo(Monday.AddDays(2));
+
+        await CreateUseCase().HandleAsync(householdId, Monday.AddDays(2), CancellationToken.None);
+
+        Assert.Equal(0, _occurrences.AddCallCount);
+    }
+
+    [Fact]
     public async Task A_paused_household_generates_nothing_and_catches_up_nothing_after_resuming()
     {
         var householdId = await ArrangeHouseholdAsync();

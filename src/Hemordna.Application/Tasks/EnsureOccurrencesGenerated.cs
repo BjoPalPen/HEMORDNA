@@ -95,7 +95,14 @@ public sealed class EnsureOccurrencesGenerated
 
         while (next <= today && iterations < MaxCatchUpPerDefinition)
         {
-            if (!IsSkippedForPause(household, definition, next))
+            if (!IsSkippedForPause(household, definition, next)
+                // An occurrence that already sits on this exact date - typically one moved there
+                // by RebalanceSchedule re-anchoring the definition's recurrence after it already
+                // had an outstanding occurrence - already covers this slot. Without this check,
+                // the cursor above (based on the OLD occurrence's immutable
+                // OriginalScheduledDate, not where it was moved to) would not know that, and
+                // this would generate a second, genuinely duplicate occurrence for the same date.
+                && !await _occurrences.HasOutstandingOnDateAsync(household.Id, definition.Id, next, cancellationToken))
             {
                 await ScheduleGeneratedOccurrenceAsync(
                     household, definition, next, assignedMinutesByMember, cancellationToken);

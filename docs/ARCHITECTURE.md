@@ -209,6 +209,25 @@ fem alternativ som vid skapande), så att spara utan att röra valet måste åte
 uppgiftens befintliga intervall i stället för att tyst platta till den till en bokstavlig
 daglig uppgift - se `RoomTasks.razor`s `BuildRecurrence`.
 
+**Bugg hittad i produktion (2026-09-07), fixad:** att ändra frekvens flyttar bara definitionens
+framtida schema - en redan skapad, ännu ej avklarad occurrence från den GAMLA regeln blev kvar
+orörd. Den hamnade aldrig i fas med den nya regeln (dess `OriginalScheduledDate` är satt en
+gång för alla) och sköts bara upp dag efter dag för evigt, samtidigt som
+`EnsureOccurrencesGenerated` skapade en helt ny, korrekt occurrence den dag den nya regelns
+veckodag kom. Samma syssla dök upp två gånger permanent - konkret orsak till att en användare
+rapporterade att "torka golv" och "töm soptunna" kändes som att de dök upp orimligt ofta (varje
+rum har sin egen, medvetet spridda "Torka golvet", men dubbleringen gjorde att hälften av dem
+aldrig försvann). `UpdateTaskFrequency` avfärdar nu (`TaskOccurrence.Skip`) alla utestående
+occurrences för uppgiften när schemat FAKTISKT ändras (jämfört mot det gamla värdet - att spara
+oförändrat val rör inte en uppgift någon redan ska göra idag). Samma klass av bugg fanns latent
+i `RebalanceSchedule`, som i stället flyttar (inte avfärdar) en utestående occurrence till den
+nya ankardagen via `DeferTo` - `EnsureOccurrencesGenerated` litade bara på cursorn
+(`FindMostRecentOriginalDateAsync`, medvetet oförändrad av `DeferTo`) och visste därför inte att
+den flyttade occurrencen redan täckte den dagen. Generatorn kollar nu explicit
+(`HasOutstandingOnDateAsync`) om en utestående occurrence redan sitter exakt på datumet den är
+på väg att skapa en ny för, oavsett hur den hamnade där - ett generellt skydd mot just den här
+klassen av dubblettbugg, oavsett framtida orsak.
+
 ### Beslut: `Area`/`HouseholdMember`/`TaskDefinition` kan tas bort — `IMPLEMENTED`
 
 Alla tre hade redan `Deactivate()`/`Reactivate()` i domänen (och `IsActive` i kontraktet) sen

@@ -1,3 +1,5 @@
+using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.Playwright;
 
 namespace Hemordna.E2E.Tests;
@@ -42,5 +44,53 @@ public class TaskFrequencyTests
 
         await Assertions.Expect(taskRow).ToContainTextAsync("varje vecka");
         await Assertions.Expect(taskRow).Not.ToContainTextAsync("varje dag");
+    }
+
+    [Fact]
+    public async Task Changing_frequency_retires_the_now_stale_outstanding_occurrence()
+    {
+        // The actual production bug this fixes: moving a task to a new weekday left its old,
+        // already-generated occurrence outstanding forever - nagging every day (endlessly
+        // deferred) alongside a fresh one generated for the new weekday once it arrived. See
+        // docs/ARCHITECTURE.md.
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Wilma");
+
+        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
+        http.DefaultRequestHeaders.Authorization = new("Bearer", token);
+        var me = await (await http.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
+        var householdId = me.GetProperty("householdId").GetGuid();
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        await http.PutAsJsonAsync(
+            $"/api/households/{householdId}/members/{me.GetProperty("memberId").GetGuid()}/availability",
+            new { date = today, availableMinutes = 60 });
+
+        var task = await (await http.PostAsJsonAsync(
+            $"/api/households/{householdId}/tasks",
+            new
+            {
+                name = "Torka golvet",
+                estimatedMinutes = 10,
+                hasRotatingResponsibility = true,
+                recurrence = new { frequency = "Daily", interval = 1, startDate = today }
+            }))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        var taskId = task.GetProperty("id").GetGuid();
+
+        await page.GotoAsync("/");
+        var completeButton = page.GetByRole(AriaRole.Button, new() { Name = "Markera Torka golvet som klar" });
+        await Assertions.Expect(completeButton).ToBeVisibleAsync();
+
+        // Move it to a weekday that is not today, far enough that no fresh occurrence for it is
+        // due yet - anything still shown afterwards must be the old, stale one.
+        var otherWeekday = today.DayOfWeek == DayOfWeek.Monday ? DayOfWeek.Wednesday : DayOfWeek.Monday;
+        await http.PutAsJsonAsync(
+            $"/api/households/{householdId}/tasks/{taskId}/frequency",
+            new { recurrence = new { frequency = "Weekly", interval = 1, startDate = today, weekday = otherWeekday.ToString() } });
+
+        await page.ReloadAsync();
+        await Assertions.Expect(completeButton).Not.ToBeVisibleAsync();
     }
 }
