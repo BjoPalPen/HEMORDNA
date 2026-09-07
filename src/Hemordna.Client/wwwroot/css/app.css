@@ -246,7 +246,14 @@ a {
 }
 
 .list-name {
-    flex: 1;
+    /* flex-basis 100px, not the 0% that "flex: 1" shorthand would give it: flex-wrap decides
+       whether a sibling fits on the same line using each item's un-shrunk hypothetical size,
+       which for a 0%-basis item is always 0 - so a real .list-item-actions sibling always
+       "fit" beside it and the row itself never wrapped; instead .list-name (still free to
+       shrink below this once the line is actually laid out) got crushed to near-nothing and
+       its text wrapped internally underneath the actions instead. A non-zero basis makes the
+       row wrap as a whole once there truly is not room for both. */
+    flex: 1 1 100px;
     min-width: 0;
     display: flex;
     flex-direction: column;
@@ -255,6 +262,18 @@ a {
 .list-meta {
     flex-shrink: 0;
     font-variant-numeric: tabular-nums;
+}
+
+/* Two or more trailing controls on a .list-item (e.g. "Ändra frekvens" + "Ta bort") must wrap
+   to their own line together on a narrow screen, not as separate flex items - .list-item's own
+   flex-wrap alone lets .list-name (flex-basis 0) get crushed to near-nothing instead, since the
+   browser only wraps a whole item when its OWN hypothetical size does not fit, and .list-name's
+   hypothetical size is always ~0. Wrapping the controls in one element gives the row exactly
+   two flex items (name, actions) - the same two-item case already confirmed to wrap cleanly. */
+.list-item-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
 }
 
 .chip {

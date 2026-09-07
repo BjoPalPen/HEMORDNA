@@ -35,20 +35,22 @@ else
             <li class="list-item">
                 <span class="avatar" aria-hidden="true">@Initial(member.DisplayName)</span>
                 <span class="list-name">@member.DisplayName</span>
-                <select class="role-select" aria-label="@($"Roll för {member.DisplayName}")"
-                        value="@RoleValueFor(member)"
-                        @onchange="e => SetMemberRoleAsync(member.Id, e.Value)">
-                    <option value="" disabled>Anpassad tid</option>
-                    @foreach (var preset in HouseholdRolePresets.All)
-                    {
-                        <option value="@preset.Role">@preset.Label</option>
-                    }
-                </select>
-                <button type="button" class="btn btn-secondary" aria-label="@($"Ta bort {member.DisplayName}")"
-                        disabled="@(_removingMemberId == member.Id)"
-                        @onclick="() => RemoveMemberAsync(member.Id)">
-                    Ta bort
-                </button>
+                <div class="list-item-actions">
+                    <select class="role-select" aria-label="@($"Roll för {member.DisplayName}")"
+                            value="@RoleValueFor(member)"
+                            @onchange="e => SetMemberRoleAsync(member.Id, e.Value)">
+                        <option value="" disabled>Anpassad tid</option>
+                        @foreach (var preset in HouseholdRolePresets.All)
+                        {
+                            <option value="@preset.Role">@preset.Label</option>
+                        }
+                    </select>
+                    <button type="button" class="btn btn-secondary" aria-label="@($"Ta bort {member.DisplayName}")"
+                            disabled="@(_removingMemberId == member.Id)"
+                            @onclick="() => RemoveMemberAsync(member.Id)">
+                        Ta bort
+                    </button>
+                </div>
             </li>
         }
     </ul>

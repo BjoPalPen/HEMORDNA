@@ -35,15 +35,17 @@ else
                         <span class="muted small">endast vuxna</span>
                     }
                 </span>
-                <button type="button" class="btn btn-secondary" aria-label="@($"Ändra frekvens för {task.Name}")"
-                        @onclick="() => ToggleEditFrequency(task)">
-                    Ändra frekvens
-                </button>
-                <button type="button" class="btn btn-secondary" aria-label="@($"Ta bort {task.Name}")"
-                        disabled="@(_removingTaskId == task.Id)"
-                        @onclick="() => RemoveTaskAsync(task.Id)">
-                    Ta bort
-                </button>
+                <div class="list-item-actions">
+                    <button type="button" class="btn btn-secondary" aria-label="@($"Ändra frekvens för {task.Name}")"
+                            @onclick="() => ToggleEditFrequency(task)">
+                        Ändra frekvens
+                    </button>
+                    <button type="button" class="btn btn-secondary" aria-label="@($"Ta bort {task.Name}")"
+                            disabled="@(_removingTaskId == task.Id)"
+                            @onclick="() => RemoveTaskAsync(task.Id)">
+                        Ta bort
+                    </button>
+                </div>
             </li>
 
             @if (_editingTaskId == task.Id)
