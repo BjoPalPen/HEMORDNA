@@ -27,7 +27,10 @@ internal sealed class HouseholdDailyActivityQuery : IHouseholdDailyActivityQuery
             .Select(group => new
             {
                 Date = group.Key,
-                Total = group.Count(),
+                // A skipped occurrence ("not needed this time") is a conscious decision to shrink
+                // the day's scope, not an unfinished item - it must not sit in the total forever
+                // capping the ring below 100% no matter what still gets done.
+                Total = group.Count(occurrence => occurrence.Status != TaskOccurrenceStatus.Skipped),
                 Completed = group.Count(occurrence => occurrence.Status == TaskOccurrenceStatus.Completed)
             })
             .ToDictionaryAsync(row => row.Date, cancellationToken);
