@@ -4,10 +4,24 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#4A6C8C" />
+    <meta name="theme-color" content="#4A6C8C" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#1C2024" media="(prefers-color-scheme: dark)" />
     <meta name="description" content="Ett enklare hem, en lugnare vardag." />
     <title>Hemordna</title>
     <base href="/" />
+    <!-- Applies a forced light/dark choice (Support/Theme.cs, wwwroot/js/theme.js) before
+         app.css loads, so there is no flash of the wrong theme on first paint. Keep the
+         storage key and attribute logic here in sync with theme.js if either changes. -->
+    <script>
+        (function () {
+            try {
+                var theme = localStorage.getItem('hemordna.theme');
+                if (theme === 'light' || theme === 'dark') {
+                    document.documentElement.setAttribute('data-theme', theme);
+                }
+            } catch (e) {}
+        })();
+    </script>
     <link rel="preload" id="webassembly" />
     <link rel="stylesheet" href="css/app.css" />
     <link rel="icon" type="image/png" href="favicon.png" />

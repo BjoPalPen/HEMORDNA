@@ -78,6 +78,8 @@
 
     --shadow-card: 0 1px 2px rgba(34, 40, 46, .06);
 
+    color-scheme: light;
+
     --space-1: 4px;
     --space-2: 8px;
     --space-3: 12px;
@@ -92,6 +94,59 @@
     --font-display: "Familjen Grotesk", "Segoe UI", system-ui, sans-serif;
     --font-body: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     --font-family: var(--font-body);
+}
+
+/* Mörkt läge - ritat, inte inverterat (docs/DESIGN.md §2/§10). Applied two ways: automatically
+   from the OS preference, unless the person has explicitly forced light (data-theme="light");
+   or forced on regardless of the OS (data-theme="dark", set via Inställningar - see Support/
+   Theme.cs). Every value here is its own considered choice for a dark surface, not a filter
+   or an inversion of the light tokens above - contrast for every pair below verified the same
+   way as the light palette (DESIGN.md §2), values recorded in ARCHITECTURE.md §10 steg 5.
+   --gustav itself is deliberately UNCHANGED from light mode: its only role as a bare token is
+   background-under-white-text (.btn-primary), which is already theme-independent (5.50:1) -
+   brightening it for dark-surface legibility would break that pairing. Anywhere gustav needs
+   to read as text/icon against a dark surface, --gustav-ink (already the "text-safe" variant)
+   is the correct token - see the .btn-link:hover fix below. */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --kalk: #1C2024;
+        --surface: #262B31;
+        --surface-2: #323942;
+        --sot: #EDEBE6;
+        --sot-soft: #A9B0B7;
+        --line: #3D444C;
+        --gustav-ink: #8FB0CC;
+        --gustav-soft: #24384A;
+        --saffran-soft: #4A3A1D;
+        --aska: #8B95A0;
+        --aska-soft: #33383D;
+        --ronn: #D97B67;
+        --ronn-soft: #3E211B;
+        --ronn-ink: #F0937E;
+
+        --shadow-card: 0 1px 3px rgba(0, 0, 0, .4);
+        color-scheme: dark;
+    }
+}
+
+:root[data-theme="dark"] {
+    --kalk: #1C2024;
+    --surface: #262B31;
+    --surface-2: #323942;
+    --sot: #EDEBE6;
+    --sot-soft: #A9B0B7;
+    --line: #3D444C;
+    --gustav-ink: #8FB0CC;
+    --gustav-soft: #24384A;
+    --saffran-soft: #4A3A1D;
+    --aska: #8B95A0;
+    --aska-soft: #33383D;
+    --ronn: #D97B67;
+    --ronn-soft: #3E211B;
+    --ronn-ink: #F0937E;
+
+    --shadow-card: 0 1px 3px rgba(0, 0, 0, .4);
+    color-scheme: dark;
 }
 
 /* Presentation mode: larger text. Individual preference, never a household setting. */
@@ -245,8 +300,12 @@ a {
     cursor: pointer;
 }
 
+/* Relative to whatever --gustav-ink already resolves to, rather than swapping to the bare
+   --gustav token - that token's only job is background-under-white-text (.btn-primary), a
+   role that pins it dark enough to stay AA-safe as text ONLY in light mode (see the dark
+   palette's own comment above). brightness() keeps the hover state readable in both themes. */
 .btn-link:hover {
-    color: var(--gustav);
+    filter: brightness(1.2);
 }
 
 .btn-block {

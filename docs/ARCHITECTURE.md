@@ -837,7 +837,7 @@ Integrationstester mot en verklig PostgreSQL införs när persistence byggs – 
 
 ---
 
-## 10. Beslut: Ny form — `IMPLEMENTED` (steg 1–4) / `PROPOSED` (steg 5)
+## 10. Beslut: Ny form — `IMPLEMENTED` (steg 1–5, alla)
 
 Klienten byggs om skärm för skärm till ett nytt visuellt uttryck och en enklare navigation -
 enbart `Hemordna.Client` och dokumentation, ingen ändring i Domain/Application/Infrastructure/
@@ -1078,12 +1078,54 @@ egen skicka-knappstext medvetet hölls identiska med tidigare UI-text. Ny delad 
 (`AddMemberWithoutAccountAsync`/`OpenMemberSheetAsync`), ersätter den upprepade
 "öppna Bjud in-arket, fyll i det nästlade formuläret"-koden i fem olika testfiler.
 
-### Steg 5 (`feat/ny-form-morkt-lage`) — `PROPOSED`
+### Steg 5 (`feat/ny-form-morkt-lage`) — `IMPLEMENTED`
 
-Dark-tokens, `data-theme`-växel, bock-animation och haptik under `prefers-reduced-motion` -
-`TaskListItem` har redan sin `prefers-reduced-motion`-hantering för svepet, så steg 5 behöver
-bara motsvarande för nya interaktioner den själv inför. Lämnar appen fullt fungerande och alla
-tester gröna innan den påbörjas.
+Mörkt läge (docs/DESIGN.md §2/§10) - **ritat, inte inverterat**: varje mörk tokenvärde är sitt
+eget övervägda val, kontrastverifierat på samma sätt som den ljusa paletten, inte en filter-
+invertering. Applicerad två vägar, i `wwwroot/css/app.css`:
+`@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {...} }` för automatiskt
+mörkt läge, och `:root[data-theme="dark"]` för ett uttryckligt val som vinner oavsett OS.
+
+- **`--gustav` är medvetet ORÖRD i mörkt läge.** Dess enda roll som bar token är
+  bakgrund-under-vit-text (`.btn-primary`) - redan tema-oberoende AA-säker (5.50:1). Att göra
+  den ljusare för läsbarhet mot en mörk yta hade brutit just den kopplingen. Överallt gustav
+  behöver läsas som text/ikon mot en mörk yta används i stället `--gustav-ink` (redan den
+  "textsäkra" varianten) - se buggen nedan.
+- **Alla nya färgpar kontrastverifierade** med samma Python-script som den ljusa paletten
+  (relativ luminans, sRGB-gammaformeln): `sot`/`kalk` 13.76:1, `gustav-ink`/`kalk` 7.22:1,
+  vit/`gustav` 5.50:1, `sot`/`surface-2` 9.80:1, `ronn-ink`/`ronn-soft` 6.38:1,
+  `gustav-ink`/`gustav-soft` 5.32:1, `sot`/`saffran-soft` 9.21:1, `aska`/`kalk` 5.39:1 (3:1-
+  golvet för UI-komponenter som fokusringen, inte textens 4.5:1). Samtliga med god marginal.
+- **`Support/Theme.cs` + `wwwroot/js/theme.js`**: ljust/mörkt/systemets eget, ett **per-enhet**
+  val i `localStorage` (`hemordna.theme`) - inte `MemberPreference`, till skillnad från
+  presentationsläget, eftersom rätt tema hör till skärmens egen miljö, inte till personen.
+  `wwwroot/index.html` kör samma logik synkront, inline, innan `app.css` laddas, för att
+  undvika en synlig blink av fel tema vid första målningen.
+- **"Utseende"-kortet** på Inställningar (tre alternativknappar, applicerar direkt vid val -
+  inget separat "Spara", till skillnad från presentationsläget ovanför som fortfarande sparas
+  mot servern).
+- **Bock- och svepbekräftelsen delas nu.** `task-swipe.js`s `confirm(element)` (flash +
+  `navigator.vibrate(10)`, skippas helt - inklusive haptiken - under
+  `prefers-reduced-motion`) fanns sedan tidigare bara för svepet; den vanliga
+  bock-knappen (`TaskListItem.CompleteAsync`) anropar nu samma funktion innan den
+  fullbordar uppgiften. CSS-klassen döptes om från `.task-swipe-confirm` till `.task-confirm`
+  eftersom den inte längre är svep-specifik.
+
+**Bugg hittad under arbetet, fixad:** `.btn-link:hover { color: var(--gustav); }` gav bara
+2.98:1 mot mörkt lägets `--kalk` - bar `--gustav` är, som ovan, bara AA-säker som text i ljust
+läge. Fixat med `filter: brightness(1.2)` relativt `--gustav-ink` (redan textfärgen i default-
+läget) i stället för att byta till en annan token - fungerar i båda temana (5.34:1 ljust,
+10.45:1 mörkt), och råkar dessutom ligga närmare den ursprungliga ljusa hover-tonen än den
+gamla bar-`--gustav`-lösningen gjorde.
+
+**Testat:** `tests/Hemordna.E2E.Tests/ThemeTests.cs` (4 tester - systemets eget, tvingat mörkt
+med reload-persistens, tvingat ljust, tillbaka till systemets eget) väntar på attributet via
+`page.WaitForFunctionAsync` snarare än att anta att `SetThemeAsync` hunnit slutföras direkt
+efter `CheckAsync()` - den asynkrona Razor-hanterarens JS-import + `localStorage`-skrivning tar
+en mätbar (om än kort) stund, vilket en enstaka omedelbar assert missade i en av fyra körningar
+innan detta fixades. `SkarmbilderTests.Capture_dark_mode_screens` fångar Idag/Rum/Vecka/
+Hushåll/Inställningar och tre ark (Nytt rum, MemberSheet, Extra uppgift) med
+`page.EmulateMediaAsync(ColorScheme.Dark)`, granskade manuellt.
 
 ---
 

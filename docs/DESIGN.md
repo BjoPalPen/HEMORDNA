@@ -58,8 +58,10 @@ används bara till ramar och ikoner. Uppmätta värden för de tre par som är e
 verifieringskrav: `--gustav` på `--kalk` 4.96:1, vit på `--gustav` 5.50:1, `--sot-soft` på
 `--kalk` 5.29:1.
 
-Mörkt läge är **ritat, inte inverterat** och planerat till ett senare steg (dark-tokens,
-`data-theme`-växel i Inställningar) – se ARCHITECTURE.md "Ny form".
+Mörkt läge är **ritat, inte inverterat**: egna, kontrastverifierade mörka tokenvärden i
+`app.css`, applicerade automatiskt via `prefers-color-scheme` eller tvingat via `data-theme`
+("Utseende" i Inställningar, ett per-enhet val i `localStorage` - se ARCHITECTURE.md "Ny form"
+steg 5 för de fullständiga värdena och verifieringen).
 
 ## 3. Form
 
@@ -155,12 +157,13 @@ oavsett rum. "Klart idag" är en egen grupp längst ner, dämpad (55% opacitet) 
 
 Varje rad (`Components/TaskListItem.razor`): en 44×44px rund bock (gustav-kant, ofylld; fylld
 gustav med vit bock när klar), namn i Familjen Grotesk 600, en chevron till höger som fäller ut
-beskrivning och "Skjut upp till imorgon". Svep höger på raden = markera klar (kort
-gustav-soft-bekräftelse och `navigator.vibrate(10)` på mobil), svep vänster = flytta till
-imorgon – bock- och skjut-upp-knapparna finns alltid kvar som vanliga knappar för tangentbord
-och skärmläsare, och ett svep som börjar på en knapp gör ingenting (annars skulle det stjäla
-klicket). Under `prefers-reduced-motion`: ingen dragrörelse, ingen bekräftelseflash, ingen
-haptik – bara den vanliga klick-hanteringen.
+beskrivning och "Skjut upp till imorgon". Att bocka av - via bock-knappen ELLER genom att svepa
+höger på raden - ger samma korta gustav-soft-bekräftelse och `navigator.vibrate(10)` på mobil
+(`task-swipe.js`s delade `confirm()`, se ARCHITECTURE.md "Ny form" steg 5); svep vänster = flytta
+till imorgon. Bock- och skjut-upp-knapparna finns alltid kvar som vanliga knappar för
+tangentbord och skärmläsare, och ett svep som börjar på en knapp gör ingenting (annars skulle
+det stjäla klicket). Under `prefers-reduced-motion`: ingen dragrörelse, ingen bekräftelseflash,
+ingen haptik – bara den vanliga klick-hanteringen, oavsett om den kom från bocken eller svepet.
 
 De två gamla ▶-utfällningarna ("N till en annan dag", "Lägg till en extra uppgift") är nu chips
 under listan ("Flytta till en annan dag", "Extra uppgift") som öppnar `BottomSheet.razor` –
@@ -388,6 +391,11 @@ hushållets medlemmar.
 Se §7. Skärmen avslutas med raden:
 
 > Detta är din personliga inställning och påverkar inte andra i hushållet.
+
+Ett eget "Utseende"-kort (ljust/mörkt/systemets eget) sitter direkt under - se §2 för
+tokenvärdena. Till skillnad från "Min visning" ovanför sparas valet inte mot servern
+(`MemberPreference`), utan i `localStorage` och appliceras direkt vid val: rätt tema hör till
+enheten, inte till personen, så det ska inte följa med till någon annan skärm de loggar in på.
 
 ---
 

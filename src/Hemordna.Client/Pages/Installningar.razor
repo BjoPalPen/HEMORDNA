@@ -73,6 +73,23 @@ else
     }
 
     <div class="card">
+        <h2>Utseende</h2>
+        <p class="muted small">
+            Det här gäller bara den här enheten, inte hushållet eller dina andra enheter.
+        </p>
+
+        @foreach (var option in ThemeOptions)
+        {
+            <label class="field field-check">
+                <input type="radio" name="theme" value="@option.Value"
+                       checked="@(_theme == option.Value)"
+                       @onchange="() => SetThemeAsync(option.Value)" />
+                <span>@option.Label</span>
+            </label>
+        }
+    </div>
+
+    <div class="card">
         <h2>Byt lösenord</h2>
 
         <EditForm Model="_passwordForm" OnValidSubmit="ChangePasswordAsync">
@@ -175,6 +192,13 @@ else
         ("Calm", "Lugn - en vänlig kommentar då och då")
     ];
 
+    private static readonly (string Value, string Label)[] ThemeOptions =
+    [
+        ("system", "Följ enhetens systeminställning"),
+        ("light", "Ljust"),
+        ("dark", "Mörkt")
+    ];
+
     private sealed class PasswordForm
     {
         public string CurrentPassword { get; set; } = string.Empty;
@@ -186,6 +210,8 @@ else
     private string? _motivation;
     private string? _message;
     private bool _busy;
+
+    private string _theme = "system";
 
     private readonly PasswordForm _passwordForm = new();
     private List<string> _passwordMessages = [];
@@ -203,6 +229,7 @@ else
     {
         await Session.EnsureLoadedAsync();
         await LoadAsync();
+        _theme = await Theme.GetAsync(JS);
 
         // Never let a failure here (a flaky network call, an unsupported browser quirk) break
         // the rest of the page - this whole block used to run unguarded and could silently take
@@ -236,6 +263,12 @@ else
         var preference = await Api.GetPreferenceAsync(householdId, memberId);
         _presentation = preference?.Presentation ?? "Text";
         _motivation = preference?.Motivation ?? "None";
+    }
+
+    private async Task SetThemeAsync(string choice)
+    {
+        _theme = choice;
+        await Theme.SetAsync(JS, choice);
     }
 
     private async Task SaveAsync()

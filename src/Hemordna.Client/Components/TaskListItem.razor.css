@@ -22,10 +22,11 @@
     border-bottom: none;
 }
 
-/* A brief, non-essential confirmation flash after a swipe-to-complete - never the only signal
-   (the row still leaves the list once the day reloads) and skipped entirely under
-   prefers-reduced-motion (task-swipe.js never adds this class in that case). */
-.task-swipe-confirm {
+/* A brief, non-essential confirmation flash after completing a task - swipe or the ordinary
+   check button, both go through task-swipe.js's confirm() (see TaskListItem.razor). Never the
+   only signal (the row still leaves the list once the day reloads) and skipped entirely under
+   prefers-reduced-motion (confirm() never adds this class in that case). */
+.task-confirm {
     background: var(--gustav-soft);
     transition: background-color .2s ease;
 }

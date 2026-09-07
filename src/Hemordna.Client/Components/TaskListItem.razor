@@ -6,7 +6,7 @@
     <button type="button" class="task-check"
             aria-label="@($"Markera {Item.Name} som klar")"
             disabled="@IsBusy"
-            @onclick="() => OnComplete.InvokeAsync(Item.OccurrenceId)"></button>
+            @onclick="CompleteAsync"></button>
 
     @if (ShowIcon)
     {
@@ -98,6 +98,19 @@
         _selfRef = DotNetObjectReference.Create(this);
         _module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/task-swipe.js");
         _handle = await _module.InvokeAsync<IJSObjectReference>("attach", _rootRef, _selfRef);
+    }
+
+    /// <summary>The tap-to-complete button's own path - the swipe gesture plays the same
+    /// confirmation directly from task-swipe.js before calling <see cref="OnSwipeCompleteAsync"/>,
+    /// so it does not come through here.</summary>
+    private async Task CompleteAsync()
+    {
+        if (_module is not null)
+        {
+            await _module.InvokeVoidAsync("confirm", _rootRef);
+        }
+
+        await OnComplete.InvokeAsync(Item.OccurrenceId);
     }
 
     [JSInvokable]

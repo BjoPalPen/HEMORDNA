@@ -180,6 +180,69 @@ public class SkarmbilderTests
         await ShootAsync(page, "14-hushall-mobil");
     }
 
+    /// <summary>Steg 5: dark tokens (docs/ARCHITECTURE.md "Ny form"), applied automatically from
+    /// an emulated OS dark preference - the same mechanism most people will actually hit, rather
+    /// than the explicit Inställningar override ThemeTests.cs already covers on its own.</summary>
+    [Fact]
+    public async Task Capture_dark_mode_screens()
+    {
+        var page = await _app.NewPageAsync();
+        await page.EmulateMediaAsync(new() { ColorScheme = ColorScheme.Dark });
+
+        await page.GotoAsync("/logga-in");
+        await page.GetByRole(AriaRole.Tab, new() { Name = "Skapa konto" }).ClickAsync();
+        await page.GetByLabel("Ditt namn").FillAsync("Nils");
+        await page.GetByLabel("E-post").FillAsync($"dark-{Guid.NewGuid():N}@example.com");
+        await page.GetByLabel("Lösenord").FillAsync("Hemordna-E2E-2026!");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa konto" }).ClickAsync();
+
+        await page.GetByRole(AriaRole.Heading, new() { Name = "Välkommen!" })
+            .WaitForAsync(new() { Timeout = 15_000 });
+        await page.GetByLabel("Hushållets namn").FillAsync("Familjen Nilsson");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa hushåll" }).ClickAsync();
+        await page.Locator("h1", new() { HasText = "Nils" }).WaitForAsync(new() { Timeout = 15_000 });
+        await ShootAsync(page, "d01-idag");
+
+        await page.GotoAsync("/rum");
+        await page.GetByRole(AriaRole.Heading, new() { Name = "Rum", Exact = true }).WaitForAsync();
+        await page.GetByRole(AriaRole.Button, new() { Name = "Nytt rum" }).ClickAsync();
+        var newRoomSheet = page.GetByRole(AriaRole.Dialog, new() { Name = "Nytt rum" });
+        await page.Locator(".floor-room-row").First.GetByLabel("Rumstyp").SelectOptionAsync(new SelectOptionValue { Label = "Kök" });
+        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa", Exact = true }).ClickAsync();
+        await page.GetByText("Skapat, uppskattad tid per rum:").WaitForAsync(new() { Timeout = 10_000 });
+        await ShootAsync(page, "d02-nytt-rum-sheet");
+        await newRoomSheet.GetByRole(AriaRole.Button, new() { Name = "Stäng" }).ClickAsync();
+        await ShootAsync(page, "d03-rum");
+
+        await page.GetByRole(AriaRole.Button, new() { Name = "Kök" }).First.ClickAsync();
+        await page.GetByRole(AriaRole.Dialog, new() { Name = "Kök" }).WaitForAsync();
+        await ShootAsync(page, "d04-room-sheet");
+        await page.Keyboard.PressAsync("Escape");
+
+        await page.GotoAsync("/vecka");
+        await page.GetByRole(AriaRole.Heading, new() { Name = "Min vecka", Exact = true }).WaitForAsync();
+        await ShootAsync(page, "d05-vecka");
+
+        await page.GotoAsync("/hushall");
+        await page.GetByRole(AriaRole.Heading, new() { Name = "Familjen Nilsson" }).WaitForAsync();
+        await ShootAsync(page, "d06-hushall");
+
+        await page.GetByRole(AriaRole.Button, new() { Name = "Nils" }).ClickAsync();
+        await page.GetByRole(AriaRole.Dialog, new() { Name = "Nils" }).WaitForAsync();
+        await ShootAsync(page, "d07-member-sheet");
+        await page.Keyboard.PressAsync("Escape");
+
+        await page.GotoAsync("/installningar");
+        await page.GetByRole(AriaRole.Heading, new() { Name = "Utseende" }).WaitForAsync();
+        await ShootAsync(page, "d08-installningar");
+
+        await page.GotoAsync("/");
+        await page.Locator("h1", new() { HasText = "Nils" }).WaitForAsync();
+        await page.GetByRole(AriaRole.Button, new() { Name = "Extra uppgift" }).ClickAsync();
+        await page.GetByRole(AriaRole.Heading, new() { Name = "Extra uppgift" }).WaitForAsync();
+        await ShootAsync(page, "d09-extra-uppgift-sheet");
+    }
+
     /// <summary>Switches "Min visning" to the given presentation mode and saves - see
     /// docs/PRODUCT.md §7, individual presentation.</summary>
     private static async Task SetPresentationModeAsync(IPage page, string presentationLabel)

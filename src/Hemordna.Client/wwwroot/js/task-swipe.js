@@ -4,6 +4,21 @@
 const threshold = 72;
 const maxDrag = 120;
 
+// A brief, non-essential confirmation (flash + haptic) after marking a task done - shared by
+// the swipe gesture below and the ordinary tap-to-complete button (TaskListItem.razor calls
+// this directly). Never the only signal that the task is done: the row still leaves the list
+// once the day reloads. Skipped entirely - including the haptic - under prefers-reduced-motion,
+// same as the drag animation below.
+export function confirm(element) {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        return;
+    }
+
+    element.classList.add('task-confirm');
+    setTimeout(() => element.classList.remove('task-confirm'), 220);
+    navigator.vibrate?.(10);
+}
+
 export function attach(element, dotNetRef) {
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -51,12 +66,7 @@ export function attach(element, dotNetRef) {
         element.style.transform = '';
 
         if (dx > threshold) {
-            if (!reduceMotion) {
-                element.classList.add('task-swipe-confirm');
-                setTimeout(() => element.classList.remove('task-swipe-confirm'), 220);
-                navigator.vibrate?.(10);
-            }
-
+            confirm(element);
             dotNetRef.invokeMethodAsync('OnSwipeCompleteAsync');
         } else if (dx < -threshold) {
             dotNetRef.invokeMethodAsync('OnSwipeDeferAsync');
