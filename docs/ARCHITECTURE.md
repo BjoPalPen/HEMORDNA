@@ -163,6 +163,17 @@ Klienten sätter för närvarande ett fast standardintervall (21 dagar,
 `RoomTemplateTask.AsNeededDefaultDays`) i stället för att fråga efter ett antal dagar - se
 DESIGN.md §6b för samma resonemang som bär `HouseholdRolePresets` och `RoomTemplates`.
 
+**Frekvensen är redigerbar efter skapandet** (`UpdateTaskFrequency`, `PUT
+.../tasks/{taskId}/frequency`, `RoomTasks.razor`s "Ändra frekvens") - hur ofta samma syssla ska
+göras varierar mycket mellan hushåll, och tidigare gick det bara att sätta en gång, vid
+skapandet; att ändra krävde att ta bort och skapa om uppgiften. Precis som vid skapande är
+`Recurrence`/`StaleAfterDays` ömsesidigt uteslutande - att sätta det ena rensar alltid det
+andra. En "Daily"-uppgift med `Interval > 1` (mallarnas "två gånger i veckan", se
+`RoomTemplateTask.ToScheduling`) syns inte som ett eget val i redigeringens dropdown (samma
+fem alternativ som vid skapande), så att spara utan att röra valet måste återanvända
+uppgiftens befintliga intervall i stället för att tyst platta till den till en bokstavlig
+daglig uppgift - se `RoomTasks.razor`s `BuildRecurrence`.
+
 ### Beslut: `Area`/`HouseholdMember`/`TaskDefinition` kan tas bort — `IMPLEMENTED`
 
 Alla tre hade redan `Deactivate()`/`Reactivate()` i domänen (och `IsActive` i kontraktet) sen
@@ -527,6 +538,7 @@ Allt under `/api/households/{householdId}` kräver token och körs bakom
 | `GET` | `/api/households/{householdId}/tasks` | `200` med hushållets uppgifter |
 | `POST` | `/api/households/{householdId}/tasks` | `201` med uppgiften |
 | `POST` | `/api/households/{householdId}/tasks/{taskId}/occurrences` | `201` med den schemalagda instansen |
+| `PUT` | `/api/households/{householdId}/tasks/{taskId}/frequency` | `200` med uppgiften, annars `404` |
 | `PUT` | `/api/households/{householdId}/members/{memberId}/availability` | `200` med dagens tidsbudget |
 | `GET` | `/api/households/{householdId}/members/{memberId}/plan?date=` | `200` med Min dag |
 

@@ -35,12 +35,45 @@ else
                         <span class="muted small">endast vuxna</span>
                     }
                 </span>
+                <button type="button" class="btn btn-secondary" aria-label="@($"Ändra frekvens för {task.Name}")"
+                        @onclick="() => ToggleEditFrequency(task)">
+                    Ändra frekvens
+                </button>
                 <button type="button" class="btn btn-secondary" aria-label="@($"Ta bort {task.Name}")"
                         disabled="@(_removingTaskId == task.Id)"
                         @onclick="() => RemoveTaskAsync(task.Id)">
                     Ta bort
                 </button>
             </li>
+
+            @if (_editingTaskId == task.Id)
+            {
+                <li class="list-item">
+                    <label class="field">
+                        <span>Ny upprepning för "@task.Name"</span>
+                        <select @bind="_editRecurrence">
+                            <option value="">Ingen - schemaläggs för hand</option>
+                            <option value="Daily">Varje dag</option>
+                            <option value="Weekly">Varje vecka</option>
+                            <option value="Monthly">Varje månad</option>
+                            <option value="AsNeeded">Vid behov</option>
+                        </select>
+                    </label>
+
+                    @if (_editMessage is { } editMessage)
+                    {
+                        <div class="notice notice-problem" role="alert">@editMessage</div>
+                    }
+
+                    <button type="button" class="btn btn-primary" disabled="@_editBusy"
+                            @onclick="() => SaveFrequencyAsync(task)">
+                        @(_editBusy ? "Sparar..." : "Spara")
+                    </button>
+                    <button type="button" class="btn btn-link" @onclick="() => _editingTaskId = null">
+                        Avbryt
+                    </button>
+                </li>
+            }
         }
     </ul>
 }
@@ -156,6 +189,11 @@ else
     private bool _busy;
     private Guid? _removingTaskId;
 
+    private Guid? _editingTaskId;
+    private string _editRecurrence = string.Empty;
+    private string? _editMessage;
+    private bool _editBusy;
+
     private readonly Dictionary<string, bool> _suggestedSelected =
         GeneralTaskTemplates.All.ToDictionary(task => task.Name, _ => false);
     private bool _suggestionsBusy;
@@ -179,6 +217,78 @@ else
         _ => "återkommer"
     };
 
+    /// <summary>
+    /// Shared by creation and by editing an existing task's frequency. <paramref name="existing"/>
+    /// (only ever passed when editing) preserves a "Daily" recurrence's interval when the
+    /// household leaves the dropdown on "Varje dag" - a template task set up as "twice weekly"
+    /// (see RoomTemplateTask.ToScheduling) is stored as Daily with Interval 3, and that interval
+    /// has no dropdown option of its own, so re-saving without touching the selection must not
+    /// silently flatten it to a literal daily task.
+    /// </summary>
+    private static RecurrenceRuleContract? BuildRecurrence(
+        string recurrenceOption, DateOnly today, RecurrenceRuleContract? existing = null)
+        => recurrenceOption switch
+        {
+            "Daily" => new RecurrenceRuleContract(
+                "Daily", existing is { Frequency: "Daily" } ? existing.Interval : 1, today, null, null),
+            "Weekly" => new RecurrenceRuleContract("Weekly", 1, today, today.DayOfWeek.ToString(), null),
+            "Monthly" => new RecurrenceRuleContract("Monthly", 1, today, null, null),
+            _ => null
+        };
+
+    /// <summary>Which dropdown option matches this task's current frequency, so opening the
+    /// edit form shows what is actually set rather than starting blank.</summary>
+    private static string RecurrenceOptionFor(TaskDefinitionResponse task) => task switch
+    {
+        { StaleAfterDays: not null } => "AsNeeded",
+        { Recurrence.Frequency: "Daily" } => "Daily",
+        { Recurrence.Frequency: "Weekly" } => "Weekly",
+        { Recurrence.Frequency: "Monthly" } => "Monthly",
+        _ => string.Empty
+    };
+
+    private void ToggleEditFrequency(TaskDefinitionResponse task)
+    {
+        if (_editingTaskId == task.Id)
+        {
+            _editingTaskId = null;
+            return;
+        }
+
+        _editingTaskId = task.Id;
+        _editRecurrence = RecurrenceOptionFor(task);
+        _editMessage = null;
+    }
+
+    private async Task SaveFrequencyAsync(TaskDefinitionResponse task)
+    {
+        _editBusy = true;
+        _editMessage = null;
+
+        try
+        {
+            var recurrence = BuildRecurrence(_editRecurrence, Today, task.Recurrence);
+            var staleAfterDays = _editRecurrence == "AsNeeded" ? RoomTemplateTask.AsNeededDefaultDays : (int?)null;
+
+            if (await Api.UpdateTaskFrequencyAsync(HouseholdId, task.Id, recurrence, staleAfterDays) is null)
+            {
+                _editMessage = "Det gick inte att spara. Försök igen.";
+                return;
+            }
+
+            _editingTaskId = null;
+            await OnChanged.InvokeAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _editMessage = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _editBusy = false;
+        }
+    }
+
     private async Task AddTaskAsync()
     {
         if (string.IsNullOrWhiteSpace(_form.Name))
@@ -198,14 +308,7 @@ else
 
         try
         {
-            var recurrence = _form.Recurrence switch
-            {
-                "Daily" => new RecurrenceRuleContract("Daily", 1, Today, null, null),
-                "Weekly" => new RecurrenceRuleContract("Weekly", 1, Today, Today.DayOfWeek.ToString(), null),
-                "Monthly" => new RecurrenceRuleContract("Monthly", 1, Today, null, null),
-                _ => (RecurrenceRuleContract?)null
-            };
-
+            var recurrence = BuildRecurrence(_form.Recurrence, Today);
             var staleAfterDays = _form.Recurrence == "AsNeeded" ? RoomTemplateTask.AsNeededDefaultDays : (int?)null;
 
             var request = new CreateTaskRequest(

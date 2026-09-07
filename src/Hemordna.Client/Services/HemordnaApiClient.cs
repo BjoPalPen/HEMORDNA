@@ -298,6 +298,29 @@ public sealed class HemordnaApiClient
     }
 
     /// <summary>
+    /// Changes how often a task repeats - the same shape a household would otherwise only get
+    /// to pick once, at creation. <paramref name="recurrence"/> and <paramref name="staleAfterDays"/>
+    /// are mutually exclusive; passing one clears the other server-side.
+    /// </summary>
+    public async Task<TaskDefinitionResponse?> UpdateTaskFrequencyAsync(
+        Guid householdId,
+        Guid taskId,
+        RecurrenceRuleContract? recurrence,
+        int? staleAfterDays,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Put, $"api/households/{householdId}/tasks/{taskId}/frequency", cancellationToken);
+        request.Content = JsonContent.Create(new { recurrence, staleAfterDays });
+
+        var response = await _http.SendAsync(request, cancellationToken);
+
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<TaskDefinitionResponse>(cancellationToken)
+            : null;
+    }
+
+    /// <summary>
     /// Re-anchors already-created recurring tasks so they spread across the week instead of
     /// clustering on whichever day they were created - see RebalanceSchedule.
     /// </summary>

@@ -86,6 +86,9 @@ public sealed record CreateTaskRequest(
     RecurrenceRuleContract? Recurrence = null,
     int? StaleAfterDays = null);
 
+/// <summary>Both null means "ingen - schemaläggs för hand" - see TaskDefinition.</summary>
+public sealed record UpdateTaskFrequencyRequest(RecurrenceRuleContract? Recurrence, int? StaleAfterDays);
+
 public sealed record TaskDefinitionResponse(
     Guid Id,
     string Name,

@@ -73,6 +73,10 @@ internal static class HouseholdEndpoints
             .Produces<TaskDefinitionResponse>()
             .Produces(StatusCodes.Status404NotFound);
 
+        scoped.MapPut("/tasks/{taskId:guid}/frequency", UpdateTaskFrequencyAsync)
+            .Produces<TaskDefinitionResponse>()
+            .Produces(StatusCodes.Status404NotFound);
+
         scoped.MapPost("/tasks/rebalance-schedule", RebalanceScheduleAsync)
             .Produces<RebalanceScheduleResponse>();
 
@@ -363,6 +367,19 @@ internal static class HouseholdEndpoints
         CancellationToken cancellationToken)
     {
         var definition = await deactivateTask.HandleAsync(householdId, taskId, cancellationToken);
+
+        return definition is null ? Results.NotFound() : Results.Ok(ToResponse(definition));
+    }
+
+    private static async Task<IResult> UpdateTaskFrequencyAsync(
+        Guid householdId,
+        Guid taskId,
+        UpdateTaskFrequencyRequest request,
+        UpdateTaskFrequency updateTaskFrequency,
+        CancellationToken cancellationToken)
+    {
+        var definition = await updateTaskFrequency.HandleAsync(
+            householdId, taskId, request.Recurrence?.ToDomain(), request.StaleAfterDays, cancellationToken);
 
         return definition is null ? Results.NotFound() : Results.Ok(ToResponse(definition));
     }
