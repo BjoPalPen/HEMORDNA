@@ -627,6 +627,26 @@ uppgiftens uppskattade tid (`SetMemberAvailability`, samma mekanism som "mindre 
 används åt andra hållet). Planeraren ljuger därmed aldrig om hur mycket tid som faktiskt finns,
 se `MinDag.razor.AddExtraTaskAsync`.
 
+### Beslut: Rumsgruppering på Min dag — `IMPLEMENTED`
+
+`DailyPlanner` har inget begrepp för "rum" i sin egen sortering (den bryr sig om
+uppskjutbarhet/förfallenhet/prioritet/datum/minuter) - en dags uppgifter från olika rum
+interfolieras därför fritt, vilket i praktiken kändes slumpmässigt (efterfrågat konkret: gör
+klart köket innan du går till badrummet, inte köks-uppgift/badrums-uppgift/köks-uppgift om
+vartannat). Löst helt klientsidigt i `MinDag.razor`, utan att röra `DailyPlanner`s redan hårt
+testade urval/prioritering:
+
+- Förfallna uppgifter (`IsOverdue`) lyfts ut i en egen ledande grupp ("Sedan tidigare"),
+  oavsett rum - en redan sen uppgift ska aldrig kunna gömmas längre ner i ett rums lista.
+- Resten grupperas efter `AreaName` via `IEnumerable.GroupBy`, som bevarar varje nyckels
+  FÖRSTA-förekomst-ordning - rummens inbördes ordning speglar därför fortfarande vilket rums
+  uppgifter `DailyPlanner` själv rankade tidigast, snarare än en godtycklig alfabetisk lista.
+  En uppgift utan rum hamnar i en egen "Övrigt"-grupp.
+- Ren omorganisering av en REDAN BESLUTAD lista för visning - ändrar aldrig vad som planeras
+  eller skjuts upp. `Hemordna.Client.Components.TaskListItem.razor` (ny) bär den delade
+  `<li>`-markeringen (bock, ikon, chip, expandera, skjut upp) så den inte behöver dupliceras
+  per grupp.
+
 **Bugg hittad i produktion (2026-09-07), fixad:** "Tjuvkika på ett schema"s peek-vy visade
 `PlannedTaskResponse.IsOverdue` ingenstans, till skillnad från huvudvyn (som redan taggar en
 sådan rad "sedan tidigare"). En daglig uppgift som inte avklarats idag är fortfarande

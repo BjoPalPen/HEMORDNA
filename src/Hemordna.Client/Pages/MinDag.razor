@@ -65,58 +65,33 @@ else
 
                 @if (_day.Items.Count > 0)
                 {
-                    <ul class="task-list" aria-label="Uppgifter kvar idag">
-                        @foreach (var item in _day.Items)
-                        {
-                            <li class="task">
-                                <button type="button" class="task-check"
-                                        aria-label="@($"Markera {item.Name} som klar")"
-                                        disabled="@(_busyOccurrence == item.OccurrenceId)"
-                                        @onclick="() => CompleteAsync(item.OccurrenceId)"></button>
-
-                                @if (ShowIcons)
-                                {
-                                    <img class="task-icon" src="@IconSrc(item.Name, item.AreaName)" alt="" width="24" height="24" />
-                                }
-
-                                <span class="task-name">
-                                    @item.Name
-                                    @if (item.AreaName is { } area)
-                                    {
-                                        <span class="chip">@area</span>
-                                    }
-                                    @if (item.IsOverdue)
-                                    {
-                                        <span class="task-note muted small">sedan tidigare</span>
-                                    }
-                                </span>
-
-                                <button type="button" class="task-expand"
-                                        aria-label="@($"Mer om {item.Name}")"
-                                        aria-expanded="@(_expandedOccurrence == item.OccurrenceId ? "true" : "false")"
-                                        @onclick="() => ToggleExpand(item.OccurrenceId)">⌄</button>
-                            </li>
-
-                            @if (_expandedOccurrence == item.OccurrenceId)
+                    @if (OverdueItems.Count > 0)
+                    {
+                        <h2 class="task-group-heading">Sedan tidigare</h2>
+                        <ul class="task-list" aria-label="Sedan tidigare">
+                            @foreach (var item in OverdueItems)
                             {
-                                <li class="task-details">
-                                    @if (!string.IsNullOrWhiteSpace(item.Description))
-                                    {
-                                        <p class="muted small">@item.Description</p>
-                                    }
-
-                                    @if (item.CanBeDeferred)
-                                    {
-                                        <button type="button" class="btn btn-secondary"
-                                                disabled="@(_busyOccurrence == item.OccurrenceId)"
-                                                @onclick="() => DeferAsync(item.OccurrenceId)">
-                                            Skjut upp till imorgon
-                                        </button>
-                                    }
-                                </li>
+                                <TaskListItem Item="item" ShowIcon="ShowIcons" ShowOverdueNote="false"
+                                              IsBusy="_busyOccurrence == item.OccurrenceId"
+                                              IsExpanded="_expandedOccurrence == item.OccurrenceId"
+                                              OnComplete="CompleteAsync" OnToggleExpand="ToggleExpand" OnDefer="DeferAsync" />
                             }
-                        }
-                    </ul>
+                        </ul>
+                    }
+
+                    @foreach (var group in RoomGroups)
+                    {
+                        <h2 class="task-group-heading">@(group.AreaName ?? "Övrigt")</h2>
+                        <ul class="task-list" aria-label="@(group.AreaName ?? "Övrigt")">
+                            @foreach (var item in group.Items)
+                            {
+                                <TaskListItem Item="item" ShowIcon="ShowIcons"
+                                              IsBusy="_busyOccurrence == item.OccurrenceId"
+                                              IsExpanded="_expandedOccurrence == item.OccurrenceId"
+                                              OnComplete="CompleteAsync" OnToggleExpand="ToggleExpand" OnDefer="DeferAsync" />
+                            }
+                        </ul>
+                    }
                 }
                 else if (_day.Completed.Count > 0)
                 {
@@ -296,6 +271,30 @@ else
 
     // "Bild + text" - an individual preference (PRODUCT.md §7), not a household setting.
     private bool ShowIcons => _presentation == "ImageAndText";
+
+    private sealed record TaskGroup(string? AreaName, IReadOnlyList<PlannedTaskResponse> Items);
+
+    /// <summary>
+    /// Overdue items are pulled into their own leading group regardless of room, so something
+    /// already late is never buried inside a room's list further down - see
+    /// docs/ARCHITECTURE.md "Rumsgruppering på Min dag".
+    /// </summary>
+    private List<PlannedTaskResponse> OverdueItems
+        => _day?.Items.Where(item => item.IsOverdue).ToList() ?? [];
+
+    /// <summary>
+    /// The rest of today's items (not overdue), grouped by room so the day reads as one room
+    /// at a time instead of a random mix - a task with no room ("Övrigt") gets its own group.
+    /// <see cref="Enumerable.GroupBy{TSource,TKey}(IEnumerable{TSource},System.Func{TSource,TKey})"/>
+    /// preserves each key's first-appearance order, so the room order still reflects
+    /// DailyPlanner's own prioritisation (whichever room's tasks it ranked earliest leads) -
+    /// this only reorganises the DISPLAY of an already-decided list, never what is planned.
+    /// </summary>
+    private List<TaskGroup> RoomGroups
+        => (_day?.Items.Where(item => !item.IsOverdue) ?? [])
+            .GroupBy(item => item.AreaName)
+            .Select(group => new TaskGroup(group.Key, [.. group]))
+            .ToList();
 
     private static string IconSrc(string taskName, string? areaName) => $"icons/tasks/{TaskIcons.For(taskName, areaName)}.svg";
 

@@ -1,0 +1,82 @@
+@using Hemordna.Client.Support
+
+<li class="task">
+    <button type="button" class="task-check"
+            aria-label="@($"Markera {Item.Name} som klar")"
+            disabled="@IsBusy"
+            @onclick="() => OnComplete.InvokeAsync(Item.OccurrenceId)"></button>
+
+    @if (ShowIcon)
+    {
+        <img class="task-icon" src="@IconSrc(Item.Name, Item.AreaName)" alt="" width="24" height="24" />
+    }
+
+    <span class="task-name">
+        @Item.Name
+        @if (Item.AreaName is { } area)
+        {
+            <span class="chip">@area</span>
+        }
+        @if (ShowOverdueNote && Item.IsOverdue)
+        {
+            <span class="task-note muted small">sedan tidigare</span>
+        }
+    </span>
+
+    <button type="button" class="task-expand"
+            aria-label="@($"Mer om {Item.Name}")"
+            aria-expanded="@(IsExpanded ? "true" : "false")"
+            @onclick="() => OnToggleExpand.InvokeAsync(Item.OccurrenceId)">⌄</button>
+</li>
+
+@if (IsExpanded)
+{
+    <li class="task-details">
+        @if (!string.IsNullOrWhiteSpace(Item.Description))
+        {
+            <p class="muted small">@Item.Description</p>
+        }
+
+        @if (Item.CanBeDeferred)
+        {
+            <button type="button" class="btn btn-secondary"
+                    disabled="@IsBusy"
+                    @onclick="() => OnDefer.InvokeAsync(Item.OccurrenceId)">
+                Skjut upp till imorgon
+            </button>
+        }
+    </li>
+}
+
+@code {
+    /// <summary>One planned task on "Min dag" - the check button, name, room chip, expandable
+    /// description and defer action. Factored out so the list can be grouped (by room, or
+    /// overdue-first) without duplicating this markup per group - see MinDag.razor.</summary>
+    [Parameter, EditorRequired]
+    public PlannedTaskResponse Item { get; set; } = null!;
+
+    [Parameter]
+    public bool ShowIcon { get; set; }
+
+    [Parameter]
+    public bool IsBusy { get; set; }
+
+    [Parameter]
+    public bool IsExpanded { get; set; }
+
+    /// <summary>False inside a group that already carries its own "overdue" heading, so the
+    /// same fact is not stated twice.</summary>
+    [Parameter]
+    public bool ShowOverdueNote { get; set; } = true;
+
+    [Parameter, EditorRequired]
+    public EventCallback<Guid> OnComplete { get; set; }
+
+    [Parameter, EditorRequired]
+    public EventCallback<Guid> OnToggleExpand { get; set; }
+
+    [Parameter, EditorRequired]
+    public EventCallback<Guid> OnDefer { get; set; }
+
+    private static string IconSrc(string taskName, string? areaName) => $"icons/tasks/{TaskIcons.For(taskName, areaName)}.svg";
+}

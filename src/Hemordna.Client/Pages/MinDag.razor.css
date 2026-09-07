@@ -35,6 +35,16 @@
     overflow: hidden;
 }
 
+/* One per room (plus "Sedan tidigare" and "Övrigt") - a quiet label above its own task-list,
+   not a page-level heading, so the day still reads as one continuous list of small sections
+   rather than separate pages. */
+.task-group-heading {
+    margin: 0 0 var(--space-2);
+    font-size: calc(var(--font-size-base) * .9);
+    font-weight: 600;
+    color: var(--color-text-soft);
+}
+
 .task {
     display: flex;
     align-items: center;
