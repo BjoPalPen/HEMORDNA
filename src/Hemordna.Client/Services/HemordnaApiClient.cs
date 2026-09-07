@@ -401,6 +401,35 @@ public sealed class HemordnaApiClient
         return response.IsSuccessStatusCode;
     }
 
+    /// <summary>Pauses the whole household through and including <paramref name="until"/>, or resumes it when <c>null</c>.</summary>
+    public async Task<bool> PauseHouseholdAsync(
+        Guid householdId,
+        DateOnly? until,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Put, $"api/households/{householdId}/pause", cancellationToken);
+        request.Content = JsonContent.Create(new PauseRequest(until));
+
+        var response = await _http.SendAsync(request, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
+    /// <summary>Pauses one member through and including <paramref name="until"/>, or resumes them when <c>null</c>.</summary>
+    public async Task<bool> PauseHouseholdMemberAsync(
+        Guid householdId,
+        Guid memberId,
+        DateOnly? until,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Put, $"api/households/{householdId}/members/{memberId}/pause", cancellationToken);
+        request.Content = JsonContent.Create(new PauseRequest(until));
+
+        var response = await _http.SendAsync(request, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
     /// <summary>Deactivates the area rather than deleting it - see Area for why.</summary>
     public async Task<bool> DeactivateAreaAsync(
         Guid householdId,

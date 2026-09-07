@@ -260,4 +260,71 @@ public class EnsureOccurrencesGeneratedTests
         Assert.True(totals[bjorn.Id] > totals.GetValueOrDefault(anna.Id));
         Assert.True(totals[bjorn.Id] >= totals.GetValueOrDefault(anna.Id) * 2);
     }
+
+    [Fact]
+    public async Task A_paused_household_generates_nothing_and_catches_up_nothing_after_resuming()
+    {
+        var householdId = await ArrangeHouseholdAsync();
+        var household = await _households.FindByIdAsync(householdId, CancellationToken.None);
+        household!.Pause(Monday.AddDays(2));
+        await _households.UpdateAsync(household, CancellationToken.None);
+
+        var definition = TaskDefinition.Create(householdId, "Diska", 20, Now);
+        definition.SetRecurrence(RecurrenceRule.Daily(Monday));
+        _definitions.Seed(definition);
+
+        // Household paused Mon-Tue; the household opens the app again on Wednesday, once the
+        // pause has already lifted.
+        await CreateUseCase().HandleAsync(householdId, Monday.AddDays(2), CancellationToken.None);
+        Assert.Equal(0, _occurrences.AddCallCount);
+
+        await CreateUseCase().HandleAsync(householdId, Monday.AddDays(3), CancellationToken.None);
+
+        // Only Wednesday - Monday and Tuesday were skipped for good, not queued up as a backlog.
+        Assert.Equal(1, _occurrences.AddCallCount);
+        var lastDate = await _occurrences.FindMostRecentOriginalDateAsync(householdId, definition.Id, CancellationToken.None);
+        Assert.Equal(Monday.AddDays(3), lastDate);
+    }
+
+    [Fact]
+    public async Task A_paused_member_is_skipped_by_rotation_but_the_task_still_goes_to_someone_else()
+    {
+        var household = await new CreateHousehold(_households, new FixedTimeProvider(Now))
+            .HandleAsync("Familjen", Guid.NewGuid(), "Anna", CancellationToken.None);
+        var anna = household.Members.Single();
+        var bjorn = household.AddMember("Bjorn", WeeklyTimeBudget.Empty, Now.AddMinutes(1));
+        anna.Pause(Monday.AddDays(10));
+        await _households.UpdateAsync(household, CancellationToken.None);
+
+        var definition = TaskDefinition.Create(household.Id, "Diska", 20, Now);
+        definition.SetRecurrence(RecurrenceRule.Daily(Monday));
+        definition.SetRotatingResponsibility(true);
+        _definitions.Seed(definition);
+
+        await CreateUseCase().HandleAsync(household.Id, Monday, CancellationToken.None);
+
+        var last = await _assignments.FindMostRecentAsync(household.Id, definition.Id, CancellationToken.None);
+        Assert.Equal(bjorn.Id, last!.MemberId);
+    }
+
+    [Fact]
+    public async Task A_fixed_tasks_new_occurrences_stop_while_its_owner_is_paused()
+    {
+        var household = await new CreateHousehold(_households, new FixedTimeProvider(Now))
+            .HandleAsync("Familjen", Guid.NewGuid(), "Anna", CancellationToken.None);
+        var anna = household.Members.Single();
+        anna.Pause(Monday.AddDays(2));
+        await _households.UpdateAsync(household, CancellationToken.None);
+
+        var definition = TaskDefinition.Create(household.Id, "Betala räkningar", 20, Now);
+        definition.SetRecurrence(RecurrenceRule.Daily(Monday));
+        definition.SetDefaultResponsibleMember(anna.Id);
+        _definitions.Seed(definition);
+
+        await CreateUseCase().HandleAsync(household.Id, Monday.AddDays(2), CancellationToken.None);
+        Assert.Equal(0, _occurrences.AddCallCount);
+
+        await CreateUseCase().HandleAsync(household.Id, Monday.AddDays(3), CancellationToken.None);
+        Assert.Equal(1, _occurrences.AddCallCount);
+    }
 }

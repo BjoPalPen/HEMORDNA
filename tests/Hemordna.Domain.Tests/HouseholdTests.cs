@@ -125,6 +125,41 @@ public class HouseholdTests
 
         Assert.Single(household.Members);
     }
+
+    [Fact]
+    public void A_new_household_is_not_paused()
+    {
+        var household = Household.Create("Familjen", CreatedAt);
+
+        Assert.Null(household.PausedUntil);
+        Assert.False(household.IsPausedOn(DateOnly.FromDateTime(CreatedAt.Date)));
+    }
+
+    [Fact]
+    public void Pause_is_paused_through_and_including_the_given_date()
+    {
+        var household = Household.Create("Familjen", CreatedAt);
+        var until = new DateOnly(2026, 3, 10);
+
+        household.Pause(until);
+
+        Assert.True(household.IsPausedOn(until));
+        Assert.True(household.IsPausedOn(until.AddDays(-1)));
+        Assert.False(household.IsPausedOn(until.AddDays(1)));
+    }
+
+    [Fact]
+    public void Resume_lifts_a_pause_immediately()
+    {
+        var household = Household.Create("Familjen", CreatedAt);
+        var until = new DateOnly(2026, 3, 10);
+        household.Pause(until);
+
+        household.Resume();
+
+        Assert.Null(household.PausedUntil);
+        Assert.False(household.IsPausedOn(until));
+    }
 }
 
 public class HouseholdMemberUserLinkTests

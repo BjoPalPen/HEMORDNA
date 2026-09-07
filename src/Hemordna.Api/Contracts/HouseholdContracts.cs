@@ -14,6 +14,7 @@ public sealed record HouseholdResponse(
     string Name,
     DateTimeOffset CreatedAt,
     string InviteCode,
+    DateOnly? PausedUntil,
     IReadOnlyList<HouseholdMemberResponse> Members,
     IReadOnlyList<AreaResponse> Areas);
 
@@ -22,7 +23,11 @@ public sealed record HouseholdMemberResponse(
     string DisplayName,
     bool IsActive,
     WeeklyTimeBudgetContract WeeklyTimeBudgetMinutes,
-    HouseholdRole? Role);
+    HouseholdRole? Role,
+    DateOnly? PausedUntil);
+
+/// <summary>Pauses through and including <c>Until</c>, or resumes immediately when it is <c>null</c>.</summary>
+public sealed record PauseRequest(DateOnly? Until);
 
 public sealed record AreaResponse(Guid Id, string Name, bool IsActive);
 

@@ -41,10 +41,11 @@ internal static class RotationPicker
     public static Guid? PickNext(
         Household household,
         TaskDefinition definition,
-        IReadOnlyDictionary<Guid, int> assignedMinutesByMember)
+        IReadOnlyDictionary<Guid, int> assignedMinutesByMember,
+        DateOnly today)
     {
         var eligible = household.Members
-            .Where(member => member.IsActive)
+            .Where(member => member.IsActive && !member.IsPausedOn(today))
             .OrderBy(member => member.CreatedAt)
             .ThenBy(member => member.Id)
             .ToList();

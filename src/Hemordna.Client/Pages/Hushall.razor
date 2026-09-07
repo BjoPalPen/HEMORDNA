@@ -34,7 +34,13 @@ else
         {
             <li class="list-item">
                 <span class="avatar" aria-hidden="true">@Initial(member.DisplayName)</span>
-                <span class="list-name">@member.DisplayName</span>
+                <span class="list-name">
+                    @member.DisplayName
+                    @if (member.PausedUntil is { } pausedUntil)
+                    {
+                        <span class="chip">Pausad t.o.m. @pausedUntil.ToString("d/M")</span>
+                    }
+                </span>
                 <div class="list-item-actions">
                     <select class="role-select" aria-label="@($"Roll för {member.DisplayName}")"
                             value="@RoleValueFor(member)"
@@ -45,6 +51,10 @@ else
                             <option value="@preset.Role">@preset.Label</option>
                         }
                     </select>
+                    <button type="button" class="btn btn-secondary" aria-label="@($"Pausa {member.DisplayName}")"
+                            @onclick="() => ToggleMemberPause(member)">
+                        @(member.PausedUntil is null ? "Pausa" : "Ändra paus")
+                    </button>
                     <button type="button" class="btn btn-secondary" aria-label="@($"Ta bort {member.DisplayName}")"
                             disabled="@(_removingMemberId == member.Id)"
                             @onclick="() => RemoveMemberAsync(member.Id)">
@@ -52,12 +62,78 @@ else
                     </button>
                 </div>
             </li>
+
+            @if (_pausingMemberId == member.Id)
+            {
+                <li class="list-item">
+                    <label class="field">
+                        <span>Pausa "@member.DisplayName" till och med</span>
+                        <input type="date" @bind="_pauseUntilInput" />
+                    </label>
+
+                    @if (_pauseMessage is { } pauseMessage)
+                    {
+                        <div class="notice notice-problem" role="alert">@pauseMessage</div>
+                    }
+
+                    <button type="button" class="btn btn-primary" disabled="@_pauseBusy"
+                            @onclick="() => SaveMemberPauseAsync(member.Id)">
+                        @(_pauseBusy ? "Sparar..." : "Pausa")
+                    </button>
+                    @if (member.PausedUntil is not null)
+                    {
+                        <button type="button" class="btn btn-secondary" disabled="@_pauseBusy"
+                                @onclick="() => ResumeMemberAsync(member.Id)">
+                            Återuppta nu
+                        </button>
+                    }
+                    <button type="button" class="btn btn-link" @onclick="() => _pausingMemberId = null">
+                        Avbryt
+                    </button>
+                </li>
+            }
         }
     </ul>
     <p class="muted small">
         Rollen styr hur mycket tid var och en normalt får för hushållssysslor - inget alla
-        medlemmar behöver tänka på själva.
+        medlemmar behöver tänka på själva. En pausad medlem hoppas över i rotationen och får
+        inga nya uppgifter tilldelade förrän pausen är slut - bra när någon är bortrest.
     </p>
+
+    <div class="card">
+        <h2>Pausa hela hushållet</h2>
+        <p class="muted small">
+            Ingen ny uppgift skapas åt någon medan hushållet är pausat - bra när alla är bortresta
+            tillsammans. Inget hopar sig - pausade dagar hoppas bara över.
+        </p>
+
+        @if (_household.PausedUntil is { } householdPausedUntil)
+        {
+            <p class="notice" role="status">Hushållet är pausat t.o.m. @householdPausedUntil.ToString("d MMMM", SwedishCulture).</p>
+        }
+
+        <label class="field">
+            <span>Pausa till och med</span>
+            <input type="date" @bind="_householdPauseUntilInput" />
+        </label>
+
+        @if (_householdPauseMessage is { } householdPauseMessage)
+        {
+            <div class="notice notice-problem" role="alert">@householdPauseMessage</div>
+        }
+
+        <button type="button" class="btn btn-primary" disabled="@_householdPauseBusy"
+                @onclick="SaveHouseholdPauseAsync">
+            @(_householdPauseBusy ? "Sparar..." : "Pausa hushållet")
+        </button>
+        @if (_household.PausedUntil is not null)
+        {
+            <button type="button" class="btn btn-secondary" disabled="@_householdPauseBusy"
+                    @onclick="ResumeHouseholdAsync">
+                Återuppta nu
+            </button>
+        }
+    </div>
 
     <div class="card">
         <h2>Veckans plan</h2>
@@ -225,6 +301,15 @@ else
     private string? _inviteMessage;
     private bool _regeneratingInviteCode;
 
+    private Guid? _pausingMemberId;
+    private DateOnly? _pauseUntilInput;
+    private string? _pauseMessage;
+    private bool _pauseBusy;
+
+    private DateOnly? _householdPauseUntilInput;
+    private string? _householdPauseMessage;
+    private bool _householdPauseBusy;
+
     private static readonly System.Globalization.CultureInfo SwedishCulture = new("sv-SE");
 
     private DateOnly Today => DateOnly.FromDateTime(TimeProvider.GetLocalNow().DateTime);
@@ -348,6 +433,123 @@ else
         finally
         {
             _regeneratingInviteCode = false;
+        }
+    }
+
+    private void ToggleMemberPause(HouseholdMemberResponse member)
+    {
+        if (_pausingMemberId == member.Id)
+        {
+            _pausingMemberId = null;
+            return;
+        }
+
+        _pausingMemberId = member.Id;
+        _pauseUntilInput = member.PausedUntil ?? Today.AddDays(7);
+        _pauseMessage = null;
+    }
+
+    private async Task SaveMemberPauseAsync(Guid memberId)
+    {
+        if (Session.Me is not { HouseholdId: { } householdId } || _pauseUntilInput is not { } until)
+        {
+            _pauseMessage = "Ange ett slutdatum för pausen.";
+            return;
+        }
+
+        _pauseBusy = true;
+        _pauseMessage = null;
+
+        try
+        {
+            if (!await Api.PauseHouseholdMemberAsync(householdId, memberId, until))
+            {
+                _pauseMessage = "Det gick inte att spara. Försök igen.";
+                return;
+            }
+
+            _pausingMemberId = null;
+            await LoadAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _pauseMessage = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _pauseBusy = false;
+        }
+    }
+
+    private async Task ResumeMemberAsync(Guid memberId)
+    {
+        if (Session.Me is not { HouseholdId: { } householdId })
+        {
+            return;
+        }
+
+        _pauseBusy = true;
+
+        try
+        {
+            await Api.PauseHouseholdMemberAsync(householdId, memberId, until: null);
+            _pausingMemberId = null;
+            await LoadAsync();
+        }
+        finally
+        {
+            _pauseBusy = false;
+        }
+    }
+
+    private async Task SaveHouseholdPauseAsync()
+    {
+        if (Session.Me is not { HouseholdId: { } householdId } || _householdPauseUntilInput is not { } until)
+        {
+            _householdPauseMessage = "Ange ett slutdatum för pausen.";
+            return;
+        }
+
+        _householdPauseBusy = true;
+        _householdPauseMessage = null;
+
+        try
+        {
+            if (!await Api.PauseHouseholdAsync(householdId, until))
+            {
+                _householdPauseMessage = "Det gick inte att spara. Försök igen.";
+                return;
+            }
+
+            await LoadAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _householdPauseMessage = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _householdPauseBusy = false;
+        }
+    }
+
+    private async Task ResumeHouseholdAsync()
+    {
+        if (Session.Me is not { HouseholdId: { } householdId })
+        {
+            return;
+        }
+
+        _householdPauseBusy = true;
+
+        try
+        {
+            await Api.PauseHouseholdAsync(householdId, until: null);
+            await LoadAsync();
+        }
+        finally
+        {
+            _householdPauseBusy = false;
         }
     }
 

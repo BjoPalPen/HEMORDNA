@@ -88,13 +88,20 @@ public sealed class EnsureOccurrencesGenerated
             household.Id, definition.Id, cancellationToken);
 
         var next = recurrence.NextOnOrAfter(lastDate?.AddDays(1) ?? recurrence.StartDate);
-        var generated = 0;
 
-        while (next <= today && generated < MaxCatchUpPerDefinition)
+        // Counts skipped-for-pause slots too, not just generated ones - otherwise a household
+        // paused for longer than this bound would never advance past the pause window at all.
+        var iterations = 0;
+
+        while (next <= today && iterations < MaxCatchUpPerDefinition)
         {
-            await ScheduleGeneratedOccurrenceAsync(
-                household, definition, next, assignedMinutesByMember, cancellationToken);
-            generated++;
+            if (!IsSkippedForPause(household, definition, next))
+            {
+                await ScheduleGeneratedOccurrenceAsync(
+                    household, definition, next, assignedMinutesByMember, cancellationToken);
+            }
+
+            iterations++;
             next = recurrence.NextOnOrAfter(next.AddDays(1));
         }
     }
@@ -128,7 +135,40 @@ public sealed class EnsureOccurrencesGenerated
             return;
         }
 
+        if (IsSkippedForPause(household, definition, today))
+        {
+            // Stays "due" with nothing recorded, so it is simply asked again next call - unlike
+            // calendar recurrence there is no slot to lose by waiting for the pause to lift.
+            return;
+        }
+
         await ScheduleGeneratedOccurrenceAsync(household, definition, today, assignedMinutesByMember, cancellationToken);
+    }
+
+    /// <summary>
+    /// True when nothing should be generated for <paramref name="definition"/> on
+    /// <paramref name="date"/> because either the whole household is paused, or the task is a
+    /// fixed (non-rotating) one owned by a member who is individually paused. A rotating task's
+    /// paused members are instead simply excluded from <see cref="RotationPicker"/>'s candidates
+    /// for that date - the task still needs doing, just not by them.
+    /// </summary>
+    private static bool IsSkippedForPause(Household household, TaskDefinition definition, DateOnly date)
+    {
+        if (household.IsPausedOn(date))
+        {
+            return true;
+        }
+
+        if (definition.HasRotatingResponsibility)
+        {
+            return false;
+        }
+
+        var owner = definition.DefaultResponsibleMemberId is { } ownerId
+            ? household.Members.FirstOrDefault(member => member.Id == ownerId)
+            : null;
+
+        return owner is not null && owner.IsPausedOn(date);
     }
 
     private async Task ScheduleGeneratedOccurrenceAsync(
@@ -143,7 +183,7 @@ public sealed class EnsureOccurrencesGenerated
 
         if (definition.HasRotatingResponsibility)
         {
-            memberId = RotationPicker.PickNext(household, definition, assignedMinutesByMember);
+            memberId = RotationPicker.PickNext(household, definition, assignedMinutesByMember, date);
 
             if (memberId is { } rotatingMemberId)
             {

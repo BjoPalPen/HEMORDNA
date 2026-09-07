@@ -102,6 +102,14 @@ internal static class HouseholdEndpoints
             .Produces<HouseholdResponse>()
             .Produces(StatusCodes.Status404NotFound);
 
+        scoped.MapPut("/pause", PauseHouseholdAsync)
+            .Produces<HouseholdResponse>()
+            .Produces(StatusCodes.Status404NotFound);
+
+        scoped.MapPut("/members/{memberId:guid}/pause", PauseHouseholdMemberAsync)
+            .Produces<HouseholdMemberResponse>()
+            .Produces(StatusCodes.Status404NotFound);
+
         scoped.MapGet("/members/{memberId:guid}/preferences", GetPreferenceAsync)
             .Produces<PreferenceResponse>()
             .Produces(StatusCodes.Status404NotFound);
@@ -484,6 +492,29 @@ internal static class HouseholdEndpoints
         return household is null ? Results.NotFound() : Results.Ok(ToResponse(household));
     }
 
+    private static async Task<IResult> PauseHouseholdAsync(
+        Guid householdId,
+        PauseRequest request,
+        PauseHousehold pauseHousehold,
+        CancellationToken cancellationToken)
+    {
+        var household = await pauseHousehold.HandleAsync(householdId, request.Until, cancellationToken);
+
+        return household is null ? Results.NotFound() : Results.Ok(ToResponse(household));
+    }
+
+    private static async Task<IResult> PauseHouseholdMemberAsync(
+        Guid householdId,
+        Guid memberId,
+        PauseRequest request,
+        PauseHouseholdMember pauseMember,
+        CancellationToken cancellationToken)
+    {
+        var member = await pauseMember.HandleAsync(householdId, memberId, request.Until, cancellationToken);
+
+        return member is null ? Results.NotFound() : Results.Ok(ToResponse(member));
+    }
+
     private static async Task<IResult> GetPreferenceAsync(
         Guid householdId,
         Guid memberId,
@@ -607,6 +638,7 @@ internal static class HouseholdEndpoints
             household.Name,
             household.CreatedAt,
             household.InviteCode,
+            household.PausedUntil,
             [.. household.Members.Select(ToResponse)],
             [.. household.Areas.Select(ToResponse)]);
 
@@ -616,7 +648,8 @@ internal static class HouseholdEndpoints
             member.DisplayName,
             member.IsActive,
             WeeklyTimeBudgetContract.From(member.WeeklyTimeBudget),
-            member.Role);
+            member.Role,
+            member.PausedUntil);
 
     private static AreaResponse ToResponse(Area area) => new(area.Id, area.Name, area.IsActive);
 

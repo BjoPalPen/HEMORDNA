@@ -31,6 +31,9 @@ internal sealed class HouseholdConfiguration : IEntityTypeConfiguration<Househol
         // assumption about the generator's entropy.
         builder.HasIndex(household => household.InviteCode).IsUnique();
 
+        // Nullable - see Household.PausedUntil for what null means.
+        builder.Property(household => household.PausedUntil);
+
         // Members and areas are exposed as read-only collections, so EF reads and writes the
         // backing fields directly instead of going through the public surface.
         builder.HasMany(household => household.Members)

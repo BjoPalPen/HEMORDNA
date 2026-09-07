@@ -45,6 +45,14 @@ public sealed class Household
     /// </summary>
     public string InviteCode { get; private set; }
 
+    /// <summary>
+    /// The last day the whole household is paused, inclusive - typically everyone travelling
+    /// together. <c>null</c> means not paused. Pausing is read by the application layer's
+    /// occurrence generator: nothing new is scheduled for anyone while paused, rather than
+    /// piling up a backlog to face on return.
+    /// </summary>
+    public DateOnly? PausedUntil { get; private set; }
+
     public static Household Create(string name, DateTimeOffset createdAt)
         => new(Guid.NewGuid(), Guard.AgainstNullOrWhiteSpace(name, nameof(name)), createdAt, GenerateInviteCode());
 
@@ -56,6 +64,13 @@ public sealed class Household
     /// membership - this only affects future attempts to join.
     /// </summary>
     public void RegenerateInviteCode() => InviteCode = GenerateInviteCode();
+
+    /// <summary>Pauses the whole household's schedule through and including <paramref name="until"/>.</summary>
+    public void Pause(DateOnly until) => PausedUntil = until;
+
+    public void Resume() => PausedUntil = null;
+
+    public bool IsPausedOn(DateOnly date) => PausedUntil is { } until && date <= until;
 
     // Excludes visually ambiguous characters (0/O, 1/I/L) since the code is meant to be read
     // aloud or typed by hand. 8 characters from this 32-letter alphabet is over a trillion

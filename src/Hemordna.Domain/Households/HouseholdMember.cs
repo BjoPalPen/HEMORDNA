@@ -52,6 +52,14 @@ public sealed class HouseholdMember
 
     public DateTimeOffset CreatedAt { get; private set; }
 
+    /// <summary>
+    /// The last day this member alone is paused, inclusive - travelling without the rest of
+    /// the household. <c>null</c> means not paused. While paused, rotation skips this member
+    /// (see RotationPicker) and their own fixed tasks are not newly scheduled either, the same
+    /// "no backlog on return" reasoning as a household-wide pause.
+    /// </summary>
+    public DateOnly? PausedUntil { get; private set; }
+
     internal static HouseholdMember Create(
         Guid householdId,
         string displayName,
@@ -111,6 +119,13 @@ public sealed class HouseholdMember
     public void Deactivate() => IsActive = false;
 
     public void Reactivate() => IsActive = true;
+
+    /// <summary>Pauses this member's own schedule through and including <paramref name="until"/>.</summary>
+    public void Pause(DateOnly until) => PausedUntil = until;
+
+    public void Resume() => PausedUntil = null;
+
+    public bool IsPausedOn(DateOnly date) => PausedUntil is { } until && date <= until;
 
     /// <summary>
     /// Resolves how many minutes this member has on <paramref name="date"/>: the one-off

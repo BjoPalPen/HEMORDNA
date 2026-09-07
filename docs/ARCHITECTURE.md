@@ -143,6 +143,41 @@ i samma batch. Se `EnsureOccurrencesGeneratedTests` för den faktiska matematike
 `TaskOccurrence`s egna snapshots) så en senare ändring av en uppgifts tidsuppskattning aldrig
 retroaktivt ändrar hur mycket en redan gjord tilldelning räknades som.
 
+### Beslut: Pausa hushåll eller enskild medlem — `IMPLEMENTED`
+
+`Household.PausedUntil`/`HouseholdMember.PausedUntil` (båda nullable `DateOnly`, "till och med
+detta datum") täcker resande: hela hushållet reser tillsammans, eller en enskild medlem gör
+det medan resten är hemma. Ingen ny status, inget separat "resa"-objekt - bara ett datum att
+jämföra dagens datum mot (`IsPausedOn`).
+
+Pausning läses uteslutande av `EnsureOccurrencesGenerated`, inte av `DailyPlanner` eller några
+redan skapade occurrences - en paus påverkar bara vad som *skapas* framöver, aldrig arbete som
+redan låg på kalendern innan pausen sattes. Tre fall:
+
+- **Hela hushållet pausat en given dag:** inget genereras alls den dagen, för någon uppgift.
+- **En roterande uppgift, en pausad medlem:** `RotationPicker` utesluter medlemmen ur
+  `eligible` för just det datumet (samma mönster som `RequiresAdult`/barn-uteslutning) -
+  uppgiften går bara till någon annan; om alla är pausade blir occurrencen helt enkelt
+  otilldelad, samma fallback som redan finns när ingen är vuxen.
+- **En fast (icke-roterande) uppgift vars ägare är pausad:** occurrencen skapas inte alls den
+  dagen - att skapa den ändå och lämna den otilldelad vore bara att skjuta upp samma problem.
+
+**Ingen eftersläpning vid återkomst** var ett uttryckligt krav: en kalenderåterkommande
+uppgift får inte hopa sig till en flodvåg av missade tillfällen dagen pausen lyfts. Lösningen
+är att `GenerateOnScheduleAsync`s catch-up-loop (som redan steg fram en dag/vecka/månad i
+taget upp till `MaxCatchUpPerDefinition`) fortsätter stega fram genom pausade datum precis som
+vanligt, men hoppar bara över själva genereringen för de datum pausen täcker - loopens egen
+räknare räknas upp även för överhoppade datum, så en ovanligt lång paus fortfarande möter
+samma skyddstak som annars finns mot en flodvåg. Nästa gång hushållet öppnar appen efter
+pausen har `recurrence.NextOnOrAfter` redan stegat förbi hela pausfönstret, som om
+tillfällena aldrig förfallit. "Vid behov"-uppgifter (`StaleAfterDays`) behöver ingen
+motsvarande stegning - de har inget kalenderdatum att tappa, en paus gör dem bara kvar "due"
+tills den lyfts, utan något extra tillstånd att hantera.
+
+`PUT .../households/{id}/pause` och `PUT .../households/{id}/members/{id}/pause` tar samma
+body (`{ until: date? }`) - `null` återupptar omedelbart. `Hushall.razor` har både en
+hushållsomfattande pausruta och en per-medlem-knapp i medlemslistan.
+
 ### Beslut: `TaskDefinition.StaleAfterDays` för "vid behov" — `IMPLEMENTED`
 
 Ett fjärde schemaläggningssätt utöver `RecurrenceRule`, för uppgifter utan en naturlig
