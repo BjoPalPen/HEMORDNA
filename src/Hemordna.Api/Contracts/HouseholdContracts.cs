@@ -110,6 +110,8 @@ public sealed record MoveTaskAreaRequest(Guid? AreaId);
 
 public sealed record SetTaskRequiresAdultRequest(bool RequiresAdult);
 
+public sealed record ChangeTaskEstimatedMinutesRequest(int EstimatedMinutes);
+
 public sealed record TaskDefinitionResponse(
     Guid Id,
     string Name,

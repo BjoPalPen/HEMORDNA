@@ -52,6 +52,7 @@ builder.Services.AddScoped<UpdateTaskFrequency>();
 builder.Services.AddScoped<UpdateTaskAssignment>();
 builder.Services.AddScoped<MoveTaskToArea>();
 builder.Services.AddScoped<SetTaskRequiresAdult>();
+builder.Services.AddScoped<ChangeTaskEstimatedMinutes>();
 builder.Services.AddScoped<RenameArea>();
 builder.Services.AddScoped<RebalanceSchedule>();
 builder.Services.AddScoped<RebalanceTaskAssignments>();

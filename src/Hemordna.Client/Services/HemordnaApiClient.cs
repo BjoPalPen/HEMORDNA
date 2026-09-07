@@ -373,6 +373,23 @@ public sealed class HemordnaApiClient
             : null;
     }
 
+    public async Task<TaskDefinitionResponse?> ChangeTaskEstimatedMinutesAsync(
+        Guid householdId,
+        Guid taskId,
+        int estimatedMinutes,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Put, $"api/households/{householdId}/tasks/{taskId}/estimated-minutes", cancellationToken);
+        request.Content = JsonContent.Create(new { estimatedMinutes });
+
+        var response = await _http.SendAsync(request, cancellationToken);
+
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<TaskDefinitionResponse>(cancellationToken)
+            : null;
+    }
+
     public async Task<AreaResponse?> RenameAreaAsync(
         Guid householdId,
         Guid areaId,

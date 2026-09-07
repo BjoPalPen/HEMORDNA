@@ -94,6 +94,11 @@ internal static class HouseholdEndpoints
             .Produces<TaskDefinitionResponse>()
             .Produces(StatusCodes.Status404NotFound);
 
+        scoped.MapPut("/tasks/{taskId:guid}/estimated-minutes", ChangeTaskEstimatedMinutesAsync)
+            .Produces<TaskDefinitionResponse>()
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status404NotFound);
+
         scoped.MapPost("/tasks/rebalance-schedule", RebalanceScheduleAsync)
             .Produces<RebalanceScheduleResponse>();
 
@@ -474,6 +479,27 @@ internal static class HouseholdEndpoints
     {
         var definition = await setTaskRequiresAdult.HandleAsync(
             householdId, taskId, request.RequiresAdult, cancellationToken);
+
+        return definition is null ? Results.NotFound() : Results.Ok(ToResponse(definition));
+    }
+
+    private static async Task<IResult> ChangeTaskEstimatedMinutesAsync(
+        Guid householdId,
+        Guid taskId,
+        ChangeTaskEstimatedMinutesRequest request,
+        ChangeTaskEstimatedMinutes changeTaskEstimatedMinutes,
+        CancellationToken cancellationToken)
+    {
+        if (request.EstimatedMinutes <= 0)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                [nameof(request.EstimatedMinutes)] = ["Uppskattad tid måste vara större än noll."]
+            });
+        }
+
+        var definition = await changeTaskEstimatedMinutes.HandleAsync(
+            householdId, taskId, request.EstimatedMinutes, cancellationToken);
 
         return definition is null ? Results.NotFound() : Results.Ok(ToResponse(definition));
     }

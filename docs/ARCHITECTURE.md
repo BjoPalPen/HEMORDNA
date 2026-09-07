@@ -1127,6 +1127,26 @@ innan detta fixades. `SkarmbilderTests.Capture_dark_mode_screens` fångar Idag/R
 Hushåll/Inställningar och tre ark (Nytt rum, MemberSheet, Extra uppgift) med
 `page.EmulateMediaAsync(ColorScheme.Dark)`, granskade manuellt.
 
+### Uppföljning efter driftsättning: redigera en uppgifts tid — `IMPLEMENTED`
+
+Upptäckt i vanligt bruk efter att "Ny form" gått i produktion: `TaskOptionsSheet` (steg 3) hade
+Upprepning/Vem gör det/Rum/Kräver vuxen, men ingen rad för tiden - uppskattad tid gick bara att
+sätta vid skapandet. Samma mönster som steg 3:s Api-undantag: `TaskDefinition
+.ChangeEstimatedMinutes` fanns redan i domänen, oanvänd av något use case. Explicit godkänt av
+användaren innan implementation (samma "stanna och rapportera"-princip som CLAUDE.md kräver för
+nya Api-fält).
+
+- **`Application.Tasks.ChangeTaskEstimatedMinutes`** följer `SetTaskRequiresAdult`s exakta
+  mönster. **`PUT .../tasks/{id}/estimated-minutes`** i samma stil som de fyra andra raderna,
+  med samma `<= 0`-validering (`ValidationProblem`) som skapande-endpointen redan hade.
+- **Ny "Tid"-rad** i `TaskOptionsSheet`, mellan "Vem gör det" och "Rum" - samma
+  `TimeLevel`-knappar (`Ingen/Lite/Lagom/Gott om tid`) som "Lägg till uppgift" redan använder,
+  förvalda på närmaste nivå (`TimeLevel.ClosestMinutes`). Samma `> 0`-krav som vid skapande
+  ("Välj ungefär hur mycket tid uppgiften tar") - en uppgift på "Ingen tid" är inte en
+  meningsfull redigering, bara ett oavsiktligt förval.
+- Inget brott mot §6a: `TaskOptionsSheet` öppnas bara från Rum (planeringsläge), aldrig från
+  Idag - samma undantag som redan gäller `RoomTile`/`RoomSheet`s egna minutsiffror.
+
 ---
 
 ## 11. Beslut som ännu inte är fattade — `OPEN`

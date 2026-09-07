@@ -58,6 +58,32 @@
             <button type="button" class="btn btn-link" @onclick="BackToOptions">Avbryt</button>
             break;
 
+        case View.Time:
+            <div class="field">
+                <span>Ungefär hur lång tid tar det?</span>
+                <div class="level-picker">
+                    @foreach (var level in TimeLevel.All)
+                    {
+                        <button type="button"
+                                class="@(_estimatedMinutes == level.Minutes ? "btn btn-primary" : "btn btn-secondary")"
+                                @onclick="() => _estimatedMinutes = level.Minutes">
+                            @level.Label
+                        </button>
+                    }
+                </div>
+            </div>
+
+            @if (_message is { } timeMessage)
+            {
+                <div class="notice notice-problem" role="alert">@timeMessage</div>
+            }
+
+            <button type="button" class="btn btn-primary btn-block" disabled="@_busy" @onclick="SaveTimeAsync">
+                @(_busy ? "Sparar..." : "Spara")
+            </button>
+            <button type="button" class="btn btn-link" @onclick="BackToOptions">Avbryt</button>
+            break;
+
         case View.Room:
             <label class="field">
                 <span>Rum</span>
@@ -98,6 +124,13 @@
                     </button>
                 </li>
                 <li class="list-item list-item-flush">
+                    <button type="button" class="task-options-row" @onclick="() => _view = View.Time">
+                        <span>Tid</span>
+                        <span class="task-options-value muted small">@TimeSummary</span>
+                        <Icon Name="chevron-right" Size="18" />
+                    </button>
+                </li>
+                <li class="list-item list-item-flush">
                     <button type="button" class="task-options-row" @onclick="() => _view = View.Room">
                         <span>Rum</span>
                         <span class="task-options-value muted small">@RoomSummary</span>
@@ -126,7 +159,7 @@
 </BottomSheet>
 
 @code {
-    private enum View { Options, Frequency, Assignment, Room }
+    private enum View { Options, Frequency, Assignment, Time, Room }
 
     [Parameter, EditorRequired]
     public Guid HouseholdId { get; set; }
@@ -154,6 +187,7 @@
     private string _recurrenceOption = string.Empty;
     private int _interval = 1;
     private string _assignmentMemberId = string.Empty;
+    private int _estimatedMinutes = TimeLevel.All[0].Minutes;
     private string _roomAreaId = string.Empty;
     private string? _message;
     private bool _busy;
@@ -176,6 +210,9 @@
 
     private string RoomSummary => Areas.FirstOrDefault(a => a.Id == Task.AreaId)?.Name ?? "Övrigt";
 
+    private string TimeSummary
+        => TimeLevel.All.First(level => level.Minutes == TimeLevel.ClosestMinutes(Task.EstimatedMinutes)).Label;
+
     protected override void OnParametersSet()
     {
         // Re-seed the edit fields whenever a different task is opened (the component instance
@@ -186,6 +223,7 @@
         _recurrenceOption = RecurrenceOptionFor(Task);
         _interval = Task.Recurrence?.Interval ?? 1;
         _assignmentMemberId = Task.DefaultResponsibleMemberId?.ToString() ?? string.Empty;
+        _estimatedMinutes = TimeLevel.ClosestMinutes(Task.EstimatedMinutes);
         _roomAreaId = Task.AreaId?.ToString() ?? string.Empty;
     }
 
@@ -271,6 +309,38 @@
             var memberId = string.IsNullOrEmpty(_assignmentMemberId) ? (Guid?)null : Guid.Parse(_assignmentMemberId);
 
             if (await Api.UpdateTaskAssignmentAsync(HouseholdId, Task.Id, memberId) is null)
+            {
+                _message = "Det gick inte att spara. Försök igen.";
+                return;
+            }
+
+            _view = View.Options;
+            await OnChanged.InvokeAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _message = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task SaveTimeAsync()
+    {
+        if (_estimatedMinutes <= 0)
+        {
+            _message = "Välj ungefär hur mycket tid uppgiften tar.";
+            return;
+        }
+
+        _busy = true;
+        _message = null;
+
+        try
+        {
+            if (await Api.ChangeTaskEstimatedMinutesAsync(HouseholdId, Task.Id, _estimatedMinutes) is null)
             {
                 _message = "Det gick inte att spara. Försök igen.";
                 return;

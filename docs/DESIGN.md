@@ -268,9 +268,10 @@ Att trycka på en bricka öppnar `Components/RoomSheet.razor`: rummets uppgifter
 lista (namn, upprepning, minuter, "roterar"/medlemsnamn, "endast vuxna"), en "Rummets meny"
 (⋯) med "Ändra frekvens för hela rummet"/"Byt namn"/"Ta bort rum", och en "+ Lägg till
 uppgift"-rad. Att trycka på en uppgift öppnar `Components/TaskOptionsSheet.razor`:
-Upprepning/Vem gör det/Rum som varsin rad som drillar ner till ett eget litet formulär inuti
-samma ark, en "Kräver vuxen"-växel, och "Ta bort uppgiften" i rönn-ink längst ner. "+ Nytt
-rum" öppnar ett ark med rumsmalls-väljaren (namnge våning, rumstyp, antal - se §6b) och en
+Upprepning/Vem gör det/Tid/Rum som varsin rad som drillar ner till ett eget litet formulär inuti
+samma ark ("Tid" med samma kvalitativa knappar - Ingen/Lite/Lagom/Gott om tid - som "Lägg till
+uppgift" redan använder), en "Kräver vuxen"-växel, och "Ta bort uppgiften" i rönn-ink längst
+ner. "+ Nytt rum" öppnar ett ark med rumsmalls-väljaren (namnge våning, rumstyp, antal - se §6b) och en
 disclosure "Lägg till ett tomt rum i stället" för grupperingar som inte är ett rum (t.ex.
 "Hund", "Garage").
 

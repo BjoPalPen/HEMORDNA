@@ -45,4 +45,45 @@ public class TaskWorkloadTests
         await Assertions.Expect(page.GetByText("Ert hushålls samlade veckokapacitet är 0 min.")).ToBeVisibleAsync();
         await Assertions.Expect(page.GetByText("mindre än det uppskattade behovet")).ToBeVisibleAsync();
     }
+
+    [Fact]
+    public async Task Changing_a_tasks_time_estimate_after_creation_updates_its_row()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Otto");
+
+        await page.GotoAsync("/rum");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Nytt rum" }).ClickAsync();
+        var newRoomSheet = page.GetByRole(AriaRole.Dialog, new() { Name = "Nytt rum" });
+        await page.GetByText("Lägg till ett tomt rum i stället").ClickAsync();
+        await page.GetByLabel("Rummets namn").FillAsync("Kök");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Lägg till rum" }).ClickAsync();
+        await newRoomSheet.GetByRole(AriaRole.Button, new() { Name = "Stäng" }).ClickAsync();
+
+        await page.GetByRole(AriaRole.Button, new() { Name = "Kök" }).First.ClickAsync();
+        var room = page.GetByRole(AriaRole.Dialog, new() { Name = "Kök" });
+        await room.WaitForAsync();
+
+        await room.GetByRole(AriaRole.Button, new() { Name = "Lägg till uppgift" }).ClickAsync();
+        var addSheet = page.GetByRole(AriaRole.Dialog, new() { Name = "Lägg till uppgift i Kök" });
+        await addSheet.GetByLabel("Namn").FillAsync("Diska");
+        await addSheet.GetByRole(AriaRole.Button, new() { Name = "Lite tid" }).ClickAsync(); // 15 min
+        await addSheet.GetByRole(AriaRole.Button, new() { Name = "Lägg till uppgift" }).ClickAsync();
+
+        var taskRow = room.GetByRole(AriaRole.Button, new() { Name = "Diska" });
+        await Assertions.Expect(taskRow).ToContainTextAsync("15 min");
+
+        // Time was only ever settable at creation until TaskOptionsSheet grew its own "Tid" row -
+        // TaskDefinition.ChangeEstimatedMinutes already existed, unused, same gap steg 3 found
+        // for assignment/room/requires-adult.
+        await taskRow.ClickAsync();
+        var taskSheet = page.GetByRole(AriaRole.Dialog, new() { Name = "Diska" });
+        await taskSheet.GetByRole(AriaRole.Button, new() { Name = "Tid" }).ClickAsync();
+        await taskSheet.GetByRole(AriaRole.Button, new() { Name = "Gott om tid" }).ClickAsync(); // 60 min
+        await taskSheet.GetByRole(AriaRole.Button, new() { Name = "Spara" }).ClickAsync();
+        await taskSheet.GetByRole(AriaRole.Button, new() { Name = "Stäng" }).ClickAsync();
+
+        await Assertions.Expect(taskRow).ToContainTextAsync("60 min");
+        await Assertions.Expect(taskRow).Not.ToContainTextAsync("15 min");
+    }
 }
