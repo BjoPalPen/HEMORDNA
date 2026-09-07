@@ -590,10 +590,21 @@ Tillämpas i denna ordning:
 | 3 | Högre prioritet före lägre | Hushållets uttalade viktning |
 | 4 | Tidigast ursprungligt förfallodatum först | Äldst arbete leder |
 | 5 | Kortare uppgift först | Vid lika ställning: att bli klar slår att påbörja, och mer ryms i budgeten |
-| 6 | Occurrence-id stigande | Stabil slutlig tie-break som gör ordningen total |
+| 6 | `ChoreSequenceHint.RankFor` (2026-09-07) | Ett fåtal kända "gör X före Y"-par, se nedan |
+| 7 | Occurrence-id stigande | Stabil slutlig tie-break som gör ordningen total |
 
 Regel 1 före regel 2 och 3 är ett medvetet val: en förfallen uppgift kan fortfarande flyttas,
 en icke uppskjutbar kan inte det.
+
+**`ChoreSequenceHint`** (regel 6) är en medvetet SMAL nudge, inte ett generellt
+städordnings-system - efterfrågat konkret: dammsug (eller sopa) golvet innan man torkar det,
+eftersom smuts annars bara flyttas runt. Ren nyckelordsmatchning på uppgiftsnamnet
+(`"torka golvet"`/`"moppa"` rankas efter `"dammsug"`/`"sopa golvet"`), tillämpad EFTER allt
+planeringsrelevant (uppskjutbarhet, förfallenhet, prioritet, datum, minuter) - kan alltså aldrig
+ändra VAD som planeras eller skjuts upp, bara i vilken ordning två annars helt likvärdiga
+uppgifter visas när de råkar hamna samma dag. Fler par kan läggas till samma väg om ett
+liknande konkret behov dyker upp - ingen anledning att gissa fram en bredare "damma före
+dammsug före torka"-ontologi som ingen efterfrågat.
 
 ### Urval
 

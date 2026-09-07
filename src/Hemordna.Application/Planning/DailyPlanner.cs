@@ -27,6 +27,9 @@ namespace Hemordna.Application.Planning;
 ///   <item>Earlier original due date first - the oldest work leads.</item>
 ///   <item>Shorter tasks first. At equal standing, finishing something beats starting
 ///   something, and it fits more of the day's work into the budget.</item>
+///   <item>A handful of well-known "do X before Y" chore pairs (see
+///   <see cref="ChoreSequenceHint"/>) - e.g. vacuum a floor before mopping it. Only ever a
+///   nudge between two tasks already tied on everything above.</item>
 ///   <item>Occurrence id, ascending. A stable final tie-break so the ordering is total and
 ///   never depends on input order.</item>
 /// </list>
@@ -58,6 +61,7 @@ public sealed class DailyPlanner
             .ThenByDescending(candidate => candidate.Priority)
             .ThenBy(candidate => candidate.Occurrence.OriginalScheduledDate)
             .ThenBy(candidate => candidate.EstimatedMinutes)
+            .ThenBy(candidate => ChoreSequenceHint.RankFor(candidate.TaskName))
             .ThenBy(candidate => candidate.Occurrence.Id)
             .ToList();
 

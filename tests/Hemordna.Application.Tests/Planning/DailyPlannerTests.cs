@@ -89,6 +89,20 @@ public class DailyPlannerTests
     }
 
     [Fact]
+    public void Vacuuming_a_floor_is_ordered_before_mopping_it_when_otherwise_tied()
+    {
+        // Tied on everything that actually matters (priority, due date, minutes) - only the
+        // chore-sequence tiebreak distinguishes them. Order in the input is deliberately
+        // reversed, so passing this cannot be an accident of input order.
+        var plan = PlanWith(
+            30,
+            PlanCandidateBuilder.Task("Torka golvet").Minutes(10).Build(),
+            PlanCandidateBuilder.Task("Dammsug golvet").Minutes(10).Build());
+
+        Assert.Equal(["Dammsug golvet", "Torka golvet"], NamesOf(plan));
+    }
+
+    [Fact]
     public void Higher_priority_is_planned_first()
     {
         var plan = PlanWith(
