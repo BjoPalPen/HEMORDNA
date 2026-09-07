@@ -50,6 +50,8 @@ builder.Services.AddScoped<CreateTaskDefinition>();
 builder.Services.AddScoped<DeactivateTaskDefinition>();
 builder.Services.AddScoped<UpdateTaskFrequency>();
 builder.Services.AddScoped<RebalanceSchedule>();
+builder.Services.AddScoped<RebalanceTaskAssignments>();
+builder.Services.AddScoped<RefreshRolePresetBudgets>();
 builder.Services.AddScoped<ScheduleTaskOccurrence>();
 builder.Services.AddScoped<CompleteTaskOccurrence>();
 builder.Services.AddScoped<DeferTaskOccurrence>();

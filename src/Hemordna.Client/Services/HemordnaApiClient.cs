@@ -338,6 +338,42 @@ public sealed class HemordnaApiClient
             : null;
     }
 
+    /// <summary>
+    /// Reassigns already-outstanding rotating occurrences to match each active member's current
+    /// share of the household's capacity - see RebalanceTaskAssignments.
+    /// </summary>
+    public async Task<RebalanceAssignmentsResponse?> RebalanceAssignmentsAsync(
+        Guid householdId,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Post, $"api/households/{householdId}/tasks/rebalance-assignments", cancellationToken);
+
+        var response = await _http.SendAsync(request, cancellationToken);
+
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<RebalanceAssignmentsResponse>(cancellationToken)
+            : null;
+    }
+
+    /// <summary>
+    /// Refreshes members whose weekly budget still matches an old role-preset formula to the
+    /// current one - see RefreshRolePresetBudgets.
+    /// </summary>
+    public async Task<RefreshRoleBudgetsResponse?> RefreshRoleBudgetsAsync(
+        Guid householdId,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Post, $"api/households/{householdId}/members/refresh-role-budgets", cancellationToken);
+
+        var response = await _http.SendAsync(request, cancellationToken);
+
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<RefreshRoleBudgetsResponse>(cancellationToken)
+            : null;
+    }
+
     public async Task<bool> ScheduleOccurrenceAsync(
         Guid householdId,
         Guid taskId,

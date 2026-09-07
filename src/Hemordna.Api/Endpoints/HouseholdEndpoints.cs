@@ -80,6 +80,14 @@ internal static class HouseholdEndpoints
         scoped.MapPost("/tasks/rebalance-schedule", RebalanceScheduleAsync)
             .Produces<RebalanceScheduleResponse>();
 
+        scoped.MapPost("/tasks/rebalance-assignments", RebalanceAssignmentsAsync)
+            .Produces<RebalanceAssignmentsResponse>()
+            .Produces(StatusCodes.Status404NotFound);
+
+        scoped.MapPost("/members/refresh-role-budgets", RefreshRoleBudgetsAsync)
+            .Produces<RefreshRoleBudgetsResponse>()
+            .Produces(StatusCodes.Status404NotFound);
+
         scoped.MapPost("/tasks/{taskId:guid}/occurrences", ScheduleOccurrenceAsync)
             .Produces<TaskOccurrenceResponse>(StatusCodes.Status201Created)
             .Produces(StatusCodes.Status404NotFound);
@@ -400,6 +408,26 @@ internal static class HouseholdEndpoints
         var changed = await rebalanceSchedule.HandleAsync(householdId, cancellationToken);
 
         return changed is null ? Results.NotFound() : Results.Ok(new RebalanceScheduleResponse(changed.Value));
+    }
+
+    private static async Task<IResult> RebalanceAssignmentsAsync(
+        Guid householdId,
+        RebalanceTaskAssignments rebalanceAssignments,
+        CancellationToken cancellationToken)
+    {
+        var changed = await rebalanceAssignments.HandleAsync(householdId, cancellationToken);
+
+        return changed is null ? Results.NotFound() : Results.Ok(new RebalanceAssignmentsResponse(changed.Value));
+    }
+
+    private static async Task<IResult> RefreshRoleBudgetsAsync(
+        Guid householdId,
+        RefreshRolePresetBudgets refreshRoleBudgets,
+        CancellationToken cancellationToken)
+    {
+        var updated = await refreshRoleBudgets.HandleAsync(householdId, cancellationToken);
+
+        return updated is null ? Results.NotFound() : Results.Ok(new RefreshRoleBudgetsResponse(updated.Value));
     }
 
     private static async Task<IResult> ScheduleOccurrenceAsync(

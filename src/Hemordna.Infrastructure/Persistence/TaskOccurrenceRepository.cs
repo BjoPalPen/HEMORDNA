@@ -86,4 +86,12 @@ internal sealed class TaskOccurrenceRepository : ITaskOccurrenceRepository
                 && occurrence.Status == TaskOccurrenceStatus.Planned
                 && occurrence.ScheduledDate <= onOrBefore)
             .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<TaskOccurrence>> ListOutstandingByHouseholdAsync(
+        Guid householdId,
+        CancellationToken cancellationToken)
+        => await _dbContext.TaskOccurrences
+            .Where(occurrence => occurrence.HouseholdId == householdId
+                && occurrence.Status == TaskOccurrenceStatus.Planned)
+            .ToListAsync(cancellationToken);
 }

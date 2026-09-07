@@ -181,6 +181,25 @@ else
             </button>
         </details>
 
+        <details class="more-options">
+            <summary>Känns det som att en person gör för mycket?</summary>
+            <p class="muted small">
+                Flyttar bara redan utestående, roterande uppgifter mellan medlemmar - så mycket
+                som möjligt lämnas orört - så att var och ens andel av det som återstår att göra
+                matchar deras egen tid bättre. Uppgifter som bara en viss person kan eller får
+                göra (t.ex. bara vuxna, eller någons eget rum) rörs aldrig.
+            </p>
+
+            @if (_rebalanceAssignmentsMessage is { } rebalanceAssignmentsMessage)
+            {
+                <div class="notice" role="status">@rebalanceAssignmentsMessage</div>
+            }
+
+            <button type="button" class="btn btn-secondary" disabled="@_rebalancingAssignments" @onclick="RebalanceAssignmentsAsync">
+                @(_rebalancingAssignments ? "Balanserar om..." : "Balansera om vem som gör vad")
+            </button>
+        </details>
+
         @foreach (var area in _areas)
         {
             <div class="card" @key="area.Id">
@@ -248,6 +267,8 @@ else
     private Guid? _removingAreaId;
     private string? _rebalanceMessage;
     private bool _rebalancing;
+    private string? _rebalanceAssignmentsMessage;
+    private bool _rebalancingAssignments;
 
     private DateOnly Today => DateOnly.FromDateTime(TimeProvider.GetLocalNow().DateTime);
 
@@ -316,6 +337,40 @@ else
         finally
         {
             _rebalancing = false;
+        }
+    }
+
+    private async Task RebalanceAssignmentsAsync()
+    {
+        if (Session.Me is not { HouseholdId: { } householdId })
+        {
+            return;
+        }
+
+        _rebalancingAssignments = true;
+        _rebalanceAssignmentsMessage = null;
+
+        try
+        {
+            // Refreshing any role-preset-derived budget first means a household that has not
+            // touched a member's role since the preset numbers last changed gets the CURRENT
+            // target ratio to rebalance against, not a stale one - see RefreshRolePresetBudgets.
+            await Api.RefreshRoleBudgetsAsync(householdId);
+
+            if (await Api.RebalanceAssignmentsAsync(householdId) is { } result)
+            {
+                _rebalanceAssignmentsMessage = result.ChangedOccurrenceCount switch
+                {
+                    0 => "Redan bra balanserat - ingenting att ändra.",
+                    1 => "En uppgift bytte ansvarig.",
+                    _ => $"{result.ChangedOccurrenceCount} uppgifter bytte ansvarig."
+                };
+                await LoadAsync();
+            }
+        }
+        finally
+        {
+            _rebalancingAssignments = false;
         }
     }
 

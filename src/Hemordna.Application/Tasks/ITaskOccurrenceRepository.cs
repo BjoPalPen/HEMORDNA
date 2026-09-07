@@ -64,4 +64,15 @@ public interface ITaskOccurrenceRepository
         Guid taskDefinitionId,
         DateOnly onOrBefore,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Every outstanding (<see cref="TaskOccurrenceStatus.Planned"/>) occurrence across the
+    /// whole household, regardless of definition - tracked, so <see cref="RebalanceTaskAssignments"/>
+    /// can reassign <see cref="TaskOccurrence.AssignedMemberId"/> on the ones that need it and
+    /// persist every change in one pass. Completed and skipped occurrences are never included -
+    /// see <see cref="TaskOccurrenceStatus"/>.
+    /// </summary>
+    Task<IReadOnlyList<TaskOccurrence>> ListOutstandingByHouseholdAsync(
+        Guid householdId,
+        CancellationToken cancellationToken);
 }
