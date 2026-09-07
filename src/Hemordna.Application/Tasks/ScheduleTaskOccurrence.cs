@@ -72,7 +72,9 @@ public sealed class ScheduleTaskOccurrence
                 {
                     var assignedMinutesByMember = await _assignments.GetAssignedMinutesByMemberAsync(
                         householdId, cancellationToken);
-                    memberId = RotationPicker.PickNext(household, definition, assignedMinutesByMember, date);
+                    var assignedMinutesOnDate = await _assignments.GetAssignedMinutesByMemberOnDateAsync(
+                        householdId, date, cancellationToken);
+                    memberId = RotationPicker.PickNext(household, definition, assignedMinutesByMember, assignedMinutesOnDate, date);
                 }
             }
 

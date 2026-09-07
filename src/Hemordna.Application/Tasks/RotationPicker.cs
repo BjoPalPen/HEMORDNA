@@ -26,8 +26,23 @@ namespace Hemordna.Application.Tasks;
 /// Weighing by <see cref="WeeklyTimeBudget.TotalWeeklyMinutes"/> fixes both: a member with no
 /// history is simply the most under-served relative to their share (rather than a special
 /// case), and a member with more normal free time is offered more of the rotating work,
-/// proportionally, without ever exceeding what their own budget allows on any given day - that
-/// cap still lives entirely in <see cref="Planning.DailyPlanner"/>, which this has no bearing on.
+/// proportionally.
+/// </remarks>
+/// <remarks>
+/// <b>Daily cap (2026-09-07).</b> The ratio above is all-time cumulative (see
+/// <see cref="EnsureOccurrencesGenerated"/>'s <c>assignedMinutesByMember</c>), which is exactly
+/// right for deciding whose TURN it is next - but a household that had gone badly lopsided
+/// before this scheme existed (or before a member was added, or came back from a long pause)
+/// has one member sitting at a far lower ratio than everyone else for a while. Left unchecked,
+/// EVERY pick in a batch that creates many rotating tasks at once (again, the normal way to set
+/// up Områden) goes to that one under-served member until their ratio catches up - dumping an
+/// entire backlog of the day's chores on whoever has the LEAST slack today, since ratio alone
+/// says nothing about whether today is realistic for them. <see cref="PickNext"/> therefore
+/// prefers a member who still has room in their OWN day
+/// (<see cref="WeeklyTimeBudget.MinutesFor"/>) for this task, among those tied for lowest ratio
+/// or not; only once nobody has room left today does it fall back to ratio alone, so the task
+/// still gets a home rather than none at all - <see cref="Planning.DailyPlanner"/> is what
+/// actually decides, per member, what fits versus what waits for another day.
 /// </remarks>
 internal static class RotationPicker
 {
@@ -37,11 +52,14 @@ internal static class RotationPicker
     /// <see cref="EnsureOccurrencesGenerated"/>, which generates many occurrences in one pass
     /// and updates this in place after each pick precisely so the second pick in a batch does
     /// not repeat the cold-start mistake the first one would otherwise make.
+    /// <paramref name="assignedMinutesTodayOnDate"/> is the same kind of running total, but
+    /// scoped to <paramref name="today"/> alone - see the daily-cap remarks above.
     /// </summary>
     public static Guid? PickNext(
         Household household,
         TaskDefinition definition,
         IReadOnlyDictionary<Guid, int> assignedMinutesByMember,
+        IReadOnlyDictionary<Guid, int> assignedMinutesTodayOnDate,
         DateOnly today)
     {
         var eligible = household.Members
@@ -68,7 +86,15 @@ internal static class RotationPicker
             return null;
         }
 
-        return eligible
+        var withRoomToday = eligible
+            .Where(member => HasRoomToday(member, today, assignedMinutesTodayOnDate, definition.EstimatedMinutes))
+            .ToList();
+
+        // Nobody having room left today is not a reason to leave the task unassigned - it still
+        // needs an owner, just picked by ratio alone as before.
+        var pool = withRoomToday.Count > 0 ? withRoomToday : eligible;
+
+        return pool
             .OrderBy(member => LoadRatio(member, assignedMinutesByMember))
             // A tie (most commonly: everyone still at their starting ratio) defers to whichever
             // member the household explicitly named, if any, before falling back to a stable,
@@ -78,6 +104,15 @@ internal static class RotationPicker
             .ThenBy(member => member.Id)
             .First()
             .Id;
+    }
+
+    private static bool HasRoomToday(
+        HouseholdMember member, DateOnly today, IReadOnlyDictionary<Guid, int> assignedMinutesTodayOnDate, int taskMinutes)
+    {
+        var capacityToday = member.WeeklyTimeBudget.MinutesFor(today.DayOfWeek);
+        var alreadyAssignedToday = assignedMinutesTodayOnDate.GetValueOrDefault(member.Id);
+
+        return alreadyAssignedToday + taskMinutes <= capacityToday;
     }
 
     /// <summary>

@@ -36,4 +36,15 @@ internal sealed class TaskAssignmentRepository : ITaskAssignmentRepository
             .GroupBy(assignment => assignment.MemberId)
             .Select(group => new { MemberId = group.Key, Minutes = group.Sum(assignment => assignment.EstimatedMinutes) })
             .ToDictionaryAsync(entry => entry.MemberId, entry => entry.Minutes, cancellationToken);
+
+    public async Task<IReadOnlyDictionary<Guid, int>> GetAssignedMinutesByMemberOnDateAsync(
+        Guid householdId,
+        DateOnly date,
+        CancellationToken cancellationToken)
+        => await _dbContext.TaskAssignments
+            .AsNoTracking()
+            .Where(assignment => assignment.HouseholdId == householdId && assignment.ScheduledDate == date)
+            .GroupBy(assignment => assignment.MemberId)
+            .Select(group => new { MemberId = group.Key, Minutes = group.Sum(assignment => assignment.EstimatedMinutes) })
+            .ToDictionaryAsync(entry => entry.MemberId, entry => entry.Minutes, cancellationToken);
 }

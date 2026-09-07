@@ -262,6 +262,51 @@ public class EnsureOccurrencesGeneratedTests
     }
 
     [Fact]
+    public async Task A_large_historical_imbalance_does_not_dump_an_entire_days_backlog_on_the_underused_member()
+    {
+        // The actual production bug this fixes: a household that had gone badly lopsided
+        // before the fairness fix existed (see the two tests above) has one member sitting at
+        // a far lower all-time ratio than the other. Setting up many rotating tasks at once
+        // funnelled EVERY one of them to that single under-served member - even though they had
+        // much LESS time to spare that day than the other member - because ratio alone says
+        // nothing about whether today is realistic for them.
+        var household = await new CreateHousehold(_households, new FixedTimeProvider(Now))
+            .HandleAsync("Familjen", Guid.NewGuid(), "Anna", CancellationToken.None);
+        var anna = household.Members.Single();
+        anna.ChangeWeeklyTimeBudget(WeeklyTimeBudget.Uniform(30)); // little daily time to spare
+        var bjorn = household.AddMember("Bjorn", WeeklyTimeBudget.Uniform(60), Now.AddMinutes(1));
+        await _households.UpdateAsync(household, CancellationToken.None);
+
+        // A large pre-existing imbalance: Bjorn has done a lot, Anna nothing - Anna's all-time
+        // ratio is now far below Bjorn's.
+        await _assignments.AddAsync(
+            TaskAssignment.Create(household.Id, Guid.NewGuid(), bjorn.Id, Monday.AddDays(-7), Now, 300),
+            CancellationToken.None);
+
+        // Three tasks, 60 minutes total - comfortably within Anna and Bjorn's COMBINED daily
+        // capacity (30 + 60 = 90), so the daily cap can do its job without either of them ever
+        // being forced over budget just because the total happens to be more than one person's
+        // day can hold.
+        for (var i = 0; i < 3; i++)
+        {
+            var definition = TaskDefinition.Create(household.Id, $"Uppgift {i}", 20, Now);
+            definition.SetRecurrence(RecurrenceRule.Daily(Monday));
+            definition.SetRotatingResponsibility(true);
+            _definitions.Seed(definition);
+        }
+
+        await CreateUseCase().HandleAsync(household.Id, Monday, CancellationToken.None);
+
+        var totals = await _assignments.GetAssignedMinutesByMemberOnDateAsync(household.Id, Monday, CancellationToken.None);
+
+        // Anna's Monday budget is 30 minutes - room for exactly one 20-minute task, not two.
+        // Everything past that must go to Bjorn instead, even though Anna's cumulative ratio
+        // is still far lower.
+        Assert.Equal(20, totals.GetValueOrDefault(anna.Id));
+        Assert.Equal(40, totals.GetValueOrDefault(bjorn.Id));
+    }
+
+    [Fact]
     public async Task Does_not_generate_a_duplicate_for_a_date_an_existing_occurrence_was_moved_onto()
     {
         // Simulates RebalanceSchedule re-anchoring a definition's recurrence to a new weekday

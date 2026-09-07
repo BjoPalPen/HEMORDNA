@@ -22,4 +22,17 @@ public interface ITaskAssignmentRepository
     Task<IReadOnlyDictionary<Guid, int>> GetAssignedMinutesByMemberAsync(
         Guid householdId,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Assigned minutes per member on one specific <paramref name="date"/> only - what
+    /// <see cref="RotationPicker"/> weighs against each member's OWN available minutes that
+    /// day, so a large all-time imbalance (see <see cref="GetAssignedMinutesByMemberAsync"/>)
+    /// cannot be corrected by dumping an entire backlog onto one person in a single sitting.
+    /// A member with no assignment on this date is absent from the result, not present with
+    /// zero.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, int>> GetAssignedMinutesByMemberOnDateAsync(
+        Guid householdId,
+        DateOnly date,
+        CancellationToken cancellationToken);
 }

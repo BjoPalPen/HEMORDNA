@@ -143,6 +143,27 @@ i samma batch. Se `EnsureOccurrencesGeneratedTests` för den faktiska matematike
 `TaskOccurrence`s egna snapshots) så en senare ändring av en uppgifts tidsuppskattning aldrig
 retroaktivt ändrar hur mycket en redan gjord tilldelning räknades som.
 
+**Dagligt tak (2026-09-07), fixad efter produktionsrapport:** kvoten ovan är räknad mot ALL tid
+någonsin - exakt rätt för att avgöra vems TUR det är, men ett hushåll som hade en stor obalans
+innan den här kvot-modellen fanns (eller innan en medlem lades till, eller efter en lång paus)
+har en medlem som ligger långt under alla andra i kvot under en lång period därefter. Utan
+spärr gick VARJE tilldelning i en batch som skapar många roterande uppgifter samtidigt (återigen
+det normala sättet att sätta upp Områden) till just den medlemmen tills kvoten hann jämna ut sig
+- en hel dags backlog dumpad på den som har MINST utrymme att avvara just den dagen, eftersom
+kvoten inte säger något om huruvida dagen faktiskt räcker till. Konkret orsak till en
+produktionsrapport: en heltidsarbetande medlem (30 min/vardag) fick 18 av 19 nya roterande
+uppgifter en och samma dag, eftersom en pensionärsmedlem (60 min/dag) tidigare varit kraftigt
+överbelastad och därför låg långt under i kvot.
+
+`RotationPicker.PickNext` föredrar nu, bland de som annars skulle valts på kvot, den som
+fortfarande har rum kvar i sin EGEN dag (`WeeklyTimeBudget.MinutesFor` för det aktuella
+datumet) för just den här uppgiften - `EnsureOccurrencesGenerated` håller en andra, i minnet
+hållen tabell (`assignedMinutesByDate`, laddad en gång per datum den faktiskt når, från
+`ITaskAssignmentRepository.GetAssignedMinutesByMemberOnDateAsync`) vid sidan av den all-tid-tabell
+som redan fanns. Först när INGEN har utrymme kvar den dagen faller valet tillbaka på kvoten
+ensam, så uppgiften ändå får en ägare - `DailyPlanner` är fortfarande det som avgör, per
+medlem, vad som faktiskt får plats kontra vad som väntar till en annan dag.
+
 ### Beslut: Pausa hushåll eller enskild medlem — `IMPLEMENTED`
 
 `Household.PausedUntil`/`HouseholdMember.PausedUntil` (båda nullable `DateOnly`, "till och med
