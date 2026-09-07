@@ -93,6 +93,8 @@ public sealed record PreferenceResponse(Guid MemberId, string Presentation, stri
 public sealed record RecentActivityResponse(
     Guid OccurrenceId, string TaskName, string MemberDisplayName, DateTimeOffset CompletedAt);
 
+public sealed record DailyActivitySummaryResponse(DateOnly Date, int CompletedCount, int TotalCount);
+
 public sealed record MemberDayStatusResponse(Guid MemberId, DateOnly Date, string Status);
 
 public sealed record AddAreaRequest(string Name);

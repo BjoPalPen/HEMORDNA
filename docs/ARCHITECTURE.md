@@ -386,6 +386,28 @@ så jämförelsen blir direkt synlig. Samma undantag som den gamla totalen redan
 DESIGN.md/PRODUCT.md §4/§8:s princip om att aldrig visa minuter i den dagliga uppgifts-UI:n -
 det här är fortfarande bara ett planeringsstadie-verktyg.
 
+### Beslut: Hushållsomfattande dagsring på "Senaste händelser" — `IMPLEMENTED`
+
+Efterfrågat konkret: gör den platta händelseloggen roligare - ett "scorecard" föreslogs, men
+avvisades direkt mot PRODUCT.md §8 ("Hemordna använder inte skuldbeläggande språk och jämför
+inte hushållsmedlemmar med varandra") och CLAUDE.md §12 (gamification/streaks explicit
+avplockat ur scope). Löst i stället som en delad, ICKE-jämförande känsla: `Hushall.razor`
+grupperar loggen per kalenderdag ("Idag"/"Igår"/datum) och visar en liten cirkulär
+progress-ring bredvid varje dag - hur stor andel av HELA HUSHÅLLETS uppgifter den dagen som
+blivit klara, aldrig uppdelat per medlem.
+
+`Hemordna.Application.Households.IHouseholdDailyActivityQuery` (ny) räknar, för varje dag i ett
+fönster (`GET .../activity/daily-summary?days=`), `TaskOccurrences` grupperat på
+`ScheduledDate` - totalt antal och antal med `Status = Completed`, över hela hushållet. Detta är
+en ANNAN dagsindelning än den befintliga `IRecentActivityQuery` (som grupperar på `CompletedAt`
+- när något faktiskt bockades av): en uppgift schemalagd på måndag men avklarad på tisdag räknas
+i måndagens NÄMNARE (den hörde dit) men i tisdagens logg-post (det var då det hände). Denna
+lilla avvikelse är en medveten, acceptabel förenkling - ringen är en känsla, inte en exakt
+rapport.
+
+Ringen SVG:as med en cirkel `r="15.9155"` - vald just för att dess omkrets blir exakt 100, så
+`PercentComplete` (0–100) kan skrivas direkt som `stroke-dasharray` utan omräkning.
+
 ### Beslut: `MemberPreference` — `IMPLEMENTED`
 
 Individuell presentation (`PresentationMode`: text / bild+text / stor text / en uppgift åt

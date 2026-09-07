@@ -145,6 +145,9 @@ public sealed record SetPreferenceRequest(PresentationMode Presentation, Motivat
 public sealed record RecentActivityResponse(
     Guid OccurrenceId, string TaskName, string MemberDisplayName, DateTimeOffset CompletedAt);
 
+/// <summary>Household-wide (never per-member) count for one day - see IHouseholdDailyActivityQuery.</summary>
+public sealed record DailyActivitySummaryResponse(DateOnly Date, int CompletedCount, int TotalCount);
+
 public sealed record MemberDayStatusResponse(Guid MemberId, DateOnly Date, DayStatus Status);
 
 public sealed record PreferenceResponse(Guid MemberId, PresentationMode Presentation, MotivationLevel Motivation);

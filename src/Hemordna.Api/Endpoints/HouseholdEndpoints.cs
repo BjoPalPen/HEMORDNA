@@ -138,6 +138,9 @@ internal static class HouseholdEndpoints
         scoped.MapGet("/activity", GetRecentActivityAsync)
             .Produces<IReadOnlyList<RecentActivityResponse>>();
 
+        scoped.MapGet("/activity/daily-summary", GetDailyActivitySummaryAsync)
+            .Produces<IReadOnlyList<DailyActivitySummaryResponse>>();
+
         scoped.MapGet("/weekly-status", GetWeeklyStatusAsync)
             .Produces<IReadOnlyList<MemberDayStatusResponse>>();
 
@@ -618,6 +621,22 @@ internal static class HouseholdEndpoints
 
         return Results.Ok(recent
             .Select(a => new RecentActivityResponse(a.OccurrenceId, a.TaskName, a.MemberDisplayName, a.CompletedAt))
+            .ToList());
+    }
+
+    private static async Task<IResult> GetDailyActivitySummaryAsync(
+        Guid householdId,
+        int? days,
+        IHouseholdDailyActivityQuery dailyActivity,
+        TimeProvider timeProvider,
+        CancellationToken cancellationToken)
+    {
+        var today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        var summaries = await dailyActivity.FindRecentDaysAsync(
+            householdId, today, Math.Clamp(days ?? 7, 1, 31), cancellationToken);
+
+        return Results.Ok(summaries
+            .Select(s => new DailyActivitySummaryResponse(s.Date, s.CompletedCount, s.TotalCount))
             .ToList());
     }
 

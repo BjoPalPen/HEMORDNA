@@ -193,17 +193,42 @@ else
         }
         else
         {
-            <ul class="list" aria-label="Senaste händelser">
-                @foreach (var activity in _activity)
-                {
-                    <li class="list-item">
-                        <span class="list-name">
-                            @activity.MemberDisplayName markerade "@activity.TaskName" som klar
-                        </span>
-                        <span class="list-meta muted small">@activity.CompletedAt.ToLocalTime().ToString("HH:mm")</span>
-                    </li>
-                }
-            </ul>
+            @foreach (var day in ActivityDays)
+            {
+                <div class="activity-day">
+                    <div class="activity-day-header">
+                        @if (day.TotalCount > 0)
+                        {
+                            <svg viewBox="0 0 36 36" class="day-ring" aria-hidden="true">
+                                <circle cx="18" cy="18" r="15.9155" class="day-ring-track" />
+                                <circle cx="18" cy="18" r="15.9155" class="day-ring-fill"
+                                        stroke-dasharray="@($"{day.PercentComplete} {100 - day.PercentComplete}")" />
+                            </svg>
+                        }
+                        <p class="activity-day-label">
+                            <strong>@DayLabel(day.Date)</strong>
+                            @if (day.TotalCount > 0)
+                            {
+                                <span class="muted small">
+                                    @day.CompletedCount av @day.TotalCount uppgifter klara i hushållet
+                                </span>
+                            }
+                        </p>
+                    </div>
+
+                    <ul class="list" aria-label="@($"Händelser {DayLabel(day.Date)}")">
+                        @foreach (var activity in day.Activities)
+                        {
+                            <li class="list-item">
+                                <span class="list-name">
+                                    @activity.MemberDisplayName markerade "@activity.TaskName" som klar
+                                </span>
+                                <span class="list-meta muted small">@activity.CompletedAt.ToLocalTime().ToString("HH:mm")</span>
+                            </li>
+                        }
+                    </ul>
+                </div>
+            }
         }
     </div>
 
@@ -294,6 +319,7 @@ else
     private HouseholdResponse? _household;
     private IReadOnlyList<TaskDefinitionResponse> _tasks = [];
     private IReadOnlyList<RecentActivityResponse> _activity = [];
+    private IReadOnlyList<DailyActivitySummaryResponse> _dailySummaries = [];
     private readonly Dictionary<(Guid MemberId, DateOnly Date), string> _weeklyStatus = [];
     private string? _message;
     private bool _busy;
@@ -313,6 +339,45 @@ else
     private static readonly System.Globalization.CultureInfo SwedishCulture = new("sv-SE");
 
     private DateOnly Today => DateOnly.FromDateTime(TimeProvider.GetLocalNow().DateTime);
+
+    /// <summary>
+    /// One day's worth of the recent-activity log, paired with the household-wide (never
+    /// per-member - PRODUCT.md §8) count of how much of that day's shared workload got done.
+    /// </summary>
+    private sealed record ActivityDay(
+        DateOnly Date, IReadOnlyList<RecentActivityResponse> Activities, int CompletedCount, int TotalCount)
+    {
+        public int PercentComplete => TotalCount > 0 ? (int)Math.Round(100.0 * CompletedCount / TotalCount) : 0;
+    }
+
+    /// <summary>
+    /// Groups the flat activity log by the local calendar day each completion happened on, most
+    /// recent day first. A day's <see cref="DailyActivitySummaryResponse"/> (fetched separately,
+    /// since it counts ALL of that day's occurrences, not just the ones that made the log's own
+    /// item limit) supplies the ring's numbers - falling back to the log's own count only if no
+    /// summary came back for that date.
+    /// </summary>
+    private List<ActivityDay> ActivityDays
+        => [.. _activity
+            .GroupBy(activity => DateOnly.FromDateTime(activity.CompletedAt.ToLocalTime().DateTime))
+            .OrderByDescending(group => group.Key)
+            .Select(group =>
+            {
+                var activities = (IReadOnlyList<RecentActivityResponse>)[.. group];
+                var summary = _dailySummaries.FirstOrDefault(s => s.Date == group.Key);
+
+                return new ActivityDay(
+                    group.Key, activities,
+                    summary?.CompletedCount ?? activities.Count,
+                    summary?.TotalCount ?? activities.Count);
+            })];
+
+    private string DayLabel(DateOnly date) => date switch
+    {
+        _ when date == Today => "Idag",
+        _ when date == Today.AddDays(-1) => "Igår",
+        _ => date.ToString("d MMMM", SwedishCulture)
+    };
 
     /// <summary>Monday through Sunday of the week containing today.</summary>
     private IReadOnlyList<DateOnly> WeekDays
@@ -354,6 +419,7 @@ else
 
         _household = await Api.GetHouseholdAsync(householdId);
         _activity = await Api.GetRecentActivityAsync(householdId);
+        _dailySummaries = await Api.GetDailyActivitySummaryAsync(householdId);
         _tasks = await Api.ListTasksAsync(householdId);
 
         _weeklyStatus.Clear();

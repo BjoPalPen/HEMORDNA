@@ -574,6 +574,13 @@ public sealed class HemordnaApiClient
         => await GetAsync<IReadOnlyList<RecentActivityResponse>>(
             $"api/households/{householdId}/activity", cancellationToken) ?? [];
 
+    public async Task<IReadOnlyList<DailyActivitySummaryResponse>> GetDailyActivitySummaryAsync(
+        Guid householdId,
+        int days = 7,
+        CancellationToken cancellationToken = default)
+        => await GetAsync<IReadOnlyList<DailyActivitySummaryResponse>>(
+            $"api/households/{householdId}/activity/daily-summary?days={days}", cancellationToken) ?? [];
+
     public async Task<IReadOnlyList<MemberDayStatusResponse>> GetWeeklyStatusAsync(
         Guid householdId,
         DateOnly date,
