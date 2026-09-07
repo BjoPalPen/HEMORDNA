@@ -12,7 +12,10 @@ public class HouseholdInviteTests
     private static async Task<string> ReadInviteCodeAsync(IPage page)
     {
         await page.GotoAsync("/hushall");
-        var code = page.GetByLabel("Inbjudningskod");
+        // The code lives inside the "Bjud in" sheet now, not directly on the page - see
+        // Hushall.razor.
+        await page.GetByRole(AriaRole.Button, new() { Name = "Bjud in" }).ClickAsync();
+        var code = page.GetByRole(AriaRole.Dialog, new() { Name = "Bjud in" }).GetByLabel("Inbjudningskod");
         await code.WaitForAsync();
         return await code.InnerTextAsync();
     }
@@ -36,10 +39,10 @@ public class HouseholdInviteTests
         await joinerPage.GotoAsync("/hushall");
         await Assertions.Expect(joinerPage.GetByRole(AriaRole.Heading, new() { Name = "Familjen Cecilia" }))
             .ToBeVisibleAsync();
-        await Assertions.Expect(joinerPage.Locator(".list-item", new() { HasText = "David" })).ToBeVisibleAsync();
+        await Assertions.Expect(joinerPage.GetByRole(AriaRole.Button, new() { Name = "David" })).ToBeVisibleAsync();
 
         await ownerPage.ReloadAsync();
-        await Assertions.Expect(ownerPage.Locator(".list-item", new() { HasText = "David" })).ToBeVisibleAsync();
+        await Assertions.Expect(ownerPage.GetByRole(AriaRole.Button, new() { Name = "David" })).ToBeVisibleAsync();
     }
 
     [Fact]

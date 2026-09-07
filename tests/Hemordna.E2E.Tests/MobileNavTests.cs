@@ -30,6 +30,7 @@ public class MobileNavTests
         await nav.GetByRole(AriaRole.Link, new() { Name = "Hushåll" }).ClickAsync();
         await page.GetByRole(AriaRole.Heading, new() { Name = "Familjen Andersson" }).WaitForAsync();
 
-        await Assertions.Expect(page.GetByRole(AriaRole.Link, new() { Name = "Inställningar ›" })).ToBeVisibleAsync();
+        // The chevron is a decorative SVG icon (Icon.razor), not literal "›" text, since step 4.
+        await Assertions.Expect(page.GetByRole(AriaRole.Link, new() { Name = "Inställningar" })).ToBeVisibleAsync();
     }
 }

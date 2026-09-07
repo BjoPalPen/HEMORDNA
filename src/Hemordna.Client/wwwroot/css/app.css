@@ -367,6 +367,44 @@ a {
     gap: var(--space-2);
 }
 
+/* A .list-item that hands all its padding to a single full-row control instead (.list-row) -
+   the whole row becomes one 44px+ tap target rather than just its trailing chevron. */
+.list-item-flush {
+    padding: 0;
+}
+
+.list-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    width: 100%;
+    min-height: 44px;
+    padding: var(--space-3) var(--space-4);
+    border: none;
+    background: transparent;
+    font: inherit;
+    color: inherit;
+    text-align: left;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.list-row:hover {
+    background: var(--surface-2);
+}
+
+.list-row .icon {
+    color: var(--sot-soft);
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+.list-row-value {
+    margin-left: auto;
+    color: var(--sot-soft);
+    font-size: calc(var(--font-size-base) * .87);
+}
+
 .chip {
     display: inline-flex;
     align-items: center;

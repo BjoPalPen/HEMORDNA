@@ -18,10 +18,8 @@ public class PeekScheduleTests
         await SignUpHelper.SignUpAsync(page, "Elin");
 
         await page.GotoAsync("/hushall");
-        await page.GetByLabel("Namn").FillAsync("Sven");
-        await page.Locator("form").GetByRole(AriaRole.Button, new() { Name = "Vuxen, jobbar heltid" }).ClickAsync();
-        await page.GetByRole(AriaRole.Button, new() { Name = "Lägg till medlem" }).ClickAsync();
-        await Assertions.Expect(page.Locator(".list-item", new() { HasText = "Sven" })).ToBeVisibleAsync();
+        await HushallHelper.AddMemberWithoutAccountAsync(page, "Sven", "Vuxen, jobbar heltid");
+        await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Sven" })).ToBeVisibleAsync();
 
         var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
         using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };

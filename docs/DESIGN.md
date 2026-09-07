@@ -192,36 +192,58 @@ upp* och *Kräver flera personer*. Primär knapp **Markera som klar**, sekundär
 Ingen tid visas; uppskattad tid sätts som ett kvalitativt läge (se §6a) och lever bara i
 domänen.
 
-### Vecka (`Planering.razor`, route `/vecka`)
+### Vecka (`Vecka.razor`, döpt om från `Planering.razor`, route `/vecka`)
 
-**Min vecka**: sju rader, en per veckodag, med bara ett kvalitativt läge i text (t.ex.
-"Ingen tid", "Lagom tid") – inget stapeldiagram, inga minuter, och ingen redigering här.
-Helt läsläge; rollen (se §6b) är enda sättet att ändra veckan.
+Hushållets veckogrid är hjälte överst: en prickmatris, en rad per medlem, en kolumn per
+veckodag (idag markerad), samma matris som tidigare bara levde på Hushållsöversikten.
+Sträckt ner till hela hushållet flyttar sidan fokus från "min egen vecka" till "hur ser
+veckan ut för oss" utan att blanda in någon minutsiffra eller jämförelse mellan medlemmar
+(PRODUCT.md §8) - bara prickar för klart/planerat/inget planerat.
+
+Under, som ett eget `<h2>Min vecka</h2>`-avsnitt: sju rader, en per veckodag, med bara ett
+kvalitativt läge i text (t.ex. "Ingen tid", "Lagom tid") – inget stapeldiagram, inga minuter,
+och ingen redigering här. Helt läsläge; rollen (se §6b, satt från Hushålls `MemberSheet`) är
+enda sättet att ändra veckan.
 
 "Tjuvkika på ett schema" (en titt på i morgon, eller på någon annans dag, skrivskyddat) bor nu
 här i stället för på Idag – samma disclosure och logik, oförändrad, bara flyttad. "Ser
 fördelningen skev ut?" (sprid om återkommande uppgifter över veckan, `RebalanceSchedule`) bor
-nu här också - flyttad hit från Rum. Vecka blir här formellt sett bara mottagare av två
-flyttade funktioner; den egna omdesignen av sidan (veckogrid som hjälte, se
-konceptartefakten) är fortfarande steg 4.
+nu här också - flyttad hit från Rum, i ett eget ark.
 
 ### Hushållsöversikt
 
-Medlemsavatarer (namn, ingen `använd/budget`-siffra) med en rollväljare per medlem (se §6b) -
-en roll sätter hela veckans budget i ett val, utan siffror. Vidare: veckans plan som
-prickmatris per medlem och dag, områden med antal uppgifter, senaste händelser.
+En avatarrad överst - en knapp per aktiv medlem (initial, namn, rolletikett), samt en sista
+"Bjud in"-knapp med ett plus-ikon i stället för en initial. Att trycka på en medlem öppnar
+`Components/MemberSheet.razor`: rollval (se §6b), en disclosure "Anpassad tid i stället",
+paus för just den medlemmen, och "Ta bort medlem" i rönn-ink längst ner. Ingen siffra
+(använd/budget) visas någonstans i raden - bara namn och rolletikett.
+
+Vidare, i tur och ordning: hushållets veckogrid (samma prickmatris som nu även toppar Vecka),
+ett tyst "Idag i hushållet"-kort (en ring, samma mönster som "Senaste händelser" nedan -
+hela hushållets andel klara uppgifter idag, aldrig per medlem, PRODUCT.md §8), "Senaste
+händelser", och sist en lista med "Pausa hushållet"/"Balansera om vem som gör vad"/
+"Inställningar"/"Logga ut" som listrader - de två första öppnar varsitt eget ark.
 
 Detta är den enda vyn som visar hela hushållet, och den är aldrig startskärm - därför är den
 också platsen för roll-/tidsinställningar som inte alla medlemmar behöver se eller röra vid,
 till skillnad från Min dag som alla öppnar varje dag.
 
-Ett "Bjud in fler"-kort visar hushållets inbjudningskod (åtta tecken, versaler, inga
-förväxlingsbara siffror/bokstäver) och en knapp för att skapa en ny om koden hamnat i fel
-händer. Den delas manuellt (ingen e-post/länk ännu) - personen som bjuds in anger koden på
-sin egen "Skapa konto"-skärm i stället för att döpa ett nytt hushåll.
+"Bjud in" (`BottomSheet`) slår ihop två funktioner bakom en enda ingång: hushållets
+inbjudningskod (åtta tecken, versaler, inga förväxlingsbara siffror/bokstäver) med en "Dela
+koden"-knapp (plattformens delningsruta där den finns, annars kopiering till urklipp) och en
+knapp för att skapa en ny kod om den gamla hamnat i fel händer, samt - som en disclosure
+"Eller lägg till en medlem utan eget konto" - formuläret för att lägga till någon som inte
+skapar ett eget konto än (t.ex. ett barn). Koden delas fortfarande manuellt (ingen e-post/
+länk ännu) - personen som bjuds in anger koden på sin egen "Skapa konto"-skärm i stället för
+att döpa ett nytt hushåll.
 
-"Känns det som att en person gör för mycket?" (ombalansera roterande ansvar,
-`RebalanceTaskAssignments`) bor nu här - flyttad hit från Rum, samma disclosure och logik.
+"Balansera om vem som gör vad" (ombalansera roterande ansvar, `RebalanceTaskAssignments`) bor
+i ett eget ark här, flyttad hit från Rum. "Pausa hushållet" har på samma sätt flyttat in i ett
+eget ark i stället för att ligga som ett alltid synligt formulär på sidan.
+
+Har hushållet fler än en våning (se Rum nedan) räknas det med i sidhuvudet ("N personer · M
+rum · K våningar") - samma härledning som Rum använder, delad via `Support/RoomFloors.cs` så
+de två sidorna inte har varsin kopia av samma " – "-parsning.
 
 ### Rum (`Rum.razor`, route `/rum`)
 
@@ -285,13 +307,13 @@ etablerade undantag som `Omraden.razor`s totalrad alltid haft: under planering a
 heltid**, **Barn eller ungdom**, **Pensionär / hemma dagtid** – och räknar ut en rimlig
 vardag/helg-fördelning åt medlemmen i ett enda val.
 
-Rollvalet sätts vid "Lägg till medlem" och kan ändras därefter från en liten rollväljare per
-medlem på Hushållsöversikten - inte på Min dag. Uppföljande feedback: att visa och kunna ändra
-en roll är i sig "tid som ett val", och det behöver inte alla medlemmar se eller ta ställning
-till varje gång de öppnar appen. Hushållsöversikten är redan en sida ingen är tvungen att
-besöka dagligen, till skillnad från Min dag, så den är rätt plats för den här typen av
-inställning. `HouseholdRolePresets.Match` känner igen om en medlems sparade budget kommer
-från en roll eller är satt för hand (då visas "Anpassad tid" i väljaren i stället).
+Rollvalet sätts vid "Lägg till medlem" och kan ändras därefter genom att öppna medlemmens egen
+`MemberSheet` från avatarraden på Hushållsöversikten - inte på Min dag. Uppföljande feedback:
+att visa och kunna ändra en roll är i sig "tid som ett val", och det behöver inte alla
+medlemmar se eller ta ställning till varje gång de öppnar appen. Hushållsöversikten är redan en
+sida ingen är tvungen att besöka dagligen, till skillnad från Min dag, så den är rätt plats för
+den här typen av inställning. `HouseholdRolePresets.Match` känner igen om en medlems sparade
+budget kommer från en roll eller är satt för hand (då visas "Anpassad tid" i stället).
 
 På samma sätt genererar `RoomTemplates` en färdig checklista av vanliga städuppgifter när
 någon namnger vilken typ av rum de lägger till (t.ex. "Litet wc" ger handfat, toalettstol,

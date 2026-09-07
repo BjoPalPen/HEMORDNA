@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Microsoft.Playwright;
 
 namespace Hemordna.E2E.Tests;
@@ -73,7 +74,7 @@ public class SkarmbilderTests
         await newRoomSheet.GetByRole(AriaRole.Button, new() { Name = "Stäng" }).ClickAsync();
         await ShootAsync(page, "03-rum");
 
-        // A room's own sheet (RoomSheet.razor), the primary new surface this step adds.
+        // A room's own sheet (RoomSheet.razor), the primary new surface step 3 added.
         await page.GetByRole(AriaRole.Button, new() { Name = "Kök" }).First.ClickAsync();
         var kitchenSheet = page.GetByRole(AriaRole.Dialog, new() { Name = "Kök" });
         await kitchenSheet.WaitForAsync();
@@ -88,13 +89,34 @@ public class SkarmbilderTests
         // without a role, "Idag" would stay empty even with rooms and tasks seeded above.
         await SetAnnasRoleReliablyAsync(page);
 
-        await page.GetByLabel("Namn").FillAsync("Erik");
-        await page.GetByRole(AriaRole.Button, new() { Name = "Vuxen, jobbar heltid" }).ClickAsync();
+        // MemberSheet.razor - a member's own role/pause/removal, the primary new surface step 4
+        // adds. Reopened fresh (rather than reused from the retry loop above) purely for the
+        // screenshot's own timing.
+        var annaSheet = await HushallHelper.OpenMemberSheetAsync(page, "Anna");
+        await ShootAsync(page, "04z-member-sheet");
+        await annaSheet.GetByRole(AriaRole.Button, new() { Name = "Stäng" }).ClickAsync();
 
-        var addMemberButton = page.GetByRole(AriaRole.Button, new() { Name = "Lägg till medlem" });
+        // "Bjud in" - both the invite code and the nested "utan eget konto" form live here now.
+        await page.GetByRole(AriaRole.Button, new() { Name = "Bjud in" }).ClickAsync();
+        var inviteSheet = page.GetByRole(AriaRole.Dialog, new() { Name = "Bjud in" });
+        await ShootAsync(page, "04y-bjud-in-sheet");
+
+        await inviteSheet.GetByText("Eller lägg till en medlem utan eget konto").ClickAsync();
+        await inviteSheet.GetByLabel("Namn").FillAsync("Erik");
+        await inviteSheet.Locator("form").GetByRole(AriaRole.Button, new() { Name = "Vuxen, jobbar heltid" }).ClickAsync();
+
+        var addMemberButton = inviteSheet.GetByRole(AriaRole.Button, new() { Name = "Lägg till medlem" });
         await addMemberButton.ClickAsync();
         await Assertions.Expect(addMemberButton).ToBeEnabledAsync();
+        await inviteSheet.GetByRole(AriaRole.Button, new() { Name = "Stäng" }).ClickAsync();
         await ShootAsync(page, "04-hushall");
+
+        // "Pausa hushållet" - shares its own text with the listrow that opens it, so scoped to
+        // the Dialog once open, same as the rebalance sheet below.
+        await page.GetByRole(AriaRole.Button, new() { Name = "Pausa hushållet" }).ClickAsync();
+        var pauseSheet = page.GetByRole(AriaRole.Dialog, new() { Name = "Pausa hushållet" });
+        await ShootAsync(page, "04x-pausa-sheet");
+        await pauseSheet.GetByRole(AriaRole.Button, new() { Name = "Stäng" }).ClickAsync();
 
         await page.GotoAsync("/vecka");
         await page.GetByRole(AriaRole.Heading, new() { Name = "Min vecka", Exact = true }).WaitForAsync();
@@ -109,9 +131,9 @@ public class SkarmbilderTests
         await page.Locator("h1", new() { HasText = "Anna" }).WaitForAsync();
 
         await page.GotoAsync("/hushall");
-        await page.GetByText("Känns det som att en person gör för mycket?").ClickAsync();
-
-        var rebalanceButton = page.GetByRole(AriaRole.Button, new() { Name = "Balansera om vem som gör vad" });
+        await page.GetByRole(AriaRole.Button, new() { Name = "Balansera om vem som gör vad" }).ClickAsync();
+        var rebalanceSheet = page.GetByRole(AriaRole.Dialog, new() { Name = "Balansera om vem som gör vad" });
+        var rebalanceButton = rebalanceSheet.GetByRole(AriaRole.Button, new() { Name = "Balansera om vem som gör vad" });
         await rebalanceButton.ClickAsync();
         await Assertions.Expect(rebalanceButton).ToBeEnabledAsync();
 
@@ -187,15 +209,18 @@ public class SkarmbilderTests
     /// occasionally drop the budget write even though the role itself sticks (the same
     /// flakiness <c>HushallTests.Changing_a_members_role_...</c> is already known to hit).
     /// Retries the pick until "Min vecka" actually shows a non-zero Monday, rather than working
-    /// around the race in application code, which is out of scope for this step.
+    /// around the race in application code, which is out of scope for this step. Role
+    /// management moved into MemberSheet in step 4, behind Anna's own avatar.
     /// </summary>
     private static async Task SetAnnasRoleReliablyAsync(IPage page)
     {
         for (var attempt = 1; attempt <= 5; attempt++)
         {
-            var annaRole = page.GetByLabel("Roll för Anna");
-            await annaRole.SelectOptionAsync(new SelectOptionValue { Label = "Vuxen, jobbar heltid" });
-            await Assertions.Expect(annaRole).ToHaveValueAsync("AdultFullTime");
+            var sheet = await HushallHelper.OpenMemberSheetAsync(page, "Anna");
+            var roleButton = sheet.GetByRole(AriaRole.Button, new() { Name = "Vuxen, jobbar heltid" });
+            await roleButton.ClickAsync();
+            await Assertions.Expect(roleButton).ToHaveClassAsync(new Regex("btn-primary"));
+            await sheet.GetByRole(AriaRole.Button, new() { Name = "Stäng" }).ClickAsync();
 
             await page.GotoAsync("/vecka");
             var monday = page.Locator(".list-item").First;

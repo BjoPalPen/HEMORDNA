@@ -21,7 +21,7 @@ public class HushallTests
 
         await Assertions.Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Familjen Svensson" }))
             .ToBeVisibleAsync();
-        await Assertions.Expect(page.Locator(".list-item", new() { HasText = "David" })).ToBeVisibleAsync();
+        await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "David" })).ToBeVisibleAsync();
     }
 
     [Fact]
@@ -31,13 +31,11 @@ public class HushallTests
         await SignUpHelper.SignUpAsync(page, "Erik");
 
         await page.GotoAsync("/hushall");
-        await page.GetByLabel("Namn").FillAsync("Filippa");
         // No minute field, and not even a per-day choice: one role infers the whole week -
         // see Support.HouseholdRolePresets.
-        await page.Locator("form").GetByRole(AriaRole.Button, new() { Name = "Vuxen, jobbar heltid" }).ClickAsync();
-        await page.GetByRole(AriaRole.Button, new() { Name = "Lägg till medlem" }).ClickAsync();
+        await HushallHelper.AddMemberWithoutAccountAsync(page, "Filippa", "Vuxen, jobbar heltid");
 
-        await Assertions.Expect(page.Locator(".list-item", new() { HasText = "Filippa" })).ToBeVisibleAsync();
+        await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Filippa" })).ToBeVisibleAsync();
 
         // Nothing in the UI shows a number, but the role's budget must actually have been sent
         // - verified against the API, the only place minutes still live. AdultFullTime is 35
@@ -64,11 +62,10 @@ public class HushallTests
         await SignUpHelper.SignUpAsync(page, "Cecilia");
 
         await page.GotoAsync("/hushall");
-        // Role management lives on the household page, not on Min dag - that page is not
+        // Role management lives behind the member's own avatar, not on Idag - that page is not
         // something every member opens daily, unlike their own day. See DESIGN.md §6b.
-        var row = page.Locator(".list-item", new() { HasText = "Cecilia" });
-        await row.GetByLabel("Roll för Cecilia")
-            .SelectOptionAsync(new SelectOptionValue { Label = "Pensionär / hemma dagtid" });
+        var sheet = await HushallHelper.OpenMemberSheetAsync(page, "Cecilia");
+        await sheet.GetByRole(AriaRole.Button, new() { Name = "Pensionär / hemma dagtid" }).ClickAsync();
 
         var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
         using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
@@ -84,34 +81,32 @@ public class HushallTests
         Assert.Equal(65, budget.GetProperty("monday").GetInt32());
         Assert.Equal(65, budget.GetProperty("saturday").GetInt32());
 
-        // The dropdown reflects the saved role back, not just accepts the click.
+        // The sheet reflects the saved role back (a filled preset button), not just accepts the
+        // click - reopen it after a reload and check the preset is highlighted as active.
         await page.ReloadAsync();
-        row = page.Locator(".list-item", new() { HasText = "Cecilia" });
-        await Assertions.Expect(row.GetByLabel("Roll för Cecilia")).ToHaveValueAsync("Retired");
+        sheet = await HushallHelper.OpenMemberSheetAsync(page, "Cecilia");
+        await Assertions.Expect(sheet.GetByRole(AriaRole.Button, new() { Name = "Pensionär / hemma dagtid" }))
+            .ToHaveClassAsync(new System.Text.RegularExpressions.Regex("btn-primary"));
     }
 
     [Fact]
-    public async Task Removing_a_member_takes_them_off_the_list()
+    public async Task Removing_a_member_takes_them_off_the_avatar_row()
     {
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Gustav");
 
         await page.GotoAsync("/hushall");
-        await page.GetByLabel("Namn").FillAsync("Filippa");
-        await page.Locator("form").GetByRole(AriaRole.Button, new() { Name = "Vuxen, jobbar heltid" }).ClickAsync();
-        await page.GetByRole(AriaRole.Button, new() { Name = "Lägg till medlem" }).ClickAsync();
-
-        var row = page.Locator(".list-item", new() { HasText = "Filippa" });
-        await row.WaitForAsync();
+        await HushallHelper.AddMemberWithoutAccountAsync(page, "Filippa", "Vuxen, jobbar heltid");
 
         // Someone moved out, or was added by mistake - see HouseholdMember.Deactivate.
-        await row.GetByRole(AriaRole.Button, new() { Name = "Ta bort" }).ClickAsync();
+        var sheet = await HushallHelper.OpenMemberSheetAsync(page, "Filippa");
+        await sheet.GetByRole(AriaRole.Button, new() { Name = "Ta bort medlem" }).ClickAsync();
 
-        await Assertions.Expect(page.Locator(".list-item", new() { HasText = "Filippa" })).Not.ToBeVisibleAsync();
+        await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Filippa" })).Not.ToBeVisibleAsync();
     }
 
     [Fact]
-    public async Task Shows_an_areas_task_count()
+    public async Task A_new_rooms_task_count_shows_on_its_room_tile()
     {
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Greta");
@@ -126,7 +121,9 @@ public class HushallTests
         await page.GetByRole(AriaRole.Button, new() { Name = "Lägg till rum" }).ClickAsync();
         await newRoomSheet.GetByRole(AriaRole.Button, new() { Name = "Stäng" }).ClickAsync();
 
-        // Task management lives in the room's own sheet now - see OmradenTests.
+        // Task management lives in the room's own sheet now - see OmradenTests. The room list
+        // that used to live on Hushåll is gone (Rum's own tiles already show this - see
+        // docs/DESIGN.md "Rum") - the tile itself is what this test now checks.
         await page.GetByRole(AriaRole.Button, new() { Name = "Kök" }).First.ClickAsync();
         var kitchen = page.GetByRole(AriaRole.Dialog, new() { Name = "Kök" });
         await kitchen.GetByRole(AriaRole.Button, new() { Name = "Lägg till uppgift" }).ClickAsync();
@@ -134,11 +131,10 @@ public class HushallTests
         await addSheet.GetByLabel("Namn").FillAsync("Diska");
         await addSheet.GetByRole(AriaRole.Button, new() { Name = "Lägg till uppgift" }).ClickAsync();
         await Assertions.Expect(kitchen.GetByRole(AriaRole.Button, new() { Name = "Diska" })).ToBeVisibleAsync();
+        await kitchen.GetByRole(AriaRole.Button, new() { Name = "Stäng" }).ClickAsync();
 
-        await page.GotoAsync("/hushall");
-
-        var areaRow = page.Locator(".list-item", new() { HasText = "Kök" });
-        await Assertions.Expect(areaRow).ToContainTextAsync("1 uppgifter");
+        await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Kök" }).First)
+            .ToContainTextAsync("1 uppgifter");
     }
 
     [Fact]

@@ -255,10 +255,8 @@ public class OmradenTests
 
         // A member to own the bedroom - everything else defaults to shared/rotating.
         await page.GotoAsync("/hushall");
-        await page.GetByLabel("Namn").FillAsync("Vera");
-        await page.Locator("form").GetByRole(AriaRole.Button, new() { Name = "Barn eller ungdom" }).ClickAsync();
-        await page.GetByRole(AriaRole.Button, new() { Name = "Lägg till medlem" }).ClickAsync();
-        await page.Locator(".list-item", new() { HasText = "Vera" }).WaitForAsync();
+        await HushallHelper.AddMemberWithoutAccountAsync(page, "Vera", "Barn eller ungdom");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Vera" }).WaitForAsync();
 
         await page.GotoAsync("/rum");
         await OpenNewRoomSheetAsync(page);

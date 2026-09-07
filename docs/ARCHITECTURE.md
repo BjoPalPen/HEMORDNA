@@ -837,7 +837,7 @@ Integrationstester mot en verklig PostgreSQL införs när persistence byggs – 
 
 ---
 
-## 10. Beslut: Ny form — `IMPLEMENTED` (steg 1–3) / `PROPOSED` (steg 4–5)
+## 10. Beslut: Ny form — `IMPLEMENTED` (steg 1–4) / `PROPOSED` (steg 5)
 
 Klienten byggs om skärm för skärm till ett nytt visuellt uttryck och en enklare navigation -
 enbart `Hemordna.Client` och dokumentation, ingen ändring i Domain/Application/Infrastructure/
@@ -1022,13 +1022,68 @@ Ingen omdesign av själva panelerna; det är steg 4:s jobb för Hushåll/Vecka s
 egna "Stäng"-knapp i samma dialog (`GetByRole(Button, Name: "Stäng")` matchade två element).
 Bytt till "Till uppgifterna".
 
-### Steg 4–5 — `PROPOSED`
+### Steg 4 (`feat/ny-form-hushall-vecka`) — `IMPLEMENTED`
 
-`feat/ny-form-hushall-vecka` (Hushåll, `MemberSheet`, Veckans egen omdesign - grid som hjälte),
-`feat/ny-form-morkt-lage` (dark-tokens, `data-theme`-växel, bock-animation och haptik under
-`prefers-reduced-motion` - `TaskListItem` har redan sin `prefers-reduced-motion`-hantering för
-svepet, så steg 5 behöver bara motsvarande för nya interaktioner den själv inför). Varje steg
-lämnar appen fullt fungerande och alla tester gröna innan nästa påbörjas.
+Hushåll byggdes om enligt DESIGN.md §6: en avatarrad (en knapp per medlem, ny `MemberSheet.razor`
+äger roll/paus/borttagning) ersätter den gamla listraden per medlem. Vecka (döpt om från
+`Planering.razor`) fick hushållets veckogrid som hjälte överst, med den inloggade medlemmens
+egen "Min vecka" som ett `<h2>`-avsnitt under - samma innehåll och markup som tidigare, bara
+omplacerat.
+
+- **`MemberSheet.razor`** (ny, `BottomSheet`): rollval (samma tre förinställningar som
+  `Support/HouseholdRole.cs` redan definierade), "Anpassad tid i stället" som en disclosure,
+  paus för just den medlemmen, och "Ta bort medlem" som en destruktiv knapp längst ned. Ersätter
+  den gamla inline-redigeringen (roll-`<select>`, egna paus-/ta bort-knappar) som låg direkt i
+  `Hushall.razor`s medlemslista.
+- **"Bjud in"** (ny `BottomSheet`) slår ihop två redan existerande, separata funktioner bakom en
+  enda ingång: koden att dela (`Dela koden`, ny `wwwroot/js/share.js` - Web Share API där den
+  finns, annars urklipp) och att lägga till en medlem utan eget konto, som nu ligger som en
+  disclosure ("Eller lägg till en medlem utan eget konto") inuti samma ark i stället för ett
+  eget, alltid synligt formulär på sidan.
+- **"Områden"-kortet togs bort från Hushåll** - ett omdömesbeslut, inte en uttrycklig
+  spec-punkt: Rum-fliken (steg 3) visar redan varje rums uppgiftsantal på sin egen bricka, så
+  kortet dubblerade information utan att tillföra något Hushåll-specifikt.
+- **"N våningar" i sidhuvudet** (`@_household.Areas.Count(...)` + `FloorCount`) delar
+  våningsräkningen med Rum via en ny, liten `Support/RoomFloors.cs` (`FloorOf`/`CountDistinct`)
+  - `Rum.razor` bytte sin egen privata `FloorOf`-metod mot samma statiska helper, i stället för
+    att ha två kopior av samma " – "-parsning.
+- **"Idag i hushållet"**: ett nytt, tyst kort med en ring (samma SVG-mönster som
+  "Senaste händelser" redan använde) - hela hushållets andel klara uppgifter idag, aldrig per
+  medlem (PRODUCT.md §8).
+- **Ombalanseringspanelerna** ("Balansera om vem som gör vad", "Pausa hushållet") flyttade in i
+  egna `BottomSheet`-ark i stället för `<details>`-utfällningar direkt på sidan - samma
+  underliggande metoder (`RebalanceAssignmentsAsync`, `SaveHouseholdPauseAsync` m.fl.), bara ny
+  container.
+
+**Bugg hittad under obligatorisk skärmbildsgranskning, fixad:** `MemberSheet`s pausfält
+(`Pausa till och med`) använde en `<div class="field"><span>...</span><input .../></div>` utan
+någon `<label>`-koppling - till skillnad från hushållets egen pausruta på samma sida, som redan
+använde `<label class="field">`. Fältet saknade därmed helt tillgängligt namn (bröt DESIGN.md
+§10). Fixat genom att byta `<div>` mot `<label>`, samma mönster som redan fanns bredvid.
+
+**Undersökt, inte en bugg:** en `FullPage: true`-skärmbild av Hushåll på mobil (390×844) visade
+till synes navigationsraden överlappa "Inställningar"/"Logga ut" längst ned. Verifierat med en
+riktig scroll till `document.documentElement.scrollHeight` (i stället för Playwrights egen
+`scrollIntoViewIfNeeded`, som visade sig stanna för tidigt eftersom dess "redan synlig"-koll
+inte känner till den fixerade navraden som täcker botten av viewporten) att `.app-main`s
+`padding-bottom: 88px` (satt redan i steg 1) räcker med god marginal - artefakten kommer från
+hur Chromiums `fullPage`-skärmbilder hanterar `position: fixed`-element på sidor högre än en
+viewport, inte från appens egen layout.
+
+**Testmönstret från steg 3** (skärmredaren "Stäng"/rader med samma text som knappen som öppnar
+dem → skopa alltid till `page.GetByRole(Dialog, Name: "...")` innan interaktion inuti) upprepas
+nu även för "Pausa hushållet" och "Balansera om vem som gör vad", vars listrad-, ark-titel- och
+egen skicka-knappstext medvetet hölls identiska med tidigare UI-text. Ny delad testhjälpare,
+`tests/Hemordna.E2E.Tests/HushallHelper.cs`
+(`AddMemberWithoutAccountAsync`/`OpenMemberSheetAsync`), ersätter den upprepade
+"öppna Bjud in-arket, fyll i det nästlade formuläret"-koden i fem olika testfiler.
+
+### Steg 5 (`feat/ny-form-morkt-lage`) — `PROPOSED`
+
+Dark-tokens, `data-theme`-växel, bock-animation och haptik under `prefers-reduced-motion` -
+`TaskListItem` har redan sin `prefers-reduced-motion`-hantering för svepet, så steg 5 behöver
+bara motsvarande för nya interaktioner den själv inför. Lämnar appen fullt fungerande och alla
+tester gröna innan den påbörjas.
 
 ---
 

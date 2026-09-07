@@ -10,27 +10,27 @@ public class HouseholdPauseTests
     public HouseholdPauseTests(HemordnaAppFixture app) => _app = app;
 
     [Fact]
-    public async Task Pausing_a_member_shows_a_pause_chip_next_to_their_name()
+    public async Task Pausing_a_member_is_reflected_when_reopening_their_sheet()
     {
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Elin");
 
         await page.GotoAsync("/hushall");
-        await page.GetByLabel("Namn").FillAsync("Sven");
-        await page.Locator("form").GetByRole(AriaRole.Button, new() { Name = "Vuxen, jobbar heltid" }).ClickAsync();
-        await page.GetByRole(AriaRole.Button, new() { Name = "Lägg till medlem" }).ClickAsync();
+        await HushallHelper.AddMemberWithoutAccountAsync(page, "Sven", "Vuxen, jobbar heltid");
 
-        // Scoped past the button's own aria-label: the row and its own conditionally-rendered
-        // edit form both mention "Sven" in their text, so a plain HasText match is ambiguous -
-        // see TaskFrequencyTests for the same issue with "Ändra frekvens".
-        var svenRow = page.Locator(".list-item:has(button[aria-label=\"Ta bort Sven\"])");
-        await Assertions.Expect(svenRow).ToBeVisibleAsync();
+        // Per-member pause now lives in the member's own sheet, alongside their role - see
+        // MemberSheet.razor.
+        var sheet = await HushallHelper.OpenMemberSheetAsync(page, "Sven");
+        await sheet.GetByLabel("Pausa till och med").FillAsync("2026-12-24");
+        await sheet.GetByRole(AriaRole.Button, new() { Name = "Pausa", Exact = true }).ClickAsync();
 
-        await svenRow.GetByRole(AriaRole.Button, new() { Name = "Pausa Sven" }).ClickAsync();
-        await page.GetByLabel("Pausa \"Sven\" till och med").FillAsync("2026-12-24");
-        await page.GetByRole(AriaRole.Button, new() { Name = "Pausa", Exact = true }).ClickAsync();
+        await Assertions.Expect(sheet.GetByText("Pausad t.o.m.")).ToBeVisibleAsync();
 
-        await Assertions.Expect(svenRow).ToContainTextAsync("Pausad t.o.m.");
+        // Reload and reopen to confirm the pause actually persisted, not just an optimistic
+        // client-side flag.
+        await page.ReloadAsync();
+        sheet = await HushallHelper.OpenMemberSheetAsync(page, "Sven");
+        await Assertions.Expect(sheet.GetByText("Pausad t.o.m.")).ToBeVisibleAsync();
     }
 
     [Fact]
@@ -40,13 +40,15 @@ public class HouseholdPauseTests
         await SignUpHelper.SignUpAsync(page, "Karin");
 
         await page.GotoAsync("/hushall");
-        await page.GetByRole(AriaRole.Heading, new() { Name = "Pausa hela hushållet" }).ScrollIntoViewIfNeededAsync();
-        await page.GetByLabel("Pausa till och med").FillAsync("2026-12-24");
         await page.GetByRole(AriaRole.Button, new() { Name = "Pausa hushållet" }).ClickAsync();
+        var sheet = page.GetByRole(AriaRole.Dialog, new() { Name = "Pausa hushållet" });
 
-        await Assertions.Expect(page.GetByText("Hushållet är pausat t.o.m.")).ToBeVisibleAsync();
+        await sheet.GetByLabel("Pausa till och med").FillAsync("2026-12-24");
+        await sheet.GetByRole(AriaRole.Button, new() { Name = "Pausa hushållet" }).ClickAsync();
 
-        await page.GetByRole(AriaRole.Button, new() { Name = "Återuppta nu" }).ClickAsync();
-        await Assertions.Expect(page.GetByText("Hushållet är pausat t.o.m.")).Not.ToBeVisibleAsync();
+        await Assertions.Expect(sheet.GetByText("Hushållet är pausat t.o.m.")).ToBeVisibleAsync();
+
+        await sheet.GetByRole(AriaRole.Button, new() { Name = "Återuppta nu" }).ClickAsync();
+        await Assertions.Expect(sheet.GetByText("Hushållet är pausat t.o.m.")).Not.ToBeVisibleAsync();
     }
 }

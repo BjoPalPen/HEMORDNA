@@ -1,0 +1,262 @@
+@using Hemordna.Client.Support
+@inject HemordnaApiClient Api
+@inject TimeProvider TimeProvider
+
+<BottomSheet Title="@Member.DisplayName" IsOpen="IsOpen" IsOpenChanged="OnIsOpenChanged">
+    <div class="field">
+        <span>Vilken roll har personen i hushållet?</span>
+        <div class="level-picker">
+            @foreach (var preset in HouseholdRolePresets.All)
+            {
+                <button type="button"
+                        class="@(Member.Role == preset.Role.ToString() ? "btn btn-primary" : "btn btn-secondary")"
+                        disabled="@_roleBusy"
+                        @onclick="() => SetRoleAsync(preset.Role)">
+                    @preset.Label
+                </button>
+            }
+        </div>
+    </div>
+
+    <details class="more-options">
+        <summary>Anpassad tid i stället</summary>
+        <div class="level-picker">
+            @foreach (var level in TimeLevel.All)
+            {
+                <button type="button" class="btn btn-secondary" disabled="@_roleBusy"
+                        @onclick="() => SetCustomMinutesAsync(level.Minutes)">
+                    @level.Label
+                </button>
+            }
+        </div>
+    </details>
+
+    @if (_roleMessage is { } roleMessage)
+    {
+        <div class="notice notice-problem" role="alert">@roleMessage</div>
+    }
+
+    <hr class="member-sheet-divider" />
+
+    <label class="field">
+        <span>Pausa till och med</span>
+        <input type="date" @bind="_pauseUntilInput" />
+    </label>
+
+    @if (Member.PausedUntil is { } pausedUntil)
+    {
+        <div class="notice" role="status">Pausad t.o.m. @pausedUntil.ToString("d MMMM", SwedishCulture).</div>
+    }
+
+    @if (_pauseMessage is { } pauseMessage)
+    {
+        <div class="notice notice-problem" role="alert">@pauseMessage</div>
+    }
+
+    <button type="button" class="btn btn-secondary btn-block" disabled="@_pauseBusy" @onclick="SavePauseAsync">
+        @(_pauseBusy ? "Sparar..." : "Pausa")
+    </button>
+    @if (Member.PausedUntil is not null)
+    {
+        <button type="button" class="btn btn-secondary btn-block" disabled="@_pauseBusy" @onclick="ResumeAsync">
+            Återuppta nu
+        </button>
+    }
+
+    <hr class="member-sheet-divider" />
+
+    @if (_removeMessage is { } removeMessage)
+    {
+        <div class="notice notice-problem" role="alert">@removeMessage</div>
+    }
+
+    <button type="button" class="btn btn-danger btn-block" disabled="@_removeBusy" @onclick="RemoveAsync">
+        Ta bort medlem
+    </button>
+</BottomSheet>
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid HouseholdId { get; set; }
+
+    [Parameter, EditorRequired]
+    public HouseholdMemberResponse Member { get; set; } = null!;
+
+    [Parameter]
+    public bool IsOpen { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> IsOpenChanged { get; set; }
+
+    /// <summary>Raised after any successful change, so the parent (Hushall.razor) reloads.</summary>
+    [Parameter, EditorRequired]
+    public EventCallback OnChanged { get; set; }
+
+    private bool _roleBusy;
+    private string? _roleMessage;
+
+    private DateOnly? _pauseUntilInput;
+    private bool _pauseBusy;
+    private string? _pauseMessage;
+
+    private bool _removeBusy;
+    private string? _removeMessage;
+
+    private static readonly System.Globalization.CultureInfo SwedishCulture = new("sv-SE");
+
+    private DateOnly Today => DateOnly.FromDateTime(TimeProvider.GetLocalNow().DateTime);
+
+    protected override void OnParametersSet()
+    {
+        if (!IsOpen)
+        {
+            _roleMessage = null;
+            _pauseMessage = null;
+            _removeMessage = null;
+            return;
+        }
+
+        _pauseUntilInput ??= Member.PausedUntil ?? Today.AddDays(7);
+    }
+
+    private async Task OnIsOpenChanged(bool isOpen)
+    {
+        IsOpen = isOpen;
+
+        if (!isOpen)
+        {
+            _pauseUntilInput = null;
+        }
+
+        await IsOpenChanged.InvokeAsync(isOpen);
+    }
+
+    private async Task SetRoleAsync(HouseholdRole role)
+    {
+        _roleBusy = true;
+        _roleMessage = null;
+
+        try
+        {
+            // Both calls describe the same pick from the UI's point of view - the role itself,
+            // and the budget the preset implies for it (still freely editable afterwards) - and
+            // neither depends on the other, so they run concurrently rather than doubling the
+            // round trip.
+            var roleTask = Api.SetMemberRoleAsync(HouseholdId, Member.Id, role.ToString());
+            var budgetTask = Api.SetWeeklyBudgetAsync(HouseholdId, Member.Id, HouseholdRolePresets.BudgetFor(role));
+            await Task.WhenAll(roleTask, budgetTask);
+
+            if (await budgetTask)
+            {
+                await OnChanged.InvokeAsync();
+            }
+            else
+            {
+                _roleMessage = "Det gick inte att spara. Försök igen.";
+            }
+        }
+        catch (HttpRequestException)
+        {
+            _roleMessage = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _roleBusy = false;
+        }
+    }
+
+    private async Task SetCustomMinutesAsync(int minutes)
+    {
+        _roleBusy = true;
+        _roleMessage = null;
+
+        try
+        {
+            var budget = new WeeklyTimeBudgetContract(minutes, minutes, minutes, minutes, minutes, minutes, minutes);
+
+            if (!await Api.SetWeeklyBudgetAsync(HouseholdId, Member.Id, budget))
+            {
+                _roleMessage = "Det gick inte att spara. Försök igen.";
+                return;
+            }
+
+            await OnChanged.InvokeAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _roleMessage = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _roleBusy = false;
+        }
+    }
+
+    private async Task SavePauseAsync()
+    {
+        if (_pauseUntilInput is not { } until)
+        {
+            _pauseMessage = "Ange ett slutdatum för pausen.";
+            return;
+        }
+
+        _pauseBusy = true;
+        _pauseMessage = null;
+
+        try
+        {
+            if (!await Api.PauseHouseholdMemberAsync(HouseholdId, Member.Id, until))
+            {
+                _pauseMessage = "Det gick inte att spara. Försök igen.";
+                return;
+            }
+
+            await OnChanged.InvokeAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _pauseMessage = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _pauseBusy = false;
+        }
+    }
+
+    private async Task ResumeAsync()
+    {
+        _pauseBusy = true;
+        _pauseMessage = null;
+
+        try
+        {
+            await Api.PauseHouseholdMemberAsync(HouseholdId, Member.Id, until: null);
+            await OnChanged.InvokeAsync();
+        }
+        finally
+        {
+            _pauseBusy = false;
+        }
+    }
+
+    private async Task RemoveAsync()
+    {
+        _removeBusy = true;
+        _removeMessage = null;
+
+        try
+        {
+            await Api.DeactivateMemberAsync(HouseholdId, Member.Id);
+            await OnIsOpenChanged(false);
+            await OnChanged.InvokeAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _removeMessage = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _removeBusy = false;
+        }
+    }
+}

@@ -54,13 +54,15 @@ public class RebalanceAssignmentsTests
                 new { date = today.AddDays(i), assignToMemberId = elinId });
         }
 
-        // "Känns det som att en person gör för mycket?" moved from Rum to Hushåll - see
-        // docs/ARCHITECTURE.md "Ny form".
+        // Rebalancing moved behind its own sheet on Hushåll - see docs/ARCHITECTURE.md "Ny
+        // form". The listrow and the sheet's own submit button share the same text, so once the
+        // sheet is open every further interaction is scoped to its Dialog.
         await page.GotoAsync("/hushall");
-        await page.GetByText("Känns det som att en person gör för mycket?").ClickAsync();
         await page.GetByRole(AriaRole.Button, new() { Name = "Balansera om vem som gör vad" }).ClickAsync();
+        var sheet = page.GetByRole(AriaRole.Dialog, new() { Name = "Balansera om vem som gör vad" });
+        await sheet.GetByRole(AriaRole.Button, new() { Name = "Balansera om vem som gör vad" }).ClickAsync();
 
-        await Assertions.Expect(page.GetByText("bytte ansvarig")).ToBeVisibleAsync();
+        await Assertions.Expect(sheet.GetByText("bytte ansvarig")).ToBeVisibleAsync();
 
         // Sven now has at least one of the five occurrences on one of their five scheduled
         // dates - proof something actually moved off Elin, who has far less than her fair share

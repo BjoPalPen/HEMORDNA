@@ -95,3 +95,61 @@
     text-decoration: line-through;
     text-decoration-color: var(--sot-soft);
 }
+
+/* The household week grid, hero content here - also shown compact on Hushall.razor, which
+   carries its own copy of the same rules (scoped CSS does not cross pages). */
+.week-grid-wrap {
+    overflow-x: auto;
+    margin-bottom: var(--space-5);
+}
+
+.week-grid {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: center;
+}
+
+.week-grid th,
+.week-grid td {
+    padding: var(--space-2);
+}
+
+.week-grid thead th {
+    color: var(--sot-soft);
+    font-weight: 500;
+    font-size: calc(var(--font-size-base) * .8);
+    text-transform: capitalize;
+}
+
+.week-grid tbody th {
+    text-align: left;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.week-grid-today {
+    background: var(--saffran-soft);
+    color: var(--sot);
+    border-radius: var(--radius-sm);
+}
+
+.dot {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: var(--pill);
+    background: var(--line);
+}
+
+.dot-done {
+    background: var(--gustav);
+}
+
+.dot-planned {
+    background: var(--surface);
+    border: 2px solid var(--gustav);
+}
+
+.vecka-section-heading {
+    margin-top: var(--space-6);
+}

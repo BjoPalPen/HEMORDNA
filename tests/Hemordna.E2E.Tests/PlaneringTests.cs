@@ -15,7 +15,10 @@ public class PlaneringTests
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Johanna");
 
-        await page.GotoAsync("/planering");
+        // Renamed from /planering - the household week-grid is now the hero, "Min vecka" (this
+        // member's own budget) is a section below it - see docs/ARCHITECTURE.md "Ny form".
+        await page.GotoAsync("/vecka");
+        await page.Locator("h1", new() { HasText = "Vecka" }).WaitForAsync();
         await page.GetByRole(AriaRole.Heading, new() { Name = "Min vecka" }).WaitForAsync();
 
         await Assertions.Expect(page.Locator(".list-item")).ToHaveCountAsync(7);

@@ -17,14 +17,47 @@ else if (Session.NeedsHousehold)
 {
     <SkapaHushall OnCreated="LoadAsync" />
 }
-else if (_member is null)
+else if (_household is null || _member is null)
 {
-    <p class="muted">Hämtar din vecka...</p>
+    <p class="muted">Hämtar veckan...</p>
 }
 else
 {
-    <h1>Min vecka</h1>
-    <p class="muted">Hur mycket tid du normalt brukar ha, dag för dag.</p>
+    <h1>Vecka</h1>
+
+    <div class="week-grid-wrap">
+        <table class="week-grid">
+            <thead>
+                <tr>
+                    <th scope="col"></th>
+                    @foreach (var day in WeekDays)
+                    {
+                        <th scope="col" class="@(day == Today ? "week-grid-today" : null)">
+                            @day.ToString("ddd", SwedishCulture)
+                        </th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var member in _household.Members.Where(m => m.IsActive))
+                {
+                    <tr>
+                        <th scope="row">@member.DisplayName</th>
+                        @foreach (var day in WeekDays)
+                        {
+                            <td class="@(day == Today ? "week-grid-today" : null)">
+                                <span class="dot @DotClass(member.Id, day)"
+                                      title="@DotTitle(member.Id, day)"></span>
+                            </td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+
+    <h2 class="vecka-section-heading">Min vecka</h2>
+    <p class="muted small">Hur mycket tid du normalt brukar ha, dag för dag.</p>
 
     <ul class="list" aria-label="Veckans normala tid">
         @foreach (var day in Weekdays(_member))
@@ -128,7 +161,9 @@ else
 }
 
 @code {
+    private HouseholdResponse? _household;
     private HouseholdMemberResponse? _member;
+    private readonly Dictionary<(Guid MemberId, DateOnly Date), string> _weeklyStatus = [];
 
     private IReadOnlyList<HouseholdMemberResponse>? _householdMembers;
     private Guid _peekMemberId;
@@ -138,6 +173,8 @@ else
 
     private string? _rebalanceMessage;
     private bool _rebalancing;
+
+    private static readonly System.Globalization.CultureInfo SwedishCulture = new("sv-SE");
 
     protected override async Task OnInitializedAsync()
     {
@@ -152,8 +189,14 @@ else
             return;
         }
 
-        var household = await Api.GetHouseholdAsync(householdId);
-        _member = household?.Members.FirstOrDefault(m => m.Id == memberId);
+        _household = await Api.GetHouseholdAsync(householdId);
+        _member = _household?.Members.FirstOrDefault(m => m.Id == memberId);
+
+        _weeklyStatus.Clear();
+        foreach (var status in await Api.GetWeeklyStatusAsync(householdId, Today))
+        {
+            _weeklyStatus[(status.MemberId, status.Date)] = status.Status;
+        }
     }
 
     private static IEnumerable<(string Label, string MinutesLabel)> Weekdays(HouseholdMemberResponse member)
@@ -171,6 +214,31 @@ else
     private static string MinutesLabelFor(int minutes) => minutes == 0 ? "Ingen tid" : $"{minutes} min";
 
     private DateOnly Today => DateOnly.FromDateTime(TimeProvider.GetLocalNow().DateTime);
+
+    /// <summary>Monday through Sunday of the week containing today.</summary>
+    private IReadOnlyList<DateOnly> WeekDays
+    {
+        get
+        {
+            var offsetFromMonday = Today.DayOfWeek == DayOfWeek.Sunday ? 6 : (int)Today.DayOfWeek - 1;
+            var monday = Today.AddDays(-offsetFromMonday);
+            return [.. Enumerable.Range(0, 7).Select(monday.AddDays)];
+        }
+    }
+
+    private string DotClass(Guid memberId, DateOnly date) => _weeklyStatus.GetValueOrDefault((memberId, date)) switch
+    {
+        "Done" => "dot-done",
+        "Planned" => "dot-planned",
+        _ => "dot-none"
+    };
+
+    private string DotTitle(Guid memberId, DateOnly date) => _weeklyStatus.GetValueOrDefault((memberId, date)) switch
+    {
+        "Done" => "Klart",
+        "Planned" => "Planerat",
+        _ => "Inget planerat"
+    };
 
     private async Task RebalanceScheduleAsync()
     {
@@ -212,8 +280,7 @@ else
             return;
         }
 
-        var household = await Api.GetHouseholdAsync(householdId);
-        _householdMembers = household?.Members.Where(m => m.IsActive).ToList() ?? [];
+        _householdMembers = _household?.Members.Where(m => m.IsActive).ToList() ?? [];
         _peekMemberId = memberId;
         await LoadPeekDayAsync();
     }

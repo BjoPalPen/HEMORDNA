@@ -274,29 +274,17 @@ else
         await LoadTodayAndNextAsync(householdId, memberId);
     }
 
-    /// <summary>
-    /// Rooms created together (Omraden.razor's floor form) share a "Våning – " name prefix -
-    /// there is no separate Floor field in the domain, and adding one is outside a client-only
-    /// step, so the segment control is derived from that naming convention. A room renamed by
-    /// hand to drop the prefix simply falls into "Annat".
-    /// </summary>
-    private static string? FloorOf(AreaResponse area)
-    {
-        var separatorIndex = area.Name.IndexOf(" – ", StringComparison.Ordinal);
-        return separatorIndex > 0 ? area.Name[..separatorIndex] : null;
-    }
-
     private List<string?> Floors
     {
         get
         {
-            var groups = (_areas ?? []).Select(FloorOf).Distinct().ToList();
+            var groups = (_areas ?? []).Select(area => RoomFloors.FloorOf(area.Name)).Distinct().ToList();
             return groups.Count > 1 ? groups : [];
         }
     }
 
     private IEnumerable<AreaResponse> VisibleAreas
-        => Floors.Count == 0 ? (_areas ?? []) : (_areas ?? []).Where(a => FloorOf(a) == _selectedFloor);
+        => Floors.Count == 0 ? (_areas ?? []) : (_areas ?? []).Where(a => RoomFloors.FloorOf(a.Name) == _selectedFloor);
 
     private void OpenRoom(Guid? areaId, string label)
     {

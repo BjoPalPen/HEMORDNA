@@ -6,6 +6,7 @@
 @inject TimeProvider TimeProvider
 @inject HouseholdRealtimeClient Realtime
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
 
 <PageTitle>Hushåll – Hemordna</PageTitle>
 
@@ -28,116 +29,36 @@ else if (_household is null)
 else
 {
     <h1>@_household.Name</h1>
-    <p class="muted">@_household.Members.Count(m => m.IsActive) medlemmar · @_household.Areas.Count(a => a.IsActive) områden</p>
-
-    <ul class="list" aria-label="Medlemmar">
-        @foreach (var member in _household.Members.Where(m => m.IsActive))
+    <p class="muted">
+        @ActiveMembers.Count personer · @_household.Areas.Count(a => a.IsActive) rum
+        @if (FloorCount > 0)
         {
-            <li class="list-item">
-                <span class="avatar" aria-hidden="true">@Initial(member.DisplayName)</span>
-                <span class="list-name">
-                    @member.DisplayName
-                    @if (member.PausedUntil is { } pausedUntil)
-                    {
-                        <span class="chip">Pausad t.o.m. @pausedUntil.ToString("d/M")</span>
-                    }
-                </span>
-                <div class="list-item-actions">
-                    <select class="role-select" aria-label="@($"Roll för {member.DisplayName}")"
-                            value="@RoleValueFor(member)"
-                            @onchange="e => SetMemberRoleAsync(member.Id, e.Value)">
-                        <option value="" disabled>Anpassad tid</option>
-                        @foreach (var preset in HouseholdRolePresets.All)
-                        {
-                            <option value="@preset.Role">@preset.Label</option>
-                        }
-                    </select>
-                    <button type="button" class="btn btn-secondary" aria-label="@($"Pausa {member.DisplayName}")"
-                            @onclick="() => ToggleMemberPause(member)">
-                        @(member.PausedUntil is null ? "Pausa" : "Ändra paus")
-                    </button>
-                    <button type="button" class="btn btn-secondary" aria-label="@($"Ta bort {member.DisplayName}")"
-                            disabled="@(_removingMemberId == member.Id)"
-                            @onclick="() => RemoveMemberAsync(member.Id)">
-                        Ta bort
-                    </button>
-                </div>
-            </li>
-
-            @if (_pausingMemberId == member.Id)
-            {
-                <li class="list-item">
-                    <label class="field">
-                        <span>Pausa "@member.DisplayName" till och med</span>
-                        <input type="date" @bind="_pauseUntilInput" />
-                    </label>
-
-                    @if (_pauseMessage is { } pauseMessage)
-                    {
-                        <div class="notice notice-problem" role="alert">@pauseMessage</div>
-                    }
-
-                    <button type="button" class="btn btn-primary" disabled="@_pauseBusy"
-                            @onclick="() => SaveMemberPauseAsync(member.Id)">
-                        @(_pauseBusy ? "Sparar..." : "Pausa")
-                    </button>
-                    @if (member.PausedUntil is not null)
-                    {
-                        <button type="button" class="btn btn-secondary" disabled="@_pauseBusy"
-                                @onclick="() => ResumeMemberAsync(member.Id)">
-                            Återuppta nu
-                        </button>
-                    }
-                    <button type="button" class="btn btn-link" @onclick="() => _pausingMemberId = null">
-                        Avbryt
-                    </button>
-                </li>
-            }
+            <text>· @FloorCount våningar</text>
         }
-    </ul>
-    <p class="muted small">
-        Rollen styr hur mycket tid var och en normalt får för hushållssysslor - inget alla
-        medlemmar behöver tänka på själva. En pausad medlem hoppas över i rotationen och får
-        inga nya uppgifter tilldelade förrän pausen är slut - bra när någon är bortrest.
     </p>
 
-    <div class="card">
-        <h2>Pausa hela hushållet</h2>
-        <p class="muted small">
-            Ingen ny uppgift skapas åt någon medan hushållet är pausat - bra när alla är bortresta
-            tillsammans. Inget hopar sig - pausade dagar hoppas bara över.
-        </p>
-
-        @if (_household.PausedUntil is { } householdPausedUntil)
+    <div class="member-row">
+        @foreach (var (member, index) in ActiveMembers.Select((m, i) => (m, i)))
         {
-            <p class="notice" role="status">Hushållet är pausat t.o.m. @householdPausedUntil.ToString("d MMMM", SwedishCulture).</p>
-        }
-
-        <label class="field">
-            <span>Pausa till och med</span>
-            <input type="date" @bind="_householdPauseUntilInput" />
-        </label>
-
-        @if (_householdPauseMessage is { } householdPauseMessage)
-        {
-            <div class="notice notice-problem" role="alert">@householdPauseMessage</div>
-        }
-
-        <button type="button" class="btn btn-primary" disabled="@_householdPauseBusy"
-                @onclick="SaveHouseholdPauseAsync">
-            @(_householdPauseBusy ? "Sparar..." : "Pausa hushållet")
-        </button>
-        @if (_household.PausedUntil is not null)
-        {
-            <button type="button" class="btn btn-secondary" disabled="@_householdPauseBusy"
-                    @onclick="ResumeHouseholdAsync">
-                Återuppta nu
+            <button type="button" class="member-avatar-btn" @onclick="() => OpenMember(member)">
+                <span class="avatar avatar-lg @(index % 2 == 0 ? "avatar-a" : "avatar-b")" aria-hidden="true">
+                    @Initial(member.DisplayName)
+                </span>
+                <span class="member-name">@member.DisplayName</span>
+                <span class="member-role muted small">@RoleLabel(member.Role)</span>
             </button>
         }
+
+        <button type="button" class="member-avatar-btn" @onclick="() => _showInviteSheet = true">
+            <span class="avatar avatar-lg avatar-add" aria-hidden="true">
+                <Icon Name="plus" Size="20" />
+            </span>
+            <span class="member-name">Bjud in</span>
+        </button>
     </div>
 
     <div class="card">
-        <h2>Veckans plan</h2>
+        <h2>Veckan</h2>
 
         <div class="week-grid-wrap">
             <table class="week-grid">
@@ -153,7 +74,7 @@ else
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var member in _household.Members.Where(m => m.IsActive))
+                    @foreach (var member in ActiveMembers)
                     {
                         <tr>
                             <th scope="row">@member.DisplayName</th>
@@ -171,38 +92,22 @@ else
         </div>
     </div>
 
-    <details class="more-options">
-        <summary>Känns det som att en person gör för mycket?</summary>
-        <p class="muted small">
-            Flyttar bara redan utestående, roterande uppgifter mellan medlemmar - så mycket som
-            möjligt lämnas orört - så att var och ens andel av det som återstår att göra matchar
-            deras egen tid bättre. Uppgifter som bara en viss person kan eller får göra (t.ex.
-            bara vuxna, eller någons eget rum) rörs aldrig.
-        </p>
-
-        @if (_rebalanceAssignmentsMessage is { } rebalanceAssignmentsMessage)
-        {
-            <div class="notice" role="status">@rebalanceAssignmentsMessage</div>
-        }
-
-        <button type="button" class="btn btn-secondary" disabled="@_rebalancingAssignments" @onclick="RebalanceAssignmentsAsync">
-            @(_rebalancingAssignments ? "Balanserar om..." : "Balansera om vem som gör vad")
-        </button>
-    </details>
-
-    <div class="card">
-        <h2>Områden</h2>
-
-        <ul class="list" aria-label="Områden">
-            @foreach (var area in _household.Areas.Where(a => a.IsActive))
-            {
-                <li class="list-item">
-                    <span class="list-name">@area.Name</span>
-                    <span class="list-meta muted small">@TaskCountFor(area.Id) uppgifter</span>
-                </li>
-            }
-        </ul>
-    </div>
+    @if (TodaySummary is { } todaySummary)
+    {
+        <div class="card">
+            <div class="ringrow">
+                <svg viewBox="0 0 36 36" class="day-ring" aria-hidden="true">
+                    <circle cx="18" cy="18" r="15.9155" class="day-ring-track" />
+                    <circle cx="18" cy="18" r="15.9155" class="day-ring-fill"
+                            stroke-dasharray="@($"{todaySummary.PercentComplete} {100 - todaySummary.PercentComplete}")" />
+                </svg>
+                <div>
+                    <p class="ringrow-title">Idag i hushållet</p>
+                    <p class="muted small">@todaySummary.CompletedCount av @todaySummary.TotalCount klara</p>
+                </div>
+            </div>
+        </div>
+    }
 
     <div class="card">
         <h2>Senaste händelser</h2>
@@ -252,31 +157,75 @@ else
         }
     </div>
 
-    <div class="card">
-        <h2>Bjud in fler</h2>
+    <ul class="list" aria-label="Hushållsinställningar">
+        <li class="list-item list-item-flush">
+            <button type="button" class="list-row" @onclick="() => _showPauseSheet = true">
+                <span>Pausa hushållet</span>
+                @if (_household.PausedUntil is not null)
+                {
+                    <span class="list-row-value">Pausat</span>
+                }
+                <Icon Name="chevron-right" Size="18" />
+            </button>
+        </li>
+        <li class="list-item list-item-flush">
+            <button type="button" class="list-row" @onclick="() => _showRebalanceSheet = true">
+                <span>Balansera om vem som gör vad</span>
+                <Icon Name="chevron-right" Size="18" />
+            </button>
+        </li>
+        <li class="list-item list-item-flush">
+            <a href="installningar" class="list-row">
+                <span>Inställningar</span>
+                <Icon Name="chevron-right" Size="18" />
+            </a>
+        </li>
+        <li class="list-item list-item-flush">
+            <button type="button" class="list-row" @onclick="SignOutAsync">
+                <span>Logga ut</span>
+            </button>
+        </li>
+    </ul>
+}
+
+@if (_openMember is { } openMember)
+{
+    <MemberSheet HouseholdId="@_householdId" Member="openMember"
+                 IsOpen="_showMemberSheet" IsOpenChanged="isOpen => _showMemberSheet = isOpen"
+                 OnChanged="LoadAsync" />
+}
+
+<BottomSheet Title="Bjud in" @bind-IsOpen="_showInviteSheet">
+    <p class="muted small">
+        Ge den här koden till någon i hushållet. De anger den när de skapar sitt eget konto, i
+        stället för att starta ett nytt hushåll.
+    </p>
+    <p class="invite-code" aria-label="Inbjudningskod">@_household?.InviteCode</p>
+
+    @if (_inviteMessage is { } inviteMessage)
+    {
+        <div class="notice" role="status">@inviteMessage</div>
+    }
+
+    <button type="button" class="btn btn-primary btn-block" @onclick="ShareInviteAsync">
+        Dela koden
+    </button>
+    <button type="button" class="btn btn-secondary btn-block" disabled="@_regeneratingInviteCode"
+            @onclick="RegenerateInviteCodeAsync">
+        @(_regeneratingInviteCode ? "Skapar ny kod..." : "Skapa ny kod")
+    </button>
+    <p class="muted small">
+        En ny kod gör den gamla ogiltig - använd bara om den här har hamnat i fel händer. Ingen
+        redan tillagd medlem påverkas.
+    </p>
+
+    <details class="more-options">
+        <summary>Eller lägg till en medlem utan eget konto</summary>
         <p class="muted small">
-            Ge den här koden till någon i hushållet. De anger den när de skapar sitt eget
-            konto, i stället för att starta ett nytt hushåll.
+            För någon som inte skapar ett eget konto än, t.ex. ett barn - namnet syns i
+            hushållet direkt.
         </p>
-        <p class="invite-code" aria-label="Inbjudningskod">@_household.InviteCode</p>
 
-        @if (_inviteMessage is { } inviteMessage)
-        {
-            <div class="notice" role="status">@inviteMessage</div>
-        }
-
-        <button type="button" class="btn btn-secondary" disabled="@_regeneratingInviteCode"
-                @onclick="RegenerateInviteCodeAsync">
-            @(_regeneratingInviteCode ? "Skapar ny kod..." : "Skapa ny kod")
-        </button>
-        <p class="muted small">
-            En ny kod gör den gamla ogiltig - använd bara om den här har hamnat i fel händer.
-            Ingen redan tillagd medlem påverkas.
-        </p>
-    </div>
-
-    <div class="card">
-        <h2>Lägg till medlem</h2>
         <EditForm Model="_form" OnValidSubmit="AddMemberAsync">
             <label class="field">
                 <span>Namn</span>
@@ -320,24 +269,64 @@ else
                 <div class="notice notice-problem" role="alert">@message</div>
             }
 
-            <button type="submit" class="btn btn-primary" disabled="@_busy">
+            <button type="submit" class="btn btn-primary btn-block" disabled="@_busy">
                 @(_busy ? "Lägger till..." : "Lägg till medlem")
             </button>
         </EditForm>
-    </div>
+    </details>
+</BottomSheet>
 
-    @* Tillfälligt tills steg 4 (Hushåll/Vecka), som ger de här raderna sin riktiga plats
-       bland hushållets sällanhandlingar - se docs/DESIGN.md "Navigation". Utan detta hade
-       /mer → /hushall lämnat Inställningar och Logga ut oåtkomliga. *@
-    <ul class="list" aria-label="Konto">
-        <li class="list-item">
-            <a href="installningar" class="list-name">Inställningar ›</a>
-        </li>
-        <li class="list-item">
-            <button type="button" class="btn-link" @onclick="SignOutAsync">Logga ut</button>
-        </li>
-    </ul>
-}
+<BottomSheet Title="Pausa hushållet" @bind-IsOpen="_showPauseSheet">
+    <p class="muted small">
+        Ingen ny uppgift skapas åt någon medan hushållet är pausat - bra när alla är bortresta
+        tillsammans. Inget hopar sig - pausade dagar hoppas bara över.
+    </p>
+
+    @if (_household?.PausedUntil is { } householdPausedUntil)
+    {
+        <p class="notice" role="status">Hushållet är pausat t.o.m. @householdPausedUntil.ToString("d MMMM", SwedishCulture).</p>
+    }
+
+    <label class="field">
+        <span>Pausa till och med</span>
+        <input type="date" @bind="_householdPauseUntilInput" />
+    </label>
+
+    @if (_householdPauseMessage is { } householdPauseMessage)
+    {
+        <div class="notice notice-problem" role="alert">@householdPauseMessage</div>
+    }
+
+    <button type="button" class="btn btn-primary btn-block" disabled="@_householdPauseBusy"
+            @onclick="SaveHouseholdPauseAsync">
+        @(_householdPauseBusy ? "Sparar..." : "Pausa hushållet")
+    </button>
+    @if (_household?.PausedUntil is not null)
+    {
+        <button type="button" class="btn btn-secondary btn-block" disabled="@_householdPauseBusy"
+                @onclick="ResumeHouseholdAsync">
+            Återuppta nu
+        </button>
+    }
+</BottomSheet>
+
+<BottomSheet Title="Balansera om vem som gör vad" @bind-IsOpen="_showRebalanceSheet">
+    <p class="muted small">
+        Flyttar bara redan utestående, roterande uppgifter mellan medlemmar - så mycket som
+        möjligt lämnas orört - så att var och ens andel av det som återstår att göra matchar
+        deras egen tid bättre. Uppgifter som bara en viss person kan eller får göra (t.ex. bara
+        vuxna, eller någons eget rum) rörs aldrig.
+    </p>
+
+    @if (_rebalanceAssignmentsMessage is { } rebalanceAssignmentsMessage)
+    {
+        <div class="notice" role="status">@rebalanceAssignmentsMessage</div>
+    }
+
+    <button type="button" class="btn btn-primary btn-block" disabled="@_rebalancingAssignments" @onclick="RebalanceAssignmentsAsync">
+        @(_rebalancingAssignments ? "Balanserar om..." : "Balansera om vem som gör vad")
+    </button>
+</BottomSheet>
 
 @code {
     private sealed class Form
@@ -348,23 +337,23 @@ else
     }
 
     private readonly Form _form = new();
+    private Guid _householdId;
     private HouseholdResponse? _household;
-    private IReadOnlyList<TaskDefinitionResponse> _tasks = [];
     private IReadOnlyList<RecentActivityResponse> _activity = [];
     private IReadOnlyList<DailyActivitySummaryResponse> _dailySummaries = [];
     private readonly Dictionary<(Guid MemberId, DateOnly Date), string> _weeklyStatus = [];
     private string? _message;
     private bool _busy;
-    private Guid? _removingMemberId;
     private string? _inviteMessage;
     private bool _regeneratingInviteCode;
     private string? _rebalanceAssignmentsMessage;
     private bool _rebalancingAssignments;
 
-    private Guid? _pausingMemberId;
-    private DateOnly? _pauseUntilInput;
-    private string? _pauseMessage;
-    private bool _pauseBusy;
+    private HouseholdMemberResponse? _openMember;
+    private bool _showMemberSheet;
+    private bool _showInviteSheet;
+    private bool _showPauseSheet;
+    private bool _showRebalanceSheet;
 
     private DateOnly? _householdPauseUntilInput;
     private string? _householdPauseMessage;
@@ -373,6 +362,24 @@ else
     private static readonly System.Globalization.CultureInfo SwedishCulture = new("sv-SE");
 
     private DateOnly Today => DateOnly.FromDateTime(TimeProvider.GetLocalNow().DateTime);
+
+    private List<HouseholdMemberResponse> ActiveMembers => _household?.Members.Where(m => m.IsActive).ToList() ?? [];
+
+    private int FloorCount => RoomFloors.CountDistinct(_household?.Areas.Where(a => a.IsActive) ?? []);
+
+    private sealed record TodayRing(int CompletedCount, int TotalCount)
+    {
+        public int PercentComplete => TotalCount > 0 ? (int)Math.Round(100.0 * CompletedCount / TotalCount) : 0;
+    }
+
+    private TodayRing? TodaySummary
+    {
+        get
+        {
+            var summary = _dailySummaries.FirstOrDefault(s => s.Date == Today);
+            return summary is null ? null : new TodayRing(summary.CompletedCount, summary.TotalCount);
+        }
+    }
 
     /// <summary>
     /// One day's worth of the recent-activity log, paired with the household-wide (never
@@ -451,10 +458,15 @@ else
             return;
         }
 
+        _householdId = householdId;
         _household = await Api.GetHouseholdAsync(householdId);
         _activity = await Api.GetRecentActivityAsync(householdId);
         _dailySummaries = await Api.GetDailyActivitySummaryAsync(householdId);
-        _tasks = await Api.ListTasksAsync(householdId);
+
+        if (_openMember is { } openMember)
+        {
+            _openMember = _household?.Members.FirstOrDefault(m => m.Id == openMember.Id);
+        }
 
         _weeklyStatus.Clear();
         foreach (var status in await Api.GetWeeklyStatusAsync(householdId, Today))
@@ -463,53 +475,23 @@ else
         }
     }
 
-    private int TaskCountFor(Guid areaId) => _tasks.Count(t => t.AreaId == areaId && t.IsActive);
-
-    private static string RoleValueFor(HouseholdMemberResponse member) => member.Role ?? string.Empty;
-
-    private async Task SetMemberRoleAsync(Guid memberId, object? value)
+    private void OpenMember(HouseholdMemberResponse member)
     {
-        if (Session.Me is not { HouseholdId: { } householdId })
-        {
-            return;
-        }
-
-        if (value is not string text || !Enum.TryParse<HouseholdRole>(text, out var role))
-        {
-            return;
-        }
-
-        // Both calls describe the same pick from the UI's point of view - the role itself, and
-        // the budget the preset implies for it (still freely editable afterwards) - and neither
-        // depends on the other, so they run concurrently rather than doubling the round trip.
-        var roleTask = Api.SetMemberRoleAsync(householdId, memberId, role.ToString());
-        var budgetTask = Api.SetWeeklyBudgetAsync(householdId, memberId, HouseholdRolePresets.BudgetFor(role));
-        await Task.WhenAll(roleTask, budgetTask);
-
-        if (await budgetTask)
-        {
-            await LoadAsync();
-        }
+        _openMember = member;
+        _showMemberSheet = true;
     }
 
-    private async Task RemoveMemberAsync(Guid memberId)
+    private static string RoleLabel(string? role)
     {
-        if (Session.Me is not { HouseholdId: { } householdId })
+        foreach (var preset in HouseholdRolePresets.All)
         {
-            return;
+            if (preset.Role.ToString() == role)
+            {
+                return preset.Label;
+            }
         }
 
-        _removingMemberId = memberId;
-
-        try
-        {
-            await Api.DeactivateMemberAsync(householdId, memberId);
-            await LoadAsync();
-        }
-        finally
-        {
-            _removingMemberId = null;
-        }
+        return "Anpassad tid";
     }
 
     private async Task RegenerateInviteCodeAsync()
@@ -536,70 +518,17 @@ else
         }
     }
 
-    private void ToggleMemberPause(HouseholdMemberResponse member)
+    private async Task ShareInviteAsync()
     {
-        if (_pausingMemberId == member.Id)
-        {
-            _pausingMemberId = null;
-            return;
-        }
-
-        _pausingMemberId = member.Id;
-        _pauseUntilInput = member.PausedUntil ?? Today.AddDays(7);
-        _pauseMessage = null;
-    }
-
-    private async Task SaveMemberPauseAsync(Guid memberId)
-    {
-        if (Session.Me is not { HouseholdId: { } householdId } || _pauseUntilInput is not { } until)
-        {
-            _pauseMessage = "Ange ett slutdatum för pausen.";
-            return;
-        }
-
-        _pauseBusy = true;
-        _pauseMessage = null;
-
-        try
-        {
-            if (!await Api.PauseHouseholdMemberAsync(householdId, memberId, until))
-            {
-                _pauseMessage = "Det gick inte att spara. Försök igen.";
-                return;
-            }
-
-            _pausingMemberId = null;
-            await LoadAsync();
-        }
-        catch (HttpRequestException)
-        {
-            _pauseMessage = "Vi når inte servern just nu. Försök igen om en stund.";
-        }
-        finally
-        {
-            _pauseBusy = false;
-        }
-    }
-
-    private async Task ResumeMemberAsync(Guid memberId)
-    {
-        if (Session.Me is not { HouseholdId: { } householdId })
+        if (_household is null)
         {
             return;
         }
 
-        _pauseBusy = true;
-
-        try
-        {
-            await Api.PauseHouseholdMemberAsync(householdId, memberId, until: null);
-            _pausingMemberId = null;
-            await LoadAsync();
-        }
-        finally
-        {
-            _pauseBusy = false;
-        }
+        var text = $"Gå med i {_household.Name} på Hemordna med koden {_household.InviteCode}";
+        await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/share.js");
+        var shared = await module.InvokeAsync<bool>("shareOrCopy", "Hemordna – inbjudan", text);
+        _inviteMessage = shared ? null : "Koden är kopierad.";
     }
 
     private async Task SaveHouseholdPauseAsync()
