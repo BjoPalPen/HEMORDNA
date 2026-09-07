@@ -58,6 +58,11 @@ internal static class HouseholdEndpoints
             .Produces<AreaResponse>()
             .Produces(StatusCodes.Status404NotFound);
 
+        scoped.MapPut("/areas/{areaId:guid}/name", RenameAreaAsync)
+            .Produces<AreaResponse>()
+            .Produces(StatusCodes.Status404NotFound)
+            .ProducesValidationProblem();
+
         scoped.MapDelete("/members/{memberId:guid}", DeactivateMemberAsync)
             .Produces<HouseholdMemberResponse>()
             .Produces(StatusCodes.Status404NotFound);
@@ -74,6 +79,18 @@ internal static class HouseholdEndpoints
             .Produces(StatusCodes.Status404NotFound);
 
         scoped.MapPut("/tasks/{taskId:guid}/frequency", UpdateTaskFrequencyAsync)
+            .Produces<TaskDefinitionResponse>()
+            .Produces(StatusCodes.Status404NotFound);
+
+        scoped.MapPut("/tasks/{taskId:guid}/assignment", UpdateTaskAssignmentAsync)
+            .Produces<TaskDefinitionResponse>()
+            .Produces(StatusCodes.Status404NotFound);
+
+        scoped.MapPut("/tasks/{taskId:guid}/area", MoveTaskAreaAsync)
+            .Produces<TaskDefinitionResponse>()
+            .Produces(StatusCodes.Status404NotFound);
+
+        scoped.MapPut("/tasks/{taskId:guid}/requires-adult", SetTaskRequiresAdultAsync)
             .Produces<TaskDefinitionResponse>()
             .Produces(StatusCodes.Status404NotFound);
 
@@ -313,6 +330,26 @@ internal static class HouseholdEndpoints
         return area is null ? Results.NotFound() : Results.Ok(ToResponse(area));
     }
 
+    private static async Task<IResult> RenameAreaAsync(
+        Guid householdId,
+        Guid areaId,
+        RenameAreaRequest request,
+        RenameArea renameArea,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name))
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                [nameof(request.Name)] = ["Ett område måste ha ett namn."]
+            });
+        }
+
+        var area = await renameArea.HandleAsync(householdId, areaId, request.Name, cancellationToken);
+
+        return area is null ? Results.NotFound() : Results.Ok(ToResponse(area));
+    }
+
     private static async Task<IResult> DeactivateMemberAsync(
         Guid householdId,
         Guid memberId,
@@ -399,6 +436,44 @@ internal static class HouseholdEndpoints
     {
         var definition = await updateTaskFrequency.HandleAsync(
             householdId, taskId, request.Recurrence?.ToDomain(), request.StaleAfterDays, cancellationToken);
+
+        return definition is null ? Results.NotFound() : Results.Ok(ToResponse(definition));
+    }
+
+    private static async Task<IResult> UpdateTaskAssignmentAsync(
+        Guid householdId,
+        Guid taskId,
+        UpdateTaskAssignmentRequest request,
+        UpdateTaskAssignment updateTaskAssignment,
+        CancellationToken cancellationToken)
+    {
+        var definition = await updateTaskAssignment.HandleAsync(
+            householdId, taskId, request.MemberId, cancellationToken);
+
+        return definition is null ? Results.NotFound() : Results.Ok(ToResponse(definition));
+    }
+
+    private static async Task<IResult> MoveTaskAreaAsync(
+        Guid householdId,
+        Guid taskId,
+        MoveTaskAreaRequest request,
+        MoveTaskToArea moveTaskToArea,
+        CancellationToken cancellationToken)
+    {
+        var definition = await moveTaskToArea.HandleAsync(householdId, taskId, request.AreaId, cancellationToken);
+
+        return definition is null ? Results.NotFound() : Results.Ok(ToResponse(definition));
+    }
+
+    private static async Task<IResult> SetTaskRequiresAdultAsync(
+        Guid householdId,
+        Guid taskId,
+        SetTaskRequiresAdultRequest request,
+        SetTaskRequiresAdult setTaskRequiresAdult,
+        CancellationToken cancellationToken)
+    {
+        var definition = await setTaskRequiresAdult.HandleAsync(
+            householdId, taskId, request.RequiresAdult, cancellationToken);
 
         return definition is null ? Results.NotFound() : Results.Ok(ToResponse(definition));
     }

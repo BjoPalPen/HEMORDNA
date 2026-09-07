@@ -116,24 +116,24 @@ public class HushallTests
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Greta");
 
-        await page.GotoAsync("/omraden");
-        // The plain area form is tucked behind a disclosure now that room templates are the
-        // primary path - see OmradenTests for that flow.
-        await page.GetByText("Lägg till ett tomt område i stället").ClickAsync();
-        await page.GetByLabel("Nytt område").FillAsync("Kök");
-        await page.GetByRole(AriaRole.Button, new() { Name = "Lägg till område" }).ClickAsync();
+        await page.GotoAsync("/rum");
+        // The plain room form is tucked behind a disclosure inside "Nytt rum" now that room
+        // templates are the primary path - see OmradenTests for that flow.
+        await page.GetByRole(AriaRole.Button, new() { Name = "Nytt rum" }).ClickAsync();
+        var newRoomSheet = page.GetByRole(AriaRole.Dialog, new() { Name = "Nytt rum" });
+        await page.GetByText("Lägg till ett tomt rum i stället").ClickAsync();
+        await page.GetByLabel("Rummets namn").FillAsync("Kök");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Lägg till rum" }).ClickAsync();
+        await newRoomSheet.GetByRole(AriaRole.Button, new() { Name = "Stäng" }).ClickAsync();
 
-        // "Kök" is also a <option> in the wizard's own room-type select, so a card matched by
-        // HasText alone would ambiguously catch that card too - filter by the actual heading.
-        var kitchenCard = page.Locator(".card")
-            .Filter(new() { Has = page.GetByRole(AriaRole.Heading, new() { Name = "Kök", Exact = true }) });
-        await kitchenCard.WaitForAsync();
-
-        // Task management lives inline on each room's own card now - see OmradenTests.
-        await kitchenCard.GetByText("Lägg till en uppgift i Kök").ClickAsync();
-        await kitchenCard.GetByLabel("Namn").FillAsync("Diska");
-        await kitchenCard.GetByRole(AriaRole.Button, new() { Name = "Lägg till uppgift" }).ClickAsync();
-        await Assertions.Expect(kitchenCard.Locator(".list-item", new() { HasText = "Diska" })).ToBeVisibleAsync();
+        // Task management lives in the room's own sheet now - see OmradenTests.
+        await page.GetByRole(AriaRole.Button, new() { Name = "Kök" }).First.ClickAsync();
+        var kitchen = page.GetByRole(AriaRole.Dialog, new() { Name = "Kök" });
+        await kitchen.GetByRole(AriaRole.Button, new() { Name = "Lägg till uppgift" }).ClickAsync();
+        var addSheet = page.GetByRole(AriaRole.Dialog, new() { Name = "Lägg till uppgift i Kök" });
+        await addSheet.GetByLabel("Namn").FillAsync("Diska");
+        await addSheet.GetByRole(AriaRole.Button, new() { Name = "Lägg till uppgift" }).ClickAsync();
+        await Assertions.Expect(kitchen.GetByRole(AriaRole.Button, new() { Name = "Diska" })).ToBeVisibleAsync();
 
         await page.GotoAsync("/hushall");
 

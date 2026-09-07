@@ -320,6 +320,76 @@ public sealed class HemordnaApiClient
             : null;
     }
 
+    /// <summary>Changes who normally owns a task - a specific member, or null to rotate between everyone.</summary>
+    public async Task<TaskDefinitionResponse?> UpdateTaskAssignmentAsync(
+        Guid householdId,
+        Guid taskId,
+        Guid? memberId,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Put, $"api/households/{householdId}/tasks/{taskId}/assignment", cancellationToken);
+        request.Content = JsonContent.Create(new { memberId });
+
+        var response = await _http.SendAsync(request, cancellationToken);
+
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<TaskDefinitionResponse>(cancellationToken)
+            : null;
+    }
+
+    /// <summary>Moves a task to a different room, or null for "Övrigt".</summary>
+    public async Task<TaskDefinitionResponse?> MoveTaskToAreaAsync(
+        Guid householdId,
+        Guid taskId,
+        Guid? areaId,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Put, $"api/households/{householdId}/tasks/{taskId}/area", cancellationToken);
+        request.Content = JsonContent.Create(new { areaId });
+
+        var response = await _http.SendAsync(request, cancellationToken);
+
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<TaskDefinitionResponse>(cancellationToken)
+            : null;
+    }
+
+    public async Task<TaskDefinitionResponse?> SetTaskRequiresAdultAsync(
+        Guid householdId,
+        Guid taskId,
+        bool requiresAdult,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Put, $"api/households/{householdId}/tasks/{taskId}/requires-adult", cancellationToken);
+        request.Content = JsonContent.Create(new { requiresAdult });
+
+        var response = await _http.SendAsync(request, cancellationToken);
+
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<TaskDefinitionResponse>(cancellationToken)
+            : null;
+    }
+
+    public async Task<AreaResponse?> RenameAreaAsync(
+        Guid householdId,
+        Guid areaId,
+        string name,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Put, $"api/households/{householdId}/areas/{areaId}/name", cancellationToken);
+        request.Content = JsonContent.Create(new { name });
+
+        var response = await _http.SendAsync(request, cancellationToken);
+
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<AreaResponse>(cancellationToken)
+            : null;
+    }
+
     /// <summary>
     /// Re-anchors already-created recurring tasks so they spread across the week instead of
     /// clustering on whichever day they were created - see RebalanceSchedule.

@@ -46,6 +46,8 @@ public sealed record RefreshRoleBudgetsResponse(int UpdatedMemberCount);
 
 public sealed record AddAreaRequest(string? Name);
 
+public sealed record RenameAreaRequest(string? Name);
+
 /// <summary>
 /// Minutes per weekday, spelled out. The domain stores these in an array; naming the days in
 /// the contract keeps the API self-explanatory without leaking that representation.
@@ -99,6 +101,14 @@ public sealed record CreateTaskRequest(
 
 /// <summary>Both null means "ingen - schemaläggs för hand" - see TaskDefinition.</summary>
 public sealed record UpdateTaskFrequencyRequest(RecurrenceRuleContract? Recurrence, int? StaleAfterDays);
+
+/// <summary>Null means "roterar mellan alla" - see TaskDefinition.SetDefaultResponsibleMember.</summary>
+public sealed record UpdateTaskAssignmentRequest(Guid? MemberId);
+
+/// <summary>Null means "Övrigt" (no room) - see TaskDefinition.AssignToArea.</summary>
+public sealed record MoveTaskAreaRequest(Guid? AreaId);
+
+public sealed record SetTaskRequiresAdultRequest(bool RequiresAdult);
 
 public sealed record TaskDefinitionResponse(
     Guid Id,

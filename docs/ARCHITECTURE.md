@@ -779,6 +779,10 @@ Allt under `/api/households/{householdId}` kräver token och körs bakom
 | `POST` | `/api/households/{householdId}/tasks` | `201` med uppgiften |
 | `POST` | `/api/households/{householdId}/tasks/{taskId}/occurrences` | `201` med den schemalagda instansen |
 | `PUT` | `/api/households/{householdId}/tasks/{taskId}/frequency` | `200` med uppgiften, annars `404` |
+| `PUT` | `/api/households/{householdId}/tasks/{taskId}/assignment` | `200` med uppgiften, annars `404` |
+| `PUT` | `/api/households/{householdId}/tasks/{taskId}/area` | `200` med uppgiften, annars `404` |
+| `PUT` | `/api/households/{householdId}/tasks/{taskId}/requires-adult` | `200` med uppgiften, annars `404` |
+| `PUT` | `/api/households/{householdId}/areas/{areaId}/name` | `200` med området, annars `404` |
 | `PUT` | `/api/households/{householdId}/members/{memberId}/availability` | `200` med dagens tidsbudget |
 | `GET` | `/api/households/{householdId}/members/{memberId}/plan?date=` | `200` med Min dag |
 
@@ -833,7 +837,7 @@ Integrationstester mot en verklig PostgreSQL införs när persistence byggs – 
 
 ---
 
-## 10. Beslut: Ny form — `IMPLEMENTED` (steg 1–2) / `PROPOSED` (steg 3–5)
+## 10. Beslut: Ny form — `IMPLEMENTED` (steg 1–3) / `PROPOSED` (steg 4–5)
 
 Klienten byggs om skärm för skärm till ett nytt visuellt uttryck och en enklare navigation -
 enbart `Hemordna.Client` och dokumentation, ingen ändring i Domain/Application/Infrastructure/
@@ -957,9 +961,69 @@ tidigare" när det gäller, aldrig hur ofta uppgiften återkommer. Ett nytt Api-
 är utanför vad ett klient-bara steg får göra (CLAUDE.md: "Behöver du ett nytt API-fält: stanna
 och rapportera").
 
-### Steg 3–5 — `PROPOSED`
+### Steg 3 (`feat/ny-form-rum`) — `IMPLEMENTED`
 
-`feat/ny-form-rum` (Områden → Rum, `RoomTile`, `RoomSheet`, `TaskOptionsSheet`),
+Områden byggdes om till Rum enligt DESIGN.md §6: en bricka per rum (`RoomTile.razor`) i
+stället för en 5000px hög sida med två knappar per uppgift, all redigering flyttad in i
+`RoomSheet.razor`/`TaskOptionsSheet.razor` (`BottomSheet.razor`, byggd i steg 1, används nu
+för första gången i skarpt läge). `RoomTasks.razor` - komponenten all uppgiftsredigering
+tidigare låg i - är borttagen, helt ersatt.
+
+**Api-undantag, explicit godkänt för detta enda syfte.** `TaskOptionsSheet`s fyra rader
+(Upprepning/Vem gör det/Rum/Kräver vuxen) motsvarar fyra Application-anrop, men Api:t hade
+bara ett av dem sen tidigare (`UpdateTaskFrequency`) - att ändra ansvarig, flytta en uppgift
+till ett annat rum, eller ändra "kräver vuxen" gick bara att göra vid skapandet. Frågan
+ställdes uttryckligen innan implementation (se konversationen) eftersom CLAUDE.md annars
+säger stanna och rapportera för ett nytt Api-fält; svaret var att bygga alla fyra rader och
+göra det nödvändiga tillägget i Application/Api, som en avsiktlig, dokumenterad avvikelse
+från "ingen ändring i Domain/Application/Infrastructure/Api" - avgränsad till precis detta.
+
+- **Domain krävde ingen ändring alls.** `TaskDefinition.AssignToArea`,
+  `SetDefaultResponsibleMember`, `SetRotatingResponsibility`, `SetRequiresAdult` och
+  `Area.Rename` fanns redan, oanvända av något use case.
+- **Fyra nya, tunna Application-klasser** följer `UpdateTaskFrequency`s exakta mönster (hämta,
+  mutera, `UpdateAsync`, `ArgumentException` för ett hushålls-främmande id):
+  `Tasks.UpdateTaskAssignment` (`Guid? memberId` - null rensar ägaren och sätter rotation,
+  ett satt id gör motsatsen; samma antingen/eller-konvention `Omraden.razor`s sovrums-ägare
+  redan använde), `Tasks.MoveTaskToArea`, `Tasks.SetTaskRequiresAdult`,
+  `Households.RenameArea`. 14 nya `Hemordna.Application.Tests`-tester (fakes, inga nya
+  mönster).
+- **Fyra nya, tunna Api-endpoints** i samma stil som `PUT .../frequency`: `PUT
+  .../tasks/{id}/assignment`, `PUT .../tasks/{id}/area`, `PUT .../tasks/{id}/requires-adult`,
+  `PUT .../areas/{id}/name` - request-DTO:er i `HouseholdContracts.cs`, registrerade i
+  `Program.cs` som `AddScoped`.
+- **Klienten** har egna kopior av anropen (`HemordnaApiClient`, anonyma JSON-objekt som
+  request-kropp - samma mönster `UpdateTaskFrequencyAsync` redan använde, inga nya
+  record-kontrakt behövda klientsidan).
+
+**"Våning" är fortfarande bara en namnkonvention, inte ett domänfält.** Segmentkontrollen
+(DESIGN.md §6) härleder våningarna genom att dela rumnamn på " – " (samma separator
+`CreateFloorAsync` redan skrev in) - `Rum.razor.FloorOf`. Ett medvetet, dokumenterat
+antagande: att lägga till ett riktigt `Floor`-fält hade varit ytterligare Api/Domain-arbete,
+och bara "Byt namn" (nytt i detta steg) kan nu få ett rum att tappa sin våningsgruppering av
+misstag genom att skriva över prefixet - det rummet hamnar då i "Annat" i stället för att
+försvinna eller krascha något.
+
+**"N idag"/"Nästa: veckodag" på varje `RoomTile` läser den inloggade medlemmens egen dag, inte
+hela hushållets.** Ingen endpoint svarar på "vem i hushållet har vad idag, per rum" - att
+fråga per medlem hade multiplicerat anropen nedan med antalet medlemmar. Lookahead-loopen (upp
+till 7 dagar, samma tak och resonemang som Idags "Nästa: veckodag") körs EN gång för alla
+rum tillsammans (`Rum.razor.LoadTodayAndNextAsync`), inte en gång per bricka - annars hade N
+rum krävt N×7 anrop i stället för högst 8.
+
+**Ombalanseringspanelerna flyttade oförändrade** - "Känns det som att en person gör för
+mycket?" (`RebalanceTaskAssignments`) till Hushåll, "Ser fördelningen skev ut?"
+(`RebalanceSchedule`) till Vecka - samma disclosure-markup och metoder, bara i en annan fil.
+Ingen omdesign av själva panelerna; det är steg 4:s jobb för Hushåll/Vecka som helhet.
+
+**Bugg hittad under obligatorisk skärmbildsgranskning, fixad:** `RoomSheet`s
+"Ändra frekvens för hela rummet"-delvy återanvände texten "Stäng" för sin egen
+"tillbaka till uppgiftslistan"-länk, vilket krockade med `BottomSheet`s alltid närvarande
+egna "Stäng"-knapp i samma dialog (`GetByRole(Button, Name: "Stäng")` matchade två element).
+Bytt till "Till uppgifterna".
+
+### Steg 4–5 — `PROPOSED`
+
 `feat/ny-form-hushall-vecka` (Hushåll, `MemberSheet`, Veckans egen omdesign - grid som hjälte),
 `feat/ny-form-morkt-lage` (dark-tokens, `data-theme`-växel, bock-animation och haptik under
 `prefers-reduced-motion` - `TaskListItem` har redan sin `prefers-reduced-motion`-hantering för

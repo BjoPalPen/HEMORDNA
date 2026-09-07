@@ -54,7 +54,9 @@ public class RebalanceAssignmentsTests
                 new { date = today.AddDays(i), assignToMemberId = elinId });
         }
 
-        await page.GotoAsync("/omraden");
+        // "Känns det som att en person gör för mycket?" moved from Rum to Hushåll - see
+        // docs/ARCHITECTURE.md "Ny form".
+        await page.GotoAsync("/hushall");
         await page.GetByText("Känns det som att en person gör för mycket?").ClickAsync();
         await page.GetByRole(AriaRole.Button, new() { Name = "Balansera om vem som gör vad" }).ClickAsync();
 

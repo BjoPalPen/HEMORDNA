@@ -11,11 +11,28 @@ public class OmradenTests
 
     public OmradenTests(HemordnaAppFixture app) => _app = app;
 
-    // Every room template name also appears as an <option> inside the wizard's own select, so a
-    // plain ".card" + HasText match would ambiguously match the wizard card too. Filtering by an
-    // actual <h2> heading (options carry no heading role) finds only the room's own card.
-    private static ILocator AreaCard(IPage page, string name)
-        => page.Locator(".card").Filter(new() { Has = page.GetByRole(AriaRole.Heading, new() { Name = name, Exact = true }) });
+    /// <summary>BottomSheet.razor gives its shell role="dialog" aria-label="Title" - the room's
+    /// own sheet (RoomSheet) and a task's own sheet (TaskOptionsSheet) are both addressable this
+    /// way, and only one is normally open at a time.</summary>
+    private static ILocator Sheet(IPage page, string title) => page.GetByRole(AriaRole.Dialog, new() { Name = title });
+
+    /// <summary>Opens the "Nytt rum" sheet from the Rum grid - the room-template wizard and the
+    /// "tomt rum" fallback both live inside it now (BottomSheet.razor).</summary>
+    private static async Task OpenNewRoomSheetAsync(IPage page)
+    {
+        await page.GetByRole(AriaRole.Button, new() { Name = "Nytt rum" }).ClickAsync();
+        await Sheet(page, "Nytt rum").WaitForAsync();
+    }
+
+    /// <summary>Opens a room's own sheet from its tile - the tile's accessible name is all of
+    /// its text (name, count, badge), so this matches on the room name as a substring.</summary>
+    private static async Task OpenRoomAsync(IPage page, string name)
+    {
+        await page.GetByRole(AriaRole.Button, new() { Name = name }).First.ClickAsync();
+        await Sheet(page, name).WaitForAsync();
+    }
+
+    private static async Task CloseSheetAsync(ILocator sheet) => await sheet.GetByRole(AriaRole.Button, new() { Name = "Stäng" }).ClickAsync();
 
     /// <summary>The household's own tasks, straight from the API - for asserting on scheduling
     /// details (which weekday a task lands on) that the UI itself never displays.</summary>
@@ -37,21 +54,23 @@ public class OmradenTests
             .GetProperty("recurrence").GetProperty("weekday").GetString();
 
     [Fact]
-    public async Task Adding_an_area_lists_it_immediately()
+    public async Task Adding_a_blank_room_lists_it_immediately()
     {
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Cecilia");
 
-        await page.GotoAsync("/omraden");
-        await page.GetByRole(AriaRole.Heading, new() { Name = "Områden", Exact = true }).WaitForAsync();
+        await page.GotoAsync("/rum");
+        await page.GetByRole(AriaRole.Heading, new() { Name = "Rum", Exact = true }).WaitForAsync();
 
-        // The plain, template-free area form is a fallback for groupings that are not a room -
+        await OpenNewRoomSheetAsync(page);
+        // The plain, template-free room form is a fallback for groupings that are not a room -
         // see Creating_a_room_from_a_template_generates_its_checklist for the primary flow.
-        await page.GetByText("Lägg till ett tomt område i stället").ClickAsync();
-        await page.GetByLabel("Nytt område").FillAsync("Tvättstuga");
-        await page.GetByRole(AriaRole.Button, new() { Name = "Lägg till område" }).ClickAsync();
+        await page.GetByText("Lägg till ett tomt rum i stället").ClickAsync();
+        await page.GetByLabel("Rummets namn").FillAsync("Tvättstuga");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Lägg till rum" }).ClickAsync();
+        await CloseSheetAsync(Sheet(page, "Nytt rum"));
 
-        await Assertions.Expect(AreaCard(page, "Tvättstuga")).ToBeVisibleAsync();
+        await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Tvättstuga" })).ToBeVisibleAsync();
     }
 
     [Fact]
@@ -60,20 +79,22 @@ public class OmradenTests
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "David");
 
-        await page.GotoAsync("/omraden");
-        await page.GetByRole(AriaRole.Heading, new() { Name = "Områden", Exact = true }).WaitForAsync();
+        await page.GotoAsync("/rum");
+        await page.GetByRole(AriaRole.Heading, new() { Name = "Rum", Exact = true }).WaitForAsync();
 
+        await OpenNewRoomSheetAsync(page);
         await page.GetByLabel("Rumstyp").SelectOptionAsync(new SelectOptionValue { Label = "Litet wc" });
-        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa" }).ClickAsync();
+        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa", Exact = true }).ClickAsync();
+        await page.GetByText("Skapat, uppskattad tid per rum:").WaitForAsync();
+        await CloseSheetAsync(Sheet(page, "Nytt rum"));
 
-        // No floor name and a single room, so the area takes the template's own label. Its
-        // checklist is shown inline on its own card now - no separate task page to visit.
-        var card = AreaCard(page, "Litet wc");
-        await card.WaitForAsync();
-        // 2+5+2+2+3+3 minutes across the template's six tasks.
-        await Assertions.Expect(card).ToContainTextAsync("6 uppgifter · 17 min");
-        await Assertions.Expect(card.Locator(".list-item", new() { HasText = "Rengör toalettstolen" }))
+        // No floor name and a single room, so the area takes the template's own label.
+        await OpenRoomAsync(page, "Litet wc");
+        var room = Sheet(page, "Litet wc");
+        await Assertions.Expect(room.GetByRole(AriaRole.Button, new() { Name = "Rengör toalettstolen" }))
             .ToBeVisibleAsync();
+        // All six of the template's tasks, one row each.
+        await Assertions.Expect(room.Locator(".task-options-row")).ToHaveCountAsync(6);
     }
 
     [Fact]
@@ -82,20 +103,25 @@ public class OmradenTests
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Hedda");
 
-        await page.GotoAsync("/omraden");
-        await page.GetByRole(AriaRole.Heading, new() { Name = "Områden", Exact = true }).WaitForAsync();
+        await page.GotoAsync("/rum");
+        await page.GetByRole(AriaRole.Heading, new() { Name = "Rum", Exact = true }).WaitForAsync();
 
+        await OpenNewRoomSheetAsync(page);
         await page.GetByLabel("Rumstyp").SelectOptionAsync(new SelectOptionValue { Label = "Litet wc" });
-        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa" }).ClickAsync();
-        await AreaCard(page, "Litet wc").WaitForAsync();
+        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa", Exact = true }).ClickAsync();
+        await page.GetByText("Skapat, uppskattad tid per rum:").WaitForAsync();
+        await CloseSheetAsync(Sheet(page, "Nytt rum"));
 
+        await OpenNewRoomSheetAsync(page);
         await page.GetByLabel("Rumstyp").SelectOptionAsync(new SelectOptionValue { Label = "Kök" });
-        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa" }).ClickAsync();
-        await AreaCard(page, "Kök").WaitForAsync();
+        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa", Exact = true }).ClickAsync();
+        await page.GetByText("Skapat, uppskattad tid per rum:").WaitForAsync();
+        await CloseSheetAsync(Sheet(page, "Nytt rum"));
 
         // Not just the two rooms' own totals (17 + 28) - a household-wide sum shown once,
-        // above the room list, so the answer to "how much time is this whole setup?" does not
-        // require adding up every card by hand.
+        // above the room grid, so the answer to "how much time is this whole setup?" does not
+        // require adding up every room by hand. This total is a flat sum (TotalMinutes),
+        // unlike each RoomTile's own "min/v" figure (frequency-weighted, TaskWorkload).
         await Assertions.Expect(page.GetByText("Totalt: 12 uppgifter · 45 min")).ToBeVisibleAsync();
     }
 
@@ -105,8 +131,8 @@ public class OmradenTests
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Elin");
 
-        await page.GotoAsync("/omraden");
-        await page.GetByRole(AriaRole.Heading, new() { Name = "Områden", Exact = true }).WaitForAsync();
+        await page.GotoAsync("/rum");
+        await OpenNewRoomSheetAsync(page);
 
         // Three bedrooms in one go, instead of repeating the single-room form three times.
         await page.GetByLabel("Rumstyp").SelectOptionAsync(new SelectOptionValue { Label = "Sovrum" });
@@ -116,17 +142,18 @@ public class OmradenTests
         // "Skapa" - otherwise the click can land on a now-shifted target mid-reflow.
         await page.Keyboard.PressAsync("Tab");
         await page.GetByLabel("Vems Sovrum 3").WaitForAsync();
-        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa" }).ClickAsync();
-
-        await Assertions.Expect(AreaCard(page, "Sovrum 1")).ToBeVisibleAsync();
-        await Assertions.Expect(AreaCard(page, "Sovrum 2")).ToBeVisibleAsync();
-        await Assertions.Expect(AreaCard(page, "Sovrum 3")).ToBeVisibleAsync();
+        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa", Exact = true }).ClickAsync();
 
         // Bedroom template: 2+1+5+3+3+5+5+10 = 34 minutes, repeated for each of the three rooms.
         var summary = page.Locator(".notice", new() { HasText = "Skapat, uppskattad tid per rum" });
         await Assertions.Expect(summary.Locator(".list-item", new() { HasText = "Sovrum 1" }))
             .ToContainTextAsync("34 min");
         await Assertions.Expect(summary).ToContainTextAsync("Totalt: 102 min");
+        await CloseSheetAsync(Sheet(page, "Nytt rum"));
+
+        await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Sovrum 1" })).ToBeVisibleAsync();
+        await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Sovrum 2" })).ToBeVisibleAsync();
+        await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Sovrum 3" })).ToBeVisibleAsync();
     }
 
     [Fact]
@@ -135,19 +162,21 @@ public class OmradenTests
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Greta");
 
-        await page.GotoAsync("/omraden");
-        await page.GetByRole(AriaRole.Heading, new() { Name = "Områden", Exact = true }).WaitForAsync();
+        await page.GotoAsync("/rum");
+        await OpenNewRoomSheetAsync(page);
 
         await page.GetByLabel("Rumstyp").SelectOptionAsync(new SelectOptionValue { Label = "Litet wc" });
         // Tasks are checked by default - unchecking one leaves it out of the room entirely.
         await page.GetByLabel("Putsa spegeln").UncheckAsync();
-        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa" }).ClickAsync();
+        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa", Exact = true }).ClickAsync();
+        await page.GetByText("Skapat, uppskattad tid per rum:").WaitForAsync();
+        await CloseSheetAsync(Sheet(page, "Nytt rum"));
 
-        // 17 total minutes minus the excluded task's 2.
-        var card = AreaCard(page, "Litet wc");
-        await Assertions.Expect(card).ToContainTextAsync("5 uppgifter · 15 min");
-        await Assertions.Expect(card.Locator(".list-item", new() { HasText = "Putsa spegeln" })).Not.ToBeVisibleAsync();
-        await Assertions.Expect(card.Locator(".list-item", new() { HasText = "Rengör toalettstolen" })).ToBeVisibleAsync();
+        await OpenRoomAsync(page, "Litet wc");
+        var room = Sheet(page, "Litet wc");
+        await Assertions.Expect(room.Locator(".task-options-row")).ToHaveCountAsync(5);
+        await Assertions.Expect(room.GetByRole(AriaRole.Button, new() { Name = "Putsa spegeln" })).Not.ToBeVisibleAsync();
+        await Assertions.Expect(room.GetByRole(AriaRole.Button, new() { Name = "Rengör toalettstolen" })).ToBeVisibleAsync();
     }
 
     [Fact]
@@ -156,42 +185,48 @@ public class OmradenTests
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Ingrid");
 
-        await page.GotoAsync("/omraden");
+        await page.GotoAsync("/rum");
+        await OpenNewRoomSheetAsync(page);
         await page.GetByLabel("Rumstyp").SelectOptionAsync(new SelectOptionValue { Label = "Litet wc" });
-        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa" }).ClickAsync();
+        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa", Exact = true }).ClickAsync();
+        await page.GetByText("Skapat, uppskattad tid per rum:").WaitForAsync();
+        await CloseSheetAsync(Sheet(page, "Nytt rum"));
 
-        var card = AreaCard(page, "Litet wc");
-        var mirrorRow = card.Locator(".list-item", new() { HasText = "Putsa spegeln" });
-        await mirrorRow.WaitForAsync();
+        await OpenRoomAsync(page, "Litet wc");
+        var room = Sheet(page, "Litet wc");
 
         // This is the actual ask: removing one activity from a room the household already has,
         // not just excluding it up front in the wizard (see Unchecking_a_template_task_...).
-        await mirrorRow.GetByRole(AriaRole.Button, new() { Name = "Ta bort" }).ClickAsync();
+        await room.GetByRole(AriaRole.Button, new() { Name = "Putsa spegeln" }).ClickAsync();
+        var taskSheet = Sheet(page, "Putsa spegeln");
+        await taskSheet.WaitForAsync();
+        await taskSheet.GetByRole(AriaRole.Button, new() { Name = "Ta bort uppgiften" }).ClickAsync();
 
-        await Assertions.Expect(card.Locator(".list-item", new() { HasText = "Putsa spegeln" })).Not.ToBeVisibleAsync();
-        await Assertions.Expect(card).ToContainTextAsync("5 uppgifter · 15 min");
+        await Assertions.Expect(room.GetByRole(AriaRole.Button, new() { Name = "Putsa spegeln" })).Not.ToBeVisibleAsync();
+        await Assertions.Expect(room.Locator(".task-options-row")).ToHaveCountAsync(5);
     }
 
     [Fact]
-    public async Task Removing_a_room_takes_it_off_the_list()
+    public async Task Removing_a_room_takes_it_off_the_grid()
     {
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Henrietta");
 
-        await page.GotoAsync("/omraden");
-        await page.GetByText("Lägg till ett tomt område i stället").ClickAsync();
-        await page.GetByLabel("Nytt område").FillAsync("Tvättstuga");
-        await page.GetByRole(AriaRole.Button, new() { Name = "Lägg till område" }).ClickAsync();
+        await page.GotoAsync("/rum");
+        await OpenNewRoomSheetAsync(page);
+        await page.GetByText("Lägg till ett tomt rum i stället").ClickAsync();
+        await page.GetByLabel("Rummets namn").FillAsync("Tvättstuga");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Lägg till rum" }).ClickAsync();
+        await CloseSheetAsync(Sheet(page, "Nytt rum"));
 
-        var card = AreaCard(page, "Tvättstuga");
-        await card.WaitForAsync();
+        await OpenRoomAsync(page, "Tvättstuga");
+        var room = Sheet(page, "Tvättstuga");
 
         // A room can have been created by mistake, or the household changed - see Area.Deactivate.
-        // The button's accessible name is "Ta bort {rummet}" (its aria-label), not its visible
-        // "Ta bort rum" text - aria-label wins over text content for the accessible name.
-        await card.GetByRole(AriaRole.Button, new() { Name = "Ta bort" }).ClickAsync();
+        await room.GetByRole(AriaRole.Button, new() { Name = "Rummets meny" }).ClickAsync();
+        await room.GetByRole(AriaRole.Button, new() { Name = "Ta bort rum" }).ClickAsync();
 
-        await Assertions.Expect(AreaCard(page, "Tvättstuga")).Not.ToBeVisibleAsync();
+        await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Tvättstuga" })).Not.ToBeVisibleAsync();
     }
 
     [Fact]
@@ -200,14 +235,16 @@ public class OmradenTests
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Fredrik");
 
-        await page.GotoAsync("/omraden");
-        await page.GetByRole(AriaRole.Heading, new() { Name = "Områden", Exact = true }).WaitForAsync();
+        await page.GotoAsync("/rum");
+        await OpenNewRoomSheetAsync(page);
 
         await page.GetByLabel("Våning (valfritt)").FillAsync("Våning 1");
         await page.GetByLabel("Rumstyp").SelectOptionAsync(new SelectOptionValue { Label = "Kök" });
-        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa" }).ClickAsync();
+        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa", Exact = true }).ClickAsync();
+        await page.GetByText("Skapat, uppskattad tid per rum:").WaitForAsync();
+        await CloseSheetAsync(Sheet(page, "Nytt rum"));
 
-        await Assertions.Expect(AreaCard(page, "Våning 1 – Kök")).ToBeVisibleAsync();
+        await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Våning 1 – Kök" })).ToBeVisibleAsync();
     }
 
     [Fact]
@@ -223,14 +260,17 @@ public class OmradenTests
         await page.GetByRole(AriaRole.Button, new() { Name = "Lägg till medlem" }).ClickAsync();
         await page.Locator(".list-item", new() { HasText = "Vera" }).WaitForAsync();
 
-        await page.GotoAsync("/omraden");
+        await page.GotoAsync("/rum");
+        await OpenNewRoomSheetAsync(page);
         await page.GetByLabel("Rumstyp").SelectOptionAsync(new SelectOptionValue { Label = "Sovrum" });
         await page.GetByLabel("Vems sovrum").SelectOptionAsync(new SelectOptionValue { Label = "Vera" });
-        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa" }).ClickAsync();
+        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa", Exact = true }).ClickAsync();
+        await page.GetByText("Skapat, uppskattad tid per rum:").WaitForAsync();
+        await CloseSheetAsync(Sheet(page, "Nytt rum"));
 
-        var card = AreaCard(page, "Sovrum");
-        var bedRow = card.Locator(".list-item", new() { HasText = "Bädda sängen" });
-        await bedRow.WaitForAsync();
+        await OpenRoomAsync(page, "Sovrum");
+        var room = Sheet(page, "Sovrum");
+        var bedRow = room.GetByRole(AriaRole.Button, new() { Name = "Bädda sängen" });
         await Assertions.Expect(bedRow).ToContainTextAsync("Vera");
         await Assertions.Expect(bedRow).Not.ToContainTextAsync("roterar");
     }
@@ -241,18 +281,21 @@ public class OmradenTests
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Lovisa");
 
-        await page.GotoAsync("/omraden");
+        await page.GotoAsync("/rum");
+        await OpenNewRoomSheetAsync(page);
         await page.GetByLabel("Rumstyp").SelectOptionAsync(new SelectOptionValue { Label = "Sovrum" });
-        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa" }).ClickAsync();
+        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa", Exact = true }).ClickAsync();
+        await page.GetByText("Skapat, uppskattad tid per rum:").WaitForAsync();
+        await CloseSheetAsync(Sheet(page, "Nytt rum"));
 
         // Ladders and more care than most chores here - kept off children's rotation by
         // default (see RoomTemplates.Bedroom), unlike the room's everyday tasks.
-        var card = AreaCard(page, "Sovrum");
-        var windowRow = card.Locator(".list-item", new() { HasText = "Tvätta fönster" });
-        await windowRow.WaitForAsync();
+        await OpenRoomAsync(page, "Sovrum");
+        var room = Sheet(page, "Sovrum");
+        var windowRow = room.GetByRole(AriaRole.Button, new() { Name = "Tvätta fönster" });
         await Assertions.Expect(windowRow).ToContainTextAsync("endast vuxna");
 
-        await Assertions.Expect(card.Locator(".list-item", new() { HasText = "Bädda sängen" }))
+        await Assertions.Expect(room.GetByRole(AriaRole.Button, new() { Name = "Bädda sängen" }))
             .Not.ToContainTextAsync("endast vuxna");
     }
 
@@ -262,14 +305,17 @@ public class OmradenTests
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Ida");
 
-        await page.GotoAsync("/omraden");
-        await page.GetByText("Lägg till en uppgift i Övrigt").ClickAsync();
-        await page.GetByLabel("Namn").FillAsync("Putsa fönster");
-        await page.GetByLabel("Upprepning").SelectOptionAsync("AsNeeded");
-        await page.GetByRole(AriaRole.Button, new() { Name = "Lägg till uppgift" }).ClickAsync();
+        await page.GotoAsync("/rum");
+        await OpenRoomAsync(page, "Övrigt");
+        var room = Sheet(page, "Övrigt");
 
-        var row = page.Locator(".list-item", new() { HasText = "Putsa fönster" });
-        await row.WaitForAsync();
+        await room.GetByRole(AriaRole.Button, new() { Name = "Lägg till uppgift" }).ClickAsync();
+        var addSheet = Sheet(page, "Lägg till uppgift i Övrigt");
+        await addSheet.GetByLabel("Namn").FillAsync("Putsa fönster");
+        await addSheet.GetByLabel("Upprepning").SelectOptionAsync("AsNeeded");
+        await addSheet.GetByRole(AriaRole.Button, new() { Name = "Lägg till uppgift" }).ClickAsync();
+
+        var row = room.GetByRole(AriaRole.Button, new() { Name = "Putsa fönster" });
         await Assertions.Expect(row).ToContainTextAsync("vid behov");
     }
 
@@ -279,18 +325,20 @@ public class OmradenTests
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Karin");
 
-        await page.GotoAsync("/omraden");
-        await page.GetByText("Lägg till vanliga hushållssysslor").ClickAsync();
-        // Nothing is preselected - it varies too much between households (see GeneralTaskTemplates).
-        await page.GetByLabel("Rasta hunden").CheckAsync();
-        await page.GetByRole(AriaRole.Button, new() { Name = "Lägg till valda" }).ClickAsync();
+        await page.GotoAsync("/rum");
+        await OpenRoomAsync(page, "Övrigt");
+        var room = Sheet(page, "Övrigt");
 
-        var row = page.Locator(".list-item", new() { HasText = "Rasta hunden" });
-        await row.WaitForAsync();
+        await room.GetByText("Lägg till vanliga hushållssysslor").ClickAsync();
+        // Nothing is preselected - it varies too much between households (see GeneralTaskTemplates).
+        await room.GetByLabel("Rasta hunden").CheckAsync();
+        await room.GetByRole(AriaRole.Button, new() { Name = "Lägg till valda" }).ClickAsync();
+
+        var row = room.GetByRole(AriaRole.Button, new() { Name = "Rasta hunden" });
         await Assertions.Expect(row).ToContainTextAsync("varje dag");
 
         // Only the checked chore was created - the rest of the list is still just suggestions.
-        await Assertions.Expect(page.Locator(".list-item", new() { HasText = "Handla mat" })).Not.ToBeVisibleAsync();
+        await Assertions.Expect(room.GetByRole(AriaRole.Button, new() { Name = "Handla mat" })).Not.ToBeVisibleAsync();
     }
 
     [Fact]
@@ -299,17 +347,16 @@ public class OmradenTests
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Hilda");
 
-        await page.GotoAsync("/omraden");
+        await page.GotoAsync("/rum");
+        await OpenNewRoomSheetAsync(page);
         await page.GetByLabel("Rumstyp").SelectOptionAsync(new SelectOptionValue { Label = "Litet wc" });
         await page.GetByText("+ Lägg till fler rum").ClickAsync();
         await page.GetByLabel("Rumstyp").Nth(1).SelectOptionAsync(new SelectOptionValue { Label = "Kök" });
         // Selecting the second room's type renders its own checklist, shifting the layout below
         // it - wait for that to settle before the submit click lands on a stable target.
         await page.GetByLabel("Rengör spisen").WaitForAsync();
-        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa" }).ClickAsync();
-
-        await AreaCard(page, "Litet wc").WaitForAsync();
-        await AreaCard(page, "Kök").WaitForAsync();
+        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa", Exact = true }).ClickAsync();
+        await page.GetByText("Skapat, uppskattad tid per rum:").WaitForAsync();
 
         var tasks = await FetchTasksAsync(page);
 
@@ -326,32 +373,35 @@ public class OmradenTests
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Ivar");
 
-        await page.GotoAsync("/omraden");
+        await page.GotoAsync("/rum");
+        await OpenNewRoomSheetAsync(page);
         await page.GetByLabel("Rumstyp").SelectOptionAsync(new SelectOptionValue { Label = "Litet wc" });
-        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa" }).ClickAsync();
-        await AreaCard(page, "Litet wc").WaitForAsync();
+        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa", Exact = true }).ClickAsync();
+        await page.GetByText("Skapat, uppskattad tid per rum:").WaitForAsync();
+        await CloseSheetAsync(Sheet(page, "Nytt rum"));
 
         // The manual add-a-task form (unlike the room wizard) always anchors a new weekly task
         // to today - simulating the real-world case this feature exists for: tasks added to
         // different rooms over time that happen to collide on the same weekday.
-        await page.GetByText("Lägg till ett tomt område i stället").ClickAsync();
-        await page.GetByLabel("Nytt område").FillAsync("Tvättstuga");
-        await page.GetByRole(AriaRole.Button, new() { Name = "Lägg till område" }).ClickAsync();
-        await AreaCard(page, "Tvättstuga").WaitForAsync();
+        await OpenNewRoomSheetAsync(page);
+        await page.GetByText("Lägg till ett tomt rum i stället").ClickAsync();
+        await page.GetByLabel("Rummets namn").FillAsync("Tvättstuga");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Lägg till rum" }).ClickAsync();
+        await CloseSheetAsync(Sheet(page, "Nytt rum"));
 
-        // Every room's own "Lägg till en uppgift"-form exists in the DOM at once (just
-        // collapsed), so the fields must be scoped to Tvättstuga's card specifically - a bare
-        // GetByLabel("Namn") would match all of them at once.
-        var tvattstugaCard = AreaCard(page, "Tvättstuga");
-        await tvattstugaCard.GetByText("Lägg till en uppgift i Tvättstuga").ClickAsync();
-        await tvattstugaCard.GetByLabel("Namn").FillAsync("Byt handdukar");
-        await tvattstugaCard.GetByLabel("Upprepning").SelectOptionAsync("Weekly");
-        await tvattstugaCard.GetByRole(AriaRole.Button, new() { Name = "Lägg till uppgift" }).ClickAsync();
-        await page.Locator(".list-item", new() { HasText = "Byt handdukar" }).WaitForAsync();
+        await OpenRoomAsync(page, "Tvättstuga");
+        var tvattstuga = Sheet(page, "Tvättstuga");
+        await tvattstuga.GetByRole(AriaRole.Button, new() { Name = "Lägg till uppgift" }).ClickAsync();
+        var addSheet = Sheet(page, "Lägg till uppgift i Tvättstuga");
+        await addSheet.GetByLabel("Namn").FillAsync("Byt handdukar");
+        await addSheet.GetByLabel("Upprepning").SelectOptionAsync("Weekly");
+        await addSheet.GetByRole(AriaRole.Button, new() { Name = "Lägg till uppgift" }).ClickAsync();
+        await tvattstuga.GetByRole(AriaRole.Button, new() { Name = "Byt handdukar" }).WaitForAsync();
 
         var beforeTasks = await FetchTasksAsync(page);
         Assert.Equal(WeekdayOf(beforeTasks, "Torka av handfatet"), WeekdayOf(beforeTasks, "Byt handdukar"));
 
+        await page.GotoAsync("/vecka");
         await page.GetByText("Ser fördelningen skev ut?").ClickAsync();
         await page.GetByRole(AriaRole.Button, new() { Name = "Sprid ut över veckan" }).ClickAsync();
         // Confirms the rebalance actually reported moving something, not just that the button

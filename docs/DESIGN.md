@@ -199,9 +199,11 @@ domänen.
 Helt läsläge; rollen (se §6b) är enda sättet att ändra veckan.
 
 "Tjuvkika på ett schema" (en titt på i morgon, eller på någon annans dag, skrivskyddat) bor nu
-här i stället för på Idag – samma disclosure och logik, oförändrad, bara flyttad. Vecka blir
-här formellt sett bara mottagare av en flyttad funktion; den egna omdesignen av sidan (veckogrid
-som hjälte, se konceptartefakten) är fortfarande steg 4.
+här i stället för på Idag – samma disclosure och logik, oförändrad, bara flyttad. "Ser
+fördelningen skev ut?" (sprid om återkommande uppgifter över veckan, `RebalanceSchedule`) bor
+nu här också - flyttad hit från Rum. Vecka blir här formellt sett bara mottagare av två
+flyttade funktioner; den egna omdesignen av sidan (veckogrid som hjälte, se
+konceptartefakten) är fortfarande steg 4.
 
 ### Hushållsöversikt
 
@@ -218,21 +220,43 @@ förväxlingsbara siffror/bokstäver) och en knapp för att skapa en ny om koden
 händer. Den delas manuellt (ingen e-post/länk ännu) - personen som bjuds in anger koden på
 sin egen "Skapa konto"-skärm i stället för att döpa ett nytt hushåll.
 
-### Områden
+"Känns det som att en person gör för mycket?" (ombalansera roterande ansvar,
+`RebalanceTaskAssignments`) bor nu här - flyttad hit från Rum, samma disclosure och logik.
+
+### Rum (`Rum.razor`, route `/rum`)
 
 Hemmets rum, och all uppgiftshantering, samlat på ett ställe - det finns ingen egen
-"Uppgifter"-sida längre (produktfeedback: kändes konstigt att hantera uppgifter någon
-annanstans än i rummet de redan hör till). Formuläret "Lägg till en våning" (se §6b) är
-förstahandsvägen till nya rum; ett tomt, namnlöst område ligger bakom disclosuren "Lägg till
-ett tomt område i stället", för grupperingar som inte är ett rum (t.ex. "Hund", "Garage").
+"Uppgifter"-sida (produktfeedback: kändes konstigt att hantera uppgifter någon annanstans än
+i rummet de redan hör till).
 
-Varje befintligt rum är ett eget kort: namn, antal uppgifter och total uppskattad tid, en
-"Ta bort rum"-knapp, listan över rummets egna uppgifter (var och en med sin frekvens och en
-egen "Ta bort"-knapp), och en dold "Lägg till en uppgift i `<rum>`"-disclosure för att lägga
-till fler för hand. Ett sista kort, "Övrigt", samlar uppgifter som inte hör till något
-särskilt rum. Att kunna ta bort en enskild uppgift - inte bara hela rummet - är i sig ett
-direkt svar på feedback: annars fanns inget sätt att bli av med en uppgift i ett redan
-skapat rum.
+Rubrik "Rum". Har hushållet fler än en våning: en segmentkontroll överst väljer vilken -
+härledd från rumnamnens "Våning – "-prefix (`Rum.razor.FloorOf`), eftersom våning inte är ett
+eget fält i domänen och att lägga till ett är utanför vad ett klient-bara steg får göra; ett
+rum som byts namn för hand så prefixet försvinner hamnar i "Annat". Under: `RoomTile.razor` i
+två kolumner (en under 360px) - namn, "N uppgifter · M min/v", och en saffran-soft "N idag"
+om den inloggade medlemmen har något där idag, annars "Nästa: veckodag" i gustav-ink (kapat
+vid 7 dagars sökning, delad över alla brickor i ett svep - se `LoadTodayAndNextAsync`). Ett
+"Övrigt"-rum utan riktigt `Area` samlar rumslösa uppgifter, alltid synligt. Sist en streckad
+"+ Nytt rum"-bricka.
+
+Att trycka på en bricka öppnar `Components/RoomSheet.razor`: rummets uppgifter som en enkel
+lista (namn, upprepning, minuter, "roterar"/medlemsnamn, "endast vuxna"), en "Rummets meny"
+(⋯) med "Ändra frekvens för hela rummet"/"Byt namn"/"Ta bort rum", och en "+ Lägg till
+uppgift"-rad. Att trycka på en uppgift öppnar `Components/TaskOptionsSheet.razor`:
+Upprepning/Vem gör det/Rum som varsin rad som drillar ner till ett eget litet formulär inuti
+samma ark, en "Kräver vuxen"-växel, och "Ta bort uppgiften" i rönn-ink längst ner. "+ Nytt
+rum" öppnar ett ark med rumsmalls-väljaren (namnge våning, rumstyp, antal - se §6b) och en
+disclosure "Lägg till ett tomt rum i stället" för grupperingar som inte är ett rum (t.ex.
+"Hund", "Garage").
+
+Totalrad "Totalt: N uppgifter · M min" (en platt summa, till skillnad från varje bricka
+egen viktade "min/v") behålls som dämpad text under brickorna, tillsammans med den
+frekvensviktade veckosumman och hushållets samlade veckokapacitet - se "Beslut:
+`TaskWorkload`" i ARCHITECTURE.md.
+
+"Känns det som att en person gör för mycket?" (ombalansera ansvar) flyttade till Hushåll;
+"Ser fördelningen skev ut?" (sprid om schemat) flyttade till Vecka - se docs/ARCHITECTURE.md
+"Ny form".
 
 ### 6a. Tid hanteras i bakgrunden, visas aldrig
 
@@ -248,6 +272,11 @@ ett internt planeringsverktyg, inte något användaren ska behöva förhålla si
 även ett litet, kvalitativt val: dagens tillfälliga avvikelse (`availableMinutes`) går
 fortfarande att sätta via API:t, men har ingen knapp någonstans i gränssnittet längre - även
 det visade sig kännas som "tid som ett val".
+
+Undantaget gäller uttryckligen bara den dagliga vyn (Idag). Rum-skärmens `RoomTile`/
+`RoomSheet` visar minuter per rum och per uppgift ("N min/v", "M min") - samma redan
+etablerade undantag som `Omraden.razor`s totalrad alltid haft: under planering av hemmet är
+"hur lång tid tar det här?" en rimlig fråga att svara på med en siffra.
 
 ### 6b. Roller och rumsmallar – färre val vid start
 

@@ -1,0 +1,36 @@
+@* One room on Rum - see docs/DESIGN.md. *@
+<button type="button" class="room-tile" @onclick="OnClick">
+    <span class="room-tile-name">@Name</span>
+    <span class="room-tile-meta muted small">@TaskCount uppgifter · @WeeklyMinutes min/v</span>
+    @if (TodayCount > 0)
+    {
+        <span class="chip chip-today room-tile-badge">@TodayCount idag</span>
+    }
+    else if (NextDayLabel is not null)
+    {
+        <span class="room-tile-next">Nästa: @NextDayLabel</span>
+    }
+</button>
+
+@code {
+    [Parameter, EditorRequired]
+    public string Name { get; set; } = string.Empty;
+
+    [Parameter]
+    public int TaskCount { get; set; }
+
+    [Parameter]
+    public int WeeklyMinutes { get; set; }
+
+    /// <summary>How many of this room's tasks are on the viewer's own day today - see
+    /// Rum.razor for why this reads the signed-in member's plan rather than the household's.</summary>
+    [Parameter]
+    public int TodayCount { get; set; }
+
+    /// <summary>Swedish weekday name, lowercase - shown only when <see cref="TodayCount"/> is 0.</summary>
+    [Parameter]
+    public string? NextDayLabel { get; set; }
+
+    [Parameter, EditorRequired]
+    public EventCallback OnClick { get; set; }
+}

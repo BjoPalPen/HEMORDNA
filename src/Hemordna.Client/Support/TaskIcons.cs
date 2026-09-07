@@ -4,7 +4,7 @@ namespace Hemordna.Client.Support;
 /// A small icon per activity, guessed from its name (falling back to its area) - what "Bild +
 /// text" (see Installningar.razor's PresentationOptions) actually shows. <see cref="For"/>
 /// returns a Material Symbols icon name; the matching SVG lives at
-/// wwwroot/icons/tasks/{name}.svg - see RoomTasks.razor/MinDag.razor for how it is rendered,
+/// wwwroot/icons/tasks/{name}.svg - see MinDag.razor for how it is rendered,
 /// and <see cref="DefaultIcon"/> for the guaranteed-to-exist fallback.
 /// </summary>
 public static class TaskIcons

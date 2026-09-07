@@ -3,7 +3,7 @@
 </svg>
 
 @code {
-    /// <summary>One of: sun, grid, calendar, people, chevron-right, plus, check.</summary>
+    /// <summary>One of: sun, grid, calendar, people, chevron-right, plus, check, more.</summary>
     [Parameter, EditorRequired]
     public string Name { get; set; } = string.Empty;
 
@@ -19,6 +19,7 @@
         "chevron-right" => """<path d="M9 5l7 7-7 7"/>""",
         "plus" => """<path d="M12 5v14M5 12h14"/>""",
         "check" => """<path d="M5 13l4 4L19 7"/>""",
+        "more" => """<circle cx="5" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.6" fill="currentColor" stroke="none"/>""",
         _ => string.Empty,
     });
 }

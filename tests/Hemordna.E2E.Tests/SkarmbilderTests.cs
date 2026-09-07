@@ -56,17 +56,29 @@ public class SkarmbilderTests
         // Seed content: a kitchen and a bedroom from templates - both carry daily tasks, so
         // "Idag" has at least three real tasks rather than an empty state.
         await page.GotoAsync("/rum");
-        await page.GetByRole(AriaRole.Heading, new() { Name = "Områden", Exact = true }).WaitForAsync();
+        await page.GetByRole(AriaRole.Heading, new() { Name = "Rum", Exact = true }).WaitForAsync();
+
+        await page.GetByRole(AriaRole.Button, new() { Name = "Nytt rum" }).ClickAsync();
+        var newRoomSheet = page.GetByRole(AriaRole.Dialog, new() { Name = "Nytt rum" });
 
         var roomRows = page.Locator(".floor-room-row");
         await roomRows.Nth(0).GetByLabel("Rumstyp").SelectOptionAsync(new SelectOptionValue { Label = "Kök" });
-        await page.GetByRole(AriaRole.Button, new() { Name = "+ Lägg till fler rum" }).ClickAsync();
+        await page.GetByText("+ Lägg till fler rum").ClickAsync();
         await roomRows.Nth(1).GetByLabel("Rumstyp").SelectOptionAsync(new SelectOptionValue { Label = "Sovrum" });
 
         var createFloorButton = page.GetByRole(AriaRole.Button, new() { Name = "Skapa", Exact = true });
         await createFloorButton.ClickAsync();
         await page.GetByText("Skapat, uppskattad tid per rum:").WaitForAsync(new() { Timeout = 10_000 });
+        await ShootAsync(page, "03-nytt-rum-sheet");
+        await newRoomSheet.GetByRole(AriaRole.Button, new() { Name = "Stäng" }).ClickAsync();
         await ShootAsync(page, "03-rum");
+
+        // A room's own sheet (RoomSheet.razor), the primary new surface this step adds.
+        await page.GetByRole(AriaRole.Button, new() { Name = "Kök" }).First.ClickAsync();
+        var kitchenSheet = page.GetByRole(AriaRole.Dialog, new() { Name = "Kök" });
+        await kitchenSheet.WaitForAsync();
+        await ShootAsync(page, "03z-room-sheet");
+        await kitchenSheet.GetByRole(AriaRole.Button, new() { Name = "Stäng" }).ClickAsync();
 
         // A second member, so "Hushåll" shows more than a single avatar.
         await page.GotoAsync("/hushall");
@@ -96,7 +108,7 @@ public class SkarmbilderTests
         await page.GotoAsync("/");
         await page.Locator("h1", new() { HasText = "Anna" }).WaitForAsync();
 
-        await page.GotoAsync("/rum");
+        await page.GotoAsync("/hushall");
         await page.GetByText("Känns det som att en person gör för mycket?").ClickAsync();
 
         var rebalanceButton = page.GetByRole(AriaRole.Button, new() { Name = "Balansera om vem som gör vad" });
@@ -134,7 +146,7 @@ public class SkarmbilderTests
         await ShootAsync(page, "11-idag-mobil");
 
         await page.GotoAsync("/rum");
-        await page.GetByRole(AriaRole.Heading, new() { Name = "Områden", Exact = true }).WaitForAsync();
+        await page.GetByRole(AriaRole.Heading, new() { Name = "Rum", Exact = true }).WaitForAsync();
         await ShootAsync(page, "12-rum-mobil");
 
         await page.GotoAsync("/vecka");

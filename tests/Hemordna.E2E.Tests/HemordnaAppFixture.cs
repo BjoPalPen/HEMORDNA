@@ -67,6 +67,18 @@ public sealed class HemordnaAppFixture : IAsyncLifetime
         });
     }
 
+    // All test classes share one collection (HemordnaAppCollection), so xUnit runs them one at
+    // a time, never in parallel with each other - but no test ever closes the context(s) it
+    // opens. Left untracked, a full run's worth of contexts (and their renderer processes) pile
+    // up for the run's entire duration rather than each test's own, which is what actually made
+    // a full-suite run slow and prone to timeouts under load, not parallel test execution.
+    private readonly Queue<IBrowserContext> _recentContexts = new();
+
+    // A test needing two pages at once (e.g. HouseholdInviteTests' owner + joiner) calls
+    // NewPageAsync twice in a row before using either - keeping this many "recent" contexts
+    // alive covers that without waiting for a test to finish before its own second page exists.
+    private const int RecentContextsToKeep = 3;
+
     /// <summary>
     /// A fresh browser context, so no test inherits another's stored token. Pass
     /// <paramref name="locale"/> to pin the browser language - Blazor picks its globalization
@@ -80,6 +92,13 @@ public sealed class HemordnaAppFixture : IAsyncLifetime
             ViewportSize = new ViewportSize { Width = 1280, Height = 900 },
             Locale = locale
         });
+
+        _recentContexts.Enqueue(context);
+
+        while (_recentContexts.Count > RecentContextsToKeep)
+        {
+            await _recentContexts.Dequeue().CloseAsync();
+        }
 
         return await context.NewPageAsync();
     }

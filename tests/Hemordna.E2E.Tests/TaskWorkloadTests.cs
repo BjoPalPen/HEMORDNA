@@ -15,20 +15,26 @@ public class TaskWorkloadTests
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Nora");
 
-        await page.GotoAsync("/omraden");
-        await page.GetByText("Lägg till ett tomt område i stället").ClickAsync();
-        await page.GetByLabel("Nytt område").FillAsync("Kök");
-        await page.GetByRole(AriaRole.Button, new() { Name = "Lägg till område" }).ClickAsync();
+        await page.GotoAsync("/rum");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Nytt rum" }).ClickAsync();
+        var newRoomSheet = page.GetByRole(AriaRole.Dialog, new() { Name = "Nytt rum" });
+        await page.GetByText("Lägg till ett tomt rum i stället").ClickAsync();
+        await page.GetByLabel("Rummets namn").FillAsync("Kök");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Lägg till rum" }).ClickAsync();
+        await newRoomSheet.GetByRole(AriaRole.Button, new() { Name = "Stäng" }).ClickAsync();
 
-        var kitchenCard = page.Locator(".card")
-            .Filter(new() { Has = page.GetByRole(AriaRole.Heading, new() { Name = "Kök", Exact = true }) });
-        await kitchenCard.WaitForAsync();
+        await page.GetByRole(AriaRole.Button, new() { Name = "Kök" }).First.ClickAsync();
+        var room = page.GetByRole(AriaRole.Dialog, new() { Name = "Kök" });
+        await room.WaitForAsync();
 
-        await kitchenCard.GetByText("Lägg till en uppgift i Kök").ClickAsync();
-        await kitchenCard.GetByLabel("Namn").FillAsync("Diska");
-        await kitchenCard.GetByRole(AriaRole.Button, new() { Name = "Lite tid" }).ClickAsync(); // 15 min
-        await kitchenCard.GetByLabel("Upprepning").SelectOptionAsync("Daily");
-        await kitchenCard.GetByRole(AriaRole.Button, new() { Name = "Lägg till uppgift" }).ClickAsync();
+        await room.GetByRole(AriaRole.Button, new() { Name = "Lägg till uppgift" }).ClickAsync();
+        var addSheet = page.GetByRole(AriaRole.Dialog, new() { Name = "Lägg till uppgift i Kök" });
+        await addSheet.GetByLabel("Namn").FillAsync("Diska");
+        await addSheet.GetByRole(AriaRole.Button, new() { Name = "Lite tid" }).ClickAsync(); // 15 min
+        await addSheet.GetByLabel("Upprepning").SelectOptionAsync("Daily");
+        await addSheet.GetByRole(AriaRole.Button, new() { Name = "Lägg till uppgift" }).ClickAsync();
+        await room.GetByRole(AriaRole.Button, new() { Name = "Diska" }).WaitForAsync();
+        await room.GetByRole(AriaRole.Button, new() { Name = "Stäng" }).ClickAsync();
 
         // A daily 15-minute task is ~105 min/week (15 * 7) - very different from the flat,
         // frequency-blind "Totalt: ... min" figure, which would only ever show 15.

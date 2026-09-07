@@ -36,6 +36,25 @@ else
         }
     </ul>
 
+    <details class="more-options">
+        <summary>Ser fördelningen skev ut?</summary>
+        <p class="muted small">
+            Sprider om återkommande uppgifter över veckans (eller månadens) dagar, så inte allt
+            landar samma dag - t.ex. för att flera rum sattes upp i samma veva. Uppgifter i
+            samma rum hålls ihop på sin egen dag; det är bara vilken dag som ändras, redan
+            schemalagda uppgifter påverkas inte.
+        </p>
+
+        @if (_rebalanceMessage is { } rebalanceMessage)
+        {
+            <div class="notice" role="status">@rebalanceMessage</div>
+        }
+
+        <button type="button" class="btn btn-secondary" disabled="@_rebalancing" @onclick="RebalanceScheduleAsync">
+            @(_rebalancing ? "Sprider ut..." : "Sprid ut över veckan")
+        </button>
+    </details>
+
     <details class="more-options" @ontoggle="OnPeekToggled">
         <summary>Tjuvkika på ett schema</summary>
         <p class="muted small">
@@ -117,6 +136,9 @@ else
     private DailyPlanResponse? _peekDay;
     private bool _peekBusy;
 
+    private string? _rebalanceMessage;
+    private bool _rebalancing;
+
     protected override async Task OnInitializedAsync()
     {
         await Session.EnsureLoadedAsync();
@@ -149,6 +171,35 @@ else
     private static string MinutesLabelFor(int minutes) => minutes == 0 ? "Ingen tid" : $"{minutes} min";
 
     private DateOnly Today => DateOnly.FromDateTime(TimeProvider.GetLocalNow().DateTime);
+
+    private async Task RebalanceScheduleAsync()
+    {
+        if (Session.Me is not { HouseholdId: { } householdId })
+        {
+            return;
+        }
+
+        _rebalancing = true;
+        _rebalanceMessage = null;
+
+        try
+        {
+            if (await Api.RebalanceScheduleAsync(householdId) is { } result)
+            {
+                _rebalanceMessage = result.ChangedTaskCount switch
+                {
+                    0 => "Redan bra utspritt - ingenting att ändra.",
+                    1 => "En uppgift flyttades till en annan dag.",
+                    _ => $"{result.ChangedTaskCount} uppgifter flyttades till andra dagar."
+                };
+                await LoadAsync();
+            }
+        }
+        finally
+        {
+            _rebalancing = false;
+        }
+    }
 
     /// <summary>
     /// Loads the household's member list the first time the "Tjuvkika" details is opened,

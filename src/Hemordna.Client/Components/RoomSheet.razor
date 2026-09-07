@@ -1,0 +1,555 @@
+@using Hemordna.Client.Support
+@inject HemordnaApiClient Api
+@inject TimeProvider TimeProvider
+
+<BottomSheet Title="@Label" IsOpen="IsOpen" IsOpenChanged="OnIsOpenChanged">
+    @switch (_roomView)
+    {
+        case RoomView.Rename:
+            <label class="field">
+                <span>Nytt namn</span>
+                <InputText @bind-Value="_renameName" />
+            </label>
+
+            @if (_message is { } renameMessage)
+            {
+                <div class="notice notice-problem" role="alert">@renameMessage</div>
+            }
+
+            <button type="button" class="btn btn-primary btn-block" disabled="@_busy" @onclick="SaveRenameAsync">
+                @(_busy ? "Sparar..." : "Spara")
+            </button>
+            <button type="button" class="btn btn-link" @onclick="() => _roomView = RoomView.Tasks">Avbryt</button>
+            break;
+
+        case RoomView.BulkFrequency:
+            <p class="muted small">
+                Sätter samma upprepning på alla @VisibleTasks.Count uppgifter i @Label på en gång.
+            </p>
+
+            <label class="field">
+                <span>Ny upprepning för hela @Label</span>
+                <select @bind="_bulkRecurrence">
+                    <option value="">Ingen - schemaläggs för hand</option>
+                    <option value="Daily">Varje dag</option>
+                    <option value="Weekly">Varje vecka</option>
+                    <option value="Monthly">Varje månad</option>
+                    <option value="AsNeeded">Vid behov</option>
+                </select>
+            </label>
+
+            @if (IntervalLabel(_bulkRecurrence) is { } bulkIntervalLabel)
+            {
+                <label class="field">
+                    <span>@bulkIntervalLabel</span>
+                    <input type="number" min="1" max="52" @bind="_bulkInterval" />
+                </label>
+            }
+
+            @if (_message is { } bulkMessage)
+            {
+                <div class="notice" role="status">@bulkMessage</div>
+            }
+
+            <button type="button" class="btn btn-primary btn-block" disabled="@_busy" @onclick="SaveBulkFrequencyAsync">
+                @(_busy ? "Sparar..." : $"Spara för alla {VisibleTasks.Count} uppgifter")
+            </button>
+            <button type="button" class="btn btn-link" @onclick="() => _roomView = RoomView.Tasks">Till uppgifterna</button>
+            break;
+
+        default:
+            @if (AreaId is { } realAreaId)
+            {
+                <div class="room-sheet-menu">
+                    <button type="button" class="chip-action" @onclick="() => _showMenu = !_showMenu">
+                        <Icon Name="more" Size="18" />
+                        Rummets meny
+                    </button>
+
+                    @if (_showMenu)
+                    {
+                        <ul class="list" aria-label="Rummets meny">
+                            <li class="list-item list-item-flush">
+                                <button type="button" class="task-options-row" @onclick="() => { _roomView = RoomView.BulkFrequency; _showMenu = false; }">
+                                    Ändra frekvens för hela rummet
+                                </button>
+                            </li>
+                            <li class="list-item list-item-flush">
+                                <button type="button" class="task-options-row" @onclick="() => { _renameName = Label; _roomView = RoomView.Rename; _showMenu = false; }">
+                                    Byt namn
+                                </button>
+                            </li>
+                            <li class="list-item list-item-flush">
+                                <button type="button" class="task-options-row task-options-danger" disabled="@_busy" @onclick="DeleteRoomAsync">
+                                    Ta bort rum
+                                </button>
+                            </li>
+                        </ul>
+                    }
+
+                    @if (_message is { } menuMessage)
+                    {
+                        <div class="notice notice-problem" role="alert">@menuMessage</div>
+                    }
+                </div>
+            }
+
+            @if (VisibleTasks.Count == 0)
+            {
+                <p class="muted small">Inga uppgifter här ännu.</p>
+            }
+            else
+            {
+                <ul class="list" aria-label="@($"Uppgifter i {Label}")">
+                    @foreach (var task in VisibleTasks)
+                    {
+                        <li class="list-item list-item-flush">
+                            <button type="button" class="task-options-row" @onclick="() => OpenTaskOptions(task)">
+                                <span class="room-task-name">
+                                    @task.Name
+                                    <span class="muted small room-task-meta">
+                                        @RecurrenceLabel(task) · @task.EstimatedMinutes min
+                                        @if (task.HasRotatingResponsibility)
+                                        {
+                                            <span class="chip">roterar</span>
+                                        }
+                                        else if (MemberNameFor(task.DefaultResponsibleMemberId) is { } ownerName)
+                                        {
+                                            <span class="chip">@ownerName</span>
+                                        }
+                                        @if (task.RequiresAdult)
+                                        {
+                                            <span class="chip">endast vuxna</span>
+                                        }
+                                    </span>
+                                </span>
+                                <Icon Name="chevron-right" Size="18" />
+                            </button>
+                        </li>
+                    }
+                </ul>
+            }
+
+            @if (AreaId is null)
+            {
+                <details class="more-options">
+                    <summary>Lägg till vanliga hushållssysslor</summary>
+                    <p class="muted small">Kryssa i det som stämmer för ert hushåll - inget är förvalt.</p>
+
+                    @foreach (var suggestion in GeneralTaskTemplates.All)
+                    {
+                        <label class="field-check">
+                            <input type="checkbox" @bind="_suggestedSelected[suggestion.Name]" />
+                            <span>@suggestion.Name</span>
+                        </label>
+                    }
+
+                    <button type="button" class="btn btn-primary" disabled="@_suggestionsBusy" @onclick="AddSuggestedTasksAsync">
+                        @(_suggestionsBusy ? "Lägger till..." : "Lägg till valda")
+                    </button>
+                </details>
+            }
+
+            <button type="button" class="chip-action room-sheet-add" @onclick="() => _showAddTaskSheet = true">
+                <Icon Name="plus" Size="18" />
+                Lägg till uppgift
+            </button>
+            break;
+    }
+</BottomSheet>
+
+@if (_openTask is { } openTask)
+{
+    <TaskOptionsSheet HouseholdId="HouseholdId" Task="openTask" Areas="Areas" Members="Members"
+                       IsOpen="_showTaskOptions" IsOpenChanged="isOpen => _showTaskOptions = isOpen"
+                       OnChanged="OnChanged" />
+}
+
+<BottomSheet Title="@($"Lägg till uppgift i {Label}")" @bind-IsOpen="_showAddTaskSheet">
+    <EditForm Model="_addForm" OnValidSubmit="AddTaskAsync">
+        <label class="field">
+            <span>Namn</span>
+            <InputText @bind-Value="_addForm.Name" placeholder="T.ex. Dammsug" />
+        </label>
+
+        <div class="field">
+            <span>Ungefär hur mycket tid tar det?</span>
+            <div class="level-picker">
+                @foreach (var level in TimeLevel.All)
+                {
+                    <button type="button"
+                            class="@(_addForm.EstimatedMinutes == level.Minutes ? "btn btn-primary" : "btn btn-secondary")"
+                            @onclick="() => _addForm.EstimatedMinutes = level.Minutes">
+                        @level.Label
+                    </button>
+                }
+            </div>
+        </div>
+
+        <label class="field">
+            <span>Upprepning</span>
+            <select @bind="_addForm.Recurrence">
+                <option value="">Ingen - schemaläggs för hand</option>
+                <option value="Daily">Varje dag</option>
+                <option value="Weekly">Varje vecka</option>
+                <option value="Monthly">Varje månad</option>
+                <option value="AsNeeded">Vid behov</option>
+            </select>
+        </label>
+
+        @if (IntervalLabel(_addForm.Recurrence) is { } addIntervalLabel)
+        {
+            <label class="field">
+                <span>@addIntervalLabel</span>
+                <input type="number" min="1" max="52" @bind="_addForm.Interval" />
+            </label>
+        }
+
+        <label class="field-check">
+            <input type="checkbox" @bind="_addForm.RequiresAdult" />
+            <span>Bara vuxna ska tilldelas den här</span>
+        </label>
+
+        @if (_addMessage is { } addMessage)
+        {
+            <div class="notice notice-problem" role="alert">@addMessage</div>
+        }
+
+        <button type="submit" class="btn btn-primary btn-block" disabled="@_addBusy">
+            @(_addBusy ? "Lägger till..." : "Lägg till uppgift")
+        </button>
+    </EditForm>
+</BottomSheet>
+
+@code {
+    private enum RoomView { Tasks, Rename, BulkFrequency }
+
+    [Parameter, EditorRequired]
+    public Guid HouseholdId { get; set; }
+
+    /// <summary>Null means "Övrigt" - the tasks that belong to no particular room.</summary>
+    [Parameter]
+    public Guid? AreaId { get; set; }
+
+    [Parameter, EditorRequired]
+    public string Label { get; set; } = string.Empty;
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<TaskDefinitionResponse> AllTasks { get; set; } = [];
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<AreaResponse> Areas { get; set; } = [];
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<HouseholdMemberResponse> Members { get; set; } = [];
+
+    [Parameter]
+    public bool IsOpen { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> IsOpenChanged { get; set; }
+
+    /// <summary>Raised after any change, so the parent (Rum.razor) reloads its shared task list.</summary>
+    [Parameter, EditorRequired]
+    public EventCallback OnChanged { get; set; }
+
+    private RoomView _roomView;
+    private bool _showMenu;
+    private string _renameName = string.Empty;
+    private string _bulkRecurrence = string.Empty;
+    private int _bulkInterval = 1;
+    private string? _message;
+    private bool _busy;
+
+    private TaskDefinitionResponse? _openTask;
+    private bool _showTaskOptions;
+
+    private bool _showAddTaskSheet;
+
+    private sealed class AddTaskForm
+    {
+        public string Name { get; set; } = string.Empty;
+        public int EstimatedMinutes { get; set; } = 30;
+        public string Recurrence { get; set; } = string.Empty;
+        public int Interval { get; set; } = 1;
+        public bool RequiresAdult { get; set; }
+    }
+
+    private readonly AddTaskForm _addForm = new();
+    private string? _addMessage;
+    private bool _addBusy;
+
+    private readonly Dictionary<string, bool> _suggestedSelected =
+        GeneralTaskTemplates.All.ToDictionary(task => task.Name, _ => false);
+    private bool _suggestionsBusy;
+
+    private DateOnly Today => DateOnly.FromDateTime(TimeProvider.GetLocalNow().DateTime);
+
+    private List<TaskDefinitionResponse> VisibleTasks
+        => AllTasks.Where(t => t.IsActive && t.AreaId == AreaId).ToList();
+
+    private string? MemberNameFor(Guid? memberId)
+        => memberId is { } id ? Members.FirstOrDefault(m => m.Id == id)?.DisplayName ?? "okänd" : null;
+
+    private static string RecurrenceLabel(TaskDefinitionResponse task) => task switch
+    {
+        { StaleAfterDays: not null } => "vid behov",
+        { Recurrence.Frequency: "Daily", Recurrence.Interval: > 1 } => $"ungefär var {task.Recurrence!.Interval}:e dag",
+        { Recurrence.Frequency: "Daily" } => "varje dag",
+        { Recurrence.Frequency: "Weekly", Recurrence.Interval: > 1 } => $"var {task.Recurrence!.Interval}:e vecka",
+        { Recurrence.Frequency: "Weekly" } => "varje vecka",
+        { Recurrence.Frequency: "Monthly", Recurrence.Interval: > 1 } => $"var {task.Recurrence!.Interval}:e månad",
+        { Recurrence.Frequency: "Monthly" } => "varje månad",
+        _ => "schemaläggs för hand"
+    };
+
+    private static string? IntervalLabel(string recurrenceOption) => recurrenceOption switch
+    {
+        "Daily" => "Hur många dagar mellan varje gång?",
+        "Weekly" => "Hur många veckor mellan varje gång?",
+        "Monthly" => "Hur många månader mellan varje gång?",
+        _ => null
+    };
+
+    private RecurrenceRuleContract? BuildRecurrence(string recurrenceOption, DateOnly today, int interval)
+    {
+        var safeInterval = Math.Max(1, interval);
+
+        return recurrenceOption switch
+        {
+            "Daily" => new RecurrenceRuleContract("Daily", safeInterval, today, null, null),
+            "Weekly" => new RecurrenceRuleContract("Weekly", safeInterval, today, today.DayOfWeek.ToString(), null),
+            "Monthly" => new RecurrenceRuleContract("Monthly", safeInterval, today, null, null),
+            _ => null
+        };
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (!IsOpen)
+        {
+            _roomView = RoomView.Tasks;
+            _showMenu = false;
+            _message = null;
+        }
+    }
+
+    private async Task OnIsOpenChanged(bool isOpen)
+    {
+        IsOpen = isOpen;
+        await IsOpenChanged.InvokeAsync(isOpen);
+    }
+
+    private void OpenTaskOptions(TaskDefinitionResponse task)
+    {
+        _openTask = task;
+        _showTaskOptions = true;
+    }
+
+    private async Task SaveRenameAsync()
+    {
+        if (AreaId is not { } areaId || string.IsNullOrWhiteSpace(_renameName))
+        {
+            return;
+        }
+
+        _busy = true;
+        _message = null;
+
+        try
+        {
+            if (await Api.RenameAreaAsync(HouseholdId, areaId, _renameName.Trim()) is null)
+            {
+                _message = "Det gick inte att spara. Försök igen.";
+                return;
+            }
+
+            _roomView = RoomView.Tasks;
+            await OnChanged.InvokeAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _message = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task DeleteRoomAsync()
+    {
+        if (AreaId is not { } areaId)
+        {
+            return;
+        }
+
+        _busy = true;
+        _message = null;
+
+        try
+        {
+            await Api.DeactivateAreaAsync(HouseholdId, areaId);
+            await OnIsOpenChanged(false);
+            await OnChanged.InvokeAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _message = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>
+    /// Applies one chosen frequency to every visible task in this room at once. Each task's own
+    /// anchor date is staggered by its position in the room (same spreading idea as
+    /// RoomTemplateTask.ToScheduling), so a whole room moving to e.g. "every 4 weeks" does not
+    /// pile every one of its tasks onto the same day.
+    /// </summary>
+    private async Task SaveBulkFrequencyAsync()
+    {
+        _busy = true;
+        _message = null;
+
+        try
+        {
+            var staleAfterDays = _bulkRecurrence == "AsNeeded" ? RoomTemplateTask.AsNeededDefaultDays : (int?)null;
+            var tasks = VisibleTasks;
+            var failedCount = 0;
+
+            foreach (var (task, index) in tasks.Select((task, index) => (task, index)))
+            {
+                var recurrence = BuildRecurrence(_bulkRecurrence, Today.AddDays(index), _bulkInterval);
+
+                if (await Api.UpdateTaskFrequencyAsync(HouseholdId, task.Id, recurrence, staleAfterDays) is null)
+                {
+                    failedCount++;
+                }
+            }
+
+            _message = failedCount == 0
+                ? $"Uppdaterade {tasks.Count} uppgifter."
+                : $"{tasks.Count - failedCount} av {tasks.Count} uppgifter uppdaterades - försök igen för resten.";
+
+            await OnChanged.InvokeAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _message = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task AddTaskAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_addForm.Name))
+        {
+            _addMessage = "Uppgiften behöver ett namn.";
+            return;
+        }
+
+        if (_addForm.EstimatedMinutes <= 0)
+        {
+            _addMessage = "Välj ungefär hur mycket tid uppgiften tar.";
+            return;
+        }
+
+        _addBusy = true;
+        _addMessage = null;
+
+        try
+        {
+            var recurrence = BuildRecurrence(_addForm.Recurrence, Today, _addForm.Interval);
+            var staleAfterDays = _addForm.Recurrence == "AsNeeded" ? RoomTemplateTask.AsNeededDefaultDays : (int?)null;
+
+            var request = new CreateTaskRequest(
+                _addForm.Name.Trim(),
+                _addForm.EstimatedMinutes,
+                Description: null,
+                AreaId: AreaId,
+                Priority: "Normal",
+                DefaultResponsibleMemberId: null,
+                PreferredWeekday: null,
+                CanBeDeferred: true,
+                HasRotatingResponsibility: true,
+                RequiresMultiplePeople: false,
+                Recurrence: recurrence,
+                StaleAfterDays: staleAfterDays,
+                RequiresAdult: _addForm.RequiresAdult);
+
+            if (await Api.CreateTaskAsync(HouseholdId, request) is null)
+            {
+                _addMessage = "Det gick inte att skapa uppgiften. Försök igen.";
+                return;
+            }
+
+            _addForm.Name = string.Empty;
+            _addForm.EstimatedMinutes = 30;
+            _addForm.Recurrence = string.Empty;
+            _addForm.Interval = 1;
+            _addForm.RequiresAdult = false;
+            _showAddTaskSheet = false;
+            await OnChanged.InvokeAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _addMessage = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _addBusy = false;
+        }
+    }
+
+    private async Task AddSuggestedTasksAsync()
+    {
+        var selected = GeneralTaskTemplates.All.Where(task => _suggestedSelected.GetValueOrDefault(task.Name)).ToList();
+
+        if (selected.Count == 0)
+        {
+            return;
+        }
+
+        _suggestionsBusy = true;
+
+        try
+        {
+            foreach (var (task, index) in selected.Select((task, index) => (task, index)))
+            {
+                var (recurrence, staleAfterDays) = task.ToScheduling(Today, index);
+
+                await Api.CreateTaskAsync(HouseholdId, new CreateTaskRequest(
+                    task.Name,
+                    task.EstimatedMinutes,
+                    Description: null,
+                    AreaId: null,
+                    Priority: "Normal",
+                    DefaultResponsibleMemberId: null,
+                    PreferredWeekday: null,
+                    CanBeDeferred: true,
+                    HasRotatingResponsibility: true,
+                    RequiresMultiplePeople: false,
+                    Recurrence: recurrence,
+                    StaleAfterDays: staleAfterDays,
+                    RequiresAdult: task.AdultsOnly));
+            }
+
+            foreach (var task in selected)
+            {
+                _suggestedSelected[task.Name] = false;
+            }
+
+            await OnChanged.InvokeAsync();
+        }
+        finally
+        {
+            _suggestionsBusy = false;
+        }
+    }
+}

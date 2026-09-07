@@ -11,36 +11,50 @@ public class TaskFrequencyTests
 
     public TaskFrequencyTests(HemordnaAppFixture app) => _app = app;
 
+    private static ILocator Sheet(IPage page, string title) => page.GetByRole(AriaRole.Dialog, new() { Name = title });
+
+    /// <summary>Creates a blank room via the "Nytt rum" sheet and opens it, landing on its own
+    /// RoomSheet with the sheet closed behind it.</summary>
+    private static async Task<ILocator> CreateAndOpenBlankRoomAsync(IPage page, string name)
+    {
+        await page.GotoAsync("/rum");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Nytt rum" }).ClickAsync();
+        var newRoomSheet = Sheet(page, "Nytt rum");
+        await page.GetByText("Lägg till ett tomt rum i stället").ClickAsync();
+        await page.GetByLabel("Rummets namn").FillAsync(name);
+        await page.GetByRole(AriaRole.Button, new() { Name = "Lägg till rum" }).ClickAsync();
+        await newRoomSheet.GetByRole(AriaRole.Button, new() { Name = "Stäng" }).ClickAsync();
+
+        await page.GetByRole(AriaRole.Button, new() { Name = name }).First.ClickAsync();
+        var room = Sheet(page, name);
+        await room.WaitForAsync();
+        return room;
+    }
+
     [Fact]
     public async Task Changing_a_tasks_frequency_updates_what_is_shown_without_recreating_it()
     {
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Tova");
 
-        await page.GotoAsync("/omraden");
-        await page.GetByText("Lägg till ett tomt område i stället").ClickAsync();
-        await page.GetByLabel("Nytt område").FillAsync("Kök");
-        await page.GetByRole(AriaRole.Button, new() { Name = "Lägg till område" }).ClickAsync();
+        var room = await CreateAndOpenBlankRoomAsync(page, "Kök");
 
-        var kitchenCard = page.Locator(".card")
-            .Filter(new() { Has = page.GetByRole(AriaRole.Heading, new() { Name = "Kök", Exact = true }) });
-        await kitchenCard.WaitForAsync();
-
-        await kitchenCard.GetByText("Lägg till en uppgift i Kök").ClickAsync();
-        await kitchenCard.GetByLabel("Namn").FillAsync("Diska");
+        await room.GetByRole(AriaRole.Button, new() { Name = "Lägg till uppgift" }).ClickAsync();
+        var addSheet = Sheet(page, "Lägg till uppgift i Kök");
+        await addSheet.GetByLabel("Namn").FillAsync("Diska");
         // Default estimate is fine - only the recurrence choice matters for this test.
-        await kitchenCard.GetByLabel("Upprepning").SelectOptionAsync("Daily");
-        await kitchenCard.GetByRole(AriaRole.Button, new() { Name = "Lägg till uppgift" }).ClickAsync();
+        await addSheet.GetByLabel("Upprepning").SelectOptionAsync("Daily");
+        await addSheet.GetByRole(AriaRole.Button, new() { Name = "Lägg till uppgift" }).ClickAsync();
 
-        // Scoped by its own "Ändra frekvens" button, not by name alone: once opened, the
-        // edit form's own row also contains "Diska" (in its label), which a plain HasText
-        // match would ambiguously catch too.
-        var taskRow = kitchenCard.Locator(".list-item:has(button[aria-label=\"Ändra frekvens för Diska\"])");
+        var taskRow = room.GetByRole(AriaRole.Button, new() { Name = "Diska" });
         await Assertions.Expect(taskRow).ToContainTextAsync("varje dag");
 
-        await taskRow.GetByRole(AriaRole.Button, new() { Name = "Ändra frekvens för Diska" }).ClickAsync();
-        await kitchenCard.GetByLabel("Ny upprepning för \"Diska\"").SelectOptionAsync("Weekly");
-        await kitchenCard.GetByRole(AriaRole.Button, new() { Name = "Spara" }).ClickAsync();
+        await taskRow.ClickAsync();
+        var taskSheet = Sheet(page, "Diska");
+        await taskSheet.GetByRole(AriaRole.Button, new() { Name = "Upprepning" }).ClickAsync();
+        await taskSheet.GetByLabel("Upprepning").SelectOptionAsync("Weekly");
+        await taskSheet.GetByRole(AriaRole.Button, new() { Name = "Spara" }).ClickAsync();
+        await taskSheet.GetByRole(AriaRole.Button, new() { Name = "Stäng" }).ClickAsync();
 
         await Assertions.Expect(taskRow).ToContainTextAsync("varje vecka");
         await Assertions.Expect(taskRow).Not.ToContainTextAsync("varje dag");
@@ -52,7 +66,8 @@ public class TaskFrequencyTests
         // The actual production bug this fixes: moving a task to a new weekday left its old,
         // already-generated occurrence outstanding forever - nagging every day (endlessly
         // deferred) alongside a fresh one generated for the new weekday once it arrived. See
-        // docs/ARCHITECTURE.md.
+        // docs/ARCHITECTURE.md. Drives the frequency change through the API directly - this is
+        // about EnsureOccurrencesGenerated's behaviour, not the UI form that makes the same call.
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Wilma");
 
@@ -100,27 +115,23 @@ public class TaskFrequencyTests
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Ingrid");
 
-        await page.GotoAsync("/omraden");
-        await page.GetByText("Lägg till ett tomt område i stället").ClickAsync();
-        await page.GetByLabel("Nytt område").FillAsync("Tvättstuga");
-        await page.GetByRole(AriaRole.Button, new() { Name = "Lägg till område" }).ClickAsync();
+        var room = await CreateAndOpenBlankRoomAsync(page, "Tvättstuga");
 
-        var card = page.Locator(".card")
-            .Filter(new() { Has = page.GetByRole(AriaRole.Heading, new() { Name = "Tvättstuga", Exact = true }) });
-        await card.WaitForAsync();
+        await room.GetByRole(AriaRole.Button, new() { Name = "Lägg till uppgift" }).ClickAsync();
+        var addSheet = Sheet(page, "Lägg till uppgift i Tvättstuga");
+        await addSheet.GetByLabel("Namn").FillAsync("Rengör filter");
+        await addSheet.GetByLabel("Upprepning").SelectOptionAsync("Weekly");
+        await addSheet.GetByLabel("Hur många veckor mellan varje gång?").FillAsync("4");
+        await addSheet.GetByRole(AriaRole.Button, new() { Name = "Lägg till uppgift" }).ClickAsync();
 
-        await card.GetByText("Lägg till en uppgift i Tvättstuga").ClickAsync();
-        await card.GetByLabel("Namn").FillAsync("Rengör filter");
-        await card.GetByLabel("Upprepning").SelectOptionAsync("Weekly");
-        await card.GetByLabel("Hur många veckor mellan varje gång?").FillAsync("4");
-        await card.GetByRole(AriaRole.Button, new() { Name = "Lägg till uppgift" }).ClickAsync();
-
-        var taskRow = card.Locator(".list-item:has(button[aria-label=\"Ändra frekvens för Rengör filter\"])");
+        var taskRow = room.GetByRole(AriaRole.Button, new() { Name = "Rengör filter" });
         await Assertions.Expect(taskRow).ToContainTextAsync("var 4:e vecka");
 
         // Reopening the edit form shows the interval that was actually saved, not a blank field.
-        await taskRow.GetByRole(AriaRole.Button, new() { Name = "Ändra frekvens för Rengör filter" }).ClickAsync();
-        await Assertions.Expect(card.GetByLabel("Hur många veckor mellan varje gång?")).ToHaveValueAsync("4");
+        await taskRow.ClickAsync();
+        var taskSheet = Sheet(page, "Rengör filter");
+        await taskSheet.GetByRole(AriaRole.Button, new() { Name = "Upprepning" }).ClickAsync();
+        await Assertions.Expect(taskSheet.GetByLabel("Hur många veckor mellan varje gång?")).ToHaveValueAsync("4");
     }
 
     [Fact]
@@ -129,42 +140,29 @@ public class TaskFrequencyTests
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Karl");
 
-        await page.GotoAsync("/omraden");
-        await page.GetByText("Lägg till ett tomt område i stället").ClickAsync();
-        await page.GetByLabel("Nytt område").FillAsync("Sovrum 2");
-        await page.GetByRole(AriaRole.Button, new() { Name = "Lägg till område" }).ClickAsync();
-
-        var card = page.Locator(".card")
-            .Filter(new() { Has = page.GetByRole(AriaRole.Heading, new() { Name = "Sovrum 2", Exact = true }) });
-        await card.WaitForAsync();
-
-        await card.GetByText("Lägg till en uppgift i Sovrum 2").ClickAsync();
-
-        // Scoped to the create-task <form>: once the first task exists, the whole-room bulk
-        // section below also renders its own "Ny upprepning för hela ..." select outside any
-        // form, and a <select>'s accessible name includes its currently-selected option's own
-        // text (e.g. "Upprepning Ingen - schemaläggs för hand") - so neither a plain substring
-        // nor an Exact match on "Upprepning" alone disambiguates the two.
-        var addTaskForm = card.Locator("form");
+        var room = await CreateAndOpenBlankRoomAsync(page, "Sovrum 2");
 
         foreach (var name in new[] { "Dammsug golvet", "Vädra rummet" })
         {
-            await addTaskForm.GetByLabel("Namn").FillAsync(name);
-            await addTaskForm.GetByLabel("Upprepning").SelectOptionAsync("Weekly");
-            await addTaskForm.GetByRole(AriaRole.Button, new() { Name = "Lägg till uppgift" }).ClickAsync();
-            await Assertions.Expect(card.Locator(".list-item", new() { HasText = name })).ToBeVisibleAsync();
+            await room.GetByRole(AriaRole.Button, new() { Name = "Lägg till uppgift" }).ClickAsync();
+            var addSheet = Sheet(page, "Lägg till uppgift i Sovrum 2");
+            await addSheet.GetByLabel("Namn").FillAsync(name);
+            await addSheet.GetByLabel("Upprepning").SelectOptionAsync("Weekly");
+            await addSheet.GetByRole(AriaRole.Button, new() { Name = "Lägg till uppgift" }).ClickAsync();
+            await Assertions.Expect(room.GetByRole(AriaRole.Button, new() { Name = name })).ToBeVisibleAsync();
         }
 
-        await card.GetByText("Ändra frekvens för hela Sovrum 2").ClickAsync();
-        await card.GetByLabel("Ny upprepning för hela Sovrum 2").SelectOptionAsync("Monthly");
-        await card.GetByRole(AriaRole.Button, new() { Name = "Spara för alla 2 uppgifter" }).ClickAsync();
+        await room.GetByRole(AriaRole.Button, new() { Name = "Rummets meny" }).ClickAsync();
+        await room.GetByRole(AriaRole.Button, new() { Name = "Ändra frekvens för hela rummet" }).ClickAsync();
+        await room.GetByLabel("Ny upprepning för hela Sovrum 2").SelectOptionAsync("Monthly");
+        await room.GetByRole(AriaRole.Button, new() { Name = "Spara för alla 2 uppgifter" }).ClickAsync();
 
-        await Assertions.Expect(card.GetByText("Uppdaterade 2 uppgifter.")).ToBeVisibleAsync();
+        await Assertions.Expect(room.GetByText("Uppdaterade 2 uppgifter.")).ToBeVisibleAsync();
+        await room.GetByRole(AriaRole.Button, new() { Name = "Till uppgifterna" }).ClickAsync();
 
         foreach (var name in new[] { "Dammsug golvet", "Vädra rummet" })
         {
-            var row = card.Locator($".list-item:has(button[aria-label=\"Ändra frekvens för {name}\"])");
-            await Assertions.Expect(row).ToContainTextAsync("varje månad");
+            await Assertions.Expect(room.GetByRole(AriaRole.Button, new() { Name = name })).ToContainTextAsync("varje månad");
         }
     }
 }
