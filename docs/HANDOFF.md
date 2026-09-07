@@ -6,16 +6,16 @@ Lägesbild per 2026-09-07, för en ny session. Arbetssättet styrs av
 
 ## Läge
 
-**Pågående: "Ny form"** - klienten byggs om skärm för skärm till ett nytt visuellt uttryck och
-enklare navigation, se ARCHITECTURE.md §10 för fullständiga beslut per steg. Fem steg, varje ett
-eget feature-branch, **inget mergat till `main` utan uttryckligt godkännande**:
+**"Ny form" är klart, alla fem steg** - klienten ombyggd skärm för skärm till ett nytt visuellt
+uttryck och enklare navigation, se ARCHITECTURE.md §10 för fullständiga beslut per steg. Varje
+steg sitt eget feature-branch, **inget mergat till `main` utan uttryckligt godkännande**:
 
 1. `feat/ny-form-grund` (tokens, typsnitt, `Icon`/`BottomSheet`, nav) - `IMPLEMENTED`
 2. `feat/ny-form-idag` (Idag/Min dag) - `IMPLEMENTED`
 3. `feat/ny-form-rum` (Rum, ersätter Områden) - `IMPLEMENTED`
-4. `feat/ny-form-hushall-vecka` (Hushåll, Vecka, `MemberSheet`) - `IMPLEMENTED`, senaste commit
-   `c47b91b` på detta branch, ej mergat
-5. `feat/ny-form-morkt-lage` (mörkt läge, bock-animation/haptik) - `PROPOSED`, ej påbörjad
+4. `feat/ny-form-hushall-vecka` (Hushåll, Vecka, `MemberSheet`) - `IMPLEMENTED`
+5. `feat/ny-form-morkt-lage` (mörkt läge, delad bock-/svep-bekräftelse) - `IMPLEMENTED`, senaste
+   commit `8b1bebd` på detta branch, ej mergat
 
 **`main` (senaste commit `ab086c5`) kör fortfarande den gamla, förnyade UI:t i produktion** -
 `https://app.hemordna.se`, Hetzner `62.238.45.45` (delad Caddy/nätverk med BowlingPlatform, se
@@ -42,7 +42,7 @@ scope för ett klient-bara steg).
 
 ## Öppna frågor och nästa steg
 
-**Nästa:** steg 5 (`feat/ny-form-morkt-lage`), sedan ett uttryckligt beslut om merge till
-`main`/driftsättning av hela "Ny form". Väckt men **inte påbörjad**: uppskatta städbehov
+**Nästa, väntar på uttryckligt godkännande:** merga de fem `feat/ny-form-*`-branchen till
+`main` och driftsätta - se avsnittet ovan. Väckt men **inte påbörjad**: uppskatta städbehov
 utifrån antal rum/medlemmar/husdjur. **Beslut, inte öppen fråga:** en användare tillhör exakt
 ett hushåll (ARCHITECTURE.md §4).
