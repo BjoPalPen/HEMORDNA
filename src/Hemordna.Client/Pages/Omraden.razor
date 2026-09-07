@@ -141,6 +141,26 @@ else
     else
     {
         <p class="muted small">Totalt: @TotalTaskCount uppgifter · @TotalMinutes min</p>
+        <p class="muted small">
+            Ungefär @WeeklyMinutes min/vecka i praktiken, räknat efter hur ofta varje uppgift
+            faktiskt återkommer - en daglig syssla väger mycket mer än en månatlig, till skillnad
+            från totalen ovan.
+        </p>
+
+        @if (_members.Count > 0)
+        {
+            <p class="@(WeeklyMinutes > HouseholdWeeklyCapacity ? "notice notice-problem" : "notice")" role="status">
+                Ert hushålls samlade veckokapacitet är @HouseholdWeeklyCapacity min.
+                @if (WeeklyMinutes > HouseholdWeeklyCapacity)
+                {
+                    <text>Det är mindre än det uppskattade behovet - en del kommer sannolikt alltid ligga och vänta.</text>
+                }
+                else
+                {
+                    <text>Det räcker till det uppskattade behovet, med marginal kvar.</text>
+                }
+            </p>
+        }
 
         <details class="more-options">
             <summary>Ser fördelningen skev ut?</summary>
@@ -260,6 +280,15 @@ else
     private int TotalTaskCount => _tasks.Count(t => t.IsActive);
 
     private int TotalMinutes => _tasks.Where(t => t.IsActive).Sum(t => t.EstimatedMinutes);
+
+    /// <summary>Unlike <see cref="TotalMinutes"/>, weighted by how often each task actually recurs - see TaskWorkload.</summary>
+    private int WeeklyMinutes => TaskWorkload.TotalWeeklyMinutes(_tasks.Where(t => t.IsActive));
+
+    private int HouseholdWeeklyCapacity => _members.Sum(member =>
+        member.WeeklyTimeBudgetMinutes.Monday + member.WeeklyTimeBudgetMinutes.Tuesday
+        + member.WeeklyTimeBudgetMinutes.Wednesday + member.WeeklyTimeBudgetMinutes.Thursday
+        + member.WeeklyTimeBudgetMinutes.Friday + member.WeeklyTimeBudgetMinutes.Saturday
+        + member.WeeklyTimeBudgetMinutes.Sunday);
 
     private async Task RebalanceScheduleAsync()
     {

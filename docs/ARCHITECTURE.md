@@ -291,6 +291,26 @@ som tidigare, bara sant lagrat i stället för återskapat via gissning.
 rundresetiden till servern helt i onödan, eftersom de inte beror på varandra, och gjorde ett
 redan tajmningskänsligt E2E-test (`HushallTests.Changing_a_members_role_...`) flakigare.
 
+### Beslut: `TaskWorkload` - veckoestimat viktat efter frekvens — `IMPLEMENTED`
+
+`Omraden.razor`s ursprungliga "Totalt: X uppgifter · Y min" (`_tasks.Sum(t => t.EstimatedMinutes)`)
+är en platt engångssumma - en daglig 2-minuters syssla väger lika tungt i den som en månatlig
+10-minuters, trots att den dagliga i praktiken kräver ~30x så mycket tid över en månad. Ett
+hushåll kan alltså inte använda den summan för att bedöma om t.ex. tolv rum är rimligt för två
+personer. `Hemordna.Client.Support.TaskWorkload.WeeklyMinutes` räknar i stället varje uppgifts
+förväntade andel av en genomsnittsvecka utifrån dess egen frekvens (Daily: `7/Interval`,
+Weekly: `1/Interval`, Monthly: `7/(30.44*Interval)` - oavsett om den är ankrad till dag-i-månaden
+eller en "n:te veckodag", båda faller ungefär en gång per `Interval` månader; "vid behov":
+`7/StaleAfterDays`). En uppgift utan vare sig `Recurrence` eller `StaleAfterDays` (schemaläggs
+för hand) bidrar 0 - den har ingen löpande kadens att projicera framåt.
+
+Klientsidig, ren beräkning på redan hämtade `TaskDefinitionResponse` - ingen ny endpoint, inget
+sparat. Visas bredvid den gamla totalen (inte i stället för) på Områden-sidan, tillsammans med
+hushållets samlade veckokapacitet (`WeeklyTimeBudgetMinutes` summerat över alla aktiva medlemmar)
+så jämförelsen blir direkt synlig. Samma undantag som den gamla totalen redan var till
+DESIGN.md/PRODUCT.md §4/§8:s princip om att aldrig visa minuter i den dagliga uppgifts-UI:n -
+det här är fortfarande bara ett planeringsstadie-verktyg.
+
 ### Beslut: `MemberPreference` — `IMPLEMENTED`
 
 Individuell presentation (`PresentationMode`: text / bild+text / stor text / en uppgift åt
