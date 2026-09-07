@@ -7,7 +7,7 @@
 @inject TimeProvider TimeProvider
 @inject HouseholdRealtimeClient Realtime
 
-<PageTitle>Min dag – Hemordna</PageTitle>
+<PageTitle>Idag – Hemordna</PageTitle>
 
 @if (!Session.IsLoaded)
 {
@@ -23,228 +23,205 @@ else if (Session.NeedsHousehold)
 }
 else
 {
-    <div class="day @(ShowSidebar ? "" : "day-no-sidebar")">
-        <div class="day-main">
-            <p class="day-date">@DateLabel</p>
-            <h1>Hej @Session.Me!.DisplayName! 👋</h1>
-            <p class="muted day-lead">@LeadText</p>
+    <p class="day-date">@DateLabel</p>
+    <h1>@GreetingWord, @Session.Me!.DisplayName!</h1>
 
-            @if (_day is null)
+    @if (_day is null)
+    {
+        <p class="muted">Hämtar dagens uppgifter…</p>
+    }
+    else
+    {
+        @if (_day.Items.Count > 0 || _day.Completed.Count > 0)
+        {
+            var total = _day.Items.Count + _day.Completed.Count;
+            <p class="muted small day-counts">@_day.Completed.Count av @total klara</p>
+            <div class="progress" role="presentation">
+                <i style="width:@(total == 0 ? 0 : _day.Completed.Count * 100 / total)%"></i>
+            </div>
+        }
+
+        @if (IsFocusMode)
+        {
+            @if (FocusTask is { } focusTask)
             {
-                <p class="muted">Hämtar dagens uppgifter…</p>
+                <div class="focus-card">
+                    @if (ShowIcons)
+                    {
+                        <img class="focus-icon" src="@IconSrc(focusTask.Name, focusTask.AreaName)" alt="" width="48" height="48" />
+                    }
+                    <h2 class="focus-name">@focusTask.Name</h2>
+                    @if (focusTask.AreaName is { } focusArea)
+                    {
+                        <span class="chip">@focusArea</span>
+                    }
+                    @if (focusTask.IsOverdue)
+                    {
+                        <p class="muted small">sedan tidigare</p>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(focusTask.Description))
+                    {
+                        <p class="muted small focus-description">@focusTask.Description</p>
+                    }
+
+                    <div class="focus-actions">
+                        <button type="button" class="btn btn-primary btn-block" disabled="@(_busyOccurrence == focusTask.OccurrenceId)"
+                                @onclick="() => CompleteAsync(focusTask.OccurrenceId)">
+                            Bocka av
+                        </button>
+                        @if (focusTask.CanBeDeferred)
+                        {
+                            <button type="button" class="btn btn-secondary btn-block" disabled="@(_busyOccurrence == focusTask.OccurrenceId)"
+                                    @onclick="() => DeferAsync(focusTask.OccurrenceId)">
+                                Skjut upp till imorgon
+                            </button>
+                        }
+                    </div>
+                </div>
             }
             else
             {
-                @if (_day.Completed.Count > 0 || _day.Items.Count > 0)
+                @CalmState
+            }
+        }
+        else
+        {
+            @if (_day.Items.Count > 0)
+            {
+                @if (OverdueItems.Count > 0)
                 {
-                    <p class="muted small day-counts">@CountsText</p>
-                }
-
-                @if (_day.Completed.Count > 0)
-                {
-                    <ul class="task-list" aria-label="Klara uppgifter">
-                        @foreach (var done in _day.Completed)
+                    @GroupHeading("Sedan tidigare", OverdueItems.Count)
+                    <ul class="task-list" aria-label="Sedan tidigare">
+                        @foreach (var item in OverdueItems)
                         {
-                            <li class="task task-done">
-                                <span class="task-check task-check-done" aria-hidden="true">✓</span>
-                                @if (ShowIcons)
-                                {
-                                    <img class="task-icon" src="@IconSrc(done.Name, done.AreaName)" alt="" width="24" height="24" />
-                                }
-                                <span class="task-name">
-                                    @done.Name
-                                    @if (done.AreaName is { } doneArea)
-                                    {
-                                        <span class="chip">@doneArea</span>
-                                    }
-                                </span>
-                            </li>
+                            <TaskListItem Item="item" ShowIcon="ShowIcons" ShowOverdueNote="false"
+                                          IsBusy="_busyOccurrence == item.OccurrenceId"
+                                          IsExpanded="_expandedOccurrence == item.OccurrenceId"
+                                          OnComplete="CompleteAsync" OnToggleExpand="ToggleExpand" OnDefer="DeferAsync" />
                         }
                     </ul>
                 }
 
-                @if (_day.Items.Count > 0)
+                @foreach (var group in RoomGroups)
                 {
-                    @if (OverdueItems.Count > 0)
-                    {
-                        <h2 class="task-group-heading">Sedan tidigare</h2>
-                        <ul class="task-list" aria-label="Sedan tidigare">
-                            @foreach (var item in OverdueItems)
-                            {
-                                <TaskListItem Item="item" ShowIcon="ShowIcons" ShowOverdueNote="false"
-                                              IsBusy="_busyOccurrence == item.OccurrenceId"
-                                              IsExpanded="_expandedOccurrence == item.OccurrenceId"
-                                              OnComplete="CompleteAsync" OnToggleExpand="ToggleExpand" OnDefer="DeferAsync" />
-                            }
-                        </ul>
-                    }
-
-                    @foreach (var group in RoomGroups)
-                    {
-                        <h2 class="task-group-heading">@(group.AreaName ?? "Övrigt")</h2>
-                        <ul class="task-list" aria-label="@(group.AreaName ?? "Övrigt")">
-                            @foreach (var item in group.Items)
-                            {
-                                <TaskListItem Item="item" ShowIcon="ShowIcons"
-                                              IsBusy="_busyOccurrence == item.OccurrenceId"
-                                              IsExpanded="_expandedOccurrence == item.OccurrenceId"
-                                              OnComplete="CompleteAsync" OnToggleExpand="ToggleExpand" OnDefer="DeferAsync" />
-                            }
-                        </ul>
-                    }
-                }
-                else if (_day.Completed.Count > 0)
-                {
-                    <div class="notice">Dagens uppgifter är klara.</div>
-                }
-                else
-                {
-                    <div class="notice">Inget är inplanerat idag.</div>
-                }
-
-                @if (_day.Unplanned.Count > 0)
-                {
-                    <details class="rest">
-                        <summary>@_day.Unplanned.Count till en annan dag</summary>
-                        <ul class="task-list">
-                            @foreach (var task in _day.Unplanned)
-                            {
-                                <li class="task task-rest">
-                                    @if (ShowIcons)
-                                    {
-                                        <img class="task-icon" src="@IconSrc(task.Name, task.AreaName)" alt="" width="24" height="24" />
-                                    }
-                                    <span class="task-name">
-                                        @task.Name
-                                        @if (task.AreaName is { } unplannedArea)
-                                        {
-                                            <span class="chip">@unplannedArea</span>
-                                        }
-                                    </span>
-                                </li>
-                            }
-                        </ul>
-                    </details>
-                }
-
-                <details class="more-options">
-                    <summary>Lägg till en extra uppgift</summary>
-                    <p class="muted small">
-                        Något du vill göra i dag utöver det som redan är inplanerat - t.ex. en
-                        engångssak som inte behöver upprepas.
-                    </p>
-
-                    <EditForm Model="_extraForm" OnValidSubmit="AddExtraTaskAsync">
-                        <label class="field">
-                            <span>Namn</span>
-                            <InputText @bind-Value="_extraForm.Name" placeholder="T.ex. Rensa garderoben" />
-                        </label>
-
-                        <div class="field">
-                            <span>Ungefär hur mycket tid tar det?</span>
-                            <div class="level-picker">
-                                @foreach (var level in TimeLevel.All)
-                                {
-                                    <button type="button"
-                                            class="@(_extraForm.EstimatedMinutes == level.Minutes ? "btn btn-primary" : "btn btn-secondary")"
-                                            @onclick="() => _extraForm.EstimatedMinutes = level.Minutes">
-                                        @level.Label
-                                    </button>
-                                }
-                            </div>
-                        </div>
-
-                        @if (_extraTaskMessage is { } extraTaskMessage)
+                    @GroupHeading(group.AreaName ?? "Övrigt", group.Items.Count)
+                    <ul class="task-list" aria-label="@(group.AreaName ?? "Övrigt")">
+                        @foreach (var item in group.Items)
                         {
-                            <div class="notice notice-problem" role="alert">@extraTaskMessage</div>
+                            <TaskListItem Item="item" ShowIcon="ShowIcons"
+                                          IsBusy="_busyOccurrence == item.OccurrenceId"
+                                          IsExpanded="_expandedOccurrence == item.OccurrenceId"
+                                          OnComplete="CompleteAsync" OnToggleExpand="ToggleExpand" OnDefer="DeferAsync" />
                         }
-
-                        <button type="submit" class="btn btn-primary" disabled="@_extraTaskBusy">
-                            @(_extraTaskBusy ? "Lägger till..." : "Lägg till för i dag")
-                        </button>
-                    </EditForm>
-                </details>
-
-                <details class="more-options" @ontoggle="OnPeekToggled">
-                    <summary>Tjuvkika på ett schema</summary>
-                    <p class="muted small">
-                        En titt på i morgon, eller på någon annans dag - bara för att se, inget
-                        går att bocka av eller skjuta upp härifrån.
-                    </p>
-
-                    @if (_householdMembers is { Count: > 0 })
-                    {
-                        <label class="field">
-                            <span>Vems dag?</span>
-                            <select @bind="_peekMemberId" @bind:after="LoadPeekDayAsync">
-                                @foreach (var member in _householdMembers)
-                                {
-                                    <option value="@member.Id">
-                                        @(member.Id == Session.Me!.MemberId ? "Jag" : member.DisplayName)
-                                    </option>
-                                }
-                            </select>
-                        </label>
-
-                        <label class="field">
-                            <span>Vilken dag?</span>
-                            <select @bind="_peekDayOffset" @bind:after="LoadPeekDayAsync">
-                                <option value="0">Idag</option>
-                                <option value="1">Imorgon</option>
-                            </select>
-                        </label>
-
-                        @if (_peekBusy)
-                        {
-                            <p class="muted small">Hämtar...</p>
-                        }
-                        else if (_peekDay is { } peekDay)
-                        {
-                            @if (peekDay.Items.Count == 0 && peekDay.Completed.Count == 0)
-                            {
-                                <div class="notice">Inget inplanerat den dagen.</div>
-                            }
-                            else
-                            {
-                                <ul class="task-list" aria-label="Tjuvkikad dag">
-                                    @foreach (var done in peekDay.Completed)
-                                    {
-                                        <li class="task task-done">
-                                            <span class="task-check task-check-done" aria-hidden="true">✓</span>
-                                            <span class="task-name">@done.Name</span>
-                                        </li>
-                                    }
-                                    @foreach (var item in peekDay.Items)
-                                    {
-                                        <li class="task">
-                                            <span class="task-name">
-                                                @item.Name
-                                                @if (item.AreaName is { } peekArea)
-                                                {
-                                                    <span class="chip">@peekArea</span>
-                                                }
-                                                @if (item.IsOverdue)
-                                                {
-                                                    <span class="task-note muted small">sedan tidigare</span>
-                                                }
-                                            </span>
-                                        </li>
-                                    }
-                                </ul>
-                            }
-                        }
-                    }
-                </details>
+                    </ul>
+                }
             }
+            else
+            {
+                @CalmState
+            }
+        }
+
+        <div class="chips">
+            @if (_day.Unplanned.Count > 0)
+            {
+                <button type="button" class="chip-action" @onclick="() => _showUnplannedSheet = true">
+                    Flytta till en annan dag
+                </button>
+            }
+            <button type="button" class="chip-action" @onclick="() => _showExtraTaskSheet = true">
+                Extra uppgift
+            </button>
         </div>
 
-        @if (ShowSidebar)
+        @if (_day.Completed.Count > 0)
         {
-            <aside class="day-side">
-                <div class="card encouragement">@EncouragementText</div>
-            </aside>
+            @GroupHeading("Klart idag", _day.Completed.Count, showKvar: false)
+            <ul class="task-list task-list-done" aria-label="Klart idag">
+                @foreach (var done in _day.Completed)
+                {
+                    <li class="task task-done">
+                        <span class="task-check task-check-done" aria-hidden="true">
+                            <Icon Name="check" Size="18" />
+                        </span>
+                        @if (ShowIcons)
+                        {
+                            <img class="task-icon" src="@IconSrc(done.Name, done.AreaName)" alt="" width="24" height="24" />
+                        }
+                        <span class="task-name">
+                            @done.Name
+                            @if (done.AreaName is { } doneArea)
+                            {
+                                <span class="chip">@doneArea</span>
+                            }
+                        </span>
+                    </li>
+                }
+            </ul>
         }
-    </div>
+
+        <BottomSheet Title="Flytta till en annan dag" @bind-IsOpen="_showUnplannedSheet">
+            <p class="muted small">
+                Uppgifter som inte fick plats idag och väntar till en annan dag - inget kan
+                bockas av eller skjutas upp härifrån.
+            </p>
+            <ul class="task-list">
+                @foreach (var task in _day.Unplanned)
+                {
+                    <li class="task task-rest">
+                        @if (ShowIcons)
+                        {
+                            <img class="task-icon" src="@IconSrc(task.Name, task.AreaName)" alt="" width="24" height="24" />
+                        }
+                        <span class="task-name">
+                            @task.Name
+                            @if (task.AreaName is { } unplannedArea)
+                            {
+                                <span class="chip">@unplannedArea</span>
+                            }
+                        </span>
+                    </li>
+                }
+            </ul>
+        </BottomSheet>
+
+        <BottomSheet Title="Extra uppgift" @bind-IsOpen="_showExtraTaskSheet">
+            <p class="muted small">
+                Något du vill göra i dag utöver det som redan är inplanerat - t.ex. en
+                engångssak som inte behöver upprepas.
+            </p>
+
+            <EditForm Model="_extraForm" OnValidSubmit="AddExtraTaskAsync">
+                <label class="field">
+                    <span>Namn</span>
+                    <InputText @bind-Value="_extraForm.Name" placeholder="T.ex. Rensa garderoben" />
+                </label>
+
+                <div class="field">
+                    <span>Ungefär hur mycket tid tar det?</span>
+                    <div class="level-picker">
+                        @foreach (var level in TimeLevel.All)
+                        {
+                            <button type="button"
+                                    class="@(_extraForm.EstimatedMinutes == level.Minutes ? "btn btn-primary" : "btn btn-secondary")"
+                                    @onclick="() => _extraForm.EstimatedMinutes = level.Minutes">
+                                @level.Label
+                            </button>
+                        }
+                    </div>
+                </div>
+
+                @if (_extraTaskMessage is { } extraTaskMessage)
+                {
+                    <div class="notice notice-problem" role="alert">@extraTaskMessage</div>
+                }
+
+                <button type="submit" class="btn btn-primary" disabled="@_extraTaskBusy">
+                    @(_extraTaskBusy ? "Lägger till..." : "Lägg till för i dag")
+                </button>
+            </EditForm>
+        </BottomSheet>
+    }
 }
 
 @code {
@@ -252,6 +229,9 @@ else
     private Guid? _busyOccurrence;
     private Guid? _expandedOccurrence;
     private string? _presentation;
+    private bool _showUnplannedSheet;
+    private bool _showExtraTaskSheet;
+    private (DateOnly Date, int Count)? _nextPlanned;
 
     private sealed class ExtraTaskForm
     {
@@ -263,14 +243,10 @@ else
     private string? _extraTaskMessage;
     private bool _extraTaskBusy;
 
-    private IReadOnlyList<HouseholdMemberResponse>? _householdMembers;
-    private Guid _peekMemberId;
-    private int _peekDayOffset;
-    private DailyPlanResponse? _peekDay;
-    private bool _peekBusy;
-
     // "Bild + text" - an individual preference (PRODUCT.md §7), not a household setting.
     private bool ShowIcons => _presentation == "ImageAndText";
+
+    private bool IsFocusMode => _presentation == "OneAtATime";
 
     private sealed record TaskGroup(string? AreaName, IReadOnlyList<PlannedTaskResponse> Items);
 
@@ -296,7 +272,35 @@ else
             .Select(group => new TaskGroup(group.Key, [.. group]))
             .ToList();
 
+    /// <summary>"En uppgift åt gången" (docs/PRODUCT.md §7): the same order the grouped view
+    /// would show, just one row deep - completing or deferring it naturally surfaces the next
+    /// one on reload, so no separate index needs to be tracked here.</summary>
+    private PlannedTaskResponse? FocusTask
+        => OverdueItems.Concat(RoomGroups.SelectMany(group => group.Items)).FirstOrDefault();
+
     private static string IconSrc(string taskName, string? areaName) => $"icons/tasks/{TaskIcons.For(taskName, areaName)}.svg";
+
+    /// <summary>A room/status heading with a trailing count - "N kvar" for outstanding work,
+    /// just the number for "Klart idag" (nothing left to do there).</summary>
+    private static RenderFragment GroupHeading(string name, int count, bool showKvar = true) => @<div class="task-group-heading">
+        <span>@name</span>
+        <span>@(showKvar ? $"{count} kvar" : count.ToString())</span>
+    </div>;
+
+    private RenderFragment CalmState => @<div class="calm-state">
+        @if (_day is { Items.Count: 0, Completed.Count: > 0 })
+        {
+            <h2>Dagens uppgifter är klara.</h2>
+        }
+        else
+        {
+            <h2>Ledigt idag</h2>
+            @if (_nextPlanned is { } next)
+            {
+                <p class="muted">Nästa: @next.Date.ToString("dddd", SwedishCulture), @next.Count uppgifter</p>
+            }
+        }
+    </div>;
 
     // The date is resolved from an injected clock here at the edge; nothing below reads one.
     // TimeProvider rather than DateTime.Now so the page can be rendered at a fixed date.
@@ -304,32 +308,15 @@ else
 
     private string DateLabel => Today.ToString("dddd d MMMM", SwedishCulture);
 
+    /// <summary>No emoji, time of day picks the word - see docs/DESIGN.md "Idag".</summary>
+    private string GreetingWord => TimeProvider.GetLocalNow().Hour switch
+    {
+        >= 5 and < 10 => "God morgon",
+        >= 10 and < 18 => "Hej",
+        _ => "God kväll"
+    };
+
     private static readonly System.Globalization.CultureInfo SwedishCulture = new("sv-SE");
-
-    private string LeadText => _day switch
-    {
-        { Items.Count: 0, Completed.Count: > 0 } => "Det viktigaste är gjort.",
-        { Items.Count: 0 } => "Ingenting väntar på dig just nu.",
-        _ => "Här är dina uppgifter för idag. En sak i taget räcker."
-    };
-
-    private string CountsText
-    {
-        get
-        {
-            var total = _day!.Completed.Count + _day.Items.Count;
-            return $"{total} uppgifter · {_day.Completed.Count} klara · {_day.Items.Count} kvar";
-        }
-    }
-
-    private string? EncouragementText => _day switch
-    {
-        { Items.Count: 0, Completed.Count: > 0 } => "Dagens uppgifter är klara. Bra jobbat!",
-        { Completed.Count: > 0 } => "Det viktigaste är på väg. En sak i taget räcker.",
-        _ => null
-    };
-
-    private bool ShowSidebar => _day is not null && EncouragementText is not null;
 
     protected override async Task OnInitializedAsync()
     {
@@ -373,6 +360,38 @@ else
         }
 
         _day = await Api.GetDailyPlanAsync(householdId, memberId, Today);
+
+        if (_day is { Items.Count: 0, Completed.Count: 0 })
+        {
+            _nextPlanned ??= await FindNextPlannedDayAsync(householdId, memberId);
+        }
+        else
+        {
+            _nextPlanned = null;
+        }
+    }
+
+    /// <summary>
+    /// No endpoint answers "when is this member's next planned day" directly, so this looks
+    /// forward a bounded week at a time via the same per-day call "Idag" already makes -
+    /// generating each date's occurrences along the way, exactly like tomorrow's chip in the
+    /// old "Tjuvkika" peek already did. Capped at 7 days: a "Nästa: ..." hint only makes sense
+    /// as a near-term, this-week thing: further out, "Ledigt idag" stands on its own.
+    /// </summary>
+    private async Task<(DateOnly, int)?> FindNextPlannedDayAsync(Guid householdId, Guid memberId)
+    {
+        for (var offset = 1; offset <= 7; offset++)
+        {
+            var date = Today.AddDays(offset);
+            var plan = await Api.GetDailyPlanAsync(householdId, memberId, date);
+
+            if (plan is { Items.Count: > 0 })
+            {
+                return (date, plan.Items.Count);
+            }
+        }
+
+        return null;
     }
 
     private async Task CompleteAsync(Guid occurrenceId)
@@ -474,6 +493,7 @@ else
 
             _extraForm.Name = string.Empty;
             _extraForm.EstimatedMinutes = 0;
+            _showExtraTaskSheet = false;
             await LoadDayAsync();
         }
         catch (HttpRequestException)
@@ -483,42 +503,6 @@ else
         finally
         {
             _extraTaskBusy = false;
-        }
-    }
-
-    /// <summary>
-    /// Loads the household's member list the first time the "Tjuvkika" details is opened,
-    /// rather than on every visit to Min dag - most people will never open it.
-    /// </summary>
-    private async Task OnPeekToggled()
-    {
-        if (_householdMembers is not null || Session.Me is not { HouseholdId: { } householdId, MemberId: { } memberId })
-        {
-            return;
-        }
-
-        var household = await Api.GetHouseholdAsync(householdId);
-        _householdMembers = household?.Members.Where(member => member.IsActive).ToList() ?? [];
-        _peekMemberId = memberId;
-        await LoadPeekDayAsync();
-    }
-
-    private async Task LoadPeekDayAsync()
-    {
-        if (Session.Me is not { HouseholdId: { } householdId } || _peekMemberId == Guid.Empty)
-        {
-            return;
-        }
-
-        _peekBusy = true;
-
-        try
-        {
-            _peekDay = await Api.GetDailyPlanAsync(householdId, _peekMemberId, Today.AddDays(_peekDayOffset));
-        }
-        finally
-        {
-            _peekBusy = false;
         }
     }
 }

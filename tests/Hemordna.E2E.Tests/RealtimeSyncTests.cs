@@ -37,7 +37,7 @@ public class RealtimeSyncTests
             $"/api/households/{householdId}/members/{memberId}/weekly-budget",
             new { monday = 60, tuesday = 60, wednesday = 60, thursday = 60, friday = 60, saturday = 60, sunday = 60 });
         await page.ReloadAsync();
-        await page.GetByRole(AriaRole.Heading, new() { Name = "Hej Hanna!" }).WaitForAsync();
+        await page.Locator("h1", new() { HasText = "Hanna" }).WaitForAsync();
 
         // Give the page's SignalR connection time to finish joining the household group
         // before the change happens, or the push has nothing to reach.

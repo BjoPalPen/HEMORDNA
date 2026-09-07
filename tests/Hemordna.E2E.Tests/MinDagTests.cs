@@ -70,7 +70,9 @@ public class MinDagTests
 
         await SignUpAsync(page, "Anna");
 
-        await Assertions.Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Hej Anna!" }))
+        // The greeting word depends on time of day (see docs/DESIGN.md "Idag") - only the name
+        // itself, in the page's own h1, is what this test can assert regardless of when it runs.
+        await Assertions.Expect(page.Locator("h1", new() { HasText = "Anna" }))
             .ToBeVisibleAsync();
     }
 
@@ -81,7 +83,7 @@ public class MinDagTests
 
         await SignUpAsync(page, "Bjorn");
 
-        await Assertions.Expect(page.GetByText("Inget är inplanerat idag.")).ToBeVisibleAsync();
+        await Assertions.Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Ledigt idag" })).ToBeVisibleAsync();
 
         // The tone rules in docs/PRODUCT.md are a product requirement, not a preference.
         var body = await page.Locator("body").InnerTextAsync();

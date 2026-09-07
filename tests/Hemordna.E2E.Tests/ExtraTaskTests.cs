@@ -18,7 +18,7 @@ public class ExtraTaskTests
         // A fresh household's creator starts at zero minutes a day (see CreateHousehold), so
         // this only lands on today's list - rather than silently under "till en annan dag" -
         // if AddExtraTaskAsync's availability bump actually worked.
-        await page.GetByText("Lägg till en extra uppgift").ClickAsync();
+        await page.GetByRole(AriaRole.Button, new() { Name = "Extra uppgift" }).ClickAsync();
         await page.GetByLabel("Namn").FillAsync("Rensa garderoben");
         await page.GetByRole(AriaRole.Button, new() { Name = "Lagom tid" }).ClickAsync();
         await page.GetByRole(AriaRole.Button, new() { Name = "Lägg till för i dag" }).ClickAsync();

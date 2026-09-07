@@ -1,7 +1,9 @@
 @page "/installningar"
+@using Hemordna.Client.Support
 @inject HemordnaApiClient Api
 @inject HemordnaSession Session
 @inject WebAuthnClient WebAuthn
+@inject IJSRuntime JS
 
 <PageTitle>Inställningar – Hemordna</PageTitle>
 
@@ -252,6 +254,12 @@ else
             if (!await Api.SetPreferenceAsync(householdId, memberId, _presentation, _motivation))
             {
                 _message = "Det gick inte att spara. Försök igen.";
+            }
+            else
+            {
+                // Applies immediately in this tab, rather than only after the next reload -
+                // MainLayout only re-checks the preference on sign-in, not on every save here.
+                await TextSize.ApplyAsync(JS, _presentation == "LargeText");
             }
         }
         catch (HttpRequestException)

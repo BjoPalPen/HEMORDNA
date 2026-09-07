@@ -389,6 +389,30 @@ a {
     color: var(--sot);
 }
 
+/* An interactive chip - a secondary action, visually a chip but a real 44px tap target
+   (DESIGN.md §10 is unconditional; the concept mockup's own chips are drawn smaller than that
+   only because they illustrate proportions, not literal pixel sizes). */
+.chip-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding: 0 var(--space-4);
+    border: none;
+    border-radius: var(--pill);
+    background: var(--surface-2);
+    color: var(--sot);
+    font: inherit;
+    font-family: var(--font-display);
+    font-weight: 600;
+    font-size: calc(var(--font-size-base) * .85);
+    cursor: pointer;
+}
+
+.chip-action:hover {
+    background: var(--aska-soft);
+}
+
 /* Never the only carrier of meaning - always paired with text. */
 .notice {
     padding: var(--space-3) var(--space-4);

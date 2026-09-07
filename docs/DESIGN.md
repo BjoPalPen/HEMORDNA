@@ -125,27 +125,65 @@ Försenade uppgifter beskrivs neutralt och sakligt, aldrig anklagande.
 
 ## 6. Skärmar
 
-### Min dag (huvudvy)
+### Idag (huvudvy)
 
-Startskärmen. Visar **bara den egna dagen** – aldrig hushållets backlogg.
+Startskärmen (`MinDag.razor`, route `/`). Visar **bara den egna dagen** – aldrig hushållets
+backlogg.
 
 ```text
-Hej Anna! 👋
-Här är dina uppgifter för idag. En sak i taget räcker.
+MÅNDAG 7 SEPTEMBER
+God morgon, Björn
+3 av 6 klara
+▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬  (tunn linje, gustav på surface-2)
 
-4 uppgifter · 2 klara · 2 kvar
+KÖK                                            2 KVAR
+( ) Diska eller töm diskmaskinen  [Kök]           ›
+( ) Torka av bänkarna             [Kök]           ›
 
-[x] Torka av köksbänkar    [Kök]      ⌄
-[ ] Dammsug vardagsrum     [Vardagsrum]   ⌄
-[ ] Plocka tvätt           [Tvättstuga]   ⌄
+[Extra uppgift]
+
+KLART IDAG                                         3
+(✓) Bädda sängen                  [Sovrum]
 ```
 
-Varje rad: kryssruta, namn, områdeschip, expandering. Ingen tid visas – varken per uppgift
-eller som summa, och inget val om tid över huvud taget. Tid hanteras helt i bakgrunden (se
-§6a); användaren ser bara namn och bock. Sidopanel (dator): bara ett uppmuntranskort, och
-bara när det finns något avklarat att uppmuntra – annars ingen sidopanel alls. Ett tidigare
-"Snabbval" för dagens tillfälliga avvikelse är borttaget: även ett litet, kvalitativt tidsval
-visade sig kännas rörigt och stressande på sidan alla öppnar varje dag (produktfeedback).
+Datum som versal etikett, hälsning som rubrik – tidpunkten styr ordet (God morgon/Hej/God
+kväll), aldrig en emoji. Ingen tid visas – varken per uppgift eller som summa, och inget val om
+tid över huvud taget (se §6a) – bara "N av M klara" och en tunn framstegslinje. Uppgifter
+grupperas per rum (`RoomGroups`, oförändrad sorteringslogik) med rumsnamnet i versaler och
+antal kvar till höger; en förfallen uppgift hamnar alltid först i en egen "Sedan tidigare"-grupp,
+oavsett rum. "Klart idag" är en egen grupp längst ner, dämpad (55% opacitet) och genomstruken.
+
+Varje rad (`Components/TaskListItem.razor`): en 44×44px rund bock (gustav-kant, ofylld; fylld
+gustav med vit bock när klar), namn i Familjen Grotesk 600, en chevron till höger som fäller ut
+beskrivning och "Skjut upp till imorgon". Svep höger på raden = markera klar (kort
+gustav-soft-bekräftelse och `navigator.vibrate(10)` på mobil), svep vänster = flytta till
+imorgon – bock- och skjut-upp-knapparna finns alltid kvar som vanliga knappar för tangentbord
+och skärmläsare, och ett svep som börjar på en knapp gör ingenting (annars skulle det stjäla
+klicket). Under `prefers-reduced-motion`: ingen dragrörelse, ingen bekräftelseflash, ingen
+haptik – bara den vanliga klick-hanteringen.
+
+De två gamla ▶-utfällningarna ("N till en annan dag", "Lägg till en extra uppgift") är nu chips
+under listan ("Flytta till en annan dag", "Extra uppgift") som öppnar `BottomSheet.razor` –
+samma innehåll som förut, bara i ett ark i stället för en disclosure. "Tjuvkika på ett schema"
+har flyttat till Vecka (se nedan).
+
+Tomt läge: "Ledigt idag" som en stor, lugn rubrik i stället för en blå informationsruta, med
+"Nästa: onsdag, 2 uppgifter" som underrad när något är planerat inom en vecka framåt (annars
+ingen underrad) – "Klart idag" ligger kvar under om något redan är gjort. Är dagens riktiga
+uppgifter klara men inget mer väntar: "Dagens uppgifter är klara." i samma stil. Ingen sidopanel
+längre – innehållet är alltid en enda kolumn, centrerad under den smala railen (se §8).
+
+**En uppgift åt gången** (§7) ersätter hela listan med ett enda kort: nästa uppgift i samma
+ordning listan redan skulle visat den, med **Bocka av** och **Skjut upp till imorgon** som stora
+knappar. Att bocka av eller skjuta upp laddar om dagen, så nästa uppgift dyker upp av sig
+själv – inget separat index att hålla reda på.
+
+**Kända begränsningar (dokumenterade, inte lösta i detta steg):** meta-raden under namnet
+visar bara "sedan tidigare" när en uppgift är försenad, inte hur ofta den återkommer –
+`PlannedTaskResponse` (Api-kontraktet) bär ingen sådan text, och ett nytt fält är utanför
+scope för klient-bara arbete (se CLAUDE.md, "Behöver du ett nytt API-fält: stanna och
+rapportera"). "Stor text" och "En uppgift åt gången" var sparbara sedan tidigare men lästes
+aldrig av `MinDag.razor` – se "Beslut: Ny form" i ARCHITECTURE.md för vad som nu är kopplat in.
 
 ### Uppgiftsdetalj
 
@@ -154,11 +192,16 @@ upp* och *Kräver flera personer*. Primär knapp **Markera som klar**, sekundär
 Ingen tid visas; uppskattad tid sätts som ett kvalitativt läge (se §6a) och lever bara i
 domänen.
 
-### Planering (vecka)
+### Vecka (`Planering.razor`, route `/vecka`)
 
 **Min vecka**: sju rader, en per veckodag, med bara ett kvalitativt läge i text (t.ex.
 "Ingen tid", "Lagom tid") – inget stapeldiagram, inga minuter, och ingen redigering här.
 Helt läsläge; rollen (se §6b) är enda sättet att ändra veckan.
+
+"Tjuvkika på ett schema" (en titt på i morgon, eller på någon annans dag, skrivskyddat) bor nu
+här i stället för på Idag – samma disclosure och logik, oförändrad, bara flyttad. Vecka blir
+här formellt sett bara mottagare av en flyttad funktion; den egna omdesignen av sidan (veckogrid
+som hjälte, se konceptartefakten) är fortfarande steg 4.
 
 ### Hushållsöversikt
 

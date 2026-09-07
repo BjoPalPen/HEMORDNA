@@ -47,7 +47,7 @@ public class InstallningarTests
         await page.GetByRole(AriaRole.Button, new() { Name = "Skapa konto" }).ClickAsync();
         await page.GetByLabel("Hushållets namn").FillAsync("Familjen Persson");
         await page.GetByRole(AriaRole.Button, new() { Name = "Skapa hushåll" }).ClickAsync();
-        await page.GetByRole(AriaRole.Heading, new() { Name = "Hej Byter Persson!" })
+        await page.Locator("h1", new() { HasText = "Byter Persson" })
             .WaitForAsync(new() { Timeout = 15_000 });
 
         await page.GotoAsync("/installningar");
@@ -71,7 +71,7 @@ public class InstallningarTests
 
         await page.GetByLabel("Lösenord").FillAsync("Ett-Helt-Nytt-Losenord-2026!");
         await page.GetByRole(AriaRole.Button, new() { Name = "Logga in" }).ClickAsync();
-        await page.GetByRole(AriaRole.Heading, new() { Name = "Hej Byter Persson!" })
+        await page.Locator("h1", new() { HasText = "Byter Persson" })
             .WaitForAsync(new() { Timeout = 15_000 });
     }
 }

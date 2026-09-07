@@ -1,28 +1,56 @@
-.day {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) 300px;
-    gap: var(--space-5);
-    max-width: 1100px;
-}
-
-/* No encouragement to show yet - the sidebar column would just be an empty gap. */
-.day-no-sidebar {
-    grid-template-columns: minmax(0, 1fr);
-}
-
 .day-date {
     margin: 0 0 var(--space-1);
     color: var(--sot-soft);
-    font-size: calc(var(--font-size-base) * .9);
-    text-transform: capitalize;
-}
-
-.day-lead {
-    margin: var(--space-2) 0 var(--space-5);
+    font-family: var(--font-display);
+    font-size: calc(var(--font-size-base) * .8);
+    font-weight: 600;
+    letter-spacing: .06em;
+    text-transform: uppercase;
 }
 
 .day-counts {
-    margin: 0 0 var(--space-4);
+    margin: var(--space-2) 0 var(--space-3);
+}
+
+.progress {
+    height: 6px;
+    border-radius: var(--pill);
+    background: var(--surface-2);
+    overflow: hidden;
+    margin-bottom: var(--space-5);
+}
+
+.progress > i {
+    display: block;
+    height: 100%;
+    background: var(--gustav);
+    border-radius: var(--pill);
+    transition: width .3s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .progress > i {
+        transition: none;
+    }
+}
+
+.task-group-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--space-2);
+    margin: var(--space-4) 0 var(--space-2);
+    font-family: var(--font-display);
+    font-size: calc(var(--font-size-base) * .8);
+    font-weight: 600;
+    letter-spacing: .04em;
+    text-transform: uppercase;
+    color: var(--sot-soft);
+}
+
+.task-group-heading span:last-child {
+    font-variant-numeric: tabular-nums;
+    flex-shrink: 0;
 }
 
 .task-list {
@@ -35,16 +63,8 @@
     overflow: hidden;
 }
 
-/* One per room (plus "Sedan tidigare" and "Övrigt") - a quiet label above its own task-list,
-   not a page-level heading, so the day still reads as one continuous list of small sections
-   rather than separate pages. */
-.task-group-heading {
-    margin: 0 0 var(--space-2);
-    font-size: calc(var(--font-size-base) * .9);
-    font-weight: 600;
-    color: var(--sot-soft);
-}
-
+/* Directly-written rows on this page ("Klart idag", the "Flytta till en annan dag" sheet) -
+   Components/TaskListItem.razor carries its own copy for the rows it renders itself. */
 .task {
     display: flex;
     align-items: center;
@@ -58,37 +78,17 @@
 }
 
 .task-check {
-    width: 24px;
-    height: 24px;
+    width: 44px;
+    height: 44px;
     flex-shrink: 0;
     padding: 0;
-    border: 2px solid var(--line);
-    border-radius: 6px;
+    border: 2px solid var(--gustav);
+    border-radius: var(--pill);
     background: var(--surface);
-    cursor: pointer;
-}
-
-.task-check:hover:not(:disabled) {
-    border-color: var(--gustav);
 }
 
 .task-icon {
     flex-shrink: 0;
-}
-
-.task-check:disabled {
-    opacity: .5;
-    cursor: default;
-}
-
-.task-check-done {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    border-color: var(--gustav);
-    background: var(--gustav);
-    color: #fff;
-    cursor: default;
 }
 
 .task-name {
@@ -96,81 +96,91 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-}
-
-/* Done work stays visible but recedes. It is never struck through - the day should read as
-   progress, not as a crossed-off list. */
-.task-done .task-name {
-    color: var(--sot-soft);
-}
-
-.task-note {
-    font-style: normal;
+    font-family: var(--font-display);
+    font-weight: 600;
 }
 
 .task-name .chip {
     margin-top: var(--space-1);
     align-self: flex-start;
+    font-family: var(--font-body);
 }
 
-.task-expand {
-    flex-shrink: 0;
-    width: 32px;
-    height: 32px;
-    padding: 0;
+.task-note {
+    font-style: normal;
+    font-family: var(--font-body);
+    font-weight: 400;
+}
+
+/* "Klart idag" - done work stays visible but recedes, struck through rather than removed, so
+   the day reads as progress rather than a shrinking list. */
+.task-list-done .task {
+    opacity: .55;
+}
+
+.task-list-done .task-name {
+    text-decoration: line-through;
+    text-decoration-color: var(--sot-soft);
+}
+
+.task-check-done {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     border: none;
-    background: transparent;
-    color: var(--sot-soft);
-    cursor: pointer;
-    font-size: calc(var(--font-size-base) * 1.1);
-}
-
-.task-expand:hover {
-    color: var(--sot);
-}
-
-.task-details {
-    padding: 0 var(--space-4) var(--space-3);
-    border-bottom: 1px solid var(--line);
-    background: var(--kalk);
-}
-
-.task-details:last-child {
-    border-bottom: none;
-}
-
-.task-details p {
-    margin: 0 0 var(--space-2);
-}
-
-.rest summary {
-    cursor: pointer;
-    color: var(--sot-soft);
-    font-size: calc(var(--font-size-base) * .9);
-    padding: var(--space-2) 0;
+    background: var(--gustav);
+    color: #fff;
 }
 
 .task-rest {
-    padding-left: var(--space-4);
+    opacity: .85;
 }
 
-.day-side {
+.chips {
     display: flex;
-    flex-direction: column;
-    gap: var(--space-4);
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin: var(--space-4) 0;
 }
 
-.encouragement {
-    background: var(--aska-soft);
-    border-color: var(--aska);
+/* A calm, deliberately empty page - "Ledigt idag" or "Dagens uppgifter är klara" - never a
+   blue notice box. See docs/PRODUCT.md §8: no guilt, no "nothing to see here" filler tone. */
+.calm-state {
+    padding: var(--space-6) 0 var(--space-4);
 }
 
-.quick-actions {
+.calm-state h2 {
+    font-size: calc(var(--font-size-base) * 1.6);
+    font-weight: 700;
+    margin-bottom: var(--space-2);
+}
+
+.focus-card {
+    text-align: center;
+    padding: var(--space-6) var(--space-5);
+    margin-bottom: var(--space-4);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+}
+
+.focus-icon {
+    display: block;
+    margin: 0 auto var(--space-3);
+}
+
+.focus-name {
+    font-size: calc(var(--font-size-base) * 1.3);
+    margin-bottom: var(--space-2);
+}
+
+.focus-description {
     margin-top: var(--space-3);
 }
 
-@media (max-width: 900px) {
-    .day {
-        grid-template-columns: minmax(0, 1fr);
-    }
+.focus-actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin-top: var(--space-5);
 }

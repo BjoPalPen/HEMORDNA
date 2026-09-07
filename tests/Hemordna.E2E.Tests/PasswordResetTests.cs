@@ -38,7 +38,7 @@ public class PasswordResetTests
         await page.GetByRole(AriaRole.Button, new() { Name = "Skapa konto" }).ClickAsync();
         await page.GetByLabel("Hushållets namn").FillAsync("Familjen Persson", new() { Timeout = 15_000 });
         await page.GetByRole(AriaRole.Button, new() { Name = "Skapa hushåll" }).ClickAsync();
-        await page.GetByRole(AriaRole.Heading, new() { Name = "Hej Reset Persson!" })
+        await page.Locator("h1", new() { HasText = "Reset Persson" })
             .WaitForAsync(new() { Timeout = 15_000 });
 
         await page.GotoAsync("/logga-in");
@@ -67,7 +67,7 @@ public class PasswordResetTests
         await page.GetByLabel("Lösenord").FillAsync("Alldeles-Nytt-Losenord-2026!");
         await page.GetByRole(AriaRole.Button, new() { Name = "Logga in" }).ClickAsync();
 
-        await page.GetByRole(AriaRole.Heading, new() { Name = "Hej Reset Persson!" })
+        await page.Locator("h1", new() { HasText = "Reset Persson" })
             .WaitForAsync(new() { Timeout = 15_000 });
     }
 

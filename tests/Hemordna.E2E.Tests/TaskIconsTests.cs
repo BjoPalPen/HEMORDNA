@@ -48,9 +48,9 @@ public class TaskIconsTests
         await page.GotoAsync("/");
 
         // A fresh household's creator starts at zero minutes a day (see CreateHousehold), so
-        // the task just created lands in "till en annan dag" rather than today's list - expand
-        // it rather than fight the budget just to see the icon.
-        await page.GetByText("till en annan dag").ClickAsync();
+        // the task just created lands under "Flytta till en annan dag" rather than today's
+        // list - open that sheet rather than fight the budget just to see the icon.
+        await page.GetByRole(AriaRole.Button, new() { Name = "Flytta till en annan dag" }).ClickAsync();
 
         var icon = page.Locator(".task-icon");
         await Assertions.Expect(icon).ToBeVisibleAsync();

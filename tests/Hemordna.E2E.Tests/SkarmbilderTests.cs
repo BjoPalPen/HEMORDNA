@@ -50,7 +50,7 @@ public class SkarmbilderTests
         await page.GetByLabel("Hushållets namn").FillAsync("Familjen Andersson");
         await page.GetByRole(AriaRole.Button, new() { Name = "Skapa hushåll" }).ClickAsync();
 
-        await page.GetByRole(AriaRole.Heading, new() { Name = "Hej Anna!" })
+        await page.Locator("h1", new() { HasText = "Anna" })
             .WaitForAsync(new() { Timeout = 15_000 });
 
         // Seed content: a kitchen and a bedroom from templates - both carry daily tasks, so
@@ -94,7 +94,7 @@ public class SkarmbilderTests
         // land everything on just one of them - rebalancing afterwards is what a real household
         // in that situation would do too, and it is what gives Anna's own "Idag" real content.
         await page.GotoAsync("/");
-        await page.GetByRole(AriaRole.Heading, new() { Name = "Hej Anna!" }).WaitForAsync();
+        await page.Locator("h1", new() { HasText = "Anna" }).WaitForAsync();
 
         await page.GotoAsync("/rum");
         await page.GetByText("Känns det som att en person gör för mycket?").ClickAsync();
@@ -104,8 +104,14 @@ public class SkarmbilderTests
         await Assertions.Expect(rebalanceButton).ToBeEnabledAsync();
 
         await page.GotoAsync("/");
-        await page.GetByRole(AriaRole.Heading, new() { Name = "Hej Anna!" }).WaitForAsync();
+        await page.Locator("h1", new() { HasText = "Anna" }).WaitForAsync();
         await ShootAsync(page, "06-idag");
+
+        // BottomSheet.razor in its actual chip-triggered use, not just built-and-unused.
+        await page.GetByRole(AriaRole.Button, new() { Name = "Extra uppgift" }).ClickAsync();
+        await page.GetByRole(AriaRole.Heading, new() { Name = "Extra uppgift" }).WaitForAsync();
+        await ShootAsync(page, "06z-extra-uppgift-sheet");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Stäng" }).ClickAsync();
 
         await page.GotoAsync("/installningar");
         await page.GetByRole(AriaRole.Heading, new() { Name = "Min visning" }).WaitForAsync();
@@ -115,12 +121,16 @@ public class SkarmbilderTests
         await CaptureIdagInModeAsync(page, "Stor text - större och tydligare", "09-idag-stor-text");
         await CaptureIdagInModeAsync(page, "En uppgift åt gången - fokusläge", "10-idag-en-i-taget");
 
+        // Back to the default mode - otherwise "11-idag-mobil" below would still show whatever
+        // mode the loop above left it in, not the ordinary grouped list.
+        await SetPresentationModeAsync(page, "Text (standard) - kompakt lista");
+
         // Mobile: the navigation must become a bottom bar, and every page above must still fit
         // without horizontal scroll or overlap.
         await page.SetViewportSizeAsync(390, 844);
 
         await page.GotoAsync("/");
-        await page.GetByRole(AriaRole.Heading, new() { Name = "Hej Anna!" }).WaitForAsync();
+        await page.Locator("h1", new() { HasText = "Anna" }).WaitForAsync();
         await ShootAsync(page, "11-idag-mobil");
 
         await page.GotoAsync("/rum");
@@ -136,9 +146,9 @@ public class SkarmbilderTests
         await ShootAsync(page, "14-hushall-mobil");
     }
 
-    /// <summary>Switches "Min visning" to the given presentation mode, saves, then screenshots
-    /// "Idag" in that mode - see docs/PRODUCT.md §7, individual presentation.</summary>
-    private static async Task CaptureIdagInModeAsync(IPage page, string presentationLabel, string screenshotName)
+    /// <summary>Switches "Min visning" to the given presentation mode and saves - see
+    /// docs/PRODUCT.md §7, individual presentation.</summary>
+    private static async Task SetPresentationModeAsync(IPage page, string presentationLabel)
     {
         await page.GotoAsync("/installningar");
         await page.GetByRole(AriaRole.Heading, new() { Name = "Min visning" }).WaitForAsync();
@@ -148,9 +158,14 @@ public class SkarmbilderTests
         var saveButton = page.GetByRole(AriaRole.Button, new() { Name = "Spara" });
         await saveButton.ClickAsync();
         await Assertions.Expect(saveButton).ToBeEnabledAsync();
+    }
+
+    private static async Task CaptureIdagInModeAsync(IPage page, string presentationLabel, string screenshotName)
+    {
+        await SetPresentationModeAsync(page, presentationLabel);
 
         await page.GotoAsync("/");
-        await page.GetByRole(AriaRole.Heading, new() { Name = "Hej Anna!" }).WaitForAsync();
+        await page.Locator("h1", new() { HasText = "Anna" }).WaitForAsync();
         await ShootAsync(page, screenshotName);
     }
 

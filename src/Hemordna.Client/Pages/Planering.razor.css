@@ -24,3 +24,74 @@
 .chart-value {
     font-variant-numeric: tabular-nums;
 }
+
+/* The "Tjuvkika på ett schema" peek list, moved here from Idag - see docs/ARCHITECTURE.md
+   "Ny form". Scoped CSS does not cross pages, so this page needs its own copy rather than
+   relying on Pages/MinDag.razor.css. */
+.task-list {
+    list-style: none;
+    margin: 0 0 var(--space-4);
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+    overflow: hidden;
+}
+
+.task {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--line);
+}
+
+.task:last-child {
+    border-bottom: none;
+}
+
+.task-check {
+    width: 44px;
+    height: 44px;
+    flex-shrink: 0;
+    padding: 0;
+    border: 2px solid var(--gustav);
+    border-radius: var(--pill);
+    background: var(--surface);
+}
+
+.task-check-done {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: var(--gustav);
+    color: #fff;
+}
+
+.task-name {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    font-family: var(--font-display);
+    font-weight: 600;
+}
+
+.task-name .chip {
+    margin-top: var(--space-1);
+    align-self: flex-start;
+    font-family: var(--font-body);
+}
+
+.task-note {
+    font-style: normal;
+    font-family: var(--font-body);
+    font-weight: 400;
+}
+
+.task-done .task-name {
+    opacity: .55;
+    text-decoration: line-through;
+    text-decoration-color: var(--sot-soft);
+}

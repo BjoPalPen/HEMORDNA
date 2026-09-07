@@ -1,6 +1,9 @@
 @inherits LayoutComponentBase
+@using Hemordna.Client.Support
 @inject HemordnaSession Session
+@inject HemordnaApiClient Api
 @inject NavigationManager Navigation
+@inject IJSRuntime JS
 @implements IDisposable
 
 <div class="app-shell">
@@ -12,14 +15,42 @@
 </div>
 
 @code {
+    private Guid? _textSizeAppliedForMember;
+
     protected override async Task OnInitializedAsync()
     {
         Session.Changed += OnSessionChanged;
 
         await Session.EnsureLoadedAsync();
+        await ApplyTextSizeAsync();
     }
 
-    private void OnSessionChanged() => InvokeAsync(StateHasChanged);
+    private void OnSessionChanged() => InvokeAsync(async () =>
+    {
+        await ApplyTextSizeAsync();
+        StateHasChanged();
+    });
+
+    /// <summary>
+    /// "Stor text" (docs/DESIGN.md §7) scales the whole app's base font size via a
+    /// <c>data-text-size</c> attribute on <c>&lt;html&gt;</c> (see app.css), so it has to be set
+    /// here in the layout every page renders inside - not per-page - and applied once per signed
+    /// -in member rather than on every session change, since Session.Changed fires more often
+    /// than the preference itself does.
+    /// </summary>
+    private async Task ApplyTextSizeAsync()
+    {
+        if (Session.Me is not { HouseholdId: { } householdId, MemberId: { } memberId }
+            || _textSizeAppliedForMember == memberId)
+        {
+            return;
+        }
+
+        _textSizeAppliedForMember = memberId;
+
+        var preference = await Api.GetPreferenceAsync(householdId, memberId);
+        await TextSize.ApplyAsync(JS, preference?.Presentation == "LargeText");
+    }
 
     public void Dispose() => Session.Changed -= OnSessionChanged;
 }

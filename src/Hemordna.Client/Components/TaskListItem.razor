@@ -1,6 +1,8 @@
 @using Hemordna.Client.Support
+@implements IAsyncDisposable
+@inject IJSRuntime JS
 
-<li class="task">
+<li class="task" @ref="_rootRef">
     <button type="button" class="task-check"
             aria-label="@($"Markera {Item.Name} som klar")"
             disabled="@IsBusy"
@@ -23,10 +25,12 @@
         }
     </span>
 
-    <button type="button" class="task-expand"
+    <button type="button" class="task-expand @(IsExpanded ? "task-expand-open" : null)"
             aria-label="@($"Mer om {Item.Name}")"
             aria-expanded="@(IsExpanded ? "true" : "false")"
-            @onclick="() => OnToggleExpand.InvokeAsync(Item.OccurrenceId)">⌄</button>
+            @onclick="() => OnToggleExpand.InvokeAsync(Item.OccurrenceId)">
+        <Icon Name="chevron-right" Size="18" />
+    </button>
 </li>
 
 @if (IsExpanded)
@@ -49,9 +53,10 @@
 }
 
 @code {
-    /// <summary>One planned task on "Min dag" - the check button, name, room chip, expandable
-    /// description and defer action. Factored out so the list can be grouped (by room, or
-    /// overdue-first) without duplicating this markup per group - see MinDag.razor.</summary>
+    /// <summary>One planned task on "Idag" - the check button, name, room chip, expandable
+    /// description and defer action, plus a swipe shortcut for both. Factored out so the list
+    /// can be grouped (by room, or overdue-first) without duplicating this markup per group -
+    /// see MinDag.razor.</summary>
     [Parameter, EditorRequired]
     public PlannedTaskResponse Item { get; set; } = null!;
 
@@ -78,5 +83,69 @@
     [Parameter, EditorRequired]
     public EventCallback<Guid> OnDefer { get; set; }
 
+    private ElementReference _rootRef;
+    private IJSObjectReference? _module;
+    private IJSObjectReference? _handle;
+    private DotNetObjectReference<TaskListItem>? _selfRef;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        _selfRef = DotNetObjectReference.Create(this);
+        _module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/task-swipe.js");
+        _handle = await _module.InvokeAsync<IJSObjectReference>("attach", _rootRef, _selfRef);
+    }
+
+    [JSInvokable]
+    public async Task OnSwipeCompleteAsync()
+    {
+        if (!IsBusy)
+        {
+            await OnComplete.InvokeAsync(Item.OccurrenceId);
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnSwipeDeferAsync()
+    {
+        if (!IsBusy && Item.CanBeDeferred)
+        {
+            await OnDefer.InvokeAsync(Item.OccurrenceId);
+        }
+    }
+
     private static string IconSrc(string taskName, string? areaName) => $"icons/tasks/{TaskIcons.For(taskName, areaName)}.svg";
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_handle is not null)
+        {
+            try
+            {
+                await _handle.InvokeVoidAsync("dispose");
+                await _handle.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+                // The circuit is already gone - nothing left to clean up client-side.
+            }
+        }
+
+        if (_module is not null)
+        {
+            try
+            {
+                await _module.DisposeAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+        }
+
+        _selfRef?.Dispose();
+    }
 }

@@ -30,7 +30,7 @@ public class HouseholdInviteTests
         await joinerPage.GetByLabel("Inbjudningskod").FillAsync(inviteCode);
         await joinerPage.GetByRole(AriaRole.Button, new() { Name = "Gå med i hushållet" }).ClickAsync();
 
-        await joinerPage.GetByRole(AriaRole.Heading, new() { Name = "Hej David!" }).WaitForAsync(new() { Timeout = 15_000 });
+        await joinerPage.Locator("h1", new() { HasText = "David" }).WaitForAsync(new() { Timeout = 15_000 });
 
         // Both now see the same household - the owner's own name for it, not a new one.
         await joinerPage.GotoAsync("/hushall");

@@ -1,0 +1,82 @@
+// Swipe right = mark done, swipe left = move to tomorrow (Components/TaskListItem.razor). The
+// check/move BUTTONS are the real, always-present controls for keyboard and screen readers -
+// this is a pointer-only shortcut layered on top, never the only way to do either.
+const threshold = 72;
+const maxDrag = 120;
+
+export function attach(element, dotNetRef) {
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    let startX = null;
+    let dx = 0;
+    let dragging = false;
+
+    function onPointerDown(event) {
+        if (event.pointerType === 'mouse' && event.button !== 0) {
+            return;
+        }
+
+        // A tap that starts on the check/expand button (or anything else focusable) is not the
+        // start of a swipe - capturing the pointer here would steal it from the button's own
+        // click handling.
+        if (event.target.closest('button, a, input, select, textarea')) {
+            return;
+        }
+
+        startX = event.clientX;
+        dx = 0;
+        dragging = true;
+        element.setPointerCapture(event.pointerId);
+    }
+
+    function onPointerMove(event) {
+        if (!dragging || startX === null) {
+            return;
+        }
+
+        dx = event.clientX - startX;
+
+        if (!reduceMotion) {
+            const clamped = Math.max(-maxDrag, Math.min(maxDrag, dx));
+            element.style.transform = `translateX(${clamped}px)`;
+        }
+    }
+
+    function onPointerUp() {
+        if (!dragging) {
+            return;
+        }
+
+        dragging = false;
+        element.style.transform = '';
+
+        if (dx > threshold) {
+            if (!reduceMotion) {
+                element.classList.add('task-swipe-confirm');
+                setTimeout(() => element.classList.remove('task-swipe-confirm'), 220);
+                navigator.vibrate?.(10);
+            }
+
+            dotNetRef.invokeMethodAsync('OnSwipeCompleteAsync');
+        } else if (dx < -threshold) {
+            dotNetRef.invokeMethodAsync('OnSwipeDeferAsync');
+        }
+
+        startX = null;
+        dx = 0;
+    }
+
+    element.addEventListener('pointerdown', onPointerDown);
+    element.addEventListener('pointermove', onPointerMove);
+    element.addEventListener('pointerup', onPointerUp);
+    element.addEventListener('pointercancel', onPointerUp);
+
+    return {
+        dispose() {
+            element.removeEventListener('pointerdown', onPointerDown);
+            element.removeEventListener('pointermove', onPointerMove);
+            element.removeEventListener('pointerup', onPointerUp);
+            element.removeEventListener('pointercancel', onPointerUp);
+        }
+    };
+}

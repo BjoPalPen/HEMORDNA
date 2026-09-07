@@ -1,8 +1,9 @@
 @page "/vecka"
 @inject HemordnaApiClient Api
 @inject HemordnaSession Session
+@inject TimeProvider TimeProvider
 
-<PageTitle>Planering – Hemordna</PageTitle>
+<PageTitle>Vecka – Hemordna</PageTitle>
 
 @if (!Session.IsLoaded)
 {
@@ -34,10 +35,87 @@ else
             </li>
         }
     </ul>
+
+    <details class="more-options" @ontoggle="OnPeekToggled">
+        <summary>Tjuvkika på ett schema</summary>
+        <p class="muted small">
+            En titt på i morgon, eller på någon annans dag - bara för att se, inget går att
+            bocka av eller skjuta upp härifrån.
+        </p>
+
+        @if (_householdMembers is { Count: > 0 })
+        {
+            <label class="field">
+                <span>Vems dag?</span>
+                <select @bind="_peekMemberId" @bind:after="LoadPeekDayAsync">
+                    @foreach (var peekable in _householdMembers)
+                    {
+                        <option value="@peekable.Id">
+                            @(peekable.Id == Session.Me!.MemberId ? "Jag" : peekable.DisplayName)
+                        </option>
+                    }
+                </select>
+            </label>
+
+            <label class="field">
+                <span>Vilken dag?</span>
+                <select @bind="_peekDayOffset" @bind:after="LoadPeekDayAsync">
+                    <option value="0">Idag</option>
+                    <option value="1">Imorgon</option>
+                </select>
+            </label>
+
+            @if (_peekBusy)
+            {
+                <p class="muted small">Hämtar...</p>
+            }
+            else if (_peekDay is { } peekDay)
+            {
+                @if (peekDay.Items.Count == 0 && peekDay.Completed.Count == 0)
+                {
+                    <div class="notice">Inget inplanerat den dagen.</div>
+                }
+                else
+                {
+                    <ul class="task-list" aria-label="Tjuvkikad dag">
+                        @foreach (var done in peekDay.Completed)
+                        {
+                            <li class="task task-done">
+                                <span class="task-check task-check-done" aria-hidden="true">✓</span>
+                                <span class="task-name">@done.Name</span>
+                            </li>
+                        }
+                        @foreach (var item in peekDay.Items)
+                        {
+                            <li class="task">
+                                <span class="task-name">
+                                    @item.Name
+                                    @if (item.AreaName is { } peekArea)
+                                    {
+                                        <span class="chip">@peekArea</span>
+                                    }
+                                    @if (item.IsOverdue)
+                                    {
+                                        <span class="task-note muted small">sedan tidigare</span>
+                                    }
+                                </span>
+                            </li>
+                        }
+                    </ul>
+                }
+            }
+        }
+    </details>
 }
 
 @code {
     private HouseholdMemberResponse? _member;
+
+    private IReadOnlyList<HouseholdMemberResponse>? _householdMembers;
+    private Guid _peekMemberId;
+    private int _peekDayOffset;
+    private DailyPlanResponse? _peekDay;
+    private bool _peekBusy;
 
     protected override async Task OnInitializedAsync()
     {
@@ -69,4 +147,42 @@ else
     }
 
     private static string MinutesLabelFor(int minutes) => minutes == 0 ? "Ingen tid" : $"{minutes} min";
+
+    private DateOnly Today => DateOnly.FromDateTime(TimeProvider.GetLocalNow().DateTime);
+
+    /// <summary>
+    /// Loads the household's member list the first time the "Tjuvkika" details is opened,
+    /// rather than on every visit to Vecka - most people will never open it.
+    /// </summary>
+    private async Task OnPeekToggled()
+    {
+        if (_householdMembers is not null || Session.Me is not { HouseholdId: { } householdId, MemberId: { } memberId })
+        {
+            return;
+        }
+
+        var household = await Api.GetHouseholdAsync(householdId);
+        _householdMembers = household?.Members.Where(m => m.IsActive).ToList() ?? [];
+        _peekMemberId = memberId;
+        await LoadPeekDayAsync();
+    }
+
+    private async Task LoadPeekDayAsync()
+    {
+        if (Session.Me is not { HouseholdId: { } householdId } || _peekMemberId == Guid.Empty)
+        {
+            return;
+        }
+
+        _peekBusy = true;
+
+        try
+        {
+            _peekDay = await Api.GetDailyPlanAsync(householdId, _peekMemberId, Today.AddDays(_peekDayOffset));
+        }
+        finally
+        {
+            _peekBusy = false;
+        }
+    }
 }

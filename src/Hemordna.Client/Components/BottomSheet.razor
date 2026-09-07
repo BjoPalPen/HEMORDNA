@@ -26,7 +26,7 @@
     public bool IsOpen { get; set; }
 
     [Parameter]
-    public EventCallback IsOpenChanged { get; set; }
+    public EventCallback<bool> IsOpenChanged { get; set; }
 
     [Parameter]
     public RenderFragment? ChildContent { get; set; }

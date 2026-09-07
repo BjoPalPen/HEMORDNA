@@ -833,7 +833,7 @@ Integrationstester mot en verklig PostgreSQL införs när persistence byggs – 
 
 ---
 
-## 10. Beslut: Ny form — `IMPLEMENTED` (steg 1) / `PROPOSED` (steg 2–5)
+## 10. Beslut: Ny form — `IMPLEMENTED` (steg 1–2) / `PROPOSED` (steg 3–5)
 
 Klienten byggs om skärm för skärm till ett nytt visuellt uttryck och en enklare navigation -
 enbart `Hemordna.Client` och dokumentation, ingen ändring i Domain/Application/Infrastructure/
@@ -894,21 +894,77 @@ självförsörjande: den upprepar `.task`/`.task-details` (som redan fungerade v
 scope-propagering) tillsammans med de tidigare ostylade nästlade reglerna, snarare än att lita
 på att `Pages/MinDag.razor.css` täcker dem.
 
-**Upptäckt, inte fixad (utanför scope för detta steg): "Stor text" och "En uppgift åt gången"
-sparas korrekt som `MemberPreference.Presentation` i Inställningar, men `MinDag.razor` läser
-bara `ImageAndText` (`ShowIcons`) - `data-text-size="large"` sätts aldrig, och det finns ingen
-fokusläges-vy. Skärmbilder av båda lägena är därför visuellt identiska med textläget. Detta är
-inte en regression i detta steg (ingen kod i `MinDag.razor` rördes) utan en sedan tidigare
-ofärdig del av MVP:t - relevant för steg 2 ("Idag-skärmen") vars verifieringskrav uttryckligen
-omfattar alla presentationslägen.
+**Upptäckt i steg 1, löst i steg 2:** "Stor text" och "En uppgift åt gången" sparades korrekt
+som `MemberPreference.Presentation` men lästes aldrig av `MinDag.razor` - se steg 2 nedan.
 
-### Steg 2–5 — `PROPOSED`
+### Steg 2 (`feat/ny-form-idag`) — `IMPLEMENTED`
 
-`feat/ny-form-idag` (Min dag → Idag), `feat/ny-form-rum` (Områden → Rum, `RoomTile`,
-`RoomSheet`, `TaskOptionsSheet`), `feat/ny-form-hushall-vecka` (Hushåll, `MemberSheet`,
-Planering → Vecka), `feat/ny-form-morkt-lage` (dark-tokens, `data-theme`-växel, bock-animation
-och haptik under `prefers-reduced-motion`). Varje steg lämnar appen fullt fungerande och alla
-tester gröna innan nästa påbörjas.
+Min dag byggdes om till Idag enligt DESIGN.md §6 - grupperad lista, chips i stället för
+utfällningar, bock- och svep-interaktion, samt de två presentationslägena steg 1 hittade som
+sparade men overksamma.
+
+**Beslut, ingen fråga innan implementation:**
+- **Tid förblir dold, tvärtemot konceptets egen skiss.** Konceptartefaktens `TaskListItem`-
+  beskrivning ("minuter till höger med tabular-nums") och summeringsraden ("42 min kvar")
+  motsäger DESIGN.md §6a rakt av - ett medvetet, dokumenterat beslut från tidigare
+  produktfeedback ("alltför mycket tidsvisning... skapar stress"). Frågan ställdes uttryckligen
+  innan kod skrevs (se konversationen); svaret var att behålla §6a orört. "Idag" visar därför
+  bara "N av M klara", ingen minutsiffra någonstans, varken per uppgift eller summerat.
+- **Områdeschippen per uppgift behölls**, trots att konceptets egen mockup inte visar den (bara
+  ett rumsrubrik-baserat sammanhang) - `MinDagDetailTests.Shows_the_area_as_a_chip_...` skyddar
+  redan detta som ett namngivet, avsiktligt beteende (DESIGN.md §6, gamla texten "kryssruta,
+  namn, områdeschip, expandering"), och inget i uppdraget bad om att ta bort det.
+- **Ingen ny knapp för "flytta"** - `TaskListItem`s befintliga expandera-knapp följt av "Skjut
+  upp till imorgon" var redan den permanenta, tangentbords-/skärmläsarvänliga vägen att skjuta
+  upp en uppgift (uppfyller redan kravet att bock- och flytta-handlingar alltid finns som
+  vanliga knappar); svepet är ett rent tillägg ovanpå den, inte en ersättning.
+- **`.chip-action`** (ny, global, i `app.css`): konceptets egna chips är ritade betydligt under
+  44px - DESIGN.md §10 är uttryckligt ovillkorligt ("gäller oförändrat"), så "Flytta till en
+  annan dag"/"Extra uppgift" är riktiga knappar med `min-height: 44px`, bara chip-formade.
+- **"Nästa: veckodag, N uppgifter" i tomt-läget** har ingen egen endpoint att fråga - löst
+  genom att stega framåt dag för dag (samma `GetDailyPlanAsync`-anrop "Idag" redan gör, vilket
+  redan genererar den dagens förekomster som en sidoeffekt, precis som gamla "Tjuvkika" på
+  imorgon alltid gjort) och sluta vid 7 dagar. En vecka är gränsen för vad "Nästa: ..." rimligen
+  ska antyda - längre bort står "Ledigt idag" bättre för sig själv.
+- **"En uppgift åt gången"** visar bara den första uppgiften i samma ordning listan redan har
+  (`OverdueItems` följt av `RoomGroups`, plattat till en enda kö) - inget separat index: att
+  bocka av eller skjuta upp laddar om dagen, och nästa uppgift blir automatiskt densamma kön.
+
+**Presentationslägena kopplades in:**
+- **"Stor text"**: `MainLayout.razor` läser nu `MemberPreference.Presentation` en gång per
+  inloggad medlem (inte per sidnavigering - se `_textSizeAppliedForMember`) och sätter
+  `data-text-size="large"` på `<html>` via `wwwroot/js/text-size.js`
+  (`Hemordna.Client.Support.TextSize`, delad med Installningar.razor som anropar samma helper
+  direkt efter en lyckad sparning, så det egna fliken uppdateras utan omladdning). Global,
+  medvetet - typsnittsskalning är per definition en hel-app-inställning (DESIGN.md §7), inte
+  något en enskild sida kan äga.
+- **"En uppgift åt gången"**: se ovan.
+
+**Bugg hittad under obligatorisk skärmbildsgranskning, fixad:** svep-gestens
+`element.setPointerCapture()` i `wwwroot/js/task-swipe.js` fångade pekaren redan vid
+`pointerdown` var som helst i raden - inklusive ovanpå bock- och pil-knapparna - vilket helt
+stoppade deras egna klick från att nå fram (`MinDagDetailTests`/`ExtraTaskTests` gick sönder på
+just detta). Löst genom att `onPointerDown` genast returnerar om målet är eller ligger inuti en
+`button`/`a`/`input`/`select`/`textarea` - ett svep kan bara starta på radens "tomma" yta.
+
+**Tjuvkika på ett schema** flyttade oförändrad till `Planering.razor` (Vecka) - samma markup,
+samma metoder (`OnPeekToggled`/`LoadPeekDayAsync`), bara i en annan fil. `PeekScheduleTests.cs`
+uppdaterades att navigera till `/vecka` i stället för `/`.
+
+**Kvarstående, dokumenterad begränsning:** `PlannedTaskResponse` bär ingen upprepningstext
+("Varje dag", "Varje vecka") - meta-raden under uppgiftsnamnet visar därför bara "sedan
+tidigare" när det gäller, aldrig hur ofta uppgiften återkommer. Ett nytt Api-fält löser det men
+är utanför vad ett klient-bara steg får göra (CLAUDE.md: "Behöver du ett nytt API-fält: stanna
+och rapportera").
+
+### Steg 3–5 — `PROPOSED`
+
+`feat/ny-form-rum` (Områden → Rum, `RoomTile`, `RoomSheet`, `TaskOptionsSheet`),
+`feat/ny-form-hushall-vecka` (Hushåll, `MemberSheet`, Veckans egen omdesign - grid som hjälte),
+`feat/ny-form-morkt-lage` (dark-tokens, `data-theme`-växel, bock-animation och haptik under
+`prefers-reduced-motion` - `TaskListItem` har redan sin `prefers-reduced-motion`-hantering för
+svepet, så steg 5 behöver bara motsvarande för nya interaktioner den själv inför). Varje steg
+lämnar appen fullt fungerande och alla tester gröna innan nästa påbörjas.
 
 ---
 

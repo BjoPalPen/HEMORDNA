@@ -54,7 +54,8 @@ public class PeekScheduleTests
             $"/api/households/{householdId}/tasks/{taskId}/occurrences",
             new { date = today, assignToMemberId = svenId });
 
-        await page.GotoAsync("/");
+        // "Tjuvkika på ett schema" moved from Idag to Vecka - see docs/ARCHITECTURE.md "Ny form".
+        await page.GotoAsync("/vecka");
         await page.GetByText("Tjuvkika på ett schema").ClickAsync();
         await page.GetByLabel("Vems dag?").SelectOptionAsync(new SelectOptionValue { Label = "Sven" });
 
@@ -95,7 +96,8 @@ public class PeekScheduleTests
             $"/api/households/{householdId}/tasks/{taskId}/occurrences",
             new { date = tomorrow, assignToMemberId = memberId });
 
-        await page.GotoAsync("/");
+        // "Tjuvkika på ett schema" moved from Idag to Vecka - see docs/ARCHITECTURE.md "Ny form".
+        await page.GotoAsync("/vecka");
         await page.GetByText("Tjuvkika på ett schema").ClickAsync();
         await page.GetByLabel("Vilken dag?").SelectOptionAsync(new SelectOptionValue { Label = "Imorgon" });
 
@@ -143,7 +145,8 @@ public class PeekScheduleTests
             $"/api/households/{householdId}/tasks/{taskId}/occurrences",
             new { date = tomorrow, assignToMemberId = memberId });
 
-        await page.GotoAsync("/");
+        // "Tjuvkika på ett schema" moved from Idag to Vecka - see docs/ARCHITECTURE.md "Ny form".
+        await page.GotoAsync("/vecka");
         await page.GetByText("Tjuvkika på ett schema").ClickAsync();
         await page.GetByLabel("Vilken dag?").SelectOptionAsync(new SelectOptionValue { Label = "Imorgon" });
 

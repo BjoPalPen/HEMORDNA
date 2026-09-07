@@ -49,7 +49,7 @@ public class PasskeyTests
         await page.GetByRole(AriaRole.Button, new() { Name = "Skapa konto" }).ClickAsync();
         await page.GetByLabel("Hushållets namn").FillAsync("Familjen Nyckel", new() { Timeout = 15_000 });
         await page.GetByRole(AriaRole.Button, new() { Name = "Skapa hushåll" }).ClickAsync();
-        await page.GetByRole(AriaRole.Heading, new() { Name = "Hej Nyckel Persson!" })
+        await page.Locator("h1", new() { HasText = "Nyckel Persson" })
             .WaitForAsync(new() { Timeout = 15_000 });
 
         await page.GotoAsync("/installningar");
@@ -66,7 +66,7 @@ public class PasskeyTests
         await page.GetByRole(AriaRole.Button, new() { Name = "Fortsätt med Face ID / fingeravtryck" })
             .ClickAsync();
 
-        await page.GetByRole(AriaRole.Heading, new() { Name = "Hej Nyckel Persson!" })
+        await page.Locator("h1", new() { HasText = "Nyckel Persson" })
             .WaitForAsync(new() { Timeout = 15_000 });
     }
 
@@ -86,7 +86,7 @@ public class PasskeyTests
         await page.GetByRole(AriaRole.Button, new() { Name = "Skapa konto" }).ClickAsync();
         await page.GetByLabel("Hushållets namn").FillAsync("Familjen Borttagen", new() { Timeout = 15_000 });
         await page.GetByRole(AriaRole.Button, new() { Name = "Skapa hushåll" }).ClickAsync();
-        await page.GetByRole(AriaRole.Heading, new() { Name = "Hej Borttagen Persson!" })
+        await page.Locator("h1", new() { HasText = "Borttagen Persson" })
             .WaitForAsync(new() { Timeout = 15_000 });
 
         await page.GotoAsync("/installningar");

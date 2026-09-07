@@ -17,7 +17,11 @@ internal static class SignUpHelper
         await page.GetByLabel("Hushållets namn").FillAsync(householdName);
         await page.GetByRole(AriaRole.Button, new() { Name = "Skapa hushåll" }).ClickAsync();
 
-        await page.GetByRole(AriaRole.Heading, new() { Name = $"Hej {displayName}!" })
+        // Not GetByRole(Heading, Name: displayName): a short name can be a substring of other
+        // headings on the page too (e.g. "Ida" inside the empty-state "Ledigt idag"), which
+        // Playwright's default substring matching would treat as a second match. The greeting
+        // is always the page's one and only <h1>.
+        await page.Locator("h1", new() { HasText = displayName })
             .WaitForAsync(new() { Timeout = 15_000 });
     }
 
