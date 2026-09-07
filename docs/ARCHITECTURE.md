@@ -408,6 +408,13 @@ rapport.
 Ringen SVG:as med en cirkel `r="15.9155"` - vald just för att dess omkrets blir exakt 100, så
 `PercentComplete` (0–100) kan skrivas direkt som `stroke-dasharray` utan omräkning.
 
+Nämnaren (`Total`) räknar INTE `TaskOccurrenceStatus.Skipped`. En överhoppad förekomst ("behövs
+inte den här gången", t.ex. kvarlämnad av en frekvensändring - se `TaskFrequencyTests`) är ett
+medvetet beslut att krympa dagens omfång, inte en ouppfylld post. Om den låg kvar i nämnaren
+skulle ringen aldrig kunna nå 100% igen den dagen oavsett vad som faktiskt blir klart - en tyst,
+permanent "ofullständig"-markering som motverkar PRODUCT.md §8:s skuldfria ton. Upptäckt av en
+användare vars hushåll hade flera överhoppade förekomster kvar från tidigare frekvensändringar.
+
 ### Beslut: `MemberPreference` — `IMPLEMENTED`
 
 Individuell presentation (`PresentationMode`: text / bild+text / stor text / en uppgift åt
