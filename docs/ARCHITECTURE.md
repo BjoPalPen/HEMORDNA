@@ -616,6 +616,16 @@ uppgiftens uppskattade tid (`SetMemberAvailability`, samma mekanism som "mindre 
 används åt andra hållet). Planeraren ljuger därmed aldrig om hur mycket tid som faktiskt finns,
 se `MinDag.razor.AddExtraTaskAsync`.
 
+**Bugg hittad i produktion (2026-09-07), fixad:** "Tjuvkika på ett schema"s peek-vy visade
+`PlannedTaskResponse.IsOverdue` ingenstans, till skillnad från huvudvyn (som redan taggar en
+sådan rad "sedan tidigare"). En daglig uppgift som inte avklarats idag är fortfarande
+utestående i morgon - `DailyPlanner` viker (avsiktligt) in den i morgondagens `Items` som
+övertidig, TILLSAMMANS med morgondagens egen, färska instans - vilket i peek-vyn visade samma
+uppgiftsnamn två gånger utan förklaring och lästes som en äkta dubblett. Ingen dubblett i
+databasen: två skilda occurrences (dagens obehandlade, morgondagens nya), bara samma etikett
+som huvudvyn redan hade som saknades i peek. `MinDag.razor`s peek-rendering visar nu samma
+"sedan tidigare"-chip för `item.IsOverdue` som huvudvyn.
+
 ---
 
 ## 7. Persistence — `IMPLEMENTED`

@@ -102,4 +102,58 @@ public class PeekScheduleTests
         await Assertions.Expect(page.Locator(".task", new() { HasText = "Imorgondagens uppgift" }))
             .ToBeVisibleAsync();
     }
+
+    [Fact]
+    public async Task Peeking_at_tomorrow_labels_todays_still_outstanding_occurrence_separately_from_tomorrows_own()
+    {
+        // The actual production report this fixes: a daily task not yet completed today was
+        // shown twice under "Imorgon" with no explanation, looking like a genuine duplicate.
+        // It is really two different occurrences (today's, still overdue, folded forward -
+        // the same behaviour the main Min dag view already labels "sedan tidigare" - and
+        // tomorrow's own fresh one) but the peek view forgot to show that label at all.
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Otto");
+
+        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
+        http.DefaultRequestHeaders.Authorization = new("Bearer", token);
+
+        var me = await (await http.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
+        var householdId = me.GetProperty("householdId").GetGuid();
+        var memberId = me.GetProperty("memberId").GetGuid();
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var tomorrow = today.AddDays(1);
+        await http.PutAsJsonAsync(
+            $"/api/households/{householdId}/members/{memberId}/availability",
+            new { date = tomorrow, availableMinutes = 60 });
+
+        var task = await (await http.PostAsJsonAsync(
+            $"/api/households/{householdId}/tasks",
+            new { name = "Bädda sängen", estimatedMinutes = 5 }))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        var taskId = task.GetProperty("id").GetGuid();
+
+        // Today's occurrence is left outstanding (never completed) - genuinely overdue by the
+        // time "tomorrow" is peeked - alongside a separate, freshly scheduled one for tomorrow.
+        await http.PostAsJsonAsync(
+            $"/api/households/{householdId}/tasks/{taskId}/occurrences",
+            new { date = today, assignToMemberId = memberId });
+        await http.PostAsJsonAsync(
+            $"/api/households/{householdId}/tasks/{taskId}/occurrences",
+            new { date = tomorrow, assignToMemberId = memberId });
+
+        await page.GotoAsync("/");
+        await page.GetByText("Tjuvkika på ett schema").ClickAsync();
+        await page.GetByLabel("Vilken dag?").SelectOptionAsync(new SelectOptionValue { Label = "Imorgon" });
+
+        // Scoped to the peek's own list - the member's main Min dag list above it separately
+        // shows today's still-outstanding "Bädda sängen" too, with the same ".task" class.
+        var peekList = page.GetByRole(AriaRole.List, new() { Name = "Tjuvkikad dag" });
+        await Assertions.Expect(peekList.Locator(".task", new() { HasText = "Bädda sängen" })).ToHaveCountAsync(2);
+
+        // Exactly one of the two carries the "from before" label - the still-outstanding one
+        // from today - so the two are never mistaken for the same thing shown twice.
+        await Assertions.Expect(peekList.GetByText("sedan tidigare")).ToHaveCountAsync(1);
+    }
 }

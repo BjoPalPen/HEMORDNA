@@ -248,6 +248,10 @@ else
                                                 {
                                                     <span class="chip">@peekArea</span>
                                                 }
+                                                @if (item.IsOverdue)
+                                                {
+                                                    <span class="task-note muted small">sedan tidigare</span>
+                                                }
                                             </span>
                                         </li>
                                     }
