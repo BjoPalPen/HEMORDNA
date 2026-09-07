@@ -38,6 +38,12 @@ public sealed record SetMemberRoleRequest(HouseholdRole? Role);
 
 public sealed record RebalanceScheduleResponse(int ChangedTaskCount);
 
+/// <summary>How many outstanding occurrences actually changed owner - see <c>RebalanceTaskAssignments</c>.</summary>
+public sealed record RebalanceAssignmentsResponse(int ChangedOccurrenceCount);
+
+/// <summary>How many members' budgets were refreshed to the current role preset - see <c>RefreshRolePresetBudgets</c>.</summary>
+public sealed record RefreshRoleBudgetsResponse(int UpdatedMemberCount);
+
 public sealed record AddAreaRequest(string? Name);
 
 /// <summary>

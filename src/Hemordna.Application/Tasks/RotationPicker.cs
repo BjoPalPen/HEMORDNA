@@ -62,24 +62,7 @@ internal static class RotationPicker
         IReadOnlyDictionary<Guid, int> assignedMinutesTodayOnDate,
         DateOnly today)
     {
-        var eligible = household.Members
-            .Where(member => member.IsActive && !member.IsPausedOn(today))
-            .OrderBy(member => member.CreatedAt)
-            .ThenBy(member => member.Id)
-            .ToList();
-
-        if (definition.RequiresAdult)
-        {
-            // A soft preference: if every active member happens to be a child (or nobody's
-            // role is known), falling back to the full list keeps the task assignable rather
-            // than stuck with no eligible candidate.
-            var adults = eligible.Where(member => member.Role != HouseholdRole.ChildOrTeen).ToList();
-
-            if (adults.Count > 0)
-            {
-                eligible = adults;
-            }
-        }
+        var eligible = EligibleMembers(household, definition, today);
 
         if (eligible.Count == 0)
         {
@@ -106,11 +89,45 @@ internal static class RotationPicker
             .Id;
     }
 
-    private static bool HasRoomToday(
-        HouseholdMember member, DateOnly today, IReadOnlyDictionary<Guid, int> assignedMinutesTodayOnDate, int taskMinutes)
+    /// <summary>
+    /// Active, not-paused-on-<paramref name="date"/> members, narrowed to adults when
+    /// <see cref="TaskDefinition.RequiresAdult"/> is set (falling back to the full list if that
+    /// would leave nobody eligible). Shared with <see cref="RebalanceTaskAssignments"/> so a
+    /// reassignment can never land on someone the live picker itself would have refused.
+    /// </summary>
+    internal static IReadOnlyList<HouseholdMember> EligibleMembers(
+        Household household, TaskDefinition definition, DateOnly date)
     {
-        var capacityToday = member.WeeklyTimeBudget.MinutesFor(today.DayOfWeek);
-        var alreadyAssignedToday = assignedMinutesTodayOnDate.GetValueOrDefault(member.Id);
+        var eligible = household.Members
+            .Where(member => member.IsActive && !member.IsPausedOn(date))
+            .OrderBy(member => member.CreatedAt)
+            .ThenBy(member => member.Id)
+            .ToList();
+
+        if (definition.RequiresAdult)
+        {
+            // A soft preference: if every active member happens to be a child (or nobody's
+            // role is known), falling back to the full list keeps the task assignable rather
+            // than stuck with no eligible candidate.
+            var adults = eligible.Where(member => member.Role != HouseholdRole.ChildOrTeen).ToList();
+
+            if (adults.Count > 0)
+            {
+                eligible = adults;
+            }
+        }
+
+        return eligible;
+    }
+
+    /// <summary>Whether assigning a <paramref name="taskMinutes"/> task to <paramref name="member"/> on
+    /// <paramref name="date"/> would stay within their own budget for that day, given what
+    /// <paramref name="assignedMinutesOnDate"/> already has them down for.</summary>
+    internal static bool HasRoomToday(
+        HouseholdMember member, DateOnly date, IReadOnlyDictionary<Guid, int> assignedMinutesOnDate, int taskMinutes)
+    {
+        var capacityToday = member.WeeklyTimeBudget.MinutesFor(date.DayOfWeek);
+        var alreadyAssignedToday = assignedMinutesOnDate.GetValueOrDefault(member.Id);
 
         return alreadyAssignedToday + taskMinutes <= capacityToday;
     }

@@ -291,6 +291,65 @@ som tidigare, bara sant lagrat i stället för återskapat via gissning.
 rundresetiden till servern helt i onödan, eftersom de inte beror på varandra, och gjorde ett
 redan tajmningskänsligt E2E-test (`HushallTests.Changing_a_members_role_...`) flakigare.
 
+### Beslut: 65/35 target split mellan Pensionär och Heltidsarbetande — `IMPLEMENTED`
+
+Den eftersträvade fördelningen av roterande hushållsarbete mellan en pensionär och en
+heltidsarbetande medlem ska vara 65 %/35 %, räknat i uppskattade minuter - inte antal uppgifter.
+
+**Var kvoten kommer ifrån.** `RotationPicker` (helt rollneutral, se `docs/ARCHITECTURE.md` §3
+"Hur roterande ansvar räknas ut") väger redan varje tilldelning mot
+`WeeklyTimeBudget.TotalWeeklyMinutes` - aldrig mot en roll. 65/35 uppnås därför INTE genom att
+lägga in en regel som känner igen "Pensionär" eller "Heltidsarbetande" - det uppstår av sig
+självt när de två rollernas `HouseholdRolePresets`-budgetar (klientsidan) står i förhållandet
+7:13. `AdultFullTime` och `Retired` är nu enhetliga per dag (inte "mindre på vardagar, mer på
+helgen" som tidigare - vilket dagar som faktiskt är lediga varierar med yrke, skiftarbete inom
+t.ex. vård eller handel har sällan lördag/söndag ledigt): 35 min/dag (245/vecka) respektive 65
+min/dag (455/vecka). 455/(245+455) = 65,0 %. `ChildOrTeen` är oförändrad - ligger utanför detta
+beslut.
+
+**Migrering av redan sparade hushåll.** `Hemordna.Application.Households.RefreshRolePresetBudgets`
+uppdaterar en medlems budget till den nya preset-formeln, men ENDAST om den nuvarande budgeten
+exakt matchar den GAMLA formeln för medlemmens sparade `Role` - en verkligt handredigerad budget
+(eller en medlem utan roll) rörs aldrig. Formlerna (gammal och ny) är medvetet duplicerade som
+literaler i den filen, eftersom `Hemordna.Client.Support.HouseholdRolePresets` är en
+klient-endast typ (klienten har redan sin egen kopia av varje wire-kontrakt istället för att
+referera server-assemblies, se `Hemordna.Client.Contracts.ApiContracts`s filhuvud) och
+Application-lagret därför inte kan referera den direkt. Körs aldrig automatiskt - bara explicit
+via `POST .../members/refresh-role-budgets`.
+
+**Ombalansering av redan tilldelade uppgifter.**
+`Hemordna.Application.Tasks.RebalanceTaskAssignments` är den nya, explicita motsvarigheten för
+uppgifter som redan har en ansvarig när kapaciteterna ändras (ny roll, ny medlem, paus som tar
+slut, eller just detta 65/35-beslut) - `RotationPicker` fattar bara beslut framåt, en gång per
+ny occurrence, och rör aldrig ett redan fattat beslut. Flyttar bara utestående
+(`TaskOccurrenceStatus.Planned`), roterande, ej arkiverade occurrences - en avklarad, överhoppad
+eller arkiverad uppgift rörs aldrig, och en fast (icke-roterande) uppgift (t.ex. någons eget
+sovrum) är aldrig en kandidat alls, eftersom hushållet redan uttryckligen valt en permanent
+ägare. Domänen saknar helt ett "låst tilldelning"/"manuell kontra automatisk"-koncept i skrivande
+stund - alla andra utestående roterande occurrences är därför flyttbara oavsett hur de en gång
+tilldelades.
+
+Algoritmen är en enda deterministisk genomgång (sorterad efter datum, definition, id) - vid varje
+occurrence är kandidatpoolen exakt `RotationPicker.EligibleMembers` skuren mot
+`RotationPicker.HasRoomToday` (samma regler den levande tilldelningen redan följer, så en
+omflyttning aldrig kan hamna hos någon `RotationPicker` själv skulle ha avvisat). Den nuvarande
+ägaren behålls om inte någon ANNAN kandidat har en strikt lägre löpande kvot (tilldelat hittills
+÷ målandel) - oavgjort (inklusive "nuvarande ägare har redan lägst kvot") favoriserar att behålla,
+vilket är precis det som gör hela genomgången minimal-ändring, deterministisk och idempotent (ett
+nytt körning utgår från föregåendes eget resultat, där ingen kandidat längre har en strikt bättre
+kvot att erbjuda - se `RebalanceTaskAssignmentsTests` för det fullständiga argumentet och flera
+handverifierade exempel, bland annat ett där ojämna, odelbara uppgiftsstorlekar gör att den
+nuvarande fördelningen redan är närmast möjliga och inget flyttas).
+
+Varje ändring appliceras på redan spårade entiteter i minnet; `ITaskOccurrenceRepository.UpdateAsync`
+anropas exakt en gång i slutet (dess nuvarande implementation sparar alla väntande ändringar för
+hela enhetsarbetet i ett anrop) - hela satsen committas tillsammans eller inte alls.
+`IHouseholdNotifier.NotifyOccurrencesChangedAsync` anropas likaså högst en gång, bara om något
+faktiskt ändrades. Körs aldrig automatiskt - bara explicit via `POST .../tasks/rebalance-assignments`,
+bakom samma `HouseholdAccessFilter` som `RebalanceSchedule` redan använder (ingen ny
+admin-behörighetsnivå - se CLAUDE.md §12 Scope control om varför ett sådant system inte byggs
+för detta).
+
 ### Beslut: `TaskWorkload` - veckoestimat viktat efter frekvens — `IMPLEMENTED`
 
 `Omraden.razor`s ursprungliga "Totalt: X uppgifter · Y min" (`_tasks.Sum(t => t.EstimatedMinutes)`)

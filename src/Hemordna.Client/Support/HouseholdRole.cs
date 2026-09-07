@@ -25,19 +25,35 @@ public static class HouseholdRolePresets
     ];
 
     /// <summary>
-    /// A rough weekly shape per role: less on the days taken up by work or school, more when
-    /// free. Not precise - just enough to start from, and always editable afterwards.
+    /// A rough weekly shape per role - not precise, just enough to start from, and always
+    /// editable afterwards.
     /// </summary>
+    /// <remarks>
+    /// <b>AdultFullTime and Retired are uniform across all seven days, deliberately in a 7:13
+    /// ratio</b> (245 and 455 minutes a week respectively - 35% / 65% of their combined total).
+    /// Uniform rather than a "less on weekdays, more on weekends" split: which days are actually
+    /// free varies by job (shift work in retail or healthcare rarely means Saturday/Sunday off),
+    /// so the role alone should not assume it - see docs/ARCHITECTURE.md for the full reasoning
+    /// behind the 65/35 target. The split itself is never encoded as a rule anywhere: it falls
+    /// out purely from <see cref="RotationPicker"/> (server-side) weighing rotation by
+    /// <c>WeeklyTimeBudget.TotalWeeklyMinutes</c>, which is entirely role-blind - two members
+    /// with these two capacities converge on a 65/35 split themselves, without either role's
+    /// name ever entering the rotation logic. <c>ChildOrTeen</c> keeps its original
+    /// less-on-schooldays shape - unaffected by the 65/35 decision.
+    /// </remarks>
     public static WeeklyTimeBudgetContract BudgetFor(HouseholdRole role)
     {
-        var (weekday, weekend) = role switch
+        if (role == HouseholdRole.AdultFullTime)
         {
-            HouseholdRole.AdultFullTime => (30, 60),
-            HouseholdRole.ChildOrTeen => (15, 30),
-            HouseholdRole.Retired => (60, 60),
-            _ => (30, 30)
-        };
+            return new WeeklyTimeBudgetContract(35, 35, 35, 35, 35, 35, 35);
+        }
 
+        if (role == HouseholdRole.Retired)
+        {
+            return new WeeklyTimeBudgetContract(65, 65, 65, 65, 65, 65, 65);
+        }
+
+        var (weekday, weekend) = role == HouseholdRole.ChildOrTeen ? (15, 30) : (30, 30);
         return new WeeklyTimeBudgetContract(weekday, weekday, weekday, weekday, weekday, weekend, weekend);
     }
 
