@@ -2051,6 +2051,59 @@ kan ha valt "Steg för steg", en annan inget alls. Allt i detta uppdrag är anti
   `grep -rniE "NPF|ADHD|autis|funktionsned|tillgänglig"` mot ändrade filer: noll träffar.
   `Hemordna.E2E.Tests` i sin helhet kört (klientändring).
 
+#### B6 (Tak på "Sedan tidigare") — `IMPLEMENTED` — med en dokumenterad avvikelse
+
+- **Problemet**: "Sedan tidigare" visade alla försenade uppgifter oavsett antal - en dag med
+  många förseningar blev en lång, tät lista som lästes som ett misslyckande snarare än en plan.
+- **`AVVIKELSE FRÅN SPECEN` - `OriginalScheduledDate` finns inte i kontraktet.** Specen bad om
+  "de 3 äldsta (lägst `OriginalScheduledDate`, sedan namn)". `PlannedTaskResponse` (Api OCH
+  Client, `Contracts/ApiContracts.cs`/`Contracts/HouseholdContracts.cs`) bär `OccurrenceId`,
+  `TaskDefinitionId`, `Name`, `EstimatedMinutes`, `Priority`, `IsOverdue`, `AreaName`,
+  `Description`, `CanBeDeferred` - inget datum. `TaskOccurrenceResponse` (en annan DTO, från
+  `/occurrences`-endpointen) har visserligen `OriginalScheduledDate`, men det är inte samma typ
+  som `MinDag.razor` faktiskt läser. Att lägga till fältet hade krävt att röra Api-kontraktet
+  utanför Del A:s "två additiva ändringar" - samma sorts eget-initiativ-tillägg uppdraget
+  uttryckligen varnar för (jf. B2:s "vem bockade av"-exempel). I stället: de tre första i den
+  ordning `OverdueItems` REDAN har (samma deterministiska, serverstyrda ordning "Sedan
+  tidigare" alltid visat, oförändrad av B6) - inte en omsortering efter datum. Konsekvens,
+  synlig i skärmbildsgranskningen: de tre synliga raderna är INTE nödvändigtvis de tre
+  kronologiskt äldsta. **Rapporteras här enligt uppdragets egen instruktion snarare än att
+  API-fältet läggs till på eget initiativ - stanna och fråga om `OriginalScheduledDate` ska
+  exponeras.**
+- **`MinDag.razor`**: `OverdueCapThreshold = 5`, `OverdueVisibleCount = 3` (namngivna
+  konstanter, inte magiska tal). När `OverdueItems.Count > 5` och `!_showAllOverdue`: bara de
+  tre första renderas, följt av `<li class="task task-more">` ("… och N-3 till", "Visa alla" →
+  `_showAllOverdue = true`, "Låt Hemordna sprida ut dem" → `RebalanceOverdueAsync`).
+  `GroupHeading`s räknare (`OutstandingCount(OverdueItems)`) räknar fortfarande hela listan,
+  capad eller inte - rubriken ljuger aldrig om hur mycket som väntar. `_showAllOverdue`
+  nollställs INTE i `LoadDayAsync` (till skillnad från `_focusOffset`) - ett medvetet val: att
+  slå av "Visa alla" igen varje gång medlemmen bockar av en annan uppgift hade känts som att
+  valet inte höll i sig.
+- **`RebalanceOverdueAsync`**: `Api.RebalanceScheduleAsync(householdId)` → `LoadDayAsync()` →
+  DÄREFTER `_rebalanceStatus = "{N} uppgifter fördelades på andra dagar."` (ordningen spelar
+  roll: `LoadDayAsync` rör inte `_rebalanceStatus`, så att sätta strängen EFTER omladdningen är
+  vad som gör att den syns kvar även om "Sedan tidigare" krympt eller försvunnit helt).
+  Statusraden (`<p class="notice" role="status">`) har ingen egen timeout - specen angav ingen
+  (till skillnad från B1/B2/B7 som alla har explicita sekundtal), tolkat som att den ska stå
+  kvar tills sidan lämnas, inte tystas efter ett gissat antal sekunder.
+- **`.task-more`** (CSS): `flex-wrap` + `row-gap` så raden med räknare + två länkknappar bryter
+  snyggt på smala skärmar i stället för att tvinga fram horisontell scroll. Ingen egen
+  `min-height`-justering på knapparna - de ärver `.btn-link`s 44px (DESIGN.md §10 är
+  ovillkorlig; ett första utkast som satte `min-height: auto` på dem togs bort igen innan
+  commit).
+- **Nytt permanent test** `OverdueCapTests.Seven_overdue_tasks_show_three_plus_a_count_until_visa_alla`
+  - sju försenade uppgifter → exakt 3 avbockningsbara rader + "... och 4 till"; rubriken visar
+  fortfarande "7 kvar"; `Visa alla` avslöjar alla sju och `.task-more`-raden försvinner.
+  "Låt Hemordna sprida ut dem" har ingen egen namngiven test i specens lista - verifierat med
+  ett tillfälligt E2E-test (skrivet, kört, raderat): knapptrycket visar statusraden
+  "0 uppgifter fördelades på andra dagar." (inga återkommande uppgifter fanns att flytta i det
+  testfallet - se skärmbild, granskad, ingen layoutbugg).
+- **Verifierat**: `dotnet build Hemordna.slnx` (0 fel/varningar). `Hemordna.Domain.Tests`
+  87/87, `Hemordna.Application.Tests` 177/177 (ren klientändring). `OverdueCapTests` 1/1.
+  Tillfälligt rebalance-test grönt, sedan raderat. `grep -rniE
+  "NPF|ADHD|autis|funktionsned|tillgänglig"` mot ändrade filer: noll träffar.
+  `Hemordna.E2E.Tests` i sin helhet kört (klientändring).
+
 ---
 
 ## 11. Beslut som ännu inte är fattade — `OPEN`

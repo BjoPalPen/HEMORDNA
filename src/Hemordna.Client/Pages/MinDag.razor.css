@@ -276,6 +276,15 @@
     opacity: .85;
 }
 
+/* "Sedan tidigare"'s cap (docs/ARCHITECTURE.md §B6) - a wall of overdue rows reads as failure,
+   not a plan, so past OverdueCapThreshold only the row itself wraps to fit both the count and
+   the two link-style actions on narrow screens instead of forcing a horizontal scroll. */
+.task-more {
+    flex-wrap: wrap;
+    row-gap: var(--space-1);
+    color: var(--sot-soft);
+}
+
 .chips {
     display: flex;
     flex-wrap: wrap;

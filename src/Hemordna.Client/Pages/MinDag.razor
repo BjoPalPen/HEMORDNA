@@ -143,7 +143,11 @@ else
                 {
                     @GroupHeading("Sedan tidigare", OutstandingCount(OverdueItems))
                     <ul class="task-list" aria-label="Sedan tidigare">
-                        @foreach (var row in OverdueItems)
+                        @{
+                            var overdueIsCapped = !_showAllOverdue && OverdueItems.Count > OverdueCapThreshold;
+                            var visibleOverdue = overdueIsCapped ? OverdueItems.Take(OverdueVisibleCount) : OverdueItems;
+                        }
+                        @foreach (var row in visibleOverdue)
                         {
                             @if (row.IsRemotelyCompleted)
                             {
@@ -157,7 +161,23 @@ else
                                               OnComplete="CompleteAsync" OnToggleExpand="ToggleExpand" OnDefer="DeferAsync" />
                             }
                         }
+                        @if (overdueIsCapped)
+                        {
+                            <li class="task task-more">
+                                … och @(OverdueItems.Count - OverdueVisibleCount) till
+                                <button type="button" class="btn btn-link" @onclick="() => _showAllOverdue = true">Visa alla</button>
+                                ·
+                                <button type="button" class="btn btn-link" disabled="@_rebalanceBusy" @onclick="RebalanceOverdueAsync">
+                                    Låt Hemordna sprida ut dem
+                                </button>
+                            </li>
+                        }
                     </ul>
+                }
+
+                @if (_rebalanceStatus is not null)
+                {
+                    <p class="notice" role="status">@_rebalanceStatus</p>
                 }
 
                 @foreach (var floorGroup in FloorGroups)
@@ -314,6 +334,14 @@ else
     private string? _motivation;
     private bool _showTimeLevel;
     private int _focusOffset;
+    private bool _showAllOverdue;
+    private bool _rebalanceBusy;
+    private string? _rebalanceStatus;
+
+    // "Beslut: Ångra och stabil lista" §B6 - a long "Sedan tidigare" reads as a wall of failure
+    // rather than a plan; past this many, only the first few show until asked to see the rest.
+    private const int OverdueCapThreshold = 5;
+    private const int OverdueVisibleCount = 3;
     private bool _showUnplannedSheet;
     private bool _showExtraTaskSheet;
     private (DateOnly Date, int Count)? _nextPlanned;
@@ -367,7 +395,11 @@ else
     /// <summary>
     /// Overdue items are pulled into their own leading group regardless of room, so something
     /// already late is never buried inside a room's list further down - see
-    /// docs/ARCHITECTURE.md "Rumsgruppering på Min dag".
+    /// docs/ARCHITECTURE.md "Rumsgruppering på Min dag". When capped (§B6), the first
+    /// <see cref="OverdueVisibleCount"/> of THIS order are shown, not a re-sort by original
+    /// scheduled date - PlannedTaskResponse does not carry that field (a confirmed contract
+    /// gap, see §B6 in ARCHITECTURE.md), so the existing, already-deterministic server order is
+    /// used instead of guessing at one.
     /// </summary>
     private List<TaskRow> OverdueItems
         => (_day?.Items.Where(item => item.IsOverdue) ?? []).Select(ToRow).ToList();
@@ -942,6 +974,37 @@ else
         finally
         {
             _busyOccurrence = null;
+        }
+    }
+
+    /// <summary>"Låt Hemordna sprida ut dem" (§B6) - re-anchors the household's recurring tasks
+    /// across the week instead of leaving them clustered on whatever day they were first
+    /// scheduled or deferred to (RebalanceSchedule). Set after LoadDayAsync, not before - the
+    /// reload does not clear this field, so setting it first would just have it overwritten by
+    /// nothing; setting it after means the confirmation survives the very reload it is
+    /// reporting on, even once "Sedan tidigare" itself has shrunk or emptied.</summary>
+    private async Task RebalanceOverdueAsync()
+    {
+        if (Session.Me is not { HouseholdId: { } householdId })
+        {
+            return;
+        }
+
+        _rebalanceBusy = true;
+
+        try
+        {
+            var result = await Api.RebalanceScheduleAsync(householdId);
+            await LoadDayAsync();
+
+            if (result is not null)
+            {
+                _rebalanceStatus = $"{result.ChangedTaskCount} uppgifter fördelades på andra dagar.";
+            }
+        }
+        finally
+        {
+            _rebalanceBusy = false;
         }
     }
 
