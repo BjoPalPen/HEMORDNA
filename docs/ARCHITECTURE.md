@@ -1476,6 +1476,39 @@ under alla omständigheter utanför MVP-scope (CLAUDE.md §12/PRODUCT.md §10).
   med synlig bakgrund runt om, bara "Idag" visar text i en fylld gustav-pill, övriga tre bara
   ikon, ingen hård kant mot botten.
 
+#### Delsteg 3 (punkt 2, "Kant-till-kant med progressiv blur") — `IMPLEMENTED`
+
+- **`index.html`**: viewportens `content` fick `viewport-fit=cover` - krävs för att
+  `env(safe-area-inset-*)` ska returnera ett verkligt värde på en iPhone med hemknapp-indikator/
+  hack, i stället för `0px`.
+- **`MainLayout.razor`**: två nya `<div aria-hidden="true">` (`.app-topfade`/`.app-botfade`)
+  direkt i `.app-shell`, före respektive efter `<main>` - fasta, icke-interaktiva
+  (`pointer-events: none`) toningsremsor, bara synliga ≤ 900px (`display:none` på desktop).
+  `.app-main`s eget innehåll scrollar UNDER dem; de rör sig aldrig själva.
+- **`.app-topfade`**: `position: fixed; top:0; height: calc(44px + env(safe-area-inset-top))`,
+  `linear-gradient(var(--kalk) 35%, transparent)` + `backdrop-filter: blur(10px)` (+
+  `-webkit-`) maskerad med en spegelvänd `mask-image`-gradient så själva blur-effekten också
+  tonar ut i stället för att sluta med en egen hård kant. `z-index: 9` - under piller (10) och
+  ark (20/21), över det vanliga sidinnehållet.
+- **`.app-botfade`**: samma mönster spegelvänt (`to top`), `bottom:0; height:110px` - täcker
+  ungefär pillens egen zon plus lite marginal, så sista raden tonar innan den försvinner bakom
+  piller i stället för att klippas tvärt.
+- **`.app-main`** mobil: `padding-top` fick `+ env(safe-area-inset-top)` (var bara
+  `var(--space-4)`) - annars hade `.app-topfade`s nya, säkerhetszon-medvetna höjd kunnat täcka
+  början av innehållet på en enhet med hack.
+- **Verifierat**: `dotnet build Hemordna.slnx` (0 fel/varningar); `Hemordna.Domain.Tests`
+  82/82, `Hemordna.Application.Tests` 173/173, `Hemordna.E2E.Tests` 80/80 (en känd,
+  fördokumenterad flakighet - `HouseholdInviteTests.Joining_with_a_valid_code_...` - föll under
+  full parallell körning, passerade isolerat, och en fullständig omkörning gav 81/81 rent,
+  exakt det mönster CLAUDE.md/uppdraget beskriver som pre-existing snarare än en verklig regression).
+  Fyra viewport-beskurna (inte `FullPage`, som stitchar hela sidan till en komposit och därför
+  inte visar fasta elements verkliga relation till den AKTUELLA viewporten) skärmbilder via ett
+  tillfälligt `DEBUG_Capture_edge_to_edge_fades`-test (tio uppgifter seedade, scrollad till en
+  punkt där en rad faktiskt ligger under toppremsan, och till botten där de sista raderna ligger
+  under piller/bottenremsan), granskade och borttagna: en mjuk, rundad vinjettering syns vid
+  kortens hörn precis där blur-zonen möter kortets skarpa kant - tydligast i mörkt läge - i
+  stället för en hård linje; ingen horisontell scroll eller överlappning.
+
 ---
 
 ## 11. Beslut som ännu inte är fattade — `OPEN`
