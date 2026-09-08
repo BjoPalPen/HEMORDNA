@@ -2139,6 +2139,47 @@ kan ha valt "Steg för steg", en annan inget alls. Allt i detta uppdrag är anti
   `grep -rniE "NPF|ADHD|autis|funktionsned|tillgänglig"` mot ändrade filer: noll träffar.
   `Hemordna.E2E.Tests` i sin helhet kört (klientändring).
 
+#### B10 (Språkpass) — `IMPLEMENTED`
+
+- **Problemet**: tre fraser på Vecka byggde på en bild/ett idiom i stället för att säga vad de
+  gör - "Tjuvkika" (en gissningslek: vad innebär "tjuvkika" egentligen?), "Ser fördelningen
+  skev ut?" (en bild av lutning, inte en fråga om vad knappen faktiskt gör), "Sprid ut över
+  veckan" (sprider man verkligen ut något, eller flyttas uppgifter till andra dagar?).
+- **`Vecka.razor`**: tre exakta textbyten enligt uppdraget - `<summary>Ser fördelningen skev
+  ut?</summary>` → "Vill du fördela om dagarna?", knappens vilotext "Sprid ut över veckan" →
+  "Fördela om dagarna", `<summary>Tjuvkika på ett schema</summary>` → "Se någon annans dag".
+  Knappens BUSY-text ("Sprider ut..." → "Fördelar om...") följde med av samma anledning som den
+  nya §5-regeln nedan finns - en knapps två tillstånd (vilande/upptagen) ska läsas som samma
+  handling, inte två olika. `aria-label="Tjuvkikad dag"` → `"Den valda dagen"` (samma princip
+  tillämpad på en skärmläsarsträng, inte bara synlig text - annars hade AT-användare fortfarande
+  hört den gamla idiomatiska frasen även om sidan visuellt bytt språk).
+  `_rebalanceMessage`-texterna ("En uppgift flyttades...", "Redan bra utspritt...") rördes INTE
+  - redan sakliga, ingen idiom.
+- **`docs/DESIGN.md` §5**: ny regel tillagd, ordagrant enligt uppdraget - "Inga idiom, inga
+  metaforer, inga lekfulla omskrivningar. En knapp säger vad den gör." - med de tre bytena ovan
+  som egna, konkreta exempel. §6 (Idag/Vecka): de återstående, nu inaktuella citaten av de gamla
+  frascitaten uppdaterade till de nya - annars hade dokumentet självt brutit mot regeln det just
+  fått. Samtidigt rättades ett redan inaktuellt påstående i Vecka-avsnittet om att Rum-totalen
+  "behålls som dämpad text under brickorna" - stämde inte sedan B5 flyttade den bakom "Visa tid".
+  §7/§8:s egna, större tillägg (snabbvalen, "Lugn" implementerad, namnen alltid synliga) hör till
+  Del C:s samlade dokumentationspass i stället - samma rytm som redan hållits genom A1–B9 (bara
+  ARCHITECTURE.md per commit; DESIGN.md/PRODUCT.md/HANDOFF.md i klump på slutet), med det här
+  commitets två undantag (den nya §5-regeln, och de nu direkt felaktiga citaten) gjorda ändå
+  eftersom att LÅTA dem stå fel hade varit värre än att vänta.
+- **Testuppdateringar** (bara selektorer, aldrig vad testerna kontrollerar): `OmradenTests`
+  (`Sprider_ut_veckan...`-scenariot), `PeekScheduleTests` (tre tester, samma
+  `GetByText("Tjuvkika...")` → `GetByText("Se någon annans dag")`, plus `aria-label`-bytet).
+  `PlaneringTests` hade inga träffar att uppdatera - ingen av dess assertions rörde dessa fraser.
+- **Verifierat**: `dotnet build Hemordna.slnx` (0 fel/varningar). `Hemordna.Domain.Tests`
+  87/87, `Hemordna.Application.Tests` 177/177 (ren klientändring). `PeekScheduleTests`
+  (3) + `OmradenTests` (10) + `PlaneringTests` (5) = 18/18 grönt. `grep -rniE
+  "NPF|ADHD|autis|funktionsned|tillgänglig" src/Hemordna.Client --include="*.razor"`: noll
+  träffar (DESIGN.md:s egna träffar på "tillgängligt namn"/"Tillgänglighet" är vanlig
+  webbtillgänglighetsterminologi, utanför grepets mandat som gäller `.razor`). Repo-brett sök
+  efter de gamla fraserna: bara historiska beslutsloggar i ARCHITECTURE.md (medvetet
+  oförändrade - de beskriver vad som var sant DÅ) och DESIGN.md:s egna nya exempel-citat kvar.
+  `Hemordna.E2E.Tests` i sin helhet kört (klientändring).
+
 ---
 
 ## 11. Beslut som ännu inte är fattade — `OPEN`

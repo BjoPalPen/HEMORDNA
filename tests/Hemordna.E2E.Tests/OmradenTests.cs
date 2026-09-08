@@ -402,8 +402,8 @@ public class OmradenTests
         Assert.Equal(WeekdayOf(beforeTasks, "Torka av handfatet"), WeekdayOf(beforeTasks, "Byt handdukar"));
 
         await page.GotoAsync("/vecka");
-        await page.GetByText("Ser fördelningen skev ut?").ClickAsync();
-        await page.GetByRole(AriaRole.Button, new() { Name = "Sprid ut över veckan" }).ClickAsync();
+        await page.GetByText("Vill du fördela om dagarna?").ClickAsync();
+        await page.GetByRole(AriaRole.Button, new() { Name = "Fördela om dagarna" }).ClickAsync();
         // Confirms the rebalance actually reported moving something, not just that the button
         // did nothing quietly.
         await Assertions.Expect(page.GetByText("flyttades", new() { Exact = false })).ToBeVisibleAsync();

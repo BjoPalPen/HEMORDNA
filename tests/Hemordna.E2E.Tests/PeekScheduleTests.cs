@@ -52,9 +52,9 @@ public class PeekScheduleTests
             $"/api/households/{householdId}/tasks/{taskId}/occurrences",
             new { date = today, assignToMemberId = svenId });
 
-        // "Tjuvkika på ett schema" moved from Idag to Vecka - see docs/ARCHITECTURE.md "Ny form".
+        // "Se någon annans dag" moved from Idag to Vecka - see docs/ARCHITECTURE.md "Ny form".
         await page.GotoAsync("/vecka");
-        await page.GetByText("Tjuvkika på ett schema").ClickAsync();
+        await page.GetByText("Se någon annans dag").ClickAsync();
         await page.GetByLabel("Vems dag?").SelectOptionAsync(new SelectOptionValue { Label = "Sven" });
 
         var peekedTask = page.Locator(".task", new() { HasText = "Svens uppgift" });
@@ -94,9 +94,9 @@ public class PeekScheduleTests
             $"/api/households/{householdId}/tasks/{taskId}/occurrences",
             new { date = tomorrow, assignToMemberId = memberId });
 
-        // "Tjuvkika på ett schema" moved from Idag to Vecka - see docs/ARCHITECTURE.md "Ny form".
+        // "Se någon annans dag" moved from Idag to Vecka - see docs/ARCHITECTURE.md "Ny form".
         await page.GotoAsync("/vecka");
-        await page.GetByText("Tjuvkika på ett schema").ClickAsync();
+        await page.GetByText("Se någon annans dag").ClickAsync();
         await page.GetByLabel("Vilken dag?").SelectOptionAsync(new SelectOptionValue { Label = "Imorgon" });
 
         await Assertions.Expect(page.Locator(".task", new() { HasText = "Imorgondagens uppgift" }))
@@ -143,14 +143,14 @@ public class PeekScheduleTests
             $"/api/households/{householdId}/tasks/{taskId}/occurrences",
             new { date = tomorrow, assignToMemberId = memberId });
 
-        // "Tjuvkika på ett schema" moved from Idag to Vecka - see docs/ARCHITECTURE.md "Ny form".
+        // "Se någon annans dag" moved from Idag to Vecka - see docs/ARCHITECTURE.md "Ny form".
         await page.GotoAsync("/vecka");
-        await page.GetByText("Tjuvkika på ett schema").ClickAsync();
+        await page.GetByText("Se någon annans dag").ClickAsync();
         await page.GetByLabel("Vilken dag?").SelectOptionAsync(new SelectOptionValue { Label = "Imorgon" });
 
         // Scoped to the peek's own list - the member's main Min dag list above it separately
         // shows today's still-outstanding "Bädda sängen" too, with the same ".task" class.
-        var peekList = page.GetByRole(AriaRole.List, new() { Name = "Tjuvkikad dag" });
+        var peekList = page.GetByRole(AriaRole.List, new() { Name = "Den valda dagen" });
         await Assertions.Expect(peekList.Locator(".task", new() { HasText = "Bädda sängen" })).ToHaveCountAsync(2);
 
         // Exactly one of the two carries the "from before" label - the still-outstanding one

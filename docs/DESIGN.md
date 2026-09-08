@@ -150,6 +150,13 @@ Förbjudet, oavsett hur det formuleras:
 
 Försenade uppgifter beskrivs neutralt och sakligt, aldrig anklagande.
 
+**Inga idiom, inga metaforer, inga lekfulla omskrivningar. En knapp säger vad den gör.**
+"Tjuvkika på ett schema" (en gissningslek om vad "tjuvkika" innebär) blev "Se någon annans dag".
+"Ser fördelningen skev ut?" (en bild, inte en fråga om vad knappen faktiskt gör) blev "Vill du
+fördela om dagarna?", knappen själv "Sprid ut över veckan" (idiom - sprider man verkligen ut
+något?) blev "Fördela om dagarna". Samma regel gäller retroaktivt för allt nytt språk i denna
+revision - se "Beslut: Ångra och stabil lista" i ARCHITECTURE.md.
+
 ---
 
 ## 6. Skärmar
@@ -199,8 +206,10 @@ från bocken eller svepet.
 
 De två gamla ▶-utfällningarna ("N till en annan dag", "Lägg till en extra uppgift") är nu chips
 under listan ("Flytta till en annan dag", "Extra uppgift") som öppnar `BottomSheet.razor` –
-samma innehåll som förut, bara i ett ark i stället för en disclosure. "Tjuvkika på ett schema"
-har flyttat till Vecka (se nedan).
+samma innehåll som förut, bara i ett ark i stället för en disclosure. "Flytta till en annan dag"
+rendras alltid (aldrig villkorligt gömd) - utan något att flytta blir den `aria-disabled` och
+svarar med en statusrad i stället för att öppna ett tomt ark (se "Beslut: Ångra och stabil
+lista" §B7 i ARCHITECTURE.md). "Se någon annans dag" har flyttat till Vecka (se nedan).
 
 "Extra uppgift" visar i första hand en lista av hushållets befintliga uppgifter som inte redan
 är på dagens lista (namn, kvalitativt tidsläge) - grupperad per rum/våning precis som Idags
@@ -250,17 +259,18 @@ kvalitativt läge i text (t.ex. "Ingen tid", "Lagom tid") – inget stapeldiagra
 och ingen redigering här. Helt läsläge; rollen (se §6b, satt från Hushålls `MemberSheet`) är
 enda sättet att ändra veckan.
 
-"Tjuvkika på ett schema" (en titt på i morgon, eller på någon annans dag, skrivskyddat) bor nu
+"Se någon annans dag" (en titt på i morgon, eller på någon annans dag, skrivskyddat) bor nu
 här i stället för på Idag – samma disclosure och logik, flyttad. Listan visar bara en kryssruta
 (ifylld för avklarat, tom annars) och uppgiftens namn - ingen områdeschip, för att hålla den
 korta, skrivskyddade listan så enkel som möjligt; "sedan tidigare" behålls dock på en
 utestående uppgift, annars ser en dags gamla, ej avklarade uppgift ut som en rak dubblett av
 morgondagens egna nya förekomst (se `PeekScheduleTests`, en tidigare rapporterad förvirring).
 Under listan: "Totalt: N min" (`DailyPlanResponse.PlannedMinutes + CompletedMinutes`) - ett
-uttryckligt, medvetet undantag från §6a på produktfeedback: att tjuvkika på en dag är att
+uttryckligt, medvetet undantag från §6a på produktfeedback: att se en annan dag är att
 bedöma hur full den är, närmare planeringsläget Rum/RoomTile redan har ett minutundantag för
-än den egna dagliga vyn. "Ser fördelningen skev ut?" (sprid om återkommande uppgifter över
-veckan, `RebalanceSchedule`) bor nu här också - flyttad hit från Rum, i ett eget ark.
+än den egna dagliga vyn. "Vill du fördela om dagarna?" (sprid om återkommande uppgifter över
+veckan, `RebalanceSchedule`, knappen "Fördela om dagarna") bor nu här också - flyttad hit från
+Rum, i ett eget ark.
 
 ### Hushållsöversikt
 
@@ -325,12 +335,14 @@ disclosure "Lägg till ett tomt rum i stället" för grupperingar som inte är e
 "Hund", "Garage").
 
 Totalrad "Totalt: N uppgifter · M min" (en platt summa, till skillnad från varje bricka
-egen viktade "min/v") behålls som dämpad text under brickorna, tillsammans med den
-frekvensviktade veckosumman och hushållets samlade veckokapacitet - se "Beslut:
-`TaskWorkload`" i ARCHITECTURE.md.
+egen viktade "min/v") ligger tillsammans med den frekvensviktade veckosumman och hushållets
+samlade veckokapacitet bakom en disclosure `<summary>Visa tid</summary>` under brickorna - se
+"Beslut: Ångra och stabil lista" §B5 i ARCHITECTURE.md; siffrorna själva är oförändrade, bara
+frivilliga att öppna i stället för alltid synliga (se "Beslut: `TaskWorkload`" i
+ARCHITECTURE.md för hur de räknas ut).
 
 "Känns det som att en person gör för mycket?" (ombalansera ansvar) flyttade till Hushåll;
-"Ser fördelningen skev ut?" (sprid om schemat) flyttade till Vecka - se docs/ARCHITECTURE.md
+"Vill du fördela om dagarna?" (sprid om schemat) flyttade till Vecka - se docs/ARCHITECTURE.md
 "Ny form".
 
 ### 6a. Tid hanteras i bakgrunden, visas aldrig

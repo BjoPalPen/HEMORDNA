@@ -70,7 +70,7 @@ else
     </ul>
 
     <details class="more-options">
-        <summary>Ser fördelningen skev ut?</summary>
+        <summary>Vill du fördela om dagarna?</summary>
         <p class="muted small">
             Sprider om återkommande uppgifter över veckans (eller månadens) dagar, så inte allt
             landar samma dag - t.ex. för att flera rum sattes upp i samma veva. Uppgifter i
@@ -84,12 +84,12 @@ else
         }
 
         <button type="button" class="btn btn-secondary" disabled="@_rebalancing" @onclick="RebalanceScheduleAsync">
-            @(_rebalancing ? "Sprider ut..." : "Sprid ut över veckan")
+            @(_rebalancing ? "Fördelar om..." : "Fördela om dagarna")
         </button>
     </details>
 
     <details class="more-options" @ontoggle="OnPeekToggled">
-        <summary>Tjuvkika på ett schema</summary>
+        <summary>Se någon annans dag</summary>
         <p class="muted small">
             En titt på i morgon, eller på någon annans dag - bara för att se, inget går att
             bocka av eller skjuta upp härifrån.
@@ -129,7 +129,7 @@ else
                 }
                 else
                 {
-                    <ul class="task-list" aria-label="Tjuvkikad dag">
+                    <ul class="task-list" aria-label="Den valda dagen">
                         @foreach (var done in peekDay.Completed)
                         {
                             <li class="task task-done">
@@ -271,7 +271,7 @@ else
     }
 
     /// <summary>
-    /// Loads the household's member list the first time the "Tjuvkika" details is opened,
+    /// Loads the household's member list the first time "Se någon annans dag" is opened,
     /// rather than on every visit to Vecka - most people will never open it.
     /// </summary>
     private async Task OnPeekToggled()
