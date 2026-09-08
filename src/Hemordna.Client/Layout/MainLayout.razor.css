@@ -74,3 +74,27 @@
         mask-image: linear-gradient(to top, #000 45%, transparent);
     }
 }
+
+/* "Lugnare skärm" (app.css, Support/CalmScreen.cs) - the blurred, fading-out edge is exactly
+   the kind of "genomskinlig effekt" that setting promises to remove: a plain solid strip with a
+   real, visible edge instead, rather than a blend into the content underneath. */
+html[data-calm] .app-topfade,
+html[data-calm] .app-botfade {
+    background: var(--kalk);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    -webkit-mask-image: none;
+    mask-image: none;
+}
+
+/* var(--line), not var(--edge): the strip's background is the SAME flat --kalk as the page
+   behind it (no blur left to imply depth), so without an always-visible line - --edge is
+   deliberately transparent in light mode elsewhere, relying on blur/shadow instead - this
+   "hard edge" would be invisible exactly where it is needed most. */
+html[data-calm] .app-topfade {
+    border-bottom: 1px solid var(--line);
+}
+
+html[data-calm] .app-botfade {
+    border-top: 1px solid var(--line);
+}

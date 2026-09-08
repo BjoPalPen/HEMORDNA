@@ -36,6 +36,9 @@ public class TaskWorkloadTests
         await room.GetByRole(AriaRole.Button, new() { Name = "Diska" }).WaitForAsync();
         await room.GetByRole(AriaRole.Button, new() { Name = "Stäng" }).ClickAsync();
 
+        // Time figures live behind "Visa tid" now (docs/ARCHITECTURE.md §B5) - open it once.
+        await page.GetByText("Visa tid").ClickAsync();
+
         // A daily 5-minute task is ~35 min/week (5 * 7) - very different from the flat,
         // frequency-blind "Totalt: ... min" figure, which would only ever show 5.
         await Assertions.Expect(page.GetByText("Ungefär 35 min/vecka")).ToBeVisibleAsync();

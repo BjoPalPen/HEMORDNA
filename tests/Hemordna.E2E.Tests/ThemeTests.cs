@@ -89,4 +89,29 @@ public class ThemeTests
         // The system preference (still emulated as dark) is what applies once nothing overrides it.
         Assert.Equal("rgb(28, 32, 36)", await BodyBackgroundAsync(page));
     }
+
+    private static Task<bool> HasDataCalmAsync(IPage page)
+        => page.EvaluateAsync<bool>("() => document.documentElement.hasAttribute('data-calm')");
+
+    /// <summary>"Lugnare skärm" (docs/ARCHITECTURE.md §B8/§B11) is per-device, exactly like
+    /// theme - toggling it applies data-calm immediately, with no "Spara" step at all, unlike
+    /// every other control on this page.</summary>
+    [Fact]
+    public async Task Toggling_calm_screen_sets_and_clears_data_calm_immediately_without_saving()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Erika");
+
+        await page.GotoAsync("/installningar");
+        await page.GetByRole(AriaRole.Heading, new() { Name = "Min visning" }).WaitForAsync();
+
+        Assert.False(await HasDataCalmAsync(page));
+
+        var calmToggle = page.GetByLabel("Lugnare skärm – inga rörelser eller genomskinliga effekter");
+        await calmToggle.CheckAsync();
+        await page.WaitForFunctionAsync("() => document.documentElement.hasAttribute('data-calm')");
+
+        await calmToggle.UncheckAsync();
+        await page.WaitForFunctionAsync("() => !document.documentElement.hasAttribute('data-calm')");
+    }
 }

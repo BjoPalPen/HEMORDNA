@@ -152,6 +152,11 @@ internal static class HouseholdEndpoints
             .Produces<TaskOccurrenceResponse>()
             .Produces(StatusCodes.Status404NotFound);
 
+        scoped.MapPost("/occurrences/{occurrenceId:guid}/reopen", ReopenOccurrenceAsync)
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status409Conflict);
+
         scoped.MapPost("/occurrences/{occurrenceId:guid}/defer", DeferOccurrenceAsync)
             .Produces<TaskOccurrenceResponse>()
             .Produces(StatusCodes.Status404NotFound)
@@ -657,7 +662,8 @@ internal static class HouseholdEndpoints
 
         return preference is null
             ? Results.NotFound()
-            : Results.Ok(new PreferenceResponse(preference.MemberId, preference.Presentation, preference.Motivation));
+            : Results.Ok(new PreferenceResponse(
+                preference.MemberId, preference.Presentation, preference.Motivation, preference.ShowTimeLevel));
     }
 
     private static async Task<IResult> SetPreferenceAsync(
@@ -668,11 +674,12 @@ internal static class HouseholdEndpoints
         CancellationToken cancellationToken)
     {
         var preference = await setPreference.HandleAsync(
-            householdId, memberId, request.Presentation, request.Motivation, cancellationToken);
+            householdId, memberId, request.Presentation, request.Motivation, request.ShowTimeLevel, cancellationToken);
 
         return preference is null
             ? Results.NotFound()
-            : Results.Ok(new PreferenceResponse(preference.MemberId, preference.Presentation, preference.Motivation));
+            : Results.Ok(new PreferenceResponse(
+                preference.MemberId, preference.Presentation, preference.Motivation, preference.ShowTimeLevel));
     }
 
     private static async Task<IResult> CompleteOccurrenceAsync(
@@ -690,6 +697,23 @@ internal static class HouseholdEndpoints
             householdId, occurrenceId, membership.MemberId, cancellationToken);
 
         return occurrence is null ? Results.NotFound() : Results.Ok(ToResponse(occurrence));
+    }
+
+    private static async Task<IResult> ReopenOccurrenceAsync(
+        Guid householdId,
+        Guid occurrenceId,
+        HttpContext httpContext,
+        ReopenTaskOccurrence reopen,
+        CancellationToken cancellationToken)
+    {
+        // Same source for "who is calling" as CompleteOccurrenceAsync - the caller can only
+        // undo as themselves, never name another member.
+        var membership = httpContext.GetMembership();
+
+        var reopened = await reopen.HandleAsync(
+            householdId, occurrenceId, membership.MemberId, cancellationToken);
+
+        return reopened is null ? Results.NotFound() : Results.NoContent();
     }
 
     private static async Task<IResult> DeferOccurrenceAsync(

@@ -17,4 +17,10 @@ public static class TimeLevel
 
     /// <summary>The closest level to a stored minute value, for pre-selecting an editor.</summary>
     public static int ClosestMinutes(int minutes) => All.MinBy(level => Math.Abs(level.Minutes - minutes)).Minutes;
+
+    /// <summary>The closest level's label for a task that DOES take some time - "0 minuter, no
+    /// chip at all" is the caller's own gate (Item.EstimatedMinutes > 0), so this only ever
+    /// chooses among "Lite tid"/"Lagom tid"/"Lång tid", never "Ingen tid".</summary>
+    public static string LabelFor(int minutes)
+        => All.Where(level => level.Minutes > 0).MinBy(level => Math.Abs(level.Minutes - minutes)).Label;
 }

@@ -25,7 +25,7 @@
     font-variant-numeric: tabular-nums;
 }
 
-/* The "Tjuvkika på ett schema" peek list, moved here from Idag - see docs/ARCHITECTURE.md
+/* The "Se någon annans dag" peek list, moved here from Idag - see docs/ARCHITECTURE.md
    "Ny form". Scoped CSS does not cross pages, so this page needs its own copy rather than
    relying on Pages/MinDag.razor.css. */
 .task-list {

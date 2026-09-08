@@ -175,7 +175,8 @@ internal static class DevelopmentDataSeeder
         {
             var setPreference = scope.ServiceProvider.GetRequiredService<SetMemberPreference>();
             await setPreference.HandleAsync(
-                household.Id, demoMember.Id, PresentationMode.LargeText, MotivationLevel.Calm, cancellationToken);
+                household.Id, demoMember.Id, PresentationMode.LargeText, MotivationLevel.Calm,
+                showTimeLevel: false, cancellationToken);
         }
     }
 }

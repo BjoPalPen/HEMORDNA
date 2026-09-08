@@ -63,27 +63,30 @@ else
             </button>
         </div>
 
-        <p class="muted small">Totalt: @TotalTaskCount uppgifter · @TotalMinutes min</p>
-        <p class="muted small">
-            Ungefär @WeeklyMinutes min/vecka i praktiken, räknat efter hur ofta varje uppgift
-            faktiskt återkommer - en daglig syssla väger mycket mer än en månatlig, till skillnad
-            från totalen ovan.
-        </p>
-
-        @if (_members.Count > 0)
-        {
-            <p class="@(WeeklyMinutes > HouseholdWeeklyCapacity ? "notice notice-problem" : "notice")" role="status">
-                Ert hushålls samlade veckokapacitet är @HouseholdWeeklyCapacity min.
-                @if (WeeklyMinutes > HouseholdWeeklyCapacity)
-                {
-                    <text>Det är mindre än det uppskattade behovet - en del kommer sannolikt alltid ligga och vänta.</text>
-                }
-                else
-                {
-                    <text>Det räcker till det uppskattade behovet, med marginal kvar.</text>
-                }
+        <details class="more-options">
+            <summary>Visa tid</summary>
+            <p class="muted small">Totalt: @TotalTaskCount uppgifter · @TotalMinutes min</p>
+            <p class="muted small">
+                Ungefär @WeeklyMinutes min/vecka i praktiken, räknat efter hur ofta varje uppgift
+                faktiskt återkommer - en daglig syssla väger mycket mer än en månatlig, till skillnad
+                från totalen ovan.
             </p>
-        }
+
+            @if (_members.Count > 0)
+            {
+                <p class="@(WeeklyMinutes > HouseholdWeeklyCapacity ? "notice notice-problem" : "notice")" role="status">
+                    Ert hushålls samlade veckokapacitet är @HouseholdWeeklyCapacity min.
+                    @if (WeeklyMinutes > HouseholdWeeklyCapacity)
+                    {
+                        <text>Det är mindre än det uppskattade behovet - en del kommer sannolikt alltid ligga och vänta.</text>
+                    }
+                    else
+                    {
+                        <text>Det räcker till det uppskattade behovet, med marginal kvar.</text>
+                    }
+                </p>
+            }
+        </details>
     }
 }
 

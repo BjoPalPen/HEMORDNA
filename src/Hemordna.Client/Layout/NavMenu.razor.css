@@ -85,9 +85,9 @@
 }
 
 /* Mobile: a floating pill instead of a full-width bar - see docs/DESIGN.md §8 and "Beslut: Ny
-   form 2026" in docs/ARCHITECTURE.md. Only the active tab shows its label; the rest keep their
-   accessible name via .sr-only rather than losing it to display:none (MobileNavTests/
-   SkarmbilderTests locate every tab by its accessible name regardless of which is active). */
+   form 2026" in docs/ARCHITECTURE.md. All four names stay visible, always - see "Beslut: Ångra
+   och stabil lista" §B9: hiding a name behind an active/scrolled state saved space, but losing
+   a name to remember which icon means what is exactly the kind of tax this revision removes. */
 @media (max-width: 900px) {
     .nav-shell {
         position: fixed;
@@ -136,6 +136,14 @@
         transition: padding .25s, background .2s;
     }
 
+    /* Smaller than .nav-link's own font-size above (which still sizes the icon's spacing) -
+       four names shown at once, all the time now, need to read as compact labels rather than
+       four small buttons' worth of full-size text. */
+    ::deep .nav-label {
+        font-size: calc(var(--font-size-base) * .72);
+        transition: font-size .25s;
+    }
+
     /* Active state carries both colour and background, never colour alone - same rule as the
        desktop rail above, just a filled pill instead of a soft tint (a filled pill needs to
        stay legible against the translucent .nav-shell behind it, where --gustav-soft would not
@@ -145,40 +153,58 @@
         color: #fff;
     }
 
-    ::deep .nav-link:not(.active) .nav-label {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        padding: 0;
-        margin: -1px;
-        overflow: hidden;
-        clip: rect(0, 0, 0, 0);
-        white-space: nowrap;
-        border: 0;
-    }
-
     /* Compact mode once the page has scrolled (html[data-scrolled], set by
-       Support/ScrollState.cs - see "Beslut: Ny form 2026" §3): even the active tab's own label
-       hides, and the pill shrinks, so it takes up less of the viewport while reading. */
-    ::deep html[data-scrolled] .nav-link {
-        padding: 0 11px;
+       Support/ScrollState.cs - see "Beslut: Ny form 2026" §3): the pill shrinks so it takes up
+       less of the viewport while reading, but every name stays legible and visible - just
+       smaller, never hidden (see "Beslut: Ångra och stabil lista" §B9).
+       .nav-shell ::deep .nav-link, not ::deep html[data-scrolled] .nav-link: Blazor's CSS
+       isolation always inserts the scope-attribute check immediately after ::deep, so a bare
+       "::deep html[...] .nav-link" compiles to "[scope] html[...] .nav-link" - requiring
+       something carrying THIS component's scope to be an ANCESTOR of <html>, which can never
+       be true (found via the compiled bundle in obj/, not by reasoning about the source alone -
+       this exact mistake was already made once for this same selector and is being corrected
+       here). Routing the scope check through .nav-shell (this component's own root, a genuine
+       descendant of html and ancestor of .nav-link) the way DESIGN.md's own docs example does
+       ("A ::deep B" scopes A, not the combinator itself) makes the selector topologically
+       possible again. */
+    html[data-scrolled] .nav-shell ::deep .nav-link {
+        padding: 0 9px;
     }
 
-    ::deep html[data-scrolled] .nav-link .nav-label {
-        position: absolute;
-        width: 1px;
-        height: 1px;
-        padding: 0;
-        margin: -1px;
-        overflow: hidden;
-        clip: rect(0, 0, 0, 0);
-        white-space: nowrap;
-        border: 0;
+    html[data-scrolled] .nav-shell ::deep .nav-label {
+        font-size: calc(var(--font-size-base) * .62);
+    }
+
+    /* Stor text (DESIGN.md §7) raises --font-size-base to 19px - at that size the rest-state
+       pill's ordinary padding/gap/label sizing above no longer fits four always-visible names
+       in 390px without overflowing the viewport (DESIGN.md §10: "Stor text får inte bryta
+       layouten" is unconditional). Scoped to :root[data-text-size="large"] specifically so the
+       normal-size pill - already reviewed and shipped - is untouched. The scrolled/compact
+       state is already smaller than this, so it is not separately re-tightened here. Routed
+       through .nav-shell - see the comment above html[data-scrolled] .nav-shell. */
+    :root[data-text-size="large"] .nav-shell ::deep .nav-link {
+        gap: 4px;
+        padding: 0 8px;
+    }
+
+    :root[data-text-size="large"] .nav-shell ::deep .nav-label {
+        font-size: calc(var(--font-size-base) * .55);
     }
 
     @media (prefers-reduced-motion: reduce) {
-        ::deep .nav-link {
+        ::deep .nav-link,
+        ::deep .nav-label {
             transition: none;
         }
     }
+}
+
+/* "Lugnare skärm" (app.css, Support/CalmScreen.cs) - the pill's translucency is exactly the
+   kind of "genomskinlig effekt" that setting promises to remove, so it becomes a plain solid
+   surface instead of glass, same as an ordinary card. Written as a plain (not ::deep) rule -
+   .nav-shell is this component's own root element, so the usual scoping already reaches it. */
+html[data-calm] .nav-shell {
+    background: var(--surface);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
 }

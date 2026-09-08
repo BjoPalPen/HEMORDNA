@@ -42,6 +42,78 @@
     }
 }
 
+/* "Ångra" (docs/ARCHITECTURE.md "Beslut: Ångra och stabil lista") - shown for 8s after
+   completing a task, under the header (or under .focus-card in focus mode). min-height keeps
+   its own box a stable size once shown, so it settles in a single shift rather than the text/
+   button loading in separately and reflowing again. */
+@keyframes undo-bar-in {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+.undo-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    min-height: 44px;
+    margin-bottom: var(--space-3);
+    padding: var(--space-2) var(--space-4);
+    border-radius: var(--radius-sm);
+    background: var(--gustav-soft);
+    color: var(--sot);
+    animation: undo-bar-in .2s ease;
+}
+
+/* "Beslut: Ångra och stabil lista" §B2 - pure information ("Någon annan bockade av Diska."),
+   never a comparison between members (Del C). Same quiet banner treatment as .undo-bar, so it
+   reads as "the same kind of thing" rather than a warning. */
+@keyframes remote-note-in {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+.remote-note {
+    margin: 0 0 var(--space-3);
+    padding: var(--space-2) var(--space-4);
+    border-radius: var(--radius-sm);
+    background: var(--gustav-soft);
+    color: var(--sot);
+    animation: remote-note-in .2s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .remote-note {
+        animation: none;
+    }
+}
+
+/* A row ReconcileRemoteChangeAsync marked done without moving or removing it - same dimmed,
+   struck-through, filled-check treatment as .task-list-done's own rows, so it reads as "already
+   done" rather than as a new or different kind of row. */
+.task-done-remote {
+    opacity: .55;
+}
+
+.task-done-remote .task-name {
+    text-decoration: line-through;
+    text-decoration-color: var(--sot-soft);
+}
+
 .day-date {
     margin: 0 0 var(--space-1);
     color: var(--sot-soft);
@@ -54,6 +126,14 @@
 
 .day-counts {
     margin: var(--space-2) 0 var(--space-3);
+}
+
+/* "Lugn" (docs/ARCHITECTURE.md "Beslut: Ångra och stabil lista" §B3) - a quiet second line,
+   not a banner: same weight/color as .day-counts, no background of its own. */
+.day-encouragement {
+    margin: calc(-1 * var(--space-2)) 0 var(--space-3);
+    color: var(--sot-soft);
+    font-size: calc(var(--font-size-base) * .9);
 }
 
 .progress {
@@ -194,6 +274,15 @@
 
 .task-rest {
     opacity: .85;
+}
+
+/* "Sedan tidigare"'s cap (docs/ARCHITECTURE.md §B6) - a wall of overdue rows reads as failure,
+   not a plan, so past OverdueCapThreshold only the row itself wraps to fit both the count and
+   the two link-style actions on narrow screens instead of forcing a horizontal scroll. */
+.task-more {
+    flex-wrap: wrap;
+    row-gap: var(--space-1);
+    color: var(--sot-soft);
 }
 
 .chips {

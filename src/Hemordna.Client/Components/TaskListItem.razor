@@ -19,6 +19,10 @@
         {
             <span class="chip">@area</span>
         }
+        @if (ShowTimeLevel && Item.EstimatedMinutes > 0)
+        {
+            <span class="chip chip-time">@TimeLevel.LabelFor(Item.EstimatedMinutes)</span>
+        }
         @if (ShowOverdueNote && Item.IsOverdue)
         {
             <span class="task-note muted small">sedan tidigare</span>
@@ -81,6 +85,12 @@
     /// it is the only thing distinguishing e.g. two different floors' own "Hall".</summary>
     [Parameter]
     public bool ShowAreaChip { get; set; } = true;
+
+    /// <summary>"Tid som nivåord" (docs/ARCHITECTURE.md "Beslut: Ångra och stabil lista" §B5) -
+    /// a member's own choice (MemberPreference.ShowTimeLevel), never minutes as a number on
+    /// Idag: "Lite tid"/"Lagom tid"/"Lång tid" only, via TimeLevel.LabelFor.</summary>
+    [Parameter]
+    public bool ShowTimeLevel { get; set; }
 
     [Parameter, EditorRequired]
     public EventCallback<Guid> OnComplete { get; set; }

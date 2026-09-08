@@ -35,6 +35,16 @@ else
         <div class="card">
             <h2>Hur vill du se dina uppgifter?</h2>
 
+            <div class="chips" aria-label="Snabbval">
+                @foreach (var preset in Presets)
+                {
+                    <button type="button" class="chip-action @(ActivePreset == preset ? "chip-primary" : null)"
+                            @onclick="() => ApplyPresetAsync(preset)">
+                        @preset.Label
+                    </button>
+                }
+            </div>
+
             <div class="notice">
                 Detta är din personliga inställning och påverkar inte andra i hushållet.
             </div>
@@ -48,6 +58,23 @@ else
                     <span>@option.Label</span>
                 </label>
             }
+
+            <ul class="list" aria-label="Fler val">
+                <li class="list-item">
+                    <label class="field-check">
+                        <input type="checkbox" checked="@_showTimeLevel"
+                               @onchange="@(e => _showTimeLevel = (bool)e.Value!)" />
+                        <span>Visa ungefär hur lång tid en uppgift tar</span>
+                    </label>
+                </li>
+                <li class="list-item">
+                    <label class="field-check">
+                        <input type="checkbox" checked="@_calmScreen" @onchange="ToggleCalmScreenAsync" />
+                        <span>Lugnare skärm – inga rörelser eller genomskinliga effekter</span>
+                    </label>
+                    <p class="muted small">Gäller den här enheten</p>
+                </li>
+            </ul>
 
             <h2>Motivation</h2>
 
@@ -192,6 +219,29 @@ else
         ("Calm", "Lugn - en vänlig kommentar då och då")
     ];
 
+    /// <summary>"Beslut: Ångra och stabil lista" §B11 - one press sets everything A2/B3/B5/B8
+    /// already built, but reads as an ordinary app choice: no name here says who a preset is
+    /// for, only what it does. A press only fills in the radios/toggles below (nothing saved
+    /// until "Spara") EXCEPT CalmScreen, which - like the rest of "Lugnare skärm" - always
+    /// applies immediately, preset or not (it has no "unsaved" state to begin with; see
+    /// ToggleCalmScreenAsync).</summary>
+    private sealed record Preset(string Label, string Presentation, string Motivation, bool ShowTimeLevel, bool CalmScreen);
+
+    private static readonly Preset[] Presets =
+    [
+        new("Kompakt", "Text", "None", ShowTimeLevel: false, CalmScreen: false),
+        new("Tydlig", "ImageAndText", "None", ShowTimeLevel: true, CalmScreen: false),
+        new("Steg för steg", "OneAtATime", "Calm", ShowTimeLevel: true, CalmScreen: true)
+    ];
+
+    /// <summary>Which preset (if any) the CURRENT combination happens to match - recomputed on
+    /// every render rather than remembered from the last chip pressed, so changing a single
+    /// radio or toggle by hand correctly drops the "active" highlight instead of leaving a
+    /// stale chip lit for a combination that no longer matches it.</summary>
+    private Preset? ActivePreset => Presets.FirstOrDefault(preset =>
+        preset.Presentation == _presentation && preset.Motivation == _motivation
+        && preset.ShowTimeLevel == _showTimeLevel && preset.CalmScreen == _calmScreen);
+
     private static readonly (string Value, string Label)[] ThemeOptions =
     [
         ("system", "Följ enhetens systeminställning"),
@@ -208,10 +258,12 @@ else
 
     private string? _presentation;
     private string? _motivation;
+    private bool _showTimeLevel;
     private string? _message;
     private bool _busy;
 
     private string _theme = "system";
+    private bool _calmScreen;
 
     private readonly PasswordForm _passwordForm = new();
     private List<string> _passwordMessages = [];
@@ -230,6 +282,7 @@ else
         await Session.EnsureLoadedAsync();
         await LoadAsync();
         _theme = await Theme.GetAsync(JS);
+        _calmScreen = await CalmScreen.GetAsync(JS);
 
         // Never let a failure here (a flaky network call, an unsupported browser quirk) break
         // the rest of the page - this whole block used to run unguarded and could silently take
@@ -263,12 +316,28 @@ else
         var preference = await Api.GetPreferenceAsync(householdId, memberId);
         _presentation = preference?.Presentation ?? "Text";
         _motivation = preference?.Motivation ?? "None";
+        _showTimeLevel = preference?.ShowTimeLevel ?? false;
     }
 
     private async Task SetThemeAsync(string choice)
     {
         _theme = choice;
         await Theme.SetAsync(JS, choice);
+    }
+
+    private async Task ApplyPresetAsync(Preset preset)
+    {
+        _presentation = preset.Presentation;
+        _motivation = preset.Motivation;
+        _showTimeLevel = preset.ShowTimeLevel;
+        _calmScreen = preset.CalmScreen;
+        await CalmScreen.SetAsync(JS, preset.CalmScreen);
+    }
+
+    private async Task ToggleCalmScreenAsync(ChangeEventArgs e)
+    {
+        _calmScreen = (bool)e.Value!;
+        await CalmScreen.SetAsync(JS, _calmScreen);
     }
 
     private async Task SaveAsync()
@@ -284,7 +353,7 @@ else
 
         try
         {
-            if (!await Api.SetPreferenceAsync(householdId, memberId, _presentation, _motivation))
+            if (!await Api.SetPreferenceAsync(householdId, memberId, _presentation, _motivation, _showTimeLevel))
             {
                 _message = "Det gick inte att spara. Försök igen.";
             }

@@ -74,12 +74,20 @@ public class MobileNavTests
         var lastTask = page.Locator(".task").Last;
         await lastTask.WaitForAsync();
 
+        // "Beslut: Ångra och stabil lista" §B9: every tab's name stays visible, always - not
+        // just present in the accessible tree, which .sr-only would already have satisfied.
+        var roomLink = page.GetByRole(AriaRole.Link, new() { Name = "Rum" });
+        await Assertions.Expect(roomLink).ToBeVisibleAsync();
+
         // ScrollIntoViewIfNeededAsync only scrolls the MINIMUM distance needed to make the
         // element visible - it does not know about .app-main's reserved padding-bottom and can
         // stop right as the element's bottom edge touches the literal viewport edge, which is
         // exactly where the floating pill sits. Scrolling to the true document bottom is what
         // this test actually means by "the user has scrolled all the way down".
         await page.EvaluateAsync("window.scrollTo(0, document.documentElement.scrollHeight)");
+        await page.WaitForFunctionAsync("() => document.documentElement.hasAttribute('data-scrolled')");
+
+        await Assertions.Expect(roomLink).ToBeVisibleAsync();
 
         var lastTaskBox = await lastTask.BoundingBoxAsync();
         var navBox = await page.Locator("nav.nav-shell").BoundingBoxAsync();
@@ -88,5 +96,39 @@ public class MobileNavTests
         Assert.NotNull(navBox);
         Assert.True(lastTaskBox!.Y + lastTaskBox.Height <= navBox!.Y,
             $"Last task (bottom {lastTaskBox.Y + lastTaskBox.Height}) overlaps the floating nav pill (top {navBox.Y}).");
+    }
+
+    /// <summary>"Beslut: Ångra och stabil lista" §B9: DESIGN.md §10's "Stor text får inte bryta
+    /// layouten" is unconditional - with all four names always visible (not just the active
+    /// one), Stor text's larger base font makes the pill wide enough to overflow a 390px
+    /// viewport unless it gets its own, smaller sizing. Regression test for a real bug found
+    /// via screenshot review: an earlier fix attempt compiled to a CSS selector that could
+    /// never match (Blazor's ::deep inserts the scope check immediately after itself, so
+    /// "::deep html[...] .nav-link" requires something to be an ancestor of &lt;html&gt;, which
+    /// is impossible - confirmed by inspecting the actual compiled selector in obj/, not by
+    /// reasoning about the source alone) and silently changed nothing.</summary>
+    [Fact]
+    public async Task The_pill_still_fits_with_margin_in_large_text_mode()
+    {
+        var page = await _app.NewPageAsync();
+        await page.SetViewportSizeAsync(390, 844);
+        await SignUpHelper.SignUpAsync(page, "Xenia");
+
+        await page.GotoAsync("/installningar");
+        await page.GetByRole(AriaRole.Heading, new() { Name = "Min visning" }).WaitForAsync();
+        await page.GetByLabel("Stor text - större och tydligare").CheckAsync();
+        var saveButton = page.GetByRole(AriaRole.Button, new() { Name = "Spara" });
+        await saveButton.ClickAsync();
+        await Assertions.Expect(saveButton).ToBeEnabledAsync();
+
+        await page.GotoAsync("/");
+        await page.Locator("h1", new() { HasText = "Xenia" }).WaitForAsync();
+
+        var navBox = await page.Locator("nav.nav-shell").BoundingBoxAsync();
+        Assert.NotNull(navBox);
+        var leftMargin = navBox!.X;
+        var rightMargin = 390 - (navBox.X + navBox.Width);
+        Assert.True(leftMargin >= 12, $"Left margin {leftMargin} < 12px in Stor text mode.");
+        Assert.True(rightMargin >= 12, $"Right margin {rightMargin} < 12px in Stor text mode.");
     }
 }

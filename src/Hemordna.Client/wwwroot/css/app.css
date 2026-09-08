@@ -256,6 +256,20 @@ a {
     }
 }
 
+/* "Lugnare skärm" (Inställningar, Support/CalmScreen.cs) - a per-device choice, same
+   data-attribute-on-html mechanism as data-theme. Same effect as prefers-reduced-motion above,
+   but as an explicit opt-in rather than an OS setting - someone may want a calmer screen
+   without their OS being set to reduce motion generally. This alone covers .task-confirm's
+   spring animation and .progress > i's transition (both plain animation-/transition-duration),
+   since neither needs its own separate rule; the translucency overrides below (nav pill,
+   edge fades, sheet scrim) are static visual effects this cannot reach on its own. */
+html[data-calm] * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+}
+
 /* ---------- Surfaces ---------- */
 
 .card {
@@ -532,6 +546,14 @@ a {
     color: var(--sot);
 }
 
+/* "Tid som nivåord" (docs/ARCHITECTURE.md §B5) - an outline rather than a filled chip, so it
+   reads as a lighter, secondary fact next to a room's own filled .chip, never competing with it. */
+.chip-time {
+    background: transparent;
+    border: 1px solid var(--edge);
+    color: var(--sot-soft);
+}
+
 /* An interactive chip - a secondary action, visually a chip but a real 44px tap target
    (DESIGN.md §10 is unconditional; the concept mockup's own chips are drawn smaller than that
    only because they illustrate proportions, not literal pixel sizes). */
@@ -554,6 +576,14 @@ a {
 
 .chip-action:hover {
     background: var(--aska-soft);
+}
+
+/* "Beslut: Ångra och stabil lista" §B7 - always rendered, so the layout never reflows depending
+   on what happens to be true today; aria-disabled rather than the disabled attribute, so it
+   stays reachable and clickable (DESIGN.md §10 - focus never hidden) and can answer its own tap
+   with a status line instead of just doing nothing. */
+.chip-action-disabled {
+    opacity: .55;
 }
 
 /* Never the only carrier of meaning - always paired with text. */

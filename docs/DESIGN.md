@@ -150,6 +150,13 @@ Förbjudet, oavsett hur det formuleras:
 
 Försenade uppgifter beskrivs neutralt och sakligt, aldrig anklagande.
 
+**Inga idiom, inga metaforer, inga lekfulla omskrivningar. En knapp säger vad den gör.**
+"Tjuvkika på ett schema" (en gissningslek om vad "tjuvkika" innebär) blev "Se någon annans dag".
+"Ser fördelningen skev ut?" (en bild, inte en fråga om vad knappen faktiskt gör) blev "Vill du
+fördela om dagarna?", knappen själv "Sprid ut över veckan" (idiom - sprider man verkligen ut
+något?) blev "Fördela om dagarna". Samma regel gäller retroaktivt för allt nytt språk i denna
+revision - se "Beslut: Ångra och stabil lista" i ARCHITECTURE.md.
+
 ---
 
 ## 6. Skärmar
@@ -199,8 +206,10 @@ från bocken eller svepet.
 
 De två gamla ▶-utfällningarna ("N till en annan dag", "Lägg till en extra uppgift") är nu chips
 under listan ("Flytta till en annan dag", "Extra uppgift") som öppnar `BottomSheet.razor` –
-samma innehåll som förut, bara i ett ark i stället för en disclosure. "Tjuvkika på ett schema"
-har flyttat till Vecka (se nedan).
+samma innehåll som förut, bara i ett ark i stället för en disclosure. "Flytta till en annan dag"
+rendras alltid (aldrig villkorligt gömd) - utan något att flytta blir den `aria-disabled` och
+svarar med en statusrad i stället för att öppna ett tomt ark (se "Beslut: Ångra och stabil
+lista" §B7 i ARCHITECTURE.md). "Se någon annans dag" har flyttat till Vecka (se nedan).
 
 "Extra uppgift" visar i första hand en lista av hushållets befintliga uppgifter som inte redan
 är på dagens lista (namn, kvalitativt tidsläge) - grupperad per rum/våning precis som Idags
@@ -219,9 +228,31 @@ uppgifter klara men inget mer väntar: "Dagens uppgifter är klara." i samma sti
 längre – innehållet är alltid en enda kolumn, centrerad under den smala railen (se §8).
 
 **En uppgift åt gången** (§7) ersätter hela listan med ett enda kort: nästa uppgift i samma
-ordning listan redan skulle visat den, med **Bocka av** och **Skjut upp till imorgon** som stora
-knappar. Att bocka av eller skjuta upp laddar om dagen, så nästa uppgift dyker upp av sig
-själv – inget separat index att hålla reda på.
+ordning listan redan skulle visat den, med **Bocka av**, **Skjut upp till imorgon** (om
+uppgiften får skjutas upp) och **Visa nästa** (en tredje, länk-stilad knapp, dold när bara en
+uppgift återstår) som roterar till nästa i samma ordning utan att röra servern eller Vecka - en
+titt, inte en handling. Att bocka av eller skjuta upp laddar om dagen, så nästa uppgift dyker
+upp av sig själv – inget separat index att hålla reda på (se "Beslut: Ångra och stabil lista"
+§B4 i ARCHITECTURE.md).
+
+**Ångra** (§B1): en avbockning ger 8 sekunder att ta tillbaka den - en rad, `role="status"`,
+direkt under headern (eller under fokuskortet i "En uppgift åt gången"): "Klar: {namn}" och en
+"Ångra"-länk. Bara den som bockade av kan ångra, bara inom 15 minuter (domänregel, inte en
+UI-gräns) - se `TaskOccurrence.Reopen` i ARCHITECTURE.md.
+
+**En realtidsändring ritar aldrig om listan mitt i en interaktion** (§B2): en annan medlems
+egen handling patchar `_day` på plats i stället för att ladda om allt - en rad som blev klar
+hos någon annan stannar kvar där den var (dämpad, "Klar: {namn}"), en ny rad läggs sist i sin
+rumsgrupp, inget byter ordning. En kort informationsrad, `<p class="remote-note"
+role="status">`, visar "Någon annan bockade av Diska." (eller "N uppgifter blev klara av
+andra." vid flera) i 6 sekunder - ren information, aldrig en jämförelse mellan medlemmar (se
+Del C nedan). Uppskjuts 2s i taget om ett ark är öppet eller medlemmen just interagerat.
+
+**Tak på "Sedan tidigare"** (§B6): fler än fem försenade uppgifter visar bara de tre första,
+följt av en rad "… och N till" med två länkar - "Visa alla" (lokalt, ingen server-ändring) och
+"Låt Hemordna sprida ut dem" (kör samma ombalansering som Vecka har, laddar om dagen, visar "N
+uppgifter fördelades på andra dagar."). Rubrikens eget "N kvar" räknar alltid hela listan,
+capad eller inte.
 
 **Kända begränsningar (dokumenterade, inte lösta i detta steg):** meta-raden under namnet
 visar bara "sedan tidigare" när en uppgift är försenad, inte hur ofta den återkommer –
@@ -229,6 +260,11 @@ visar bara "sedan tidigare" när en uppgift är försenad, inte hur ofta den åt
 scope för klient-bara arbete (se CLAUDE.md, "Behöver du ett nytt API-fält: stanna och
 rapportera"). "Stor text" och "En uppgift åt gången" var sparbara sedan tidigare men lästes
 aldrig av `MinDag.razor` – se "Beslut: Ny form" i ARCHITECTURE.md för vad som nu är kopplat in.
+Samma kontraktslucka gäller vem som bockade av en uppgift (`remote-note` säger "Någon annan",
+aldrig ett riktigt namn - §B2) och vilket datum en uppgift ursprungligen schemalades
+(taket på "Sedan tidigare" visar de tre första i listans egen, redan befintliga ordning, inte
+en omsortering efter ålder - §B6). Se ARCHITECTURE.md för båda som uttryckligen rapporterade,
+inte gissade, avvikelser.
 
 ### Uppgiftsdetalj
 
@@ -250,17 +286,18 @@ kvalitativt läge i text (t.ex. "Ingen tid", "Lagom tid") – inget stapeldiagra
 och ingen redigering här. Helt läsläge; rollen (se §6b, satt från Hushålls `MemberSheet`) är
 enda sättet att ändra veckan.
 
-"Tjuvkika på ett schema" (en titt på i morgon, eller på någon annans dag, skrivskyddat) bor nu
+"Se någon annans dag" (en titt på i morgon, eller på någon annans dag, skrivskyddat) bor nu
 här i stället för på Idag – samma disclosure och logik, flyttad. Listan visar bara en kryssruta
 (ifylld för avklarat, tom annars) och uppgiftens namn - ingen områdeschip, för att hålla den
 korta, skrivskyddade listan så enkel som möjligt; "sedan tidigare" behålls dock på en
 utestående uppgift, annars ser en dags gamla, ej avklarade uppgift ut som en rak dubblett av
 morgondagens egna nya förekomst (se `PeekScheduleTests`, en tidigare rapporterad förvirring).
 Under listan: "Totalt: N min" (`DailyPlanResponse.PlannedMinutes + CompletedMinutes`) - ett
-uttryckligt, medvetet undantag från §6a på produktfeedback: att tjuvkika på en dag är att
+uttryckligt, medvetet undantag från §6a på produktfeedback: att se en annan dag är att
 bedöma hur full den är, närmare planeringsläget Rum/RoomTile redan har ett minutundantag för
-än den egna dagliga vyn. "Ser fördelningen skev ut?" (sprid om återkommande uppgifter över
-veckan, `RebalanceSchedule`) bor nu här också - flyttad hit från Rum, i ett eget ark.
+än den egna dagliga vyn. "Vill du fördela om dagarna?" (sprid om återkommande uppgifter över
+veckan, `RebalanceSchedule`, knappen "Fördela om dagarna") bor nu här också - flyttad hit från
+Rum, i ett eget ark.
 
 ### Hushållsöversikt
 
@@ -325,12 +362,14 @@ disclosure "Lägg till ett tomt rum i stället" för grupperingar som inte är e
 "Hund", "Garage").
 
 Totalrad "Totalt: N uppgifter · M min" (en platt summa, till skillnad från varje bricka
-egen viktade "min/v") behålls som dämpad text under brickorna, tillsammans med den
-frekvensviktade veckosumman och hushållets samlade veckokapacitet - se "Beslut:
-`TaskWorkload`" i ARCHITECTURE.md.
+egen viktade "min/v") ligger tillsammans med den frekvensviktade veckosumman och hushållets
+samlade veckokapacitet bakom en disclosure `<summary>Visa tid</summary>` under brickorna - se
+"Beslut: Ångra och stabil lista" §B5 i ARCHITECTURE.md; siffrorna själva är oförändrade, bara
+frivilliga att öppna i stället för alltid synliga (se "Beslut: `TaskWorkload`" i
+ARCHITECTURE.md för hur de räknas ut).
 
 "Känns det som att en person gör för mycket?" (ombalansera ansvar) flyttade till Hushåll;
-"Ser fördelningen skev ut?" (sprid om schemat) flyttade till Vecka - se docs/ARCHITECTURE.md
+"Vill du fördela om dagarna?" (sprid om schemat) flyttade till Vecka - se docs/ARCHITECTURE.md
 "Ny form".
 
 ### 6a. Tid hanteras i bakgrunden, visas aldrig
@@ -454,7 +493,8 @@ enheten, inte till personen, så det ska inte följa med till någon annan skär
 
 ## 7. Presentationslägen
 
-Individuell preferens, aldrig en hushållsinställning.
+Individuell preferens, aldrig en hushållsinställning. Beskrivs alltid av vad ett läge GÖR
+("kompakt lista", "en uppgift åt gången"), aldrig av vem det är för - se docs/PRODUCT.md §7.
 
 | Läge | Status |
 |---|---|
@@ -466,6 +506,31 @@ Individuell preferens, aldrig en hushållsinställning.
 | Uppläsning | Senare |
 
 Lägena ska byta *presentation* av samma data – inte vilken data som visas.
+
+**Motivation** (`Installningar.razor`s eget `<h2>Motivation</h2>`-kort, `MotivationLevel {
+None, Calm }`) är nu på riktigt kopplad in: "Lugn" visar en av tre fasta fraser
+(`day-encouragement`, direkt under "N av M klara" på Idag) valda helt av dagens tillstånd -
+"Det viktigaste är gjort." (allt eller minst hälften klart), "En sak i taget räcker." (fler än
+fyra kvar), annars "Här är dina uppgifter för idag." Aldrig slumpmässigt, aldrig en jämförelse
+mellan medlemmar (§5) - se "Beslut: Ångra och stabil lista" §B3 i ARCHITECTURE.md.
+
+**Visa tid** (`ShowTimeLevel`, en egen växel i "Fler val" under presentationsvalen) byter
+`TaskListItem`s tidsangivelse mellan osynlig och en kvalitativ nivå-chip ("Lite tid"/"Lagom
+tid"/"Lång tid") - Idag visar aldrig en minutsiffra, oavsett läge (se §6a). Samma chip i
+fokuskortet när läget är "En uppgift åt gången". Se §B5 i ARCHITECTURE.md.
+
+**Snabbval** (tre chips - Kompakt, Tydlig, Steg för steg - överst i presentationskortet, §B11)
+fyller i presentation, motivation, visa tid och lugnare skärm på en gång, men beskrivs bara av
+vad de gör: "Kompakt" (Text, ingen motivation, ingen tid, ingen lugnare skärm), "Tydlig" (bild
+och text, ingen motivation, tid PÅ, ingen lugnare skärm), "Steg för steg" (en uppgift åt
+gången, Lugn, tid PÅ, lugnare skärm PÅ). Presentation, motivation och tid sparas först vid
+"Spara"; lugnare skärm (nästa stycke) gäller omedelbart, preset eller inte.
+
+**Lugnare skärm** (`CalmScreen`, `hemordna.calm` i `localStorage`, `data-calm` på `<html>`) är
+enhetslokal, precis som temat - inte en `MemberPreference`. Stänger av alla transitions/
+animationer app-brett (samma regler som `prefers-reduced-motion`), gör nav-piller och
+fade-kanter solida i stället för genomskinliga, och hoppar över svep-dragrörelsen. Se §B8 i
+ARCHITECTURE.md.
 
 ---
 
@@ -495,12 +560,14 @@ Idag är alltid första valet och startvyn.
 Piller flyter `max(14px, env(safe-area-inset-bottom))` från underkanten, centrerad, med en
 tonad `--glass`-bakgrund (`backdrop-filter: blur(18px) saturate(1.3)`) och `--shadow-float` -
 det enda stället i appen glas-transparens används, eftersom det bär navigation, inte innehåll
-(se ARCHITECTURE.md, "vad som medvetet inte görs"). Bara den aktiva fliken visar sin text i en
-fylld gustav-pill; övriga tre visar bara sin ikon, med etiketten visuellt gömd (`.sr-only`-
-mönster - `clip`, aldrig `display:none`) så det tillgängliga namnet finns kvar för skärmläsare.
-Har sidan scrollats (`html[data-scrolled]`, satt av `Support/ScrollState.cs`) krymper piller
-ytterligare och döljer även den aktiva flikens text, av samma skäl. `.app-main`s bottenmarginal är 112px på
-mobil så sista raden i en lång lista alltid scrollar helt fri från pillens egen ruta.
+(se ARCHITECTURE.md, "vad som medvetet inte görs"). **Alla fyra namn syns alltid** - ingen
+flik döljer sin text, varken vilande eller efter scroll (se "Beslut: Ångra och stabil lista"
+§B9 i ARCHITECTURE.md: en flik som ibland bara är en ikon och ibland har text är precis den
+sortens oförutsägbarhet uppdraget tar bort). Har sidan scrollats (`html[data-scrolled]`, satt
+av `Support/ScrollState.cs`) krymper piller till ett kompaktare läge (mindre `font-size` och
+padding på `.nav-label`) för att orden fortfarande ska få plats, snarare än att gömma dem.
+`.app-main`s bottenmarginal är 112px på mobil så sista raden i en lång lista alltid scrollar
+helt fri från pillens egen ruta.
 
 ---
 

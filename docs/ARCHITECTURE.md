@@ -1642,9 +1642,669 @@ under alla omständigheter utanför MVP-scope (CLAUDE.md §12/PRODUCT.md §10).
 
 ### Sammanfattning
 
-Alla sex delsteg av "Ny form 2026" är nu `IMPLEMENTED` på `feat/ny-form-2026`, var sitt
-commit, inget mergat till `main` ännu - väntar på uttryckligt godkännande, samma regel som
-"Ny form" steg 1-5 följde.
+Alla sex delsteg av "Ny form 2026" mergades till `main` (`3531eb2`) med uttryckligt
+godkännande och kör i produktion.
+
+### Beslut: Ångra och stabil lista — `IMPLEMENTED`
+
+NPF-revisionens åtgärder (`feat/npf-revision`) - en granskning av kognitiv tillgänglighet
+(ADHD, autism, språkstörning, IF) fann att grunden är rätt (skuldfritt språk, fokusläge,
+rumsgruppering) men att några MEKANISMER motverkar den: en avbockning går inte att ångra, en
+realtidsuppdatering ritar om hela listan mitt i en interaktion, "Lugn" sparas men syns aldrig,
+uppskattad tid är antingen helt dold eller en rå minutsiffra. Detta är inget nytt formsteg -
+inget i `DailyPlanner`s urval/ordning eller i det visuella uttrycket från "Ny form"/"Ny form
+2026" ändras. **Inget ord om diagnoser, funktionsnedsättning eller "tillgänglighet" förekommer
+i UI:t** - varje val beskrivs av vad det gör, aldrig av vem det är för; se docs/PRODUCT.md §7.
+
+**Del C, den bärande regeln för hela uppdraget:** ett hushåll är normalt blandat - en medlem
+kan ha valt "Steg för steg", en annan inget alls. Allt i detta uppdrag är antingen per medlem
+(`MemberPreference`) eller per enhet (`localStorage`), aldrig på `Household`. Delade ytor
+(Hushåll, Vecka, Rum) visar aldrig vilket läge någon valt.
+
+#### A1 (Ångra avbockning) — `IMPLEMENTED`
+
+- **`TaskOccurrence.Reopen(Guid byMemberId, DateTimeOffset now)`** (Domain): kastar
+  `DomainException` om occurrensen inte är `Completed`, om `byMemberId` inte är samma person
+  som `CompletedByMemberId`, eller om `now - CompletedAt > 15 minuter`. Annars: `Status` →
+  `Planned`, `CompletedByMemberId`/`CompletedAt` → `null` - exakt samma fält `Complete` satte,
+  nollställda, inte en ny "ångrad"-status. **Varför 15 minuter och bara samma person:** ett
+  felslag ska gå att ta tillbaka snabbt av den som gjorde det - inte en historik någon annan
+  kan skriva om i efterhand. Ett hushåll är blandat (Del C) - den som ångrar sin egen
+  avbockning ska inte behöva förklara sig, och ingen annan ska kunna ångra åt någon.
+- **`Application/Tasks/ReopenTaskOccurrence.cs`** speglar `CompleteTaskOccurrence` exakt
+  (samma tre beroenden, samma `TimeProvider`-mönster - CLAUDE.md §5). Returnerar `bool?`
+  (`null` = occurrensen finns inte i hushållet); ett regelbrott (fel person, utanför
+  fönstret, redan utestående) kastar `DomainException` och fångas INTE här - samma stil som
+  `Complete`/`Defer` redan har, så anroparen får ett riktigt 409 via `DomainExceptionHandler`,
+  inte ett tyst `false`.
+- **`POST /api/households/{householdId}/occurrences/{occurrenceId}/reopen`** bredvid
+  `/complete`, `memberId` från samma `httpContext.GetMembership()` som `/complete` redan
+  använder - anroparen kan bara ångra som sig själv. `204 No Content` på lyckad ångring
+  (inget kroppsinnehåll att returnera - Application-lagret ger bara `bool?`), `404` om
+  occurrensen inte finns, `409` vid regelbrott.
+- **Klient**: `HemordnaApiClient.ReopenOccurrenceAsync(householdId, occurrenceId, ct) → bool`,
+  samma form som `CompleteOccurrenceAsync`. Inte kopplad till något UI ännu - det är B1.
+- **Verifierat**: `dotnet build Hemordna.slnx` (0 fel/varningar). `Hemordna.Domain.Tests`
+  87/87 (82 tidigare + 5 nya: ångra inom fönstret, fel person kastar, efter 15 min kastar,
+  icke-`Completed` kastar, ångra-sedan-bocka-av-igen fungerar). `Hemordna.Application.Tests`
+  177/177 (173 tidigare + 4 nya, `ReopenTaskOccurrenceTests.cs`, samma fejk-mönster som
+  `CompleteAndDeferTests.cs`: notifierar exakt en gång, okänd occurrence → `null`, fel
+  person/utanför fönstret → kastar och skriver ingenting). API:t verifierat riktigt körande
+  (CLAUDE.md §7): ett tillfälligt `DEBUG_ReopenApiTests`-test (två riktiga konton i samma
+  hushåll via den faktiska inbjudningskod-vägen) anropade den skarpa, körande endpointen -
+  ångra före avbockning → riktigt 409, fel persons riktiga HTTP-anrop → riktigt 409, rätt
+  person → riktigt 204 och occurrensen syns åter bland dagens utestående via ett riktigt
+  `GET .../plan`-anrop. Testet togs bort igen efter verifiering; den permanenta,
+  produktnära täckningen är B1:s `UndoTests` (riktigt UI-flöde) och C:s
+  `MixedHouseholdTests`, som läggs till senare i den här grenen.
+
+#### A2 (Preferensfält för tid) — `IMPLEMENTED`
+
+- **`MemberPreference.ShowTimeLevel`** (bool, förvalt `false`) + `ChangeShowTimeLevel(bool)` -
+  samma mönster som `Presentation`/`Motivation` redan har. Per medlem, inte per hushåll (Del
+  C) - precis som resten av `MemberPreference`.
+- **Migration `AddShowTimeLevelToMemberPreference`**: en enda additiv `AddColumn<bool>` med
+  `defaultValue: false`, ingen `Down` som förlorar data utöver att ta bort kolumnen igen. Läst
+  innan applicering; applicerad i dev (`dotnet ef database update`), verifierad
+  (`ALTER TABLE "MemberPreferences" ADD "ShowTimeLevel" boolean NOT NULL DEFAULT FALSE`).
+- **`SetMemberPreference.HandleAsync`** fick parametern `bool showTimeLevel` - alla tre
+  anropsställen (Api-endpointen, `DevelopmentDataSeeder`, testerna) uppdaterade i samma
+  commit så lösningen bygger genomgående.
+- **`PreferenceResponse`/`SetPreferenceRequest`** (Api och klient) fick `ShowTimeLevel`.
+  Saknas fältet i en `PUT`-kropp (en äldre klient) blir det `false` automatiskt - System.Text
+  .Jsons vanliga beteende för ett obligatoriskt `bool` utan JSON-motsvarighet, ingen särskild
+  hantering behövd.
+- **`Installningar.razor`** fick ett `_showTimeLevel`-fält som läses/skickas med vid `Spara`,
+  men INGEN ny kontroll än - bara plumbing så en sparning av `Presentation`/`Motivation` inte
+  av misstag nollställer ett värde satt via en framtida kontroll. Den faktiska kryssrutan är
+  B11:s jobb.
+- **Verifierat**: `dotnet build Hemordna.slnx` (0 fel/varningar). Migrationen genererad, läst
+  och applicerad i dev enligt ovan. `Hemordna.Domain.Tests` 87/87 (oförändrat - inga nya
+  domänregler, bara ett fält). `Hemordna.Application.Tests` 177/177 (befintliga
+  preferenstester utökade med `ShowTimeLevel`-assertioner i stället för nya testmetoder:
+  sparas och läses tillbaka, uppdateras vid en andra sparning, defaultar till `false`).
+  `Hemordna.E2E.Tests` 82/82 rent - kört i sin helhet eftersom commiten rör klientkod
+  (`Installningar.razor`, `HemordnaApiClient`, delade kontrakt), inte bara backend.
+
+#### B8 (Lugnare skärm) — `IMPLEMENTED`
+
+- **`Support/CalmScreen.cs` + `wwwroot/js/calm-screen.js`** speglar `Theme.cs`/`theme.js`
+  exakt: `localStorage`-nyckel `hemordna.calm` (`"1"`/saknas), attribut `data-calm` på
+  `<html>`, samma synkrona inline-snutt i `index.html` (utökad, inte duplicerad) så det gäller
+  innan Blazor och `app.css` hinner måla något. Per enhet, inte per medlem (Del C) - exakt
+  samma motivering som temat redan har: det är en egenskap hos skärmen man håller i.
+- **Global neutraliserande regel** i `app.css`, `html[data-calm] * { animation-duration:
+  .001ms!important; ... }` - en ordagrann kopia av det redan befintliga
+  `prefers-reduced-motion`-blocket, bara nyckla på attributet i stället för media-frågan. Detta
+  ensamt räcker för `.task-confirm`s fjädring och `.progress > i`s övergång - ingen egen regel
+  behövdes för någon av dem, eftersom båda bara är vanliga `animation-`/`transition-duration`-
+  värden som den generella regeln redan fångar.
+- **Tre statiska, riktade overrides** för sådant den generella regeln INTE når (genomskinlighet
+  är inte en varaktighet): `NavMenu.razor.css` (`.nav-shell` → `var(--surface)`, ingen
+  `backdrop-filter`), `MainLayout.razor.css` (`.app-topfade`/`.app-botfade` → solid `--kalk`
+  med en `var(--line)`-kant - INTE `--edge`, som medvetet är genomskinlig i ljust läge; utan en
+  alltid synlig linje hade "hård kant" varit osynlig exakt där den behövs, eftersom remsans
+  bakgrund annars är identisk med sidans egen), `BottomSheet.razor.css` (`.sheet-scrim` utan
+  blur, mörkläggningen kvar - arket är fortfarande modalt).
+- **`task-swipe.js`**: `reduceMotion`-flaggan (redan avläst en gång per `attach()`) blir
+  `prefers-reduced-motion ELLER data-calm` - svepets dragrörelse är en "rörelse" oavsett källa.
+  Samma ögonblicksbilds-begränsning som `prefers-reduced-motion` redan har (ändras inte live
+  för en redan fäst rad, bara nästa gång en lista laddas om) - medvetet, inte en ny svaghet.
+- **Medveten avgränsning, inte en spec-avvikelse jag ändrat på eget initiativ:** `wwwroot/js/
+  bottom-sheet.js`s egen drag-till-expandera/stäng-gest (`attachDrag`, "Ny form 2026" steg 5)
+  har KVAR bara sin egen `prefers-reduced-motion`-koll, ingen `data-calm`-koll - B8:s filuppsättning
+  namnger uttryckligen `task-swipe.js`, inte `bottom-sheet.js`. En riktig, om än liten,
+  produktinkonsekvens (ett halvt arks drag skulle fortfarande animeras under "Lugnare skärm"),
+  flaggad här snarare än tyst utökad utanför den angivna filuppsättningen.
+- **Ingen kontroll i UI:t ännu** - `data-calm` går bara att sätta via `localStorage` direkt
+  fram till B11.
+- **Verifierat**: `dotnet build Hemordna.slnx` (0 fel/varningar). `Hemordna.Domain.Tests`
+  87/87, `Hemordna.Application.Tests` 177/177 (ingen ändring - ren klientfunktion).
+  `Hemordna.E2E.Tests` 82/82 rent. Eftersom ingen UI-kontroll finns än verifierades den
+  faktiska effekten med ett tillfälligt `DEBUG_CalmScreenTests`-test (satte `localStorage`
+  direkt, precis som den riktiga knappen kommer göra, och laddade om) - bekräftade att
+  navpillen blir solid `--surface` utan `backdrop-filter`, att `.app-topfade` blir solid
+  `--kalk` utan blur/mask och med en riktig 1px-kant, och att `.progress > i`s övergångstid
+  faller till den neutraliserande regelns `0.001ms` (`getComputedStyle` rapporterar det som
+  `1e-06s` - sekunder, inte millisekunder, samma tal). Testet togs bort igen efter
+  verifiering.
+
+#### B9 (Navigation: namnen alltid synliga) — `IMPLEMENTED`
+
+- **`NavMenu.razor.css`**: sr-only-reglerna för `.nav-link:not(.active) .nav-label` och för
+  `html[data-scrolled] .nav-link .nav-label` borttagna. Alla fyra namn syns nu alltid, oavsett
+  vilken flik som är aktiv eller om sidan är scrollad. Ny `::deep .nav-label`-regel ger
+  etiketterna en egen, mindre bas-storlek (`.72`) skild från länkens egen (`.85`, som
+  fortfarande styr ikonens avstånd) - fyra alltid synliga namn behöver läsas som kompakta
+  etiketter, inte fyra knappars fullstora text. Kompakt läge under scroll krymper vidare till
+  `.62` med `padding: 0 9px` (var `0 11px`).
+- **Verklig bugg hittad och fixad, som spårar tillbaka till "Ny form 2026" steg 1 (inte ny i
+  det här steget):** den redan existerande kompakt-läges-regeln `::deep html[data-scrolled]
+  .nav-link { padding: 0 9px; }` (tidigare `0 11px`) hade ALDRIG haft någon effekt alls sen den
+  skrevs - Blazors CSS-isolering sätter in scope-kontrollen OMEDELBART efter `::deep`, så
+  `::deep html[data-scrolled] .nav-link` kompileras till `[scope] html[data-scrolled]
+  .nav-link` - ett krav att något med DENNA komponents scope ska vara en ANFADER till
+  `<html>`, vilket aldrig kan stämma (`<html>` har inga anfäder). Upptäckt genom att läsa den
+  faktiska kompilerade selektorn i `obj/…/scopedcss/bundle/Hemordna.Client.styles.css`, inte
+  genom att resonera om källkoden - ett nytt försök att lägga till motsvarande regel för Stor
+  text (se nedan) gav exakt samma symptom (mätvärdet ändrades inte alls efter ändringen),
+  vilket avslöjade att mönstret redan var trasigt. Fixat genom att styra scope-kontrollen genom
+  `.nav-shell` (komponentens eget rotelement, en riktig ättling till `html` OCH en riktig
+  anfader till `.nav-link`): `html[data-scrolled] .nav-shell ::deep .nav-link` - `::deep`
+  scopear allt FÖRE sig självt normalt (`.nav-shell` får scope-attributet), och lämnar allt
+  EFTER sig obehandlat (`.nav-link`), topologiskt möjligt. Samma mönster användes för Stor
+  text-regeln nedan direkt, i stället för att upprepa misstaget.
+- **Stor text (DESIGN.md §7, §10 "Stor text får inte bryta layouten")**: vid 390px och
+  `--font-size-base` 19px räckte inte piller-utrymmet längre för fyra alltid synliga namn -
+  uppmätt överflöde ~10.66px (~5.3px på var sida, `nav.nav-shell`s `BoundingBox` gick negativ).
+  Löst med en egen, snävare storlek `:root[data-text-size="large"] .nav-shell ::deep
+  .nav-link`/`.nav-label` (mindre `gap`/`padding`/`font-size`), scopad specifikt till Stor
+  text-läget så den redan granskade normalstorleks-pillen inte rörs.
+- **Nytt permanent test** `MobileNavTests.The_pill_still_fits_with_margin_in_large_text_mode`
+  (ersätter det tillfälliga skärmbildstestet som hittade buggen) - mäter `nav.nav-shell`s
+  `BoundingBox` i Stor text-läge och kräver ≥ 12px marginal på var sida. En riktig
+  regressionsrisk (layoututrymmet är exakt beräknat, inte generöst tilltaget) motiverar att
+  behålla testet permanent i stället för att bara verifiera en gång och kasta det, till
+  skillnad från de flesta andra verifieringarna i detta uppdrag.
+- Utökade `MobileNavTests.Scrolling_to_the_bottom_clears_the_floating_pill` med en assertion
+  att "Rum"-länken är `ToBeVisibleAsync()` - inte bara finns i DOM:en - både före och efter
+  scroll.
+- **Verifierat**: `dotnet build Hemordna.slnx` (0 fel/varningar). `Hemordna.Domain.Tests`
+  87/87, `Hemordna.Application.Tests` 177/177 (ren klientändring). `MobileNavTests` 3/3
+  (inklusive det nya permanenta testet). `Hemordna.E2E.Tests` 83/83 rent (82 tidigare + det
+  nya permanenta testet) - kört i sin helhet, delad navigations-CSS. Skärmbilder (normal text
+  och Stor text, 390px) granskade: alla fyra namn syns tydligt i båda lägena, pillen ryms med
+  marginal i Stor text.
+
+#### B1 (Ångra på Idag) — `IMPLEMENTED`
+
+- **`MinDag.razor`**: `_undo` (`(Guid OccurrenceId, string Name)?`) sätts i `CompleteAsync`
+  efter en lyckad `Api.CompleteOccurrenceAsync` (namnet slås upp i `_day.Items` INNAN
+  `LoadDayAsync()` ersätter `_day` - occurrensen har inte hunnit flytta till `Completed` än vid
+  det laget). Ett delat `UndoBar`-`RenderFragment` (`role="status"`, "Klar: {namn}" +
+  "Ångra"-knapp) renderas direkt under `header.day-header` i listläge, och direkt under
+  `.focus-card` i fokusläge - samma `_undo`-tillstånd, bara olika placering beroende på
+  `IsFocusMode`, inte två samtidiga kopior.
+- **8s-fönstret**: en `CancellationTokenSource` per "visa ångra"-anrop (`ShowUndo`) - en ny
+  avbockning innan de första 8 sekunderna gått ut avbryter (`Cancel()`) den tidigare timern i
+  stället för att låta två `Task.Delay`-anrop kapplöpa om att nollställa `_undo`.
+  `Task.Delay(TimeSpan, CancellationToken)` (rent klient-UI, ingen domän-/Application-logik -
+  CLAUDE.md §5:s `TimeProvider`-krav gäller inte en visuell auto-dismiss-timer på samma sätt
+  som det gäller planeringslogik) fångar `TaskCanceledException` och returnerar tyst vid
+  avbrott. `Dispose()` avbryter och kastar den kvarvarande `CancellationTokenSource`en.
+- **"Ångra"** anropar `Api.ReopenOccurrenceAsync` (A1) och laddar om dagen vid lyckad ångring;
+  ett avslag (utanför 15-minutersfönstret, fel person - borde i praktiken aldrig hända från
+  denna knapp eftersom den bara syns för den som just bockade av) lämnar raden bockad utan
+  felmeddelande, en medveten, minimal avvägning för ett fel som inte rimligen kan uppstå från
+  UI:t självt.
+- **`min-height: 44px` på `.undo-bar` självt** (inte en alltid närvarande, tom platshållare) -
+  radens EGEN höjd är stabil oavsett hur texten/knappen laddar in, så listan under flyttas i
+  ETT enda, förutsägbart steg när raden dyker upp, i stället för att reflowa flera gånger medan
+  dess eget innehåll sätter sig. En medveten, enklare tolkning av "reservera utrymmet" än en
+  permanent tom platshållare - dokumenterad här som ett aktivt val, inte en spec-avvikelse.
+- **`task-swipe.js`**: `threshold` höjd 72 → 96px. Ny riktnings-låsning: de första 12px rörelse
+  avgör om gesten är horisontell (fortsätt som svep) eller vertikal (`|dy| > |dx|` - avbryt
+  helt, släpp pekar-capture, låt `touch-action: pan-y` sköta scrollningen resten av gesten;
+  beslutet tas EN gång per gest, omprövas inte om fingret senare drar mer horisontellt).
+- **Inte täckt av något E2E-test** (varken nytt eller sedan tidigare): själva
+  svep-gestens JS-logik (tröskelvärde, riktningslåsning) - Playwright-simulerad pekar-drag för
+  denna specifika interaktion har aldrig funnits i testsviten, och inget nytt sådant test
+  efterfrågades i uppdraget. `NOT VERIFIED` för just gest-nivån; verifierat genom kodgranskning
+  och att `[JSInvokable] OnSwipeCompleteAsync`/`OnSwipeDeferAsync`s kontrakt mot
+  `TaskListItem.razor` är oförändrat.
+- **Nytt permanent test** `UndoTests.Undo_brings_a_completed_task_back_and_the_offer_expires_on_its_own`
+  - bockar av, ångrar, bekräftar raden är tillbaka som vanlig utestående uppgift; bockar av
+  igen och låter erbjudandet självdö (riktig 9s väntan, inte en simulerad klocka - matchar
+  uppdragets egen instruktion "vänta 9 s").
+- **Verifierat**: `dotnet build Hemordna.slnx` (0 fel/varningar). `Hemordna.Domain.Tests`
+  87/87, `Hemordna.Application.Tests` 177/177 (ren klientändring). `UndoTests` 1/1.
+  `Hemordna.E2E.Tests` 84/84 rent (83 tidigare + `UndoTests`) - kört i sin helhet. Skärmbilder
+  (ljust/mörkt, 390px) granskade: ångra-raden syns tydligt mellan rubrik och lista, ingen
+  överlappning, "Klart idag" visar den avbockade uppgiften korrekt genomstruken.
+
+#### B2 (Stabil lista vid realtidsändring) — `IMPLEMENTED`
+
+- **Problemet**: `OnOccurrencesChanged` (realtidshändelsen från `HouseholdRealtimeClient`, en
+  annan medlems egen handling) anropade tidigare `LoadDayAsync()` direkt - en fullständig
+  omritning som kunde slänga listan mitt i ett svep, en expanderad rad, eller ett öppet ark, och
+  som alltid ritade om ordningen från grunden. Idag är den enda sidan i appen där medlemmen
+  aktivt trycker/sveper/expanderar rader - se Del C: hushållet är normalt blandat, och detta kan
+  komma från vilken annan medlems handling som helst, när som helst.
+- **`MinDag.razor`**: `OnOccurrencesChanged` anropar nu `HandleRemoteChangeAsync`, som gör ett av
+  två saker:
+  1. **Upptagen** (`IsInteractionBusy()`: `_showUnplannedSheet`/`_showExtraTaskSheet` öppet,
+     eller `_lastInteraction` yngre än 2s) - startar om (`CancellationTokenSource`, samma mönster
+     som `ShowUndo`) en 2s-timer som prövar igen; en andra ändring som kommer in medan den väntar
+     ersätter timern i stället för att kapplöpa med den.
+  2. **Ledig** - anropar `ReconcileRemoteChangeAsync()` direkt.
+  `_lastInteraction` sätts i `CompleteAsync`, `DeferAsync`, `ToggleExpand`, `OpenUnplannedSheet`
+  (ny metod - ersätter den tidigare inline-lambdan `() => _showUnplannedSheet = true`, som annars
+  inte kunde sätta `_lastInteraction`) och `OpenExtraTaskSheetAsync`.
+- **`ReconcileRemoteChangeAsync()`**: hämtar en färsk plan till en temp-variabel och patchar
+  `_day` "på plats" i stället för att ersätta den:
+  - En rad som fortfarande är utestående i den nya planen behåller sin plats oförändrad.
+  - En rad som inte längre är utestående OCH nu finns i `incoming.Completed` läggs till i
+    `_remotelyCompletedIds` och **stannar kvar** i `_day.Items` (ritas som
+    `RemotelyCompletedRow` - dämpad, ifylld bock, "Klar: {namn}" - i stället för att flyttas till
+    "Klart idag" eller försvinna). En rad som försvunnit av annan anledning (uppskjuten,
+    borttagen) faller bort tyst, precis som en vanlig omladdning redan skulle göra.
+  - En genuint ny occurrence (schemalagd av någon annan, eller Idags egen
+    occurrence-generering som hunnit ikapp) läggs sist i sin rumsgrupp - `RoomGroups`/
+    `FloorGroups` grupperar redan på `AreaName` och bevarar första-förekomst-ordning, så att
+    lägga till sist räcker; själva grupperingen ändras inte.
+  - `Completed` sätts till `incoming.Completed` MED alla `_remotelyCompletedIds` filtrerade
+    bort - annars skulle samma uppgift räknas och ritas två gånger (en gång som kvarliggande rad
+    i "Övrigt"/rumsgruppen, en gång i "Klart idag"). Hittades och fixades via det tillfälliga
+    E2E-testet nedan: "1 av 1 klara" visade felaktigt "2 av 2 klara" innan fixen.
+  - `_day` byts aldrig ut i sin helhet av en realtidshändelse - bara av medlemmens egen nästa
+    handling (`CompleteAsync`/`DeferAsync`/... anropar redan alla `LoadDayAsync()`) eller genom
+    att lämna och öppna sidan igen. `LoadDayAsync()` nollställer `_remotelyCompletedIds`,
+    `_remoteNote` och avbryter en väntande `_remoteRetryCts` - en full omladdning ersätter helt
+    det patchade tillståndet den byggdes ovanpå.
+- **`remote-note`**: `<p class="remote-note" role="status">` direkt under `.day-header`, synlig
+  i både list- och fokusläge (samma placering oavsett `IsFocusMode`, till skillnad från
+  `UndoBar` som har två renderingsplatser). Ren information, aldrig en jämförelse mellan
+  medlemmar (Del C) - och aldrig ett riktigt namn: varken `PlannedTaskResponse` eller
+  `DailyPlanResponse` bär vem som bockade av en occurrence (bekräftad kontraktslucka), så texten
+  blir alltid "Någon annan bockade av {uppgift}." för en uppgift, "{N} uppgifter blev klara av
+  andra." för flera. Försvinner efter 6s, samma `CancellationTokenSource`-mönster som
+  `UndoBar`s 8s.
+- **`RemotelyCompletedRow`**: "Klar: {uppgiftens eget namn}" - inte ett personnamn (finns inte i
+  kontraktet), av samma anledning och med samma fras-konvention som `UndoBar`s "Klar: {namn}".
+  Ingen `TaskListItem` - raden är inte längre interaktiv (inget svep, ingen expansion, inget kvar
+  att skjuta upp), samma dämpade/genomstrukna behandling som `.task-list-done .task` redan har.
+- **`OutstandingCount`**: en kvarliggande men avbockad rad får inte längre räknas mot "N kvar" i
+  gruppens rubrik - `GroupHeading`s räkneargument byttes från `.Count` till
+  `OutstandingCount(...)` som filtrerar bort `IsRemotelyCompleted`-rader.
+- **`Hushall.razor`**: oförändrad - har redan sin egen, direkta omladdning vid samma
+  realtidshändelse (bekräftat via kodgranskning), och uppdraget är uttryckligt att den ska
+  behålla den.
+- **Inget nytt API-kontrakt**: `PlannedTaskResponse`/`CompletedTaskResponse`/`DailyPlanResponse`
+  rörs inte - hela lösningen är ett rent klientlager (`TaskRow`-posten lägger bara
+  `IsRemotelyCompleted` ovanpå den befintliga `PlannedTaskResponse` för rendering).
+- **Tillfälligt E2E-test** (skrivet, kört, sedan raderat - samma konvention som tidigare
+  `DEBUG_*`-tester denna session): bockade av en occurrence direkt via HTTP medan sidan var öppen
+  i webbläsaren (simulerar "någon annan"), bekräftade att `remote-note`n visas med rätt text,
+  att raden stannar kvar som `.task-done-remote` med "Klar: Diska", att bocka-knappen försvinner,
+  att "1 av 1 klara" stämmer (inte "2 av 2" - se dubbelräkningsbuggen ovan) och att notisen
+  försvinner av sig själv inom 7s. Inget namngivet permanent E2E-test för B2 efterfrågades i
+  uppdragets egen lista ("Nya E2E-tester"), så ingen permanent testfil lades till för just detta.
+- **Verifierat**: `dotnet build Hemordna.slnx` (0 fel/varningar). `Hemordna.Domain.Tests`
+  87/87, `Hemordna.Application.Tests` 177/177 (ren klientändring, ingen påverkan väntad eller
+  sedd). Tillfälligt E2E-test grönt (se ovan), sedan raderat. `Hemordna.E2E.Tests` i sin helhet
+  kört (ren klientändring - se den skalade ner testpolicyn i konversationen).
+
+#### B3 ("Lugn" ska göra något) — `IMPLEMENTED`
+
+- **Problemet**: `MotivationLevel.Calm` har funnits i `MemberPreference` sedan tidigare
+  (`Domain/Households/MemberPreference.cs`, `Installningar.razor`s `motivation`-radiogrupp) och
+  gick att välja och spara - men ingenstans i klienten lästes eller visades något baserat på
+  värdet. Ett val som inte gör något är precis den sortens mekanism uppdraget åtgärdar: valet
+  fanns, effekten fanns inte.
+- **`MinDag.razor`**: `_motivation` (nytt fält, läses från `GetPreferenceAsync` bredvid
+  `_presentation` i `OnInitializedAsync`). När `_motivation == "Calm"` renderas
+  `<p class="day-encouragement">` direkt under `p.day-counts`, innanför samma
+  `@if (hasDayCounts)`-block (så den aldrig visas för en tom dag) och i `header.day-header`
+  (samma header som används i både list- och fokusläge - ingen separat kopia för
+  `IsFocusMode`).
+- **`EncouragementFor(outstanding, completed, total)`**: rent deterministisk, prövad i exakt
+  denna ordning (spegel av uppdragstexten):
+  1. `outstanding == 0 && completed > 0` → "Det viktigaste är gjort."
+  2. `completed * 2 >= total && outstanding > 0` → "Det viktigaste är gjort."
+  3. `outstanding > 4` → "En sak i taget räcker."
+  4. annars → "Här är dina uppgifter för idag."
+  Samma tillstånd (samma `Items.Count`/`Completed.Count`/totalt) ger alltid samma fras - ingen
+  slumpmässig variation, ingen tidsbaserad rotation. Frasernas ordning i `EncouragementPhrases`
+  (en `static readonly string[]`) följer samma ordning som villkoren, med en kommentar som
+  pekar på DESIGN.md §5:s "Tillåtet"-lista - alla tre fraser klarar den listan (inga idiom,
+  inga jämförelser mellan medlemmar, ingen skuldbeläggning).
+- **`.day-encouragement`** (CSS): en tyst andra rad, samma tonvikt som `.day-counts` (`--sot-
+  soft`, mindre textstorlek) - ingen egen bakgrund eller ram, ingen banderoll. Ingen ny
+  animation, ingen `prefers-reduced-motion`-hänsyn behövs (statisk text, ingen in/ut-övergång).
+- **`"None"`**: renderar ingenting, exakt som specen kräver - `_motivation` är antingen
+  `"Calm"` eller `"None"` (aldrig `null` i praktiken efter `Installningar.razor`s egen
+  `?? "None"`-fallback, men `_motivation == "Calm"` är ändå det enda villkoret som slår på
+  - `null`/`"None"`/vad som helst annat visar inget).
+- **Del C**: `_motivation` är redan en `MemberPreference` (per medlem sedan tidigare, inte nytt
+  i B3) - ingen ändring krävs för att hålla det utanför delade ytor (Hushåll/Vecka/Rum visar
+  aldrig `.day-encouragement`, den finns bara på `MinDag.razor`).
+- **Nytt permanent test** `CalmMotivationTests`:
+  - `Calm_with_half_the_days_tasks_done_shows_the_most_important_is_done_phrase` - Lugn +
+    1 av 2 klara (regel 2, inte regel 1: `outstanding = 1 > 0`) → "Det viktigaste är gjort."
+    (exakt uppdragets eget exempel).
+  - `None_shows_no_phrase_at_all` - motivation lämnad odiskuterad (default `"None"`), 0 av 1
+    klar → `.day-encouragement` finns inte i DOM:et.
+- **Verifierat**: `dotnet build Hemordna.slnx` (0 fel/varningar). `Hemordna.Domain.Tests`
+  87/87, `Hemordna.Application.Tests` 177/177 (ren klientändring). `CalmMotivationTests` 2/2.
+  `grep -rniE "NPF|ADHD|autis|funktionsned|tillgänglig"` mot ändrade filer: noll träffar.
+  `Hemordna.E2E.Tests` i sin helhet kört (ren klientändring).
+
+#### B4 (Fokusläget: "Visa nästa") — `IMPLEMENTED`
+
+- **Problemet**: i fokusläge (`OneAtATime`) visade `.focus-card` alltid den första utestående
+  uppgiften i ordningen - ingen väg förbi den utan att bocka av eller skjuta upp den, även om
+  medlemmen bara ville se vad som väntade längre fram.
+- **`MinDag.razor`**: `FocusTask` (tidigare en beräknad `.FirstOrDefault()`) delades i två:
+  `FocusOrder` (samma `OverdueItems.Concat(RoomGroups...)`-kedja som förut, nu materialiserad
+  till en `List<PlannedTaskResponse>` i stället för att bara ta första träffen) och `FocusTask`
+  som indexerar `FocusOrder[_focusOffset % FocusOrder.Count]` (`null` om listan är tom - samma
+  `@CalmState`-fallback som innan). Rader en `ReconcileRemoteChangeAsync` markerat
+  `IsRemotelyCompleted` filtreras fortfarande bort - de är inte längre någons "nästa".
+- **`_focusOffset`** (nytt `int`-fält, default 0): ökar med ett vid varje tryck på "Visa nästa"
+  (`ShowNextFocusTask`) - ingen egen modulo-räkning vid ökningen, `FocusTask`s egen `%
+  FocusOrder.Count` håller den inom gränserna oavsett hur många gånger den ökats. Nollställs i
+  `LoadDayAsync()` - en ny dag, en omladdning efter egen handling, eller att lämna och komma
+  tillbaka till sidan börjar alltid om från den första uppgiften i ordningen, aldrig kvar på en
+  tidigare "nästa"-position.
+- **Knappen**: tredje knappen i `.focus-actions`, `class="btn btn-link"` (skiljer den visuellt
+  från de två primära handlingarna "Bocka av"/"Skjut upp till imorgon" - det här är en titt,
+  inte en handling), dold när `FocusOrder.Count <= 1` (inget att rotera till).
+- **Ändrar ingenting på servern eller på Vecka**: `ShowNextFocusTask` rör varken `_day`, någon
+  `Api.*`-anrop eller occurrensernas ordning/status - rent lokalt UI-tillstånd, samma kategori
+  som `_expandedOccurrence`.
+- **Nytt permanent test** `FocusNextTests.Visa_nasta_cycles_the_focus_card_without_changing_the_days_schedule`
+  - tre uppgifter, "Visa nästa" tryckt tre gånger visar tre olika namn och går sedan runt till
+  det första igen (bevisar cykeln, inte bara "byter till NÅGOT"); en avslutande `GET .../plan`
+  bekräftar att alla tre fortfarande är i `items` (ingen flyttad till `completed`) - "ändrar
+  inget på servern" verifierat, inte bara antaget.
+- **Verifierat**: `dotnet build Hemordna.slnx` (0 fel/varningar). `Hemordna.Domain.Tests`
+  87/87, `Hemordna.Application.Tests` 177/177 (ren klientändring). `FocusNextTests` 1/1.
+  `grep -rniE "NPF|ADHD|autis|funktionsned|tillgänglig"` mot ändrade filer: noll träffar.
+  `Hemordna.E2E.Tests` i sin helhet kört (ren klientändring).
+
+#### B5 (Tid som nivåord) — `IMPLEMENTED`
+
+- **Problemet**: `MemberPreference.ShowTimeLevel` (A2) fanns i kontraktet och gick att spara i
+  Inställningar, men styrde ingenting i klienten - samma "val utan effekt"-mönster som B3:s
+  `Calm`. Dessutom visade `Rum.razor` alltid minuter som råa siffror (`Totalt: N uppgifter · M
+  min`, veckokapacitet) - PRODUCT.md §4/§8:s "tid är en planeringsingång, inte något att räkna
+  i minuter" gällde bara delar av appen.
+- **`TimeLevel.LabelFor(int minutes)`** (`Support/TimeLevel.cs`): närmaste nivåns etikett bland
+  ENDAST de tre positiva nivåerna ("Lite tid"/"Lagom tid"/"Lång tid") - `MinBy` på `All.Where
+  (level.Minutes > 0)`, aldrig "Ingen tid". "0 minuter → ingen chip alls" är uppringarens eget
+  villkor (`EstimatedMinutes > 0`), inte något `LabelFor` självt uttrycker.
+- **`TaskListItem.razor`**: ny parameter `ShowTimeLevel` (`bool`, default false). När sann och
+  `Item.EstimatedMinutes > 0`: `<span class="chip chip-time">@TimeLevel.LabelFor(...)</span>`
+  direkt efter namnet/rumschipen. `.chip-time` (ny CSS): en konturchip (`border: 1px solid
+  var(--edge)`, transparent bakgrund, `--sot-soft`) snarare än en fylld - så den läses som ett
+  lugnare, sekundärt faktum bredvid rummets egen fyllda `.chip`, aldrig konkurrerar med den.
+- **`MinDag.razor`**: `_showTimeLevel` (nytt fält, läst från `GetPreferenceAsync` bredvid
+  `_motivation`) skickas som `ShowTimeLevel="_showTimeLevel"` till båda `<TaskListItem>`-
+  användningarna ("Sedan tidigare" och rumsgrupperna). Fokuskortet visar samma chip direkt
+  under `h2.focus-name`, samma `_showTimeLevel && focusTask.EstimatedMinutes > 0`-villkor -
+  ingen dubblettlogik, bara samma mönster på två ställen eftersom fokuskortet inte går genom
+  `TaskListItem`.
+- **`Rum.razor`**: `Totalt: N uppgifter · M min`, den frekvensvägda `Ungefär … min/vecka`-
+  raden och hushållets kapacitetsnotis flyttades in i `<details class="more-options">
+  <summary>Visa tid</summary>` - samma disclosure-mönster som redan fanns för "Lägg till ett
+  tomt rum i stället". Siffrorna själva är oförändrade (bara Idag ska ALDRIG visa minuter som
+  siffra - Rum får fortsätta göra det, bakom en frivillig disclosure snarare än alltid synligt).
+  `TaskWorkloadTests`/`OmradenTests`: uppdaterade till att klicka `Visa tid` innan de letar
+  efter texten - vad de kontrollerar är oförändrat.
+- **Nytt permanent test** `TimeLevelTests.Toggled_on_shows_a_time_level_chip_and_never_the_minute_count`
+  - av som standard: ingen chip, ingen "5 min" någonstans. Påslaget: `.chip-time` visar "Lite
+  tid" för en 5-minutersuppgift, och varken "5 min" eller den fristående siffran "5" finns i
+  DOM:et i något av lägena.
+- **Verifierat**: `dotnet build Hemordna.slnx` (0 fel/varningar). `Hemordna.Domain.Tests`
+  87/87, `Hemordna.Application.Tests` 177/177 (ren klientändring). `TimeLevelTests` 1/1,
+  `TaskWorkloadTests` + `OmradenTests` (uppdaterade) 16/16 grönt tillsammans.
+  `grep -rniE "NPF|ADHD|autis|funktionsned|tillgänglig"` mot ändrade filer: noll träffar.
+  `Hemordna.E2E.Tests` i sin helhet kört (klientändring).
+
+#### B6 (Tak på "Sedan tidigare") — `IMPLEMENTED` — med en dokumenterad avvikelse
+
+- **Problemet**: "Sedan tidigare" visade alla försenade uppgifter oavsett antal - en dag med
+  många förseningar blev en lång, tät lista som lästes som ett misslyckande snarare än en plan.
+- **`AVVIKELSE FRÅN SPECEN` - `OriginalScheduledDate` finns inte i kontraktet.** Specen bad om
+  "de 3 äldsta (lägst `OriginalScheduledDate`, sedan namn)". `PlannedTaskResponse` (Api OCH
+  Client, `Contracts/ApiContracts.cs`/`Contracts/HouseholdContracts.cs`) bär `OccurrenceId`,
+  `TaskDefinitionId`, `Name`, `EstimatedMinutes`, `Priority`, `IsOverdue`, `AreaName`,
+  `Description`, `CanBeDeferred` - inget datum. `TaskOccurrenceResponse` (en annan DTO, från
+  `/occurrences`-endpointen) har visserligen `OriginalScheduledDate`, men det är inte samma typ
+  som `MinDag.razor` faktiskt läser. Att lägga till fältet hade krävt att röra Api-kontraktet
+  utanför Del A:s "två additiva ändringar" - samma sorts eget-initiativ-tillägg uppdraget
+  uttryckligen varnar för (jf. B2:s "vem bockade av"-exempel). I stället: de tre första i den
+  ordning `OverdueItems` REDAN har (samma deterministiska, serverstyrda ordning "Sedan
+  tidigare" alltid visat, oförändrad av B6) - inte en omsortering efter datum. Konsekvens,
+  synlig i skärmbildsgranskningen: de tre synliga raderna är INTE nödvändigtvis de tre
+  kronologiskt äldsta. **Rapporteras här enligt uppdragets egen instruktion snarare än att
+  API-fältet läggs till på eget initiativ - stanna och fråga om `OriginalScheduledDate` ska
+  exponeras.**
+- **`MinDag.razor`**: `OverdueCapThreshold = 5`, `OverdueVisibleCount = 3` (namngivna
+  konstanter, inte magiska tal). När `OverdueItems.Count > 5` och `!_showAllOverdue`: bara de
+  tre första renderas, följt av `<li class="task task-more">` ("… och N-3 till", "Visa alla" →
+  `_showAllOverdue = true`, "Låt Hemordna sprida ut dem" → `RebalanceOverdueAsync`).
+  `GroupHeading`s räknare (`OutstandingCount(OverdueItems)`) räknar fortfarande hela listan,
+  capad eller inte - rubriken ljuger aldrig om hur mycket som väntar. `_showAllOverdue`
+  nollställs INTE i `LoadDayAsync` (till skillnad från `_focusOffset`) - ett medvetet val: att
+  slå av "Visa alla" igen varje gång medlemmen bockar av en annan uppgift hade känts som att
+  valet inte höll i sig.
+- **`RebalanceOverdueAsync`**: `Api.RebalanceScheduleAsync(householdId)` → `LoadDayAsync()` →
+  DÄREFTER `_rebalanceStatus = "{N} uppgifter fördelades på andra dagar."` (ordningen spelar
+  roll: `LoadDayAsync` rör inte `_rebalanceStatus`, så att sätta strängen EFTER omladdningen är
+  vad som gör att den syns kvar även om "Sedan tidigare" krympt eller försvunnit helt).
+  Statusraden (`<p class="notice" role="status">`) har ingen egen timeout - specen angav ingen
+  (till skillnad från B1/B2/B7 som alla har explicita sekundtal), tolkat som att den ska stå
+  kvar tills sidan lämnas, inte tystas efter ett gissat antal sekunder.
+- **`.task-more`** (CSS): `flex-wrap` + `row-gap` så raden med räknare + två länkknappar bryter
+  snyggt på smala skärmar i stället för att tvinga fram horisontell scroll. Ingen egen
+  `min-height`-justering på knapparna - de ärver `.btn-link`s 44px (DESIGN.md §10 är
+  ovillkorlig; ett första utkast som satte `min-height: auto` på dem togs bort igen innan
+  commit).
+- **Nytt permanent test** `OverdueCapTests.Seven_overdue_tasks_show_three_plus_a_count_until_visa_alla`
+  - sju försenade uppgifter → exakt 3 avbockningsbara rader + "... och 4 till"; rubriken visar
+  fortfarande "7 kvar"; `Visa alla` avslöjar alla sju och `.task-more`-raden försvinner.
+  "Låt Hemordna sprida ut dem" har ingen egen namngiven test i specens lista - verifierat med
+  ett tillfälligt E2E-test (skrivet, kört, raderat): knapptrycket visar statusraden
+  "0 uppgifter fördelades på andra dagar." (inga återkommande uppgifter fanns att flytta i det
+  testfallet - se skärmbild, granskad, ingen layoutbugg).
+- **Verifierat**: `dotnet build Hemordna.slnx` (0 fel/varningar). `Hemordna.Domain.Tests`
+  87/87, `Hemordna.Application.Tests` 177/177 (ren klientändring). `OverdueCapTests` 1/1.
+  Tillfälligt rebalance-test grönt, sedan raderat. `grep -rniE
+  "NPF|ADHD|autis|funktionsned|tillgänglig"` mot ändrade filer: noll träffar.
+  `Hemordna.E2E.Tests` i sin helhet kört (klientändring).
+
+#### B7 (Knappar som alltid finns) — `IMPLEMENTED`
+
+- **Problemet**: "Flytta till en annan dag" rendrades bara när `_day.Unplanned.Count > 0` -
+  chip-raden bytte alltså form beroende på ett tillstånd som inte syns förrän man redan tittar
+  på den. En knapp som ibland finns och ibland inte är precis den sortens oförutsägbarhet
+  uppdraget åtgärdar (jf. B9:s "namnen alltid synliga" - samma princip, en annan yta).
+- **`MinDag.razor`**: chippet rendras nu ALLTID, i samma ordning. När
+  `_day.Unplanned.Count == 0`: klassen `chip-action-disabled` (opacitet, ingen
+  bakgrundsändring - `.chip-action-disabled` är bara en av flera samtidiga signaler, aldrig
+  ensam bärare av "avstängd") och `aria-disabled="true"`.
+- **`aria-disabled`, inte `disabled`** - ett medvetet val, inte en genväg: `disabled` hade tagit
+  bort knappen ur tabb-ordningen helt, vilket motverkar precis den förutsägbarhet chippet finns
+  till för (samma knapp på samma plats, oavsett dagens tillstånd - även för tangentbords-/
+  switch-navigering). `OpenUnplannedSheet` grenar därför på `_day.Unplanned.Count`: noll →
+  `ShowUnplannedNotice()` (statusrad "Inget att flytta just nu.", 4s, samma
+  `CancellationTokenSource`-mönster som `ShowUndo`/`ShowRemoteNote`); annars → öppnar arket som
+  förut. **Playwright-fångst**: `ClickAsync()` vägrar av sig själv klicka ett
+  `aria-disabled="true"`-element (dess egen "actionability"-heuristik tolkar det som `disabled`,
+  trots att en riktig muspekare inte bryr sig om `aria-disabled`) - testet nedan använder
+  `ClickAsync(new() { Force = true })` för att testa det verkliga, tillåtna beteendet i stället
+  för Playwrights konservativa gissning.
+- **Inga befintliga tester påverkades**: varken `ExtraTaskTests.cs` eller `TaskIconsTests.cs`
+  (den enda befintliga referensen till knappen) förlitar sig på att den saknas - ingen
+  testuppdatering krävdes utöver det nya testet nedan.
+- **Nytt permanent test** `AlwaysVisibleChipTests.With_nothing_unplanned_the_chip_stays_but_answers_with_a_status_line`
+  - inget odisponerat: chippet syns, `aria-disabled="true"`, ett tvingat klick visar statusraden
+  i stället för att öppna arket (bekräftat: dialogen öppnas INTE), och statusraden försvinner av
+  sig själv. Inte namngivet i specens egen testlista - lades till ändå eftersom det är ny,
+  tidigare otestad UI-logik.
+- **Verifierat**: `dotnet build Hemordna.slnx` (0 fel/varningar). `Hemordna.Domain.Tests`
+  87/87, `Hemordna.Application.Tests` 177/177 (ren klientändring). `AlwaysVisibleChipTests` 1/1;
+  `ExtraTaskTests`/`TaskIconsTests` 5/5 oförändrade och gröna.
+  `grep -rniE "NPF|ADHD|autis|funktionsned|tillgänglig"` mot ändrade filer: noll träffar.
+  `Hemordna.E2E.Tests` i sin helhet kört (klientändring).
+
+#### B10 (Språkpass) — `IMPLEMENTED`
+
+- **Problemet**: tre fraser på Vecka byggde på en bild/ett idiom i stället för att säga vad de
+  gör - "Tjuvkika" (en gissningslek: vad innebär "tjuvkika" egentligen?), "Ser fördelningen
+  skev ut?" (en bild av lutning, inte en fråga om vad knappen faktiskt gör), "Sprid ut över
+  veckan" (sprider man verkligen ut något, eller flyttas uppgifter till andra dagar?).
+- **`Vecka.razor`**: tre exakta textbyten enligt uppdraget - `<summary>Ser fördelningen skev
+  ut?</summary>` → "Vill du fördela om dagarna?", knappens vilotext "Sprid ut över veckan" →
+  "Fördela om dagarna", `<summary>Tjuvkika på ett schema</summary>` → "Se någon annans dag".
+  Knappens BUSY-text ("Sprider ut..." → "Fördelar om...") följde med av samma anledning som den
+  nya §5-regeln nedan finns - en knapps två tillstånd (vilande/upptagen) ska läsas som samma
+  handling, inte två olika. `aria-label="Tjuvkikad dag"` → `"Den valda dagen"` (samma princip
+  tillämpad på en skärmläsarsträng, inte bara synlig text - annars hade AT-användare fortfarande
+  hört den gamla idiomatiska frasen även om sidan visuellt bytt språk).
+  `_rebalanceMessage`-texterna ("En uppgift flyttades...", "Redan bra utspritt...") rördes INTE
+  - redan sakliga, ingen idiom.
+- **`docs/DESIGN.md` §5**: ny regel tillagd, ordagrant enligt uppdraget - "Inga idiom, inga
+  metaforer, inga lekfulla omskrivningar. En knapp säger vad den gör." - med de tre bytena ovan
+  som egna, konkreta exempel. §6 (Idag/Vecka): de återstående, nu inaktuella citaten av de gamla
+  frascitaten uppdaterade till de nya - annars hade dokumentet självt brutit mot regeln det just
+  fått. Samtidigt rättades ett redan inaktuellt påstående i Vecka-avsnittet om att Rum-totalen
+  "behålls som dämpad text under brickorna" - stämde inte sedan B5 flyttade den bakom "Visa tid".
+  §7/§8:s egna, större tillägg (snabbvalen, "Lugn" implementerad, namnen alltid synliga) hör till
+  Del C:s samlade dokumentationspass i stället - samma rytm som redan hållits genom A1–B9 (bara
+  ARCHITECTURE.md per commit; DESIGN.md/PRODUCT.md/HANDOFF.md i klump på slutet), med det här
+  commitets två undantag (den nya §5-regeln, och de nu direkt felaktiga citaten) gjorda ändå
+  eftersom att LÅTA dem stå fel hade varit värre än att vänta.
+- **Testuppdateringar** (bara selektorer, aldrig vad testerna kontrollerar): `OmradenTests`
+  (`Sprider_ut_veckan...`-scenariot), `PeekScheduleTests` (tre tester, samma
+  `GetByText("Tjuvkika...")` → `GetByText("Se någon annans dag")`, plus `aria-label`-bytet).
+  `PlaneringTests` hade inga träffar att uppdatera - ingen av dess assertions rörde dessa fraser.
+- **Verifierat**: `dotnet build Hemordna.slnx` (0 fel/varningar). `Hemordna.Domain.Tests`
+  87/87, `Hemordna.Application.Tests` 177/177 (ren klientändring). `PeekScheduleTests`
+  (3) + `OmradenTests` (10) + `PlaneringTests` (5) = 18/18 grönt. `grep -rniE
+  "NPF|ADHD|autis|funktionsned|tillgänglig" src/Hemordna.Client --include="*.razor"`: noll
+  träffar (DESIGN.md:s egna träffar på "tillgängligt namn"/"Tillgänglighet" är vanlig
+  webbtillgänglighetsterminologi, utanför grepets mandat som gäller `.razor`). Repo-brett sök
+  efter de gamla fraserna: bara historiska beslutsloggar i ARCHITECTURE.md (medvetet
+  oförändrade - de beskriver vad som var sant DÅ) och DESIGN.md:s egna nya exempel-citat kvar.
+  `Hemordna.E2E.Tests` i sin helhet kört (klientändring).
+
+#### B11 (Lägesval i Inställningar) — `IMPLEMENTED`
+
+- **Problemet**: A2/B3/B5/B8 byggde fyra oberoende, sparbara/enhetsval (presentation,
+  motivation, `ShowTimeLevel`, `CalmScreen`) - men att faktiskt kombinera dem till "en lugnare,
+  tydligare upplevelse" krävde att veta att alla fyra fanns och höra ihop. Inget i UI:t sa det.
+- **`Installningar.razor`**: en rad chips (`<div class="chips" aria-label="Snabbval">`) överst i
+  "Hur vill du se dina uppgifter?"-kortet, innan `.notice`-raden. Tre `Preset`-poster (en
+  `private sealed record` med `Label`/`Presentation`/`Motivation`/`ShowTimeLevel`/`CalmScreen`):
+  - **Kompakt**: `Text`, `None`, av, av.
+  - **Tydlig**: `ImageAndText`, `None`, PÅ, av.
+  - **Steg för steg**: `OneAtATime`, `Calm`, PÅ, PÅ.
+  Inget namn på chippen säger vem den är för - bara vad den ställer in, i linje med uppdragets
+  hårda krav (PRODUCT.md §7 får sin egen, uttryckliga version av samma regel i Del C:s
+  dokumentationspass).
+- **`ActivePreset`**: en beräknad egenskap (INTE ett en gång ihågkommet "senast tryckta chip"-
+  tillstånd) som jämför de FYRA nuvarande fälten mot varje preset och returnerar den som
+  matchar exakt, annars `null`. Ändrar medlemmen en enskild radioknapp eller växel för hand
+  efteråt slocknar `chip-primary`-markeringen automatiskt - den ljuger aldrig om att en
+  kombination fortfarande är ett namngivet läge när den inte längre är det.
+- **Två olika "sparar"-betydelser i samma tryck**: `ApplyPresetAsync` sätter
+  `_presentation`/`_motivation`/`_showTimeLevel` rent lokalt (osparat till servern förrän
+  "Spara" trycks, exakt som att fylla i radioknapparna för hand) MEN anropar
+  `CalmScreen.SetAsync` omedelbart - "Lugnare skärm" har (sedan B8) aldrig haft ett sparat/
+  osparat tillstånd över huvud taget, den ÄR bara vad den är just nu, per enhet, precis som
+  temat. Att låtsas den väntade på "Spara" hade varit en ny, påhittad regel; att den redan alltid
+  varit omedelbar är den regel som redan gällde.
+- **Ny lista** `<ul class="list" aria-label="Fler val">` (två `<li class="list-item">`,
+  `<label class="field-check">` - INTE `field field-check`, spec bad uttryckligen om den
+  fristående klassen eftersom `.list-item` redan ger radavstånd/kantlinje) mellan
+  presentation-radioknapparna och `<h2>Motivation</h2>`: "Visa ungefär hur lång tid en uppgift
+  tar" (`_showTimeLevel`, sparas med "Spara" som alla andra fält i kortet) och "Lugnare skärm –
+  inga rörelser eller genomskinliga effekter" (`_calmScreen`, `ToggleCalmScreenAsync`, samma
+  omedelbara `CalmScreen.SetAsync`-anrop som en chip gör). "Gäller den här enheten" (`muted
+  small`) under den senare - den exakta strängen specen angav; ingen tidigare identisk fras
+  fanns att återanvända (temats egen är en längre mening, "Det här gäller bara den här
+  enheten, inte hushållet eller dina andra enheter.").
+- **`<h2>Motivation</h2>` orört** utöver att den nu faktiskt gör något (B3) - ingen ny text,
+  ingen ny logik här.
+- **Nya/uppdaterade tester**:
+  - `InstallningarTests.Steg_for_steg_sets_all_four_choices_and_kompakt_resets_them` - "Steg för
+    steg" sätter alla fyra (inklusive att chippet själv visas `chip-primary`), "Kompakt"
+    nollställer alla fyra.
+  - `ThemeTests.Toggling_calm_screen_sets_and_clears_data_calm_immediately_without_saving` -
+    `data-calm` sätts/tas bort direkt vid växling, ingen "Spara" inblandad (samma fil som redan
+    äger `data-theme`-motsvarigheten, för samma "per enhet, omedelbart"-familj av beteende).
+  - `SkarmbilderTests`: `07b-installningar-steg-for-steg` tillagd direkt efter `07-installningar`
+    - trycker "Steg för steg", tar bilden, trycker sedan OMEDELBART "Kompakt" igen för att
+      återställa `data-calm` (ett upptäckt, nödvändigt steg: `CalmScreen`s omedelbara,
+      `localStorage`-baserade tillstånd hade annars läckt in i alla efterföljande skärmbilder i
+      samma testkörning - `08-idag-bild-text` och framåt - eftersom `SetPresentationModeAsync`
+      bara sköter presentation-radioknappen, aldrig `motivation`/`calmScreen`).
+  - **Ett kortvarigt, felaktigt intryck under granskning**: `chip-primary`/`chip-action` ser
+    mycket lika ut vid en snabb blick på skärmbilden (`--gustav-soft` mot `--surface-2`, båda
+    ljusa, olika nyans snarare än ljushet) - verifierat med ett tillfälligt debug-test (`class`-
+    attributet läst direkt, `chip-action chip-primary` bekräftat närvarande) i stället för att
+    lita på ögat, sedan raderat. Ingen kodändring behövdes - CSS:en fungerade redan korrekt.
+- **Verifierat**: `dotnet build Hemordna.slnx` (0 fel/varningar). `Hemordna.Domain.Tests`
+  87/87, `Hemordna.Application.Tests` 177/177 (ren klientändring). `InstallningarTests` +
+  `ThemeTests` 8/8. `SkarmbilderTests` 2/2, båda skärmbilderna granskade (ingen överlappning,
+  kryssrutorna och "Gäller den här enheten" sitter rätt, inget kvarvarande `data-calm`-läckage
+  i efterföljande bilder). `grep -rniE "NPF|ADHD|autis|funktionsned|tillgänglig"
+  src/Hemordna.Client --include="*.razor"`: noll träffar. `Hemordna.E2E.Tests` i sin helhet
+  kört (klientändring).
+
+#### Del C (Blandat hushåll) — `IMPLEMENTED`
+
+- **Varför detta är en egen, avslutande del snarare än ett test bland de andra**: varje tidigare
+  delmoment (A1–B11) byggde EN mekanism i taget; Del C är inte en ny mekanism utan ett bevis
+  att de tolv redan byggda håller ihop när två medlemmar faktiskt har olika val samtidigt - det
+  enda scenario resten av uppdraget aldrig testade explicit (varje tidigare test körde med en
+  ensam medlem).
+- **Invarianten (upprepad här som en uttalad regel, inte bara ett genomfört test)**: allt i
+  Del A och B är antingen per medlem (`MemberPreference`: `Presentation`, `Motivation`,
+  `ShowTimeLevel` - A2/B3/B5) eller per enhet (`hemordna.theme`, `hemordna.calm` - B8/B11).
+  Ingenting läser eller skriver en annan medlems preferens; ingenting ligger på `Household`.
+  Bekräftat genom kodgranskning (ingen ny `Household`-egenskap i hela uppdraget, se `git diff
+  A1..HEAD -- src/Hemordna.Domain/Households/Household.cs` = tomt) och genom testet nedan.
+- **Varför listan inte ritas om under en interaktion (B2) hör hemma i Del C:s princip**: en
+  realtidshändelse kan komma från VILKEN ANNAN MEDLEM SOM HELST, när som helst - i ett blandat
+  hushåll är detta inte en sällan förekommande edge case utan den normala driften. B2:s
+  patch-på-plats-lösning skyddar alltså inte bara mot "min egen andra flik", utan mot precis
+  den situation Del C handlar om.
+- **Varför "Lugnare skärm" är per enhet men tid ("Visa tid") är per medlem**: skärmen är en
+  egenskap hos apparaten någon råkar hålla i just då (en delad familjeplatta ska inte plötsligt
+  bli följsam för alla för att en person satte på det på sin telefon) - tiden är en egenskap
+  hos hur PERSONEN vill läsa uppgifter, oavsett vilken enhet hen råkar sitta med (se
+  docs/PRODUCT.md §7, uppdaterad nedan).
+- **15-minutersfönstret och "bara den som bockade av"** (A1) hör redan hemma här utan att vara
+  Del C-specifikt: det är en tidsgräns och en identitetskontroll i domänen
+  (`TaskOccurrence.Reopen`), inte en presentationsfråga - men värt att upprepa i sammanhanget:
+  en kort, snäv ångerrätt (inte en oändlig redigeringshistorik) är vad som gör att en ångrad
+  avbockning kan försvinna TYST ur "Senaste händelser" (Del C) utan att någon behöver undra om
+  historiken manipulerats - fönstret är kort nog att det bara någonsin är den egna, nyss gjorda
+  handlingen som kan tas tillbaka.
+- **Nytt obligatoriskt test** `MixedHouseholdTests.A_mixed_household_never_leaks_one_members_choices_or_undone_actions_to_another`
+  - två riktiga konton i samma hushåll via inbjudningskoden (samma mönster som
+  `HouseholdInviteTests`), alla fem steg i uppdragets egen ordning:
+  1. A väljer "Steg för steg" och sparar.
+  2. B:s Idag: ingen `.chip-time`, ingen `.day-encouragement`, `.task-list` syns (inte
+     `.focus-card`), inget `data-calm`; B:s Inställningar visar fortfarande "Text (standard)"
+     och "Ingen".
+  3. A bockar av och ångrar (direkt mot API:t - UI-sidan av ångra är redan `UndoTests`s jobb,
+     det här testar vad en ANNAN medlem ser efteråt). B:s Idag och Hushåll innehåller varken
+     uppgiftens namn eller ordet "ångra" i sin helhet (`.app-main`s hela textinnehåll
+     genomsökt, inte bara en enskild rad).
+  4. A:s och B:s Hushåll-sidor: `.app-main`s hela textinnehåll jämfört tecken för tecken -
+     identiskt. Sidan har ingen egen personalisering över huvud taget (ingen "Du"-etikett,
+     ingen hälsning) så detta är i praktiken samma kontroll som "inget nytt textinnehåll läcker
+     in", inte bara "ser ungefär likadan ut".
+  5. B sätter på "Lugnare skärm"; A:s separata browser-context saknar `data-calm`.
+  - **En genuin fångst under testskrivandet, inte bara en bugg i testet**: steg 1:s
+    "Steg för steg" sätter OCKSÅ `data-calm` på A:s EGET device omedelbart (samma
+    omedelbara-per-enhet-beteende som B11 redan bygger på) - för att steg 5 ska testa vad det
+    faktiskt påstår (läcker B:s växling till A, inte "har A redan satt på det själv av en
+    annan, redan verifierad anledning") stänger testet uttryckligen av "Lugnare skärm" på A:s
+    enhet igen direkt efter steg 1/2, innan steg 3–5 körs. Ingen produktionskod ändrades - det
+    är korrekt att en preset omedelbart sätter skärmen, testet behövde bara en ren
+    utgångspunkt för just den delen av kontrollen.
+  - Kört tre gånger i rad isolerat för att utesluta flakighet i det multi-context/realtids-tunga
+    flödet: grönt alla tre gångerna.
+- **Verifierat**: `dotnet build Hemordna.slnx` (0 fel/varningar). `Hemordna.Domain.Tests`
+  87/87, `Hemordna.Application.Tests` 177/177 (ren klientändring - Del C lade inte till någon
+  ny domän-/Application-/Api-kod). `MixedHouseholdTests` 1/1 (×3 isolerade körningar).
+  `grep -rniE "NPF|ADHD|autis|funktionsned|tillgänglig" src/Hemordna.Client --include="*.razor"`:
+  noll träffar. `Hemordna.E2E.Tests` i sin helhet kört.
 
 ---
 
