@@ -15,7 +15,11 @@ export function confirm(element) {
     }
 
     element.classList.add('task-confirm');
-    setTimeout(() => element.classList.remove('task-confirm'), 220);
+    // Matches the task-spring keyframes' own .32s duration (TaskListItem.razor.css) with a
+    // little headroom, so the class is never removed mid-animation.
+    setTimeout(() => element.classList.remove('task-confirm'), 340);
+    // iOS Safari silently ignores navigator.vibrate - see docs/DESIGN.md §4a. Left in for the
+    // platforms that do support it (most of Android); never the only confirmation signal.
     navigator.vibrate?.(10);
 }
 

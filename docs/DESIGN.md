@@ -118,6 +118,16 @@ ett drag nedåt (> 80px) stänger arket samma väg som "Stäng" gör. Rent till�
 `backdrop-filter: blur(3px)` - den tonade ytan bakom arket, inte arket självt (glas-transparens
 är annars förbehållet navigationspillen, se §8).
 
+**Fjädrande bekräftelse** ("Ny form 2026"): `task-swipe.js`s delade `confirm()` (bock-knappen
+och svepet på Idag, se §6) lägger på `.task-confirm`, en `task-spring`-keyframe-animation (skala
+1 → 1.025 → 1, `cubic-bezier(.2, 1.4, .4, 1)`, .32s) i stället för bara en färgövergång - en
+mjuk, "studsande" bekräftelse snarare än en platt flash. `navigator.vibrate(10)` körs fortfarande
+på mobil där webbläsaren stödjer det, men **iOS Safari ignorerar `navigator.vibrate` helt och
+tyst** - det beskrivs därför aldrig i produkttext eller marknadsföring som en funktion appen har,
+bara som ett bästa-möjliga tillägg på de plattformar (i praktiken de flesta Android-webbläsare)
+som faktiskt stödjer det. Under `prefers-reduced-motion` lägger `confirm()` aldrig till klassen
+alls (returnerar tidigt) - keyframes körs därför aldrig, ingen ytterligare avstängning behövs.
+
 ---
 
 ## 5. Tonläge
@@ -179,12 +189,13 @@ grupp längst ner, dämpad (55% opacitet) och genomstruken.
 Varje rad (`Components/TaskListItem.razor`): en 44×44px rund bock (gustav-kant, ofylld; fylld
 gustav med vit bock när klar), namn i Familjen Grotesk 600, en chevron till höger som fäller ut
 beskrivning och "Skjut upp till imorgon". Att bocka av - via bock-knappen ELLER genom att svepa
-höger på raden - ger samma korta gustav-soft-bekräftelse och `navigator.vibrate(10)` på mobil
-(`task-swipe.js`s delade `confirm()`, se ARCHITECTURE.md "Ny form" steg 5); svep vänster = flytta
-till imorgon. Bock- och skjut-upp-knapparna finns alltid kvar som vanliga knappar för
-tangentbord och skärmläsare, och ett svep som börjar på en knapp gör ingenting (annars skulle
-det stjäla klicket). Under `prefers-reduced-motion`: ingen dragrörelse, ingen bekräftelseflash,
-ingen haptik – bara den vanliga klick-hanteringen, oavsett om den kom från bocken eller svepet.
+höger på raden - ger samma korta, fjädrande bekräftelse (se §4a) och `navigator.vibrate(10)` på
+mobil (`task-swipe.js`s delade `confirm()`, se ARCHITECTURE.md "Ny form" steg 5 och "Ny form
+2026"); svep vänster = flytta till imorgon. Bock- och skjut-upp-knapparna finns alltid kvar som
+vanliga knappar för tangentbord och skärmläsare, och ett svep som börjar på en knapp gör
+ingenting (annars skulle det stjäla klicket). Under `prefers-reduced-motion`: ingen dragrörelse,
+ingen bekräftelseflash, ingen haptik – bara den vanliga klick-hanteringen, oavsett om den kom
+från bocken eller svepet.
 
 De två gamla ▶-utfällningarna ("N till en annan dag", "Lägg till en extra uppgift") är nu chips
 under listan ("Flytta till en annan dag", "Extra uppgift") som öppnar `BottomSheet.razor` –

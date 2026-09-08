@@ -1,31 +1,24 @@
 # Överlämning
 
-Lägesbild per 2026-09-07, för en ny session. Arbetssättet styrs av
+Lägesbild per 2026-09-08, för en ny session. Arbetssättet styrs av
 [../CLAUDE.md](../CLAUDE.md), som gäller före detta. Max 50 rader; äldre lägesbilder ligger i
 [handoff/](handoff/), se CLAUDE.md §17.
 
 ## Läge
 
-**"Ny form" är klart, alla fem steg** - klienten ombyggd skärm för skärm till ett nytt visuellt
-uttryck och enklare navigation, se ARCHITECTURE.md §10 för fullständiga beslut per steg. Varje
-steg sitt eget feature-branch, **inget mergat till `main` utan uttryckligt godkännande**:
+**"Ny form" (steg 1-5) är mergat och kör i produktion** - `https://app.hemordna.se`, Hetzner
+`62.238.45.45` (delad Caddy/nätverk med BowlingPlatform). `main`s senaste commit är `3f0c426`;
+flera mindre uppföljningar landade också sen merget - se `git log`/ARCHITECTURE.md §10, inte
+denna fil.
 
-1. `feat/ny-form-grund` (tokens, typsnitt, `Icon`/`BottomSheet`, nav) - `IMPLEMENTED`
-2. `feat/ny-form-idag` (Idag/Min dag) - `IMPLEMENTED`
-3. `feat/ny-form-rum` (Rum, ersätter Områden) - `IMPLEMENTED`
-4. `feat/ny-form-hushall-vecka` (Hushåll, Vecka, `MemberSheet`) - `IMPLEMENTED`
-5. `feat/ny-form-morkt-lage` (mörkt läge, delad bock-/svep-bekräftelse) - `IMPLEMENTED`, senaste
-   commit `8b1bebd` på detta branch, ej mergat
+**"Ny form 2026" är klart, alla sex delsteg** - ett andra visuellt delta (svävande navpill,
+kant-till-kant-blur, scroll-rubrik, ark med två höjdlägen, squircle/kantlösa ytor, fjädrande
+bekräftelse), se ARCHITECTURE.md §10 "Beslut: Ny form 2026" för beslut och buggar per delsteg.
+Sex commits på `feat/ny-form-2026`, **inget mergat till `main` utan uttryckligt godkännande**.
 
-**`main` (senaste commit `ab086c5`) kör fortfarande den gamla, förnyade UI:t i produktion** -
-`https://app.hemordna.se`, Hetzner `62.238.45.45` (delad Caddy/nätverk med BowlingPlatform, se
-äldre lägesbild i `handoff/` för driftsättningsdetaljer). Ny form syns alltså inte i produktion
-förrän ett merge-beslut fattas.
-
-**Tre produktionsbuggar från första driftsättningen, redan fixade** (se `handoff/` för detaljer
-om felen själva): `ContentTypeProvider` för `.dat`/`.blat`/`.wasm`, produktionens egen
-`appsettings.Production.json`, och att döpa om den delade Docker-tjänsten från `api` till
-`hemordna-api` (generiskt tjänstenamn på delat nätverk kolliderade med BowlingPlatform).
+**Tre produktionsbuggar från första driftsättningen, redan fixade** (se `handoff/`):
+`ContentTypeProvider` för `.dat`/`.blat`/`.wasm`, produktionens egen
+`appsettings.Production.json`, delad Docker-tjänst döpt om `api` → `hemordna-api`.
 
 ## Köra
 
@@ -33,16 +26,25 @@ Fullständig uppstart: [../README.md](../README.md). Portar: API `5199`, klient 
 **PostgreSQL på port `5433`, inte `5432`** (`.env`). **LAN-åtkomst:** binda med
 `--urls "http://*:PORT"`, inte `0.0.0.0`.
 
+## Fällor som kostat tid
+
+Blazor CSS-isolering döper om `@keyframes`-identifierare, inte bara selektorer
+(`task-spring` → `task-spring-b-xxxxxxxx`) - ett E2E-test som kollar `animationName` måste
+matcha på prefix, inte exakt namn. `::deep` måste stå FÖRE hela den del av en selektor som
+inte hör till komponentens eget renderträd (t.ex. `html[data-scrolled]`), inte bara före
+målklassen - annars försöker isoleringen lägga sitt scope-attribut på `html`, vilket aldrig
+matchar. `SheetDetent.Half` råkar vara enumens nollvärde, samma som ett osatt fälts egen
+default - synka alltid en sådan parameter i `OnParametersSet`, inte `OnAfterRenderAsync` (som
+kör efter den första renderingen som redan behöver värdet).
+
 ## Kända brister
 
 Ett dokumenterat, medvetet ej fixat race: att välja en roll skickar två samtidiga PUT (roll +
 veckobudget) - budgeten kan under belastning tappas trots att rollen sätts. Synligt i
-`HushallTests`/`SkarmbilderTests` som en retry-loop, inte en fix i applikationskoden (utanför
-scope för ett klient-bara steg).
+`HushallTests`/`SkarmbilderTests` som en retry-loop.
 
 ## Öppna frågor och nästa steg
 
-**Nästa, väntar på uttryckligt godkännande:** merga de fem `feat/ny-form-*`-branchen till
-`main` och driftsätta - se avsnittet ovan. Väckt men **inte påbörjad**: uppskatta städbehov
-utifrån antal rum/medlemmar/husdjur. **Beslut, inte öppen fråga:** en användare tillhör exakt
-ett hushåll (ARCHITECTURE.md §4).
+**Nästa, väntar på uttryckligt godkännande:** merga `feat/ny-form-2026` till `main` och
+driftsätta. **Beslut, inte öppen fråga:** en användare tillhör exakt ett hushåll
+(ARCHITECTURE.md §4).

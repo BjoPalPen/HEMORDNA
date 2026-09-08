@@ -1367,7 +1367,7 @@ inga dubbletter).
   bevisar hela vägen: skapa uppgift med rum valt → hamnar under rätt rums rubrik på Idag, inte
   "Övrigt".
 
-### Beslut: Ny form 2026 — `IN PROGRESS`
+### Beslut: Ny form 2026 — `IMPLEMENTED` (alla sex delsteg, ej mergat till `main`)
 
 Ett andra visuellt delta ovanpå "Ny form" (steg 1–5, ovan), på samma villkor: enbart
 `Hemordna.Client` och dokumentation, ingen ändring i Domain/Application/Infrastructure/Api eller
@@ -1606,6 +1606,45 @@ under alla omständigheter utanför MVP-scope (CLAUDE.md §12/PRODUCT.md §10).
   granskade och borttagna: `TaskOptionsSheet` visar `RoomSheet`s brickor/rader synliga bakom sig
   genom scrimmets blur, inget innehåll klipps i något av de tre halva Hushålls-arken - allt
   ryms inom 56vh eller scrollar internt.
+
+#### Delsteg 6 (punkt 6, "Fjädrande bekräftelse") — `IMPLEMENTED`
+
+- **`Components/TaskListItem.razor.css`**: `.task-confirm` bytte från en ren
+  `background-color`-övergång till en `@keyframes task-spring`-animation (`0% scale(1)` →
+  `40% scale(1.025)` + `background: var(--gustav-soft)` → `100% scale(1)`,
+  `animation: task-spring .32s cubic-bezier(.2, 1.4, .4, 1)`) - en mjuk, studsande bekräftelse
+  i stället för en platt färgflash.
+- **`wwwroot/js/task-swipe.js`**: timeouten som tar bort `.task-confirm` höjd från 220ms till
+  340ms, så klassen aldrig hinner plockas bort mitt i animationens egna .32s.
+- **`navigator.vibrate(10)` kvar oförändrad**, men nu uttryckligen dokumenterad (DESIGN.md §4a):
+  iOS Safari ignorerar `navigator.vibrate` helt och tyst - det är därför aldrig beskrivet i
+  produkttext som en funktion appen har, bara ett bästa-möjliga tillägg på plattformar som
+  faktiskt stödjer det.
+- **`prefers-reduced-motion`**: `confirm()` returnerade redan tidigt innan denna klass någonsin
+  sätts - verifierat (se nedan), inget ytterligare att stänga av.
+- **Verifierat, med ett skript snarare än en skärmbild** (en animation syns inte i en stillbild):
+  ett tillfälligt test anropade `task-swipe.js`s `confirm()` direkt på en riktig, redan
+  renderad `.task`-rad (inte ett syntetiskt `document.createElement`-element - Blazors
+  CSS-isolering stämplar bara verkligt renderade element med sitt scope-attribut, så en
+  konstruerad `<div>` hade aldrig matchat den scopade `.task-confirm`-regeln). Bekräftade att
+  `getComputedStyle(el).animationName` normalt börjar med `task-spring` (Blazors
+  CSS-isolering döper om även `@keyframes`-identifierare, inte bara selektorer, till
+  `task-spring-b-xxxxxxxx` - förväntat, inte en bugg) och att `.task-confirm` ALDRIG läggs till
+  under `ReducedMotion.Reduce`. Testet togs bort igen efter verifiering, samma
+  tillfälliga-test-mönster som skärmbilderna genom hela detta uppdrag - den ursprungliga
+  bock-/svep-bekräftelsen (steg 5) har heller aldrig haft ett eget permanent E2E-test av samma
+  skäl (skärmbildsgranskning i stället), så inget nytt permanent test lades till här.
+- `dotnet build Hemordna.slnx` (0 fel/varningar); `Hemordna.Domain.Tests` 82/82,
+  `Hemordna.Application.Tests` 173/173, `Hemordna.E2E.Tests` 82/82 (en enskild,
+  orelaterad flakighet - `PasswordResetTests.Following_the_reset_link_...`, rör
+  lösenordsåterställning, inget den här commiten rör - föll under full parallell körning,
+  passerade isolerat, ny fullständig körning gav 82/82 rent).
+
+### Sammanfattning
+
+Alla sex delsteg av "Ny form 2026" är nu `IMPLEMENTED` på `feat/ny-form-2026`, var sitt
+commit, inget mergat till `main` ännu - väntar på uttryckligt godkännande, samma regel som
+"Ny form" steg 1-5 följde.
 
 ---
 
