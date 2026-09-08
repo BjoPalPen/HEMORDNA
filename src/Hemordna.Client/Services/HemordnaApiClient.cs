@@ -466,12 +466,13 @@ public sealed class HemordnaApiClient
         Guid taskId,
         DateOnly date,
         Guid? assignToMemberId,
+        bool addedAsExtra = false,
         CancellationToken cancellationToken = default)
     {
         var request = await AuthorizedAsync(
             HttpMethod.Post, $"api/households/{householdId}/tasks/{taskId}/occurrences", cancellationToken);
         request.Content = JsonContent.Create(
-            new { date = date.ToString("yyyy-MM-dd"), assignToMemberId });
+            new { date = date.ToString("yyyy-MM-dd"), assignToMemberId, addedAsExtra });
 
         var response = await _http.SendAsync(request, cancellationToken);
         return response.IsSuccessStatusCode;
@@ -588,10 +589,16 @@ public sealed class HemordnaApiClient
             $"api/households/{householdId}/members/{memberId}/plan?date={date:yyyy-MM-dd}",
             cancellationToken);
 
-    /// <summary>Marks a task done. Safe to call twice - the server keeps the first completion.</summary>
+    /// <summary>
+    /// Marks a task done. Safe to call twice - the server keeps the first completion.
+    /// <paramref name="today"/> is this device's own local date - it decides whether the
+    /// completion earns "tid i förväg" (see CompleteTaskOccurrence), and can differ from the
+    /// server's own date around midnight. Left null falls back to the server's date.
+    /// </summary>
     public async Task<bool> CompleteOccurrenceAsync(
         Guid householdId,
         Guid occurrenceId,
+        DateOnly? today = null,
         CancellationToken cancellationToken = default)
     {
         var request = await AuthorizedAsync(
@@ -599,9 +606,100 @@ public sealed class HemordnaApiClient
             $"api/households/{householdId}/occurrences/{occurrenceId}/complete",
             cancellationToken);
 
+        if (today is { } value)
+        {
+            request.Content = JsonContent.Create(new { today = value.ToString("yyyy-MM-dd") });
+        }
+
         var response = await _http.SendAsync(request, cancellationToken);
         return response.IsSuccessStatusCode;
     }
+
+    /// <summary>"Jobba i förväg" for a single occurrence - pulls a not-yet-due task to today.
+    /// Only the member it is assigned to may bring it forward.</summary>
+    public async Task<bool> BringOccurrenceForwardAsync(
+        Guid householdId,
+        Guid occurrenceId,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Post,
+            $"api/households/{householdId}/occurrences/{occurrenceId}/bring-forward",
+            cancellationToken);
+
+        var response = await _http.SendAsync(request, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
+    /// <summary>Undoes bringing an occurrence forward, putting it back on its original date.</summary>
+    public async Task<bool> UndoBringForwardAsync(
+        Guid householdId,
+        Guid occurrenceId,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Post,
+            $"api/households/{householdId}/occurrences/{occurrenceId}/undo-bring-forward",
+            cancellationToken);
+
+        var response = await _http.SendAsync(request, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
+    /// <summary>
+    /// Marks a date as the member's own day off. <paramref name="mode"/> is
+    /// "BringAllForward" or "DeferAll" - see SetMemberDayOff.DayOffMode.
+    /// </summary>
+    public async Task<DayOffResponse?> SetDayOffAsync(
+        Guid householdId,
+        Guid memberId,
+        DateOnly date,
+        string mode,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Put,
+            $"api/households/{householdId}/members/{memberId}/days-off/{date:yyyy-MM-dd}",
+            cancellationToken);
+        request.Content = JsonContent.Create(new { mode });
+
+        var response = await _http.SendAsync(request, cancellationToken);
+
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<DayOffResponse>(cancellationToken)
+            : null;
+    }
+
+    /// <summary>Clears a member's day off. Whatever already moved out of the way while it was
+    /// set stays exactly where it ended up - see ClearMemberDayOff.</summary>
+    public async Task<bool> ClearDayOffAsync(
+        Guid householdId,
+        Guid memberId,
+        DateOnly date,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Delete,
+            $"api/households/{householdId}/members/{memberId}/days-off/{date:yyyy-MM-dd}",
+            cancellationToken);
+
+        var response = await _http.SendAsync(request, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
+    public async Task<IReadOnlyList<MemberDayOffResponse>> GetDaysOffAsync(
+        Guid householdId,
+        Guid memberId,
+        CancellationToken cancellationToken = default)
+        => await GetAsync<IReadOnlyList<MemberDayOffResponse>>(
+            $"api/households/{householdId}/members/{memberId}/days-off", cancellationToken) ?? [];
+
+    /// <summary>The signed-in member's own "tid i förväg" balance - never anyone else's, see
+    /// GetMemberTimeCredit.</summary>
+    public async Task<TimeCreditResponse?> GetTimeCreditAsync(
+        Guid householdId,
+        CancellationToken cancellationToken = default)
+        => await GetAsync<TimeCreditResponse>($"api/households/{householdId}/time-credit", cancellationToken);
 
     /// <summary>Undoes a completion - only the member who completed it can, and only within a
     /// short window server-side (see TaskOccurrence.Reopen). A rejected attempt (wrong person,

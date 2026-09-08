@@ -24,7 +24,8 @@ public sealed record DailyPlanResponse(
     int CompletedMinutes,
     IReadOnlyList<PlannedTaskResponse> Items,
     IReadOnlyList<CompletedTaskResponse> Completed,
-    IReadOnlyList<UnplannedTaskResponse> Unplanned);
+    IReadOnlyList<UnplannedTaskResponse> Unplanned,
+    bool IsDayOff);
 
 public sealed record CompletedTaskResponse(
     Guid OccurrenceId,
@@ -97,7 +98,17 @@ public sealed record RecentActivityResponse(
 
 public sealed record DailyActivitySummaryResponse(DateOnly Date, int CompletedCount, int TotalCount);
 
-public sealed record MemberDayStatusResponse(Guid MemberId, DateOnly Date, string Status);
+public sealed record MemberDayStatusResponse(Guid MemberId, DateOnly Date, string Status, bool IsDayOff);
+
+/// <summary>How many of the member's own occurrences on the day off actually moved - see
+/// SetMemberDayOff.</summary>
+public sealed record DayOffResponse(int BroughtForward, int Deferred, DateOnly? DeferredTo);
+
+public sealed record MemberDayOffResponse(DateOnly Date);
+
+/// <summary>A member's own "tid i förväg" balance - always the calling member's own, see
+/// GetMemberTimeCredit.</summary>
+public sealed record TimeCreditResponse(int Minutes);
 
 public sealed record AddAreaRequest(string Name);
 
