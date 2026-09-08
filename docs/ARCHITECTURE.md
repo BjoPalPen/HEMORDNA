@@ -2104,6 +2104,41 @@ kan ha valt "Steg för steg", en annan inget alls. Allt i detta uppdrag är anti
   "NPF|ADHD|autis|funktionsned|tillgänglig"` mot ändrade filer: noll träffar.
   `Hemordna.E2E.Tests` i sin helhet kört (klientändring).
 
+#### B7 (Knappar som alltid finns) — `IMPLEMENTED`
+
+- **Problemet**: "Flytta till en annan dag" rendrades bara när `_day.Unplanned.Count > 0` -
+  chip-raden bytte alltså form beroende på ett tillstånd som inte syns förrän man redan tittar
+  på den. En knapp som ibland finns och ibland inte är precis den sortens oförutsägbarhet
+  uppdraget åtgärdar (jf. B9:s "namnen alltid synliga" - samma princip, en annan yta).
+- **`MinDag.razor`**: chippet rendras nu ALLTID, i samma ordning. När
+  `_day.Unplanned.Count == 0`: klassen `chip-action-disabled` (opacitet, ingen
+  bakgrundsändring - `.chip-action-disabled` är bara en av flera samtidiga signaler, aldrig
+  ensam bärare av "avstängd") och `aria-disabled="true"`.
+- **`aria-disabled`, inte `disabled`** - ett medvetet val, inte en genväg: `disabled` hade tagit
+  bort knappen ur tabb-ordningen helt, vilket motverkar precis den förutsägbarhet chippet finns
+  till för (samma knapp på samma plats, oavsett dagens tillstånd - även för tangentbords-/
+  switch-navigering). `OpenUnplannedSheet` grenar därför på `_day.Unplanned.Count`: noll →
+  `ShowUnplannedNotice()` (statusrad "Inget att flytta just nu.", 4s, samma
+  `CancellationTokenSource`-mönster som `ShowUndo`/`ShowRemoteNote`); annars → öppnar arket som
+  förut. **Playwright-fångst**: `ClickAsync()` vägrar av sig själv klicka ett
+  `aria-disabled="true"`-element (dess egen "actionability"-heuristik tolkar det som `disabled`,
+  trots att en riktig muspekare inte bryr sig om `aria-disabled`) - testet nedan använder
+  `ClickAsync(new() { Force = true })` för att testa det verkliga, tillåtna beteendet i stället
+  för Playwrights konservativa gissning.
+- **Inga befintliga tester påverkades**: varken `ExtraTaskTests.cs` eller `TaskIconsTests.cs`
+  (den enda befintliga referensen till knappen) förlitar sig på att den saknas - ingen
+  testuppdatering krävdes utöver det nya testet nedan.
+- **Nytt permanent test** `AlwaysVisibleChipTests.With_nothing_unplanned_the_chip_stays_but_answers_with_a_status_line`
+  - inget odisponerat: chippet syns, `aria-disabled="true"`, ett tvingat klick visar statusraden
+  i stället för att öppna arket (bekräftat: dialogen öppnas INTE), och statusraden försvinner av
+  sig själv. Inte namngivet i specens egen testlista - lades till ändå eftersom det är ny,
+  tidigare otestad UI-logik.
+- **Verifierat**: `dotnet build Hemordna.slnx` (0 fel/varningar). `Hemordna.Domain.Tests`
+  87/87, `Hemordna.Application.Tests` 177/177 (ren klientändring). `AlwaysVisibleChipTests` 1/1;
+  `ExtraTaskTests`/`TaskIconsTests` 5/5 oförändrade och gröna.
+  `grep -rniE "NPF|ADHD|autis|funktionsned|tillgänglig"` mot ändrade filer: noll träffar.
+  `Hemordna.E2E.Tests` i sin helhet kört (klientändring).
+
 ---
 
 ## 11. Beslut som ännu inte är fattade — `OPEN`

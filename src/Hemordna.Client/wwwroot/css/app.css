@@ -578,6 +578,14 @@ html[data-calm] * {
     background: var(--aska-soft);
 }
 
+/* "Beslut: Ångra och stabil lista" §B7 - always rendered, so the layout never reflows depending
+   on what happens to be true today; aria-disabled rather than the disabled attribute, so it
+   stays reachable and clickable (DESIGN.md §10 - focus never hidden) and can answer its own tap
+   with a status line instead of just doing nothing. */
+.chip-action-disabled {
+    opacity: .55;
+}
+
 /* Never the only carrier of meaning - always paired with text. */
 .notice {
     padding: var(--space-3) var(--space-4);
