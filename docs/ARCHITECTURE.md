@@ -1769,6 +1769,53 @@ kan ha valt "Steg för steg", en annan inget alls. Allt i detta uppdrag är anti
   `1e-06s` - sekunder, inte millisekunder, samma tal). Testet togs bort igen efter
   verifiering.
 
+#### B9 (Navigation: namnen alltid synliga) — `IMPLEMENTED`
+
+- **`NavMenu.razor.css`**: sr-only-reglerna för `.nav-link:not(.active) .nav-label` och för
+  `html[data-scrolled] .nav-link .nav-label` borttagna. Alla fyra namn syns nu alltid, oavsett
+  vilken flik som är aktiv eller om sidan är scrollad. Ny `::deep .nav-label`-regel ger
+  etiketterna en egen, mindre bas-storlek (`.72`) skild från länkens egen (`.85`, som
+  fortfarande styr ikonens avstånd) - fyra alltid synliga namn behöver läsas som kompakta
+  etiketter, inte fyra knappars fullstora text. Kompakt läge under scroll krymper vidare till
+  `.62` med `padding: 0 9px` (var `0 11px`).
+- **Verklig bugg hittad och fixad, som spårar tillbaka till "Ny form 2026" steg 1 (inte ny i
+  det här steget):** den redan existerande kompakt-läges-regeln `::deep html[data-scrolled]
+  .nav-link { padding: 0 9px; }` (tidigare `0 11px`) hade ALDRIG haft någon effekt alls sen den
+  skrevs - Blazors CSS-isolering sätter in scope-kontrollen OMEDELBART efter `::deep`, så
+  `::deep html[data-scrolled] .nav-link` kompileras till `[scope] html[data-scrolled]
+  .nav-link` - ett krav att något med DENNA komponents scope ska vara en ANFADER till
+  `<html>`, vilket aldrig kan stämma (`<html>` har inga anfäder). Upptäckt genom att läsa den
+  faktiska kompilerade selektorn i `obj/…/scopedcss/bundle/Hemordna.Client.styles.css`, inte
+  genom att resonera om källkoden - ett nytt försök att lägga till motsvarande regel för Stor
+  text (se nedan) gav exakt samma symptom (mätvärdet ändrades inte alls efter ändringen),
+  vilket avslöjade att mönstret redan var trasigt. Fixat genom att styra scope-kontrollen genom
+  `.nav-shell` (komponentens eget rotelement, en riktig ättling till `html` OCH en riktig
+  anfader till `.nav-link`): `html[data-scrolled] .nav-shell ::deep .nav-link` - `::deep`
+  scopear allt FÖRE sig självt normalt (`.nav-shell` får scope-attributet), och lämnar allt
+  EFTER sig obehandlat (`.nav-link`), topologiskt möjligt. Samma mönster användes för Stor
+  text-regeln nedan direkt, i stället för att upprepa misstaget.
+- **Stor text (DESIGN.md §7, §10 "Stor text får inte bryta layouten")**: vid 390px och
+  `--font-size-base` 19px räckte inte piller-utrymmet längre för fyra alltid synliga namn -
+  uppmätt överflöde ~10.66px (~5.3px på var sida, `nav.nav-shell`s `BoundingBox` gick negativ).
+  Löst med en egen, snävare storlek `:root[data-text-size="large"] .nav-shell ::deep
+  .nav-link`/`.nav-label` (mindre `gap`/`padding`/`font-size`), scopad specifikt till Stor
+  text-läget så den redan granskade normalstorleks-pillen inte rörs.
+- **Nytt permanent test** `MobileNavTests.The_pill_still_fits_with_margin_in_large_text_mode`
+  (ersätter det tillfälliga skärmbildstestet som hittade buggen) - mäter `nav.nav-shell`s
+  `BoundingBox` i Stor text-läge och kräver ≥ 12px marginal på var sida. En riktig
+  regressionsrisk (layoututrymmet är exakt beräknat, inte generöst tilltaget) motiverar att
+  behålla testet permanent i stället för att bara verifiera en gång och kasta det, till
+  skillnad från de flesta andra verifieringarna i detta uppdrag.
+- Utökade `MobileNavTests.Scrolling_to_the_bottom_clears_the_floating_pill` med en assertion
+  att "Rum"-länken är `ToBeVisibleAsync()` - inte bara finns i DOM:en - både före och efter
+  scroll.
+- **Verifierat**: `dotnet build Hemordna.slnx` (0 fel/varningar). `Hemordna.Domain.Tests`
+  87/87, `Hemordna.Application.Tests` 177/177 (ren klientändring). `MobileNavTests` 3/3
+  (inklusive det nya permanenta testet). `Hemordna.E2E.Tests` 83/83 rent (82 tidigare + det
+  nya permanenta testet) - kört i sin helhet, delad navigations-CSS. Skärmbilder (normal text
+  och Stor text, 390px) granskade: alla fyra namn syns tydligt i båda lägena, pillen ryms med
+  marginal i Stor text.
+
 ---
 
 ## 11. Beslut som ännu inte är fattade — `OPEN`
