@@ -69,4 +69,56 @@ public class OverdueCapTests
             .ToHaveCountAsync(7);
         await Assertions.Expect(moreRow).Not.ToBeVisibleAsync();
     }
+
+    /// <summary>The three shown when capped are the three GENUINELY oldest
+    /// (OriginalScheduledDate), not just whichever three the server happened to list first -
+    /// PlannedTaskResponse gained that field specifically to make this possible (previously a
+    /// documented, reported contract gap - see ARCHITECTURE.md §B6).</summary>
+    [Fact]
+    public async Task Capped_overdue_items_are_the_oldest_by_original_scheduled_date_not_server_order()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Yara");
+
+        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
+        http.DefaultRequestHeaders.Authorization = new("Bearer", token);
+
+        var me = await (await http.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
+        var householdId = me.GetProperty("householdId").GetGuid();
+        var memberId = me.GetProperty("memberId").GetGuid();
+
+        await http.PutAsJsonAsync(
+            $"/api/households/{householdId}/members/{memberId}/weekly-budget",
+            new { monday = 600, tuesday = 600, wednesday = 600, thursday = 600, friday = 600, saturday = 600, sunday = 600 });
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        // Deliberately created out of chronological order, so a naive "server/creation order"
+        // cap would show the wrong three. "ZZOldest" sorts last alphabetically but is scheduled
+        // furthest in the past - proves the sort key is the date, name only a tiebreaker.
+        (string Name, int DaysAgo)[] tasks =
+        [
+            ("Nyast", 1), ("ZZOldest", 6), ("Mellan", 3), ("Näst", 2), ("Fyra", 4), ("Fem", 5), ("Sex", 6)
+        ];
+
+        foreach (var (name, daysAgo) in tasks)
+        {
+            var task = await (await http.PostAsJsonAsync(
+                $"/api/households/{householdId}/tasks", new { name, estimatedMinutes = 5 }))
+                .Content.ReadFromJsonAsync<JsonElement>();
+            await http.PostAsJsonAsync(
+                $"/api/households/{householdId}/tasks/{task.GetProperty("id").GetGuid()}/occurrences",
+                new { date = today.AddDays(-daysAgo), assignToMemberId = memberId });
+        }
+
+        await page.ReloadAsync();
+
+        var overdueList = page.GetByRole(AriaRole.List, new() { Name = "Sedan tidigare" });
+        await Assertions.Expect(overdueList).ToBeVisibleAsync();
+
+        var names = await overdueList.Locator(".task-name").AllTextContentsAsync();
+        // "Sex" and "ZZOldest" share the oldest date (6 days ago) - name is the documented
+        // tiebreaker, so "Sex" (alphabetically first) shows before "ZZOldest".
+        Assert.Equal(["Sex", "ZZOldest", "Fem"], names.Select(n => n.Split('\n')[0].Trim()).ToArray());
+    }
 }

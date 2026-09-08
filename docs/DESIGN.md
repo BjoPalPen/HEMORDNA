@@ -244,15 +244,17 @@ UI-gräns) - se `TaskOccurrence.Reopen` i ARCHITECTURE.md.
 egen handling patchar `_day` på plats i stället för att ladda om allt - en rad som blev klar
 hos någon annan stannar kvar där den var (dämpad, "Klar: {namn}"), en ny rad läggs sist i sin
 rumsgrupp, inget byter ordning. En kort informationsrad, `<p class="remote-note"
-role="status">`, visar "Någon annan bockade av Diska." (eller "N uppgifter blev klara av
-andra." vid flera) i 6 sekunder - ren information, aldrig en jämförelse mellan medlemmar (se
-Del C nedan). Uppskjuts 2s i taget om ett ark är öppet eller medlemmen just interagerat.
+role="status">`, visar "Helena bockade av Diska." (det riktiga namnet när medlemmen fortfarande
+finns i hushållet, annars "Någon annan bockade av Diska."; "N uppgifter blev klara av andra."
+vid flera) i 6 sekunder - ren information, aldrig en jämförelse mellan medlemmar (se Del C
+nedan: aldrig ett antal per person, aldrig en ordning mellan personer). Uppskjuts 2s i taget om
+ett ark är öppet eller medlemmen just interagerat.
 
-**Tak på "Sedan tidigare"** (§B6): fler än fem försenade uppgifter visar bara de tre första,
-följt av en rad "… och N till" med två länkar - "Visa alla" (lokalt, ingen server-ändring) och
-"Låt Hemordna sprida ut dem" (kör samma ombalansering som Vecka har, laddar om dagen, visar "N
-uppgifter fördelades på andra dagar."). Rubrikens eget "N kvar" räknar alltid hela listan,
-capad eller inte.
+**Tak på "Sedan tidigare"** (§B6): fler än fem försenade uppgifter visar de tre KRONOLOGISKT
+äldsta (`OriginalScheduledDate`, namn som tiebreak), följt av en rad "… och N till" med två
+länkar - "Visa alla" (lokalt, ingen server-ändring) och "Låt Hemordna sprida ut dem" (kör samma
+ombalansering som Vecka har, laddar om dagen, visar "N uppgifter fördelades på andra dagar.").
+Rubrikens eget "N kvar" räknar alltid hela listan, capad eller inte.
 
 **Kända begränsningar (dokumenterade, inte lösta i detta steg):** meta-raden under namnet
 visar bara "sedan tidigare" när en uppgift är försenad, inte hur ofta den återkommer –
@@ -260,11 +262,6 @@ visar bara "sedan tidigare" när en uppgift är försenad, inte hur ofta den åt
 scope för klient-bara arbete (se CLAUDE.md, "Behöver du ett nytt API-fält: stanna och
 rapportera"). "Stor text" och "En uppgift åt gången" var sparbara sedan tidigare men lästes
 aldrig av `MinDag.razor` – se "Beslut: Ny form" i ARCHITECTURE.md för vad som nu är kopplat in.
-Samma kontraktslucka gäller vem som bockade av en uppgift (`remote-note` säger "Någon annan",
-aldrig ett riktigt namn - §B2) och vilket datum en uppgift ursprungligen schemalades
-(taket på "Sedan tidigare" visar de tre första i listans egen, redan befintliga ordning, inte
-en omsortering efter ålder - §B6). Se ARCHITECTURE.md för båda som uttryckligen rapporterade,
-inte gissade, avvikelser.
 
 ### Uppgiftsdetalj
 
@@ -287,11 +284,13 @@ och ingen redigering här. Helt läsläge; rollen (se §6b, satt från Hushålls
 enda sättet att ändra veckan.
 
 "Se någon annans dag" (en titt på i morgon, eller på någon annans dag, skrivskyddat) bor nu
-här i stället för på Idag – samma disclosure och logik, flyttad. Listan visar bara en kryssruta
-(ifylld för avklarat, tom annars) och uppgiftens namn - ingen områdeschip, för att hålla den
-korta, skrivskyddade listan så enkel som möjligt; "sedan tidigare" behålls dock på en
-utestående uppgift, annars ser en dags gamla, ej avklarade uppgift ut som en rak dubblett av
-morgondagens egna nya förekomst (se `PeekScheduleTests`, en tidigare rapporterad förvirring).
+här i stället för på Idag – samma disclosure och logik, flyttad. Listan visar en kryssruta
+(ifylld för avklarat, tom annars), uppgiftens namn och dess rumschip (samma `.chip`-mönster
+`TaskListItem.razor` använder - utan den går två likadant namngivna uppgifter i olika rum,
+t.ex. "Vädra rummet" i två sovrum, inte att skilja åt; en produktionsrapporterad förvirring,
+fixad); "sedan tidigare" behålls dock på en utestående uppgift, annars ser en dags gamla, ej
+avklarade uppgift ut som en rak dubblett av morgondagens egna nya förekomst (se
+`PeekScheduleTests`, en tidigare rapporterad förvirring).
 Under listan: "Totalt: N min" (`DailyPlanResponse.PlannedMinutes + CompletedMinutes`) - ett
 uttryckligt, medvetet undantag från §6a på produktfeedback: att se en annan dag är att
 bedöma hur full den är, närmare planeringsläget Rum/RoomTile redan har ett minutundantag för

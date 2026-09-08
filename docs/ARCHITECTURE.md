@@ -1934,6 +1934,20 @@ kan ha valt "Steg för steg", en annan inget alls. Allt i detta uppdrag är anti
   sedd). Tillfälligt E2E-test grönt (se ovan), sedan raderat. `Hemordna.E2E.Tests` i sin helhet
   kört (ren klientändring - se den skalade ner testpolicyn i konversationen).
 
+**Uppföljning (samma dag, efter merge till `main`)**: kontraktsluckan ovan täpptes till.
+`CompletedTaskResponse` (Api och Client) fick `Guid? CompletedByMemberId`, populerad direkt
+från den redan befintliga `TaskOccurrence.CompletedByMemberId` i `HouseholdEndpoints.ToResponse`,
+utan något nytt i domän eller Application eftersom `PlanCandidate` redan bar hela `Occurrence`.
+`remote-note` slår nu upp namnet mot `_household.Members` (nu laddat direkt i
+`OnInitializedAsync`, inte bara vid "Extra uppgift"): "Helena bockade av Diska." när medlemmen
+hittas, "Någon annan" annars (lämnat hushållet, eller null - ett försvarsfall, inte förväntat i
+praktiken).
+`RemotelyCompletedRow`s egen text ("Klar: {uppgiftens namn}") rördes INTE - att byta den mot ett
+personnamn hade gjort raden tvetydig (vilken uppgift?), personens namn hör hemma i den redan
+fullständiga meningen i `remote-note`, inte i den terserade raden. Nytt permanent test
+`RemoteCompletionNameTests.A_real_household_members_name_appears_instead_of_someone_else` (två
+riktiga konton, samma inbjudningskodsmönster som `MixedHouseholdTests`) - grönt.
+
 #### B3 ("Lugn" ska göra något) — `IMPLEMENTED`
 
 - **Problemet**: `MotivationLevel.Calm` har funnits i `MemberPreference` sedan tidigare
@@ -2051,7 +2065,7 @@ kan ha valt "Steg för steg", en annan inget alls. Allt i detta uppdrag är anti
   `grep -rniE "NPF|ADHD|autis|funktionsned|tillgänglig"` mot ändrade filer: noll träffar.
   `Hemordna.E2E.Tests` i sin helhet kört (klientändring).
 
-#### B6 (Tak på "Sedan tidigare") — `IMPLEMENTED` — med en dokumenterad avvikelse
+#### B6 (Tak på "Sedan tidigare") — `IMPLEMENTED` — avvikelsen nedan senare löst, se uppföljningen
 
 - **Problemet**: "Sedan tidigare" visade alla försenade uppgifter oavsett antal - en dag med
   många förseningar blev en lång, tät lista som lästes som ett misslyckande snarare än en plan.
@@ -2103,6 +2117,17 @@ kan ha valt "Steg för steg", en annan inget alls. Allt i detta uppdrag är anti
   Tillfälligt rebalance-test grönt, sedan raderat. `grep -rniE
   "NPF|ADHD|autis|funktionsned|tillgänglig"` mot ändrade filer: noll träffar.
   `Hemordna.E2E.Tests` i sin helhet kört (klientändring).
+
+**Uppföljning (samma dag, efter merge till `main`)**: kontraktsluckan ovan täpptes till.
+`PlannedTaskResponse` (Api och Client) fick `DateOnly OriginalScheduledDate`, populerad direkt
+från `TaskOccurrence.OriginalScheduledDate` i `HouseholdEndpoints.ToResponse` (samma mönster som
+`CompletedByMemberId` ovan - ingen domän-/Application-ändring). `OverdueItems` sorterar nu
+`.OrderBy(OriginalScheduledDate).ThenBy(Name)` - de tre synliga vid tak är på riktigt de tre
+kronologiskt äldsta, inte bara de tre servern råkade lista först. Nytt permanent test
+`OverdueCapTests.Capped_overdue_items_are_the_oldest_by_original_scheduled_date_not_server_order`,
+sju uppgifter schemalagda i blandad ordning där en har ett namn som sorterar sist alfabetiskt
+men är schemalagd längst tillbaka i tiden - bevisar att datumet, inte namnet eller
+skapelseordningen, är den faktiska sorteringsnyckeln.
 
 #### B7 (Knappar som alltid finns) — `IMPLEMENTED`
 
@@ -2305,6 +2330,16 @@ kan ha valt "Steg för steg", en annan inget alls. Allt i detta uppdrag är anti
   ny domän-/Application-/Api-kod). `MixedHouseholdTests` 1/1 (×3 isolerade körningar).
   `grep -rniE "NPF|ADHD|autis|funktionsned|tillgänglig" src/Hemordna.Client --include="*.razor"`:
   noll träffar. `Hemordna.E2E.Tests` i sin helhet kört.
+
+**Uppföljning (samma dag, efter merge till `main` och driftsättning), produktionsfeedback:**
+"Se någon annans dag" (Vecka) visade uppgiftsnamn helt utan rumsangivelse - två likadant
+namngivna uppgifter i olika rum ("Vädra rummet" i två sovrum) gick inte att skilja åt. Ett rent
+visningsfel, inte en kontraktslucka: `PlannedTaskResponse`/`CompletedTaskResponse` bar redan
+`AreaName`, `Vecka.razor` bara rendrade aldrig chippet. Fixat genom att lägga samma
+`<span class="chip">@areaName</span>`-mönster `TaskListItem.razor` redan använder till båda
+raderna i peek-listan, plus motsvarande `.task-name .chip`-styling i `Vecka.razor.css`. Nytt
+permanent test
+`PeekScheduleTests.Two_same_named_tasks_in_different_rooms_are_distinguishable_by_their_chip`.
 
 ---
 

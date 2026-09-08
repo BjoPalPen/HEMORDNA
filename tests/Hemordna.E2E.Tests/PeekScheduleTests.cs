@@ -157,4 +157,56 @@ public class PeekScheduleTests
         // from today - so the two are never mistaken for the same thing shown twice.
         await Assertions.Expect(peekList.GetByText("sedan tidigare")).ToHaveCountAsync(1);
     }
+
+    /// <summary>Two same-named tasks in different rooms must stay distinguishable - the peek
+    /// list rendered no room chip at all until this was reported and fixed (see the room chip
+    /// bullet in ARCHITECTURE.md's Del C entry).</summary>
+    [Fact]
+    public async Task Two_same_named_tasks_in_different_rooms_are_distinguishable_by_their_chip()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Ines");
+
+        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
+        http.DefaultRequestHeaders.Authorization = new("Bearer", token);
+
+        var me = await (await http.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
+        var householdId = me.GetProperty("householdId").GetGuid();
+        var memberId = me.GetProperty("memberId").GetGuid();
+
+        var area1 = await (await http.PostAsJsonAsync(
+            $"/api/households/{householdId}/areas", new { name = "Sovrum 1" }))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        var area2 = await (await http.PostAsJsonAsync(
+            $"/api/households/{householdId}/areas", new { name = "Sovrum 2" }))
+            .Content.ReadFromJsonAsync<JsonElement>();
+
+        var tomorrow = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(1);
+        await http.PutAsJsonAsync(
+            $"/api/households/{householdId}/members/{memberId}/availability",
+            new { date = tomorrow, availableMinutes = 60 });
+
+        foreach (var areaId in new[] { area1.GetProperty("id").GetGuid(), area2.GetProperty("id").GetGuid() })
+        {
+            var task = await (await http.PostAsJsonAsync(
+                $"/api/households/{householdId}/tasks",
+                new { name = "Vädra rummet", estimatedMinutes = 5, areaId }))
+                .Content.ReadFromJsonAsync<JsonElement>();
+            await http.PostAsJsonAsync(
+                $"/api/households/{householdId}/tasks/{task.GetProperty("id").GetGuid()}/occurrences",
+                new { date = tomorrow, assignToMemberId = memberId });
+        }
+
+        await page.GotoAsync("/vecka");
+        await page.GetByText("Se någon annans dag").ClickAsync();
+        await page.GetByLabel("Vilken dag?").SelectOptionAsync(new SelectOptionValue { Label = "Imorgon" });
+
+        var rows = page.Locator(".task", new() { HasText = "Vädra rummet" });
+        await Assertions.Expect(rows).ToHaveCountAsync(2);
+
+        var rowTexts = await rows.AllInnerTextsAsync();
+        Assert.Contains(rowTexts, t => t.Contains("Sovrum 1"));
+        Assert.Contains(rowTexts, t => t.Contains("Sovrum 2"));
+    }
 }

@@ -78,6 +78,12 @@
     font-weight: 600;
 }
 
+.task-name .chip {
+    margin-top: var(--space-1);
+    align-self: flex-start;
+    font-family: var(--font-body);
+}
+
 .task-note {
     font-style: normal;
     font-family: var(--font-body);

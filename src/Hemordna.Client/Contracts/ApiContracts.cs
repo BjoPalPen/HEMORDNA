@@ -31,7 +31,8 @@ public sealed record CompletedTaskResponse(
     Guid TaskDefinitionId,
     string Name,
     int EstimatedMinutes,
-    string? AreaName);
+    string? AreaName,
+    Guid? CompletedByMemberId);
 
 public sealed record PlannedTaskResponse(
     Guid OccurrenceId,
@@ -42,7 +43,8 @@ public sealed record PlannedTaskResponse(
     bool IsOverdue,
     string? AreaName,
     string? Description,
-    bool CanBeDeferred);
+    bool CanBeDeferred,
+    DateOnly OriginalScheduledDate);
 
 public sealed record UnplannedTaskResponse(
     Guid OccurrenceId,

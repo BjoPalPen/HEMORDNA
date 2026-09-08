@@ -875,13 +875,15 @@ internal static class HouseholdEndpoints
                 item.IsOverdue,
                 item.Candidate.AreaName,
                 item.Candidate.Description,
-                item.Candidate.CanBeDeferred))],
+                item.Candidate.CanBeDeferred,
+                item.Candidate.Occurrence.OriginalScheduledDate))],
             [.. day.Completed.Select(done => new CompletedTaskResponse(
                 done.Occurrence.Id,
                 done.Occurrence.TaskDefinitionId,
                 done.TaskName,
                 done.EstimatedMinutes,
-                done.AreaName))],
+                done.AreaName,
+                done.Occurrence.CompletedByMemberId))],
             [.. plan.Unplanned.Select(task => new UnplannedTaskResponse(
                 task.Candidate.Occurrence.Id,
                 task.Candidate.Occurrence.TaskDefinitionId,
