@@ -205,7 +205,24 @@ var staticFileTypeProvider = new Microsoft.AspNetCore.StaticFiles.FileExtensionC
 staticFileTypeProvider.Mappings[".dat"] = "application/octet-stream";
 staticFileTypeProvider.Mappings[".blat"] = "application/octet-stream";
 staticFileTypeProvider.Mappings[".wasm"] = "application/wasm";
-app.UseStaticFiles(new StaticFileOptions { ContentTypeProvider = staticFileTypeProvider });
+app.UseStaticFiles(new StaticFileOptions
+{
+    ContentTypeProvider = staticFileTypeProvider,
+    OnPrepareResponse = context =>
+    {
+        // index.html and the service worker script keep the same filename across every
+        // deploy - unlike everything under _framework/, which is content-hashed and so
+        // safe to cache forever. Neither had an explicit Cache-Control before, which meant
+        // a browser could apply its own heuristic freshness and go a long time (observed:
+        // surviving several app restarts) without ever re-checking for a new version, so a
+        // real deploy stayed invisible. no-cache forces revalidation (a conditional GET)
+        // on every load without disabling caching outright.
+        if (context.File.Name is "index.html" or "service-worker.js")
+        {
+            context.Context.Response.Headers.CacheControl = "no-cache";
+        }
+    }
+});
 
 if (allowedOrigins.Length > 0)
 {

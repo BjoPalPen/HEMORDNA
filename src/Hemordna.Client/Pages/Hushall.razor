@@ -141,14 +141,12 @@ else
                         </p>
                     </div>
 
-                    <ul class="list" aria-label="@($"Händelser {DayLabel(day.Date)}")">
+                    <ul class="task-list" aria-label="@($"Händelser {DayLabel(day.Date)}")">
                         @foreach (var activity in day.Activities)
                         {
-                            <li class="list-item">
-                                <span class="list-name">
-                                    @activity.MemberDisplayName markerade "@activity.TaskName" som klar
-                                </span>
-                                <span class="list-meta muted small">@activity.CompletedAt.ToLocalTime().ToString("HH:mm")</span>
+                            <li class="task">
+                                <span class="task-check task-check-done" aria-hidden="true">✓</span>
+                                <span class="task-name">@activity.TaskName</span>
                             </li>
                         }
                     </ul>

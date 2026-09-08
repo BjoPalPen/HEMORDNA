@@ -45,9 +45,10 @@ public class HushallActivityTests
 
         await page.GotoAsync("/hushall");
 
-        var row = page.Locator(".list-item", new() { HasText = "Vattna blommorna" });
-        await Assertions.Expect(row).ToBeVisibleAsync();
-        await Assertions.Expect(row).ToContainTextAsync("Karin");
+        // Product feedback: "X markerade Y som klar" plus a clock time per row read as noise -
+        // just a checkmark and the task's name now, no attribution.
+        await Assertions.Expect(page.Locator(".task", new() { HasText = "Vattna blommorna" }))
+            .ToBeVisibleAsync();
     }
 
     [Fact]

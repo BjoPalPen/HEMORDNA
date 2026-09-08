@@ -191,6 +191,53 @@
     transition: stroke-dasharray .3s ease;
 }
 
+/* "Senaste händelser"s own rows - just a checkmark and the task's name, no attribution and no
+   clock time (product feedback: "X markerade Y som klar" plus a timestamp per row read as
+   noise, not useful history). Scoped CSS does not cross pages, so this is its own copy of the
+   same look Vecka's "Tjuvkika" list and TaskListItem already use for a completed row. Every
+   activity here is by definition already done, so unlike those two, there is no pending/empty
+   variant to draw - .task-check only ever appears as .task-check-done. */
+.task-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    background: var(--surface);
+    overflow: hidden;
+}
+
+.task {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--line);
+}
+
+.task:last-child {
+    border-bottom: none;
+}
+
+.task-check-done {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    border-radius: var(--pill);
+    background: var(--gustav);
+    color: #fff;
+}
+
+.task-name {
+    flex: 1;
+    min-width: 0;
+    font-family: var(--font-display);
+    font-weight: 600;
+}
+
 .invite-code {
     display: inline-block;
     padding: var(--space-3) var(--space-5);

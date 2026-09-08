@@ -1199,6 +1199,33 @@ Ingen ny testning för listans utseende krävdes utöver `PeekScheduleTests` (re
 oförändrade förväntningar på `.task`/"sedan tidigare"); en tillfällig skärmbild togs manuellt
 för visuell granskning under arbetet, inte sparad som permanent test.
 
+### Uppföljning: förenklad "Senaste händelser" — `IMPLEMENTED`
+
+Produktfeedback (med skärmbild): varje rad i Hushålls "Senaste händelser" visade
+"@MemberDisplayName markerade "@TaskName" som klar" plus ett klockslag - läst som brus, inte
+användbar historik. Förenklat till samma kryssruta+namn-mönster som redan finns i Vecka/
+`TaskListItem` (`.task`/`.task-check-done`), utan personens namn eller klockslaget - varje rad
+här är redan per definition avklarad, så det finns aldrig en tom/ej avklarad variant att rita.
+En egen, mindre (32px) kryssrings-cirkel i stället för den vanliga 44px: raderna är rent
+informativa, inte tryckbara, så DESIGN.md §10:s 44px-krav på tryckytor gäller inte här, och en
+lista som kan ha många rader (22 i den rapporterade skärmbilden) vinner på tätare rader.
+`HushallActivityTests.Completing_a_task_shows_it_in_the_householders_recent_activity` bytte
+`.list-item`/"Karin"-kontroll mot `.task`, utan någon assert på personens namn.
+
+**Bugg hittad under felsökningen, fixad (ingen relation till listans utseende):**
+`app.hemordna.se`s `service-worker.js`/`index.html` saknade ett eget `Cache-Control` helt -
+en webbläsare kan då heuristiskt cacha svaret på egen hand, utan att någonsin fråga servern om
+en ny version finns, även efter flera omstarter av appen (det faktiska, rapporterade symptomet:
+tjuvkik-listans nya "Totalt: N min"-rad syntes inte trots omstarter, långt efter att den redan
+låg i produktion). `_framework/`-tillgångarna är redan säkra att cacha för evigt (innehålls-
+hashade filnamn - en ny build ger nya filnamn), men skalfilerna (`index.html`,
+`service-worker.js`) behåller samma filnamn över varje driftsättning och måste omvalideras vid
+varje besök för att en uppdatering ska bli synlig. Fixat med `StaticFileOptions
+.OnPrepareResponse` i `Program.cs`: `Cache-Control: no-cache` för just de två filerna (tvingar
+en villkorad GET, förbjuder inte cachning helt). En redan cachad webbläsare behöver fortfarande
+en sista manuell cache-rensning/ominstallation för att komma loss - fixen gör bara att alla
+framtida driftsättningar upptäcks pålitligt.
+
 ---
 
 ## 11. Beslut som ännu inte är fattade — `OPEN`
