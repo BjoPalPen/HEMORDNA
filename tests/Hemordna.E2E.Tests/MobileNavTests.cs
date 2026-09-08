@@ -72,7 +72,14 @@ public class MobileNavTests
 
         await page.ReloadAsync();
         var lastTask = page.Locator(".task").Last;
-        await lastTask.ScrollIntoViewIfNeededAsync();
+        await lastTask.WaitForAsync();
+
+        // ScrollIntoViewIfNeededAsync only scrolls the MINIMUM distance needed to make the
+        // element visible - it does not know about .app-main's reserved padding-bottom and can
+        // stop right as the element's bottom edge touches the literal viewport edge, which is
+        // exactly where the floating pill sits. Scrolling to the true document bottom is what
+        // this test actually means by "the user has scrolled all the way down".
+        await page.EvaluateAsync("window.scrollTo(0, document.documentElement.scrollHeight)");
 
         var lastTaskBox = await lastTask.BoundingBoxAsync();
         var navBox = await page.Locator("nav.nav-shell").BoundingBoxAsync();

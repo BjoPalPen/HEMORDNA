@@ -1509,6 +1509,60 @@ under alla omständigheter utanför MVP-scope (CLAUDE.md §12/PRODUCT.md §10).
   kortens hörn precis där blur-zonen möter kortets skarpa kant - tydligast i mörkt läge - i
   stället för en hård linje; ingen horisontell scroll eller överlappning.
 
+#### Delsteg 4 (punkt 3, "Scroll-driven rubrik") — `IMPLEMENTED`
+
+- **Ny `wwwroot/js/scroll-state.js`** + **`Support/ScrollState.cs`**: en enda,
+  rAF-strypt (`requestAnimationFrame`) passiv `scroll`-lyssnare som sätter/tar bort
+  `document.documentElement.dataset.scrolled` vid tröskeln 24px - attacherad EN gång från
+  `MainLayout.OnAfterRenderAsync(firstRender)`, ingen per-sida-JS. `animation-timeline:
+  scroll()` hade löst samma sak i ren CSS men saknar stöd i Firefox, därför attributet.
+- **Avvikelse, uttryckligen godkänd innan implementation.** Specen ville visa
+  "N av M klara · N min kvar" i den kollapsade raden - det bryter mot DESIGN.md §6a, ett
+  tidigare uttryckligen bekräftat, hårt beslut (se steg 2, "Tid förblir dold, tvärtemot
+  konceptets egen skiss") att Idag aldrig visar minuter, inte ens summerat. Frågan ställdes
+  innan kod skrevs; svaret var att behålla §6a orört - den kollapsade raden visar bara
+  "N av M klara", samma kvalitativa text som redan står i den fulla rubriken.
+- **`MinDag.razor`**: `p.day-date`/`h1`/`p.day-counts`/`div.progress` samlade i
+  `<header class="day-header">`; `<div class="day-header-collapsed" aria-hidden="true">`
+  (bara `<strong>Idag</strong>` + `<span>N av M klara</span>`) direkt före. `h1` kvar i DOM
+  oförändrad (`SignUpHelper`/`MinDagTests` beror på den). `Hushall.razor` fick samma mönster
+  (`<strong>@_household.Name</strong>` ensam i den kollapsade raden - hushållets sammanfattning
+  har ingen kvalitativ "N av M"-motsvarighet). `h1` på Idag höjdes till
+  `calc(var(--font-size-base) * 2.1)`, `letter-spacing: -0.025em`, `line-height: 1.02` - ingen
+  `white-space: nowrap` fanns att ta bort (grep bekräftade att ingen sådan regel någonsin
+  funnits för `h1`).
+- **Bugg hittad under obligatorisk skärmbildsgranskning, fixad:** den kollapsade raden var helt
+  osynlig - `z-index: 8` (som specen angav) medan `.app-topfade` (steg 3) ligger på `z-index: 9`
+  med en gradient som är HELT OPAK `--kalk` de första 35% av sin egen höjd. Raden hamnade bakom
+  en solid yta, inte bara blurrad. Fixat genom att lyfta `.day-header-collapsed`/
+  `.household-header-collapsed` till samma `z-index: 9` som toppremsan - eftersom den kollapsade
+  raden renderas SENARE i DOM:en (inuti `<main>`, en syskon-`<div>` efter `.app-topfade`), vinner
+  den den vanliga "senare i dokumentordning vid lika z-index"-regeln och målas ovanpå, precis som
+  en riktig iOS-navigationsrad ritar sin egen titel ovanpå den blurrade baren i stället för att
+  blurras av den.
+- **Andra buggen hittad under samma granskning, fixad:** i "Stor text"-läget (större bastext)
+  var "TISDAG 8 SEPTEMBER" halvt osynlig REDAN I VILOLÄGE (ingen scroll alls) - `.app-main`s
+  mobila `padding-top` (bara `var(--space-4)`, 16px) var kortare än `.app-topfade`s egen höjd
+  (44px), så den första raden alltid låg delvis inuti blur-/gradientzonen. Fixat genom att höja
+  `padding-top` till `calc(44px + env(safe-area-inset-top) + var(--space-2))` - ett litet
+  `MainLayout.razor.css`-fel som spårar tillbaka till steg 3 men upptäcktes och fixas här, samma
+  mönster som tidigare steg (t.ex. steg 1 → löst i steg 2).
+- **Nytt permanent test** `ScrollHeaderTests.Idags_collapsed_header_only_becomes_visible_after_scrolling`
+  - verifierar `getComputedStyle(...).opacity`, INTE Playwrights egen `ToBeVisibleAsync`
+    (som varken bryr sig om `opacity` eller kunnat upptäcka den första buggen ovan - en ren
+    stacking-defekt). Två testbuggar hittades och fixades under skrivandet: för lite seedat
+    innehåll (en enda uppgift räckte inte för att sidan skulle bli scrollbar alls - tio
+    uppgifter används nu, samma mönster som skärmbildstesterna) och en race mot den 0.2s CSS-
+    övergången (väntar nu på det faktiska beräknade opacity-värdet, inte bara attributet som
+    triggar det).
+- **Verifierat**: `dotnet build Hemordna.slnx` (0 fel/varningar); `Hemordna.Domain.Tests`
+  82/82, `Hemordna.Application.Tests` 173/173, `Hemordna.E2E.Tests` 81/81. Skärmbilder (Idag/
+  Hushåll, ljust/mörkt, scrollad/ej scrollad) via ett tillfälligt `DEBUG_Capture_scroll_header`-
+  test samt ett separat `DEBUG_Capture_large_text_h1`-test (Stor text-läge, 390px), granskade
+  och borttagna: den kollapsade raden syns tydligt och läsbart först efter scroll i båda teman,
+  h1 klipps inte och radbryter inte i Stor text vid 390px, "TISDAG ..."-etiketten är helt skarp
+  i viloläge efter padding-fixen.
+
 ---
 
 ## 11. Beslut som ännu inte är fattade — `OPEN`

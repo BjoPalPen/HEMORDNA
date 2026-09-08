@@ -29,6 +29,20 @@
         await ApplyTextSizeAsync();
     }
 
+    /// <summary>
+    /// The scroll listener behind NavMenu.razor.css's compact pill and MinDag/Hushall's
+    /// collapsed header row (docs/ARCHITECTURE.md "Beslut: Ny form 2026" §3) - attached once
+    /// here, since MainLayout itself never re-renders across page navigations, rather than once
+    /// per page that wants to react to <c>data-scrolled</c>.
+    /// </summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await ScrollState.AttachAsync(JS);
+        }
+    }
+
     private void OnSessionChanged() => InvokeAsync(async () =>
     {
         await ApplyTextSizeAsync();

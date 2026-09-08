@@ -1,3 +1,36 @@
+/* Same collapsing-header pattern as MinDag.razor.css's day-header-collapsed - scoped CSS does
+   not cross files, so this is its own copy rather than a shared class. */
+.household-header-collapsed {
+    position: sticky;
+    top: env(safe-area-inset-top);
+    /* Same z-index as .app-topfade - see MinDag.razor.css's own day-header-collapsed for why. */
+    z-index: 9;
+    padding: var(--space-2) 0;
+    opacity: 0;
+    transform: translateY(-6px);
+    transition: opacity .2s, transform .2s;
+    pointer-events: none;
+}
+
+.household-header-collapsed strong {
+    font-family: var(--font-display);
+}
+
+:root[data-scrolled] .household-header-collapsed {
+    opacity: 1;
+    transform: none;
+}
+
+.household-header {
+    transition: opacity .2s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .household-header-collapsed {
+        transition: none;
+    }
+}
+
 .role-select {
     flex-shrink: 0;
     min-height: 36px;

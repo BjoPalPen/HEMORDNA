@@ -28,14 +28,23 @@ else if (_household is null)
 }
 else
 {
-    <h1>@_household.Name</h1>
-    <p class="muted">
-        @ActiveMembers.Count personer · @_household.Areas.Count(a => a.IsActive) rum
-        @if (FloorCount > 0)
-        {
-            <text>· @FloorCount våningar</text>
-        }
-    </p>
+    <!-- Sticky summary once the full header (below) has scrolled past - see
+         docs/ARCHITECTURE.md "Beslut: Ny form 2026" §3. Same pattern as MinDag's own
+         day-header-collapsed, just the household's name instead of a task count. -->
+    <div class="household-header-collapsed" aria-hidden="true">
+        <strong>@_household.Name</strong>
+    </div>
+
+    <header class="household-header">
+        <h1>@_household.Name</h1>
+        <p class="muted">
+            @ActiveMembers.Count personer · @_household.Areas.Count(a => a.IsActive) rum
+            @if (FloorCount > 0)
+            {
+                <text>· @FloorCount våningar</text>
+            }
+        </p>
+    </header>
 
     <div class="member-row">
         @foreach (var (member, index) in ActiveMembers.Select((m, i) => (m, i)))
