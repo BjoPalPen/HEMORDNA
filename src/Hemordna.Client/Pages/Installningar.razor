@@ -208,6 +208,10 @@ else
 
     private string? _presentation;
     private string? _motivation;
+    // No control reads/writes this yet - added in A2 purely so a save here round-trips the
+    // member's existing choice instead of silently resetting it to false. B11 adds the actual
+    // toggle.
+    private bool _showTimeLevel;
     private string? _message;
     private bool _busy;
 
@@ -263,6 +267,7 @@ else
         var preference = await Api.GetPreferenceAsync(householdId, memberId);
         _presentation = preference?.Presentation ?? "Text";
         _motivation = preference?.Motivation ?? "None";
+        _showTimeLevel = preference?.ShowTimeLevel ?? false;
     }
 
     private async Task SetThemeAsync(string choice)
@@ -284,7 +289,7 @@ else
 
         try
         {
-            if (!await Api.SetPreferenceAsync(householdId, memberId, _presentation, _motivation))
+            if (!await Api.SetPreferenceAsync(householdId, memberId, _presentation, _motivation, _showTimeLevel))
             {
                 _message = "Det gick inte att spara. Försök igen.";
             }

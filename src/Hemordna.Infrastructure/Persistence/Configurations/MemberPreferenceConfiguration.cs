@@ -17,6 +17,7 @@ internal sealed class MemberPreferenceConfiguration : IEntityTypeConfiguration<M
         builder.Property(preference => preference.HouseholdId).IsRequired();
         builder.Property(preference => preference.Presentation).IsRequired();
         builder.Property(preference => preference.Motivation).IsRequired();
+        builder.Property(preference => preference.ShowTimeLevel).IsRequired();
 
         builder.HasIndex(preference => preference.HouseholdId);
 

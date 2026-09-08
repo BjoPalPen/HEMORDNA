@@ -26,11 +26,13 @@ public class SetMemberPreferenceTests
         var (householdId, member) = await ArrangeHouseholdAsync();
 
         var preference = await CreateUseCase().HandleAsync(
-            householdId, member.Id, PresentationMode.LargeText, MotivationLevel.Calm, CancellationToken.None);
+            householdId, member.Id, PresentationMode.LargeText, MotivationLevel.Calm,
+            showTimeLevel: true, CancellationToken.None);
 
         Assert.NotNull(preference);
         Assert.Equal(PresentationMode.LargeText, preference.Presentation);
         Assert.Equal(MotivationLevel.Calm, preference.Motivation);
+        Assert.True(preference.ShowTimeLevel);
         Assert.Equal(1, _preferences.Count);
     }
 
@@ -41,12 +43,15 @@ public class SetMemberPreferenceTests
         var useCase = CreateUseCase();
 
         await useCase.HandleAsync(
-            householdId, member.Id, PresentationMode.LargeText, MotivationLevel.None, CancellationToken.None);
+            householdId, member.Id, PresentationMode.LargeText, MotivationLevel.None,
+            showTimeLevel: false, CancellationToken.None);
         var second = await useCase.HandleAsync(
-            householdId, member.Id, PresentationMode.OneAtATime, MotivationLevel.Calm, CancellationToken.None);
+            householdId, member.Id, PresentationMode.OneAtATime, MotivationLevel.Calm,
+            showTimeLevel: true, CancellationToken.None);
 
         Assert.NotNull(second);
         Assert.Equal(PresentationMode.OneAtATime, second.Presentation);
+        Assert.True(second.ShowTimeLevel);
         Assert.Equal(1, _preferences.Count);
     }
 
@@ -56,7 +61,8 @@ public class SetMemberPreferenceTests
         var (householdId, _) = await ArrangeHouseholdAsync();
 
         var preference = await CreateUseCase().HandleAsync(
-            householdId, Guid.NewGuid(), PresentationMode.Text, MotivationLevel.None, CancellationToken.None);
+            householdId, Guid.NewGuid(), PresentationMode.Text, MotivationLevel.None,
+            showTimeLevel: false, CancellationToken.None);
 
         Assert.Null(preference);
     }

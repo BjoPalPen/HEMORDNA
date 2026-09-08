@@ -26,6 +26,7 @@ public sealed class SetMemberPreference
         Guid memberId,
         PresentationMode presentation,
         MotivationLevel motivation,
+        bool showTimeLevel,
         CancellationToken cancellationToken)
     {
         var household = await _households.FindByIdAsync(householdId, cancellationToken);
@@ -44,6 +45,7 @@ public sealed class SetMemberPreference
         {
             existing.ChangePresentation(presentation);
             existing.ChangeMotivation(motivation);
+            existing.ChangeShowTimeLevel(showTimeLevel);
             await _preferences.UpdateAsync(existing, cancellationToken);
             return existing;
         }
@@ -51,6 +53,7 @@ public sealed class SetMemberPreference
         var preference = MemberPreference.CreateDefault(householdId, memberId);
         preference.ChangePresentation(presentation);
         preference.ChangeMotivation(motivation);
+        preference.ChangeShowTimeLevel(showTimeLevel);
         await _preferences.AddAsync(preference, cancellationToken);
 
         return preference;

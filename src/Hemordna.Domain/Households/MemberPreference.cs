@@ -31,12 +31,14 @@ public enum MotivationLevel
 /// </summary>
 public sealed class MemberPreference
 {
-    private MemberPreference(Guid householdId, Guid memberId, PresentationMode presentation, MotivationLevel motivation)
+    private MemberPreference(
+        Guid householdId, Guid memberId, PresentationMode presentation, MotivationLevel motivation, bool showTimeLevel)
     {
         HouseholdId = householdId;
         MemberId = memberId;
         Presentation = presentation;
         Motivation = motivation;
+        ShowTimeLevel = showTimeLevel;
     }
 
     /// <summary>Tenant key.</summary>
@@ -48,12 +50,20 @@ public sealed class MemberPreference
 
     public MotivationLevel Motivation { get; private set; }
 
+    /// <summary>
+    /// Whether this member wants tasks to show a qualitative time hint (Support/TimeLevel's
+    /// "Lite tid"/"Lagom tid"/"Lång tid" chip - never a raw minute count, see DESIGN.md §6a).
+    /// Off by default: Idag shows no time at all unless a member explicitly turns this on for
+    /// themselves - never a household setting, see docs/PRODUCT.md §7.
+    /// </summary>
+    public bool ShowTimeLevel { get; private set; }
+
     public static MemberPreference CreateDefault(Guid householdId, Guid memberId)
     {
         Guard.AgainstEmpty(householdId, nameof(householdId));
         Guard.AgainstEmpty(memberId, nameof(memberId));
 
-        return new MemberPreference(householdId, memberId, PresentationMode.Text, MotivationLevel.None);
+        return new MemberPreference(householdId, memberId, PresentationMode.Text, MotivationLevel.None, showTimeLevel: false);
     }
 
     public void ChangePresentation(PresentationMode presentation)
@@ -75,4 +85,6 @@ public sealed class MemberPreference
 
         Motivation = motivation;
     }
+
+    public void ChangeShowTimeLevel(bool showTimeLevel) => ShowTimeLevel = showTimeLevel;
 }

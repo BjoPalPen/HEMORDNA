@@ -1698,6 +1698,34 @@ kan ha valt "Steg för steg", en annan inget alls. Allt i detta uppdrag är anti
   produktnära täckningen är B1:s `UndoTests` (riktigt UI-flöde) och C:s
   `MixedHouseholdTests`, som läggs till senare i den här grenen.
 
+#### A2 (Preferensfält för tid) — `IMPLEMENTED`
+
+- **`MemberPreference.ShowTimeLevel`** (bool, förvalt `false`) + `ChangeShowTimeLevel(bool)` -
+  samma mönster som `Presentation`/`Motivation` redan har. Per medlem, inte per hushåll (Del
+  C) - precis som resten av `MemberPreference`.
+- **Migration `AddShowTimeLevelToMemberPreference`**: en enda additiv `AddColumn<bool>` med
+  `defaultValue: false`, ingen `Down` som förlorar data utöver att ta bort kolumnen igen. Läst
+  innan applicering; applicerad i dev (`dotnet ef database update`), verifierad
+  (`ALTER TABLE "MemberPreferences" ADD "ShowTimeLevel" boolean NOT NULL DEFAULT FALSE`).
+- **`SetMemberPreference.HandleAsync`** fick parametern `bool showTimeLevel` - alla tre
+  anropsställen (Api-endpointen, `DevelopmentDataSeeder`, testerna) uppdaterade i samma
+  commit så lösningen bygger genomgående.
+- **`PreferenceResponse`/`SetPreferenceRequest`** (Api och klient) fick `ShowTimeLevel`.
+  Saknas fältet i en `PUT`-kropp (en äldre klient) blir det `false` automatiskt - System.Text
+  .Jsons vanliga beteende för ett obligatoriskt `bool` utan JSON-motsvarighet, ingen särskild
+  hantering behövd.
+- **`Installningar.razor`** fick ett `_showTimeLevel`-fält som läses/skickas med vid `Spara`,
+  men INGEN ny kontroll än - bara plumbing så en sparning av `Presentation`/`Motivation` inte
+  av misstag nollställer ett värde satt via en framtida kontroll. Den faktiska kryssrutan är
+  B11:s jobb.
+- **Verifierat**: `dotnet build Hemordna.slnx` (0 fel/varningar). Migrationen genererad, läst
+  och applicerad i dev enligt ovan. `Hemordna.Domain.Tests` 87/87 (oförändrat - inga nya
+  domänregler, bara ett fält). `Hemordna.Application.Tests` 177/177 (befintliga
+  preferenstester utökade med `ShowTimeLevel`-assertioner i stället för nya testmetoder:
+  sparas och läses tillbaka, uppdateras vid en andra sparning, defaultar till `false`).
+  `Hemordna.E2E.Tests` 82/82 rent - kört i sin helhet eftersom commiten rör klientkod
+  (`Installningar.razor`, `HemordnaApiClient`, delade kontrakt), inte bara backend.
+
 ---
 
 ## 11. Beslut som ännu inte är fattade — `OPEN`

@@ -30,6 +30,7 @@ public class GetMemberPreferenceTests
         Assert.NotNull(preference);
         Assert.Equal(PresentationMode.Text, preference.Presentation);
         Assert.Equal(MotivationLevel.None, preference.Motivation);
+        Assert.False(preference.ShowTimeLevel);
         Assert.Equal(0, _preferences.Count);
     }
 
@@ -38,13 +39,15 @@ public class GetMemberPreferenceTests
     {
         var (householdId, member) = await ArrangeHouseholdAsync();
         await new SetMemberPreference(_households, _preferences).HandleAsync(
-            householdId, member.Id, PresentationMode.OneAtATime, MotivationLevel.Calm, CancellationToken.None);
+            householdId, member.Id, PresentationMode.OneAtATime, MotivationLevel.Calm,
+            showTimeLevel: true, CancellationToken.None);
 
         var preference = await CreateUseCase().HandleAsync(householdId, member.Id, CancellationToken.None);
 
         Assert.NotNull(preference);
         Assert.Equal(PresentationMode.OneAtATime, preference.Presentation);
         Assert.Equal(MotivationLevel.Calm, preference.Motivation);
+        Assert.True(preference.ShowTimeLevel);
     }
 
     [Fact]

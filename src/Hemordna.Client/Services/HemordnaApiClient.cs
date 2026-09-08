@@ -704,11 +704,12 @@ public sealed class HemordnaApiClient
         Guid memberId,
         string presentation,
         string motivation,
+        bool showTimeLevel,
         CancellationToken cancellationToken = default)
     {
         var request = await AuthorizedAsync(
             HttpMethod.Put, $"api/households/{householdId}/members/{memberId}/preferences", cancellationToken);
-        request.Content = JsonContent.Create(new { presentation, motivation });
+        request.Content = JsonContent.Create(new { presentation, motivation, showTimeLevel });
 
         var response = await _http.SendAsync(request, cancellationToken);
         return response.IsSuccessStatusCode;

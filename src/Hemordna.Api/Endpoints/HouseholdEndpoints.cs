@@ -662,7 +662,8 @@ internal static class HouseholdEndpoints
 
         return preference is null
             ? Results.NotFound()
-            : Results.Ok(new PreferenceResponse(preference.MemberId, preference.Presentation, preference.Motivation));
+            : Results.Ok(new PreferenceResponse(
+                preference.MemberId, preference.Presentation, preference.Motivation, preference.ShowTimeLevel));
     }
 
     private static async Task<IResult> SetPreferenceAsync(
@@ -673,11 +674,12 @@ internal static class HouseholdEndpoints
         CancellationToken cancellationToken)
     {
         var preference = await setPreference.HandleAsync(
-            householdId, memberId, request.Presentation, request.Motivation, cancellationToken);
+            householdId, memberId, request.Presentation, request.Motivation, request.ShowTimeLevel, cancellationToken);
 
         return preference is null
             ? Results.NotFound()
-            : Results.Ok(new PreferenceResponse(preference.MemberId, preference.Presentation, preference.Motivation));
+            : Results.Ok(new PreferenceResponse(
+                preference.MemberId, preference.Presentation, preference.Motivation, preference.ShowTimeLevel));
     }
 
     private static async Task<IResult> CompleteOccurrenceAsync(
