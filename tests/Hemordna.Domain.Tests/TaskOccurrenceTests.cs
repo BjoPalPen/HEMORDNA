@@ -292,6 +292,51 @@ public class TaskOccurrenceTests
     }
 
     [Fact]
+    public void UndoBringForward_puts_it_back_on_its_original_date()
+    {
+        var tomorrow = Friday.AddDays(1);
+        var occurrence = CreateOccurrence(date: tomorrow);
+        occurrence.BringForwardTo(Friday);
+
+        occurrence.UndoBringForward();
+
+        Assert.Equal(tomorrow, occurrence.ScheduledDate);
+        Assert.Equal(tomorrow, occurrence.OriginalScheduledDate);
+        Assert.False(occurrence.IsBroughtForwardOn(tomorrow));
+    }
+
+    [Fact]
+    public void UndoBringForward_works_even_when_the_task_cannot_normally_be_deferred()
+    {
+        var tomorrow = Friday.AddDays(1);
+        var occurrence = CreateOccurrence(canBeDeferred: false, date: tomorrow);
+        occurrence.BringForwardTo(Friday);
+
+        occurrence.UndoBringForward();
+
+        Assert.Equal(tomorrow, occurrence.ScheduledDate);
+    }
+
+    [Fact]
+    public void UndoBringForward_on_an_occurrence_that_was_never_brought_forward_is_rejected()
+    {
+        var occurrence = CreateOccurrence(date: Friday);
+
+        Assert.Throws<DomainException>(() => occurrence.UndoBringForward());
+    }
+
+    [Fact]
+    public void UndoBringForward_on_a_completed_occurrence_is_rejected()
+    {
+        var tomorrow = Friday.AddDays(1);
+        var occurrence = CreateOccurrence(date: tomorrow);
+        occurrence.BringForwardTo(Friday);
+        occurrence.Complete(Guid.NewGuid(), CompletedAt);
+
+        Assert.Throws<DomainException>(() => occurrence.UndoBringForward());
+    }
+
+    [Fact]
     public void A_new_occurrence_is_not_added_as_extra_by_default()
     {
         var occurrence = CreateOccurrence();

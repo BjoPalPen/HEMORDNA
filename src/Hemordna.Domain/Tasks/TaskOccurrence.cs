@@ -197,6 +197,25 @@ public sealed class TaskOccurrence
     public bool IsBroughtForwardOn(DateOnly date) => IsOutstanding && ScheduledDate == date && OriginalScheduledDate > date;
 
     /// <summary>
+    /// Puts a brought-forward occurrence back on the date it was originally due -
+    /// "Ångra" on the "från imorgon" chip's own undo offer. Deliberately its own operation
+    /// rather than a call to <see cref="DeferTo"/>: <see cref="BringForwardTo"/> never checked
+    /// <see cref="CanBeDeferred"/> (bringing something forward is not "pushing it later", so a
+    /// non-deferrable task can be brought forward same as any other), so undoing that move must
+    /// not suddenly require deferability either - it is simply reversing the member's own last
+    /// action, not asking for a new, ordinary deferral.
+    /// </summary>
+    public void UndoBringForward()
+    {
+        if (!IsBroughtForwardOn(ScheduledDate))
+        {
+            throw new DomainException("This task was not brought forward, so there is nothing to undo.");
+        }
+
+        ScheduledDate = OriginalScheduledDate;
+    }
+
+    /// <summary>
     /// Undoes a completion - a slip of the thumb, or a task marked done by mistake, should be
     /// easy to take back without turning into a rewritten history. Only the person who
     /// completed it can undo it, and only within a short window (15 minutes): long enough for
