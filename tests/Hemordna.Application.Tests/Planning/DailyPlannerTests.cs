@@ -387,4 +387,33 @@ public class DailyPlannerTests
 
         Assert.Throws<ArgumentException>(() => new PlanCandidate(occurrence, "   "));
     }
+
+    [Fact]
+    public void A_task_brought_forward_from_tomorrow_is_planned_even_past_the_budget()
+    {
+        var broughtForward = PlanCandidateBuilder.Task("Imorgondagens uppgift").Minutes(25).On(Friday.AddDays(1)).BuildOccurrence();
+        broughtForward.BringForwardTo(Friday);
+
+        var plan = PlanWith(10, new PlanCandidate(broughtForward, "Imorgondagens uppgift"));
+
+        Assert.Equal(["Imorgondagens uppgift"], NamesOf(plan));
+        Assert.Empty(plan.Unplanned);
+        Assert.Equal(25, plan.PlannedMinutes);
+        Assert.Equal(-15, plan.RemainingMinutes);
+    }
+
+    [Fact]
+    public void A_task_brought_forward_from_tomorrow_does_not_starve_todays_own_tasks_that_still_fit()
+    {
+        var broughtForward = PlanCandidateBuilder.Task("Imorgondagens uppgift").Minutes(15).On(Friday.AddDays(1)).BuildOccurrence();
+        broughtForward.BringForwardTo(Friday);
+
+        var plan = PlanWith(
+            30,
+            new PlanCandidate(broughtForward, "Imorgondagens uppgift"),
+            PlanCandidateBuilder.Task("Hall").Minutes(7).Build());
+
+        Assert.Equal(["Hall", "Imorgondagens uppgift"], NamesOf(plan).OrderBy(name => name).ToArray());
+        Assert.Empty(plan.Unplanned);
+    }
 }
