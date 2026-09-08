@@ -72,6 +72,48 @@
     animation: undo-bar-in .2s ease;
 }
 
+/* "Beslut: Ångra och stabil lista" §B2 - pure information ("Någon annan bockade av Diska."),
+   never a comparison between members (Del C). Same quiet banner treatment as .undo-bar, so it
+   reads as "the same kind of thing" rather than a warning. */
+@keyframes remote-note-in {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+.remote-note {
+    margin: 0 0 var(--space-3);
+    padding: var(--space-2) var(--space-4);
+    border-radius: var(--radius-sm);
+    background: var(--gustav-soft);
+    color: var(--sot);
+    animation: remote-note-in .2s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .remote-note {
+        animation: none;
+    }
+}
+
+/* A row ReconcileRemoteChangeAsync marked done without moving or removing it - same dimmed,
+   struck-through, filled-check treatment as .task-list-done's own rows, so it reads as "already
+   done" rather than as a new or different kind of row. */
+.task-done-remote {
+    opacity: .55;
+}
+
+.task-done-remote .task-name {
+    text-decoration: line-through;
+    text-decoration-color: var(--sot-soft);
+}
+
 .day-date {
     margin: 0 0 var(--space-1);
     color: var(--sot-soft);

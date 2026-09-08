@@ -1862,6 +1862,78 @@ kan ha valt "Steg för steg", en annan inget alls. Allt i detta uppdrag är anti
   (ljust/mörkt, 390px) granskade: ångra-raden syns tydligt mellan rubrik och lista, ingen
   överlappning, "Klart idag" visar den avbockade uppgiften korrekt genomstruken.
 
+#### B2 (Stabil lista vid realtidsändring) — `IMPLEMENTED`
+
+- **Problemet**: `OnOccurrencesChanged` (realtidshändelsen från `HouseholdRealtimeClient`, en
+  annan medlems egen handling) anropade tidigare `LoadDayAsync()` direkt - en fullständig
+  omritning som kunde slänga listan mitt i ett svep, en expanderad rad, eller ett öppet ark, och
+  som alltid ritade om ordningen från grunden. Idag är den enda sidan i appen där medlemmen
+  aktivt trycker/sveper/expanderar rader - se Del C: hushållet är normalt blandat, och detta kan
+  komma från vilken annan medlems handling som helst, när som helst.
+- **`MinDag.razor`**: `OnOccurrencesChanged` anropar nu `HandleRemoteChangeAsync`, som gör ett av
+  två saker:
+  1. **Upptagen** (`IsInteractionBusy()`: `_showUnplannedSheet`/`_showExtraTaskSheet` öppet,
+     eller `_lastInteraction` yngre än 2s) - startar om (`CancellationTokenSource`, samma mönster
+     som `ShowUndo`) en 2s-timer som prövar igen; en andra ändring som kommer in medan den väntar
+     ersätter timern i stället för att kapplöpa med den.
+  2. **Ledig** - anropar `ReconcileRemoteChangeAsync()` direkt.
+  `_lastInteraction` sätts i `CompleteAsync`, `DeferAsync`, `ToggleExpand`, `OpenUnplannedSheet`
+  (ny metod - ersätter den tidigare inline-lambdan `() => _showUnplannedSheet = true`, som annars
+  inte kunde sätta `_lastInteraction`) och `OpenExtraTaskSheetAsync`.
+- **`ReconcileRemoteChangeAsync()`**: hämtar en färsk plan till en temp-variabel och patchar
+  `_day` "på plats" i stället för att ersätta den:
+  - En rad som fortfarande är utestående i den nya planen behåller sin plats oförändrad.
+  - En rad som inte längre är utestående OCH nu finns i `incoming.Completed` läggs till i
+    `_remotelyCompletedIds` och **stannar kvar** i `_day.Items` (ritas som
+    `RemotelyCompletedRow` - dämpad, ifylld bock, "Klar: {namn}" - i stället för att flyttas till
+    "Klart idag" eller försvinna). En rad som försvunnit av annan anledning (uppskjuten,
+    borttagen) faller bort tyst, precis som en vanlig omladdning redan skulle göra.
+  - En genuint ny occurrence (schemalagd av någon annan, eller Idags egen
+    occurrence-generering som hunnit ikapp) läggs sist i sin rumsgrupp - `RoomGroups`/
+    `FloorGroups` grupperar redan på `AreaName` och bevarar första-förekomst-ordning, så att
+    lägga till sist räcker; själva grupperingen ändras inte.
+  - `Completed` sätts till `incoming.Completed` MED alla `_remotelyCompletedIds` filtrerade
+    bort - annars skulle samma uppgift räknas och ritas två gånger (en gång som kvarliggande rad
+    i "Övrigt"/rumsgruppen, en gång i "Klart idag"). Hittades och fixades via det tillfälliga
+    E2E-testet nedan: "1 av 1 klara" visade felaktigt "2 av 2 klara" innan fixen.
+  - `_day` byts aldrig ut i sin helhet av en realtidshändelse - bara av medlemmens egen nästa
+    handling (`CompleteAsync`/`DeferAsync`/... anropar redan alla `LoadDayAsync()`) eller genom
+    att lämna och öppna sidan igen. `LoadDayAsync()` nollställer `_remotelyCompletedIds`,
+    `_remoteNote` och avbryter en väntande `_remoteRetryCts` - en full omladdning ersätter helt
+    det patchade tillståndet den byggdes ovanpå.
+- **`remote-note`**: `<p class="remote-note" role="status">` direkt under `.day-header`, synlig
+  i både list- och fokusläge (samma placering oavsett `IsFocusMode`, till skillnad från
+  `UndoBar` som har två renderingsplatser). Ren information, aldrig en jämförelse mellan
+  medlemmar (Del C) - och aldrig ett riktigt namn: varken `PlannedTaskResponse` eller
+  `DailyPlanResponse` bär vem som bockade av en occurrence (bekräftad kontraktslucka), så texten
+  blir alltid "Någon annan bockade av {uppgift}." för en uppgift, "{N} uppgifter blev klara av
+  andra." för flera. Försvinner efter 6s, samma `CancellationTokenSource`-mönster som
+  `UndoBar`s 8s.
+- **`RemotelyCompletedRow`**: "Klar: {uppgiftens eget namn}" - inte ett personnamn (finns inte i
+  kontraktet), av samma anledning och med samma fras-konvention som `UndoBar`s "Klar: {namn}".
+  Ingen `TaskListItem` - raden är inte längre interaktiv (inget svep, ingen expansion, inget kvar
+  att skjuta upp), samma dämpade/genomstrukna behandling som `.task-list-done .task` redan har.
+- **`OutstandingCount`**: en kvarliggande men avbockad rad får inte längre räknas mot "N kvar" i
+  gruppens rubrik - `GroupHeading`s räkneargument byttes från `.Count` till
+  `OutstandingCount(...)` som filtrerar bort `IsRemotelyCompleted`-rader.
+- **`Hushall.razor`**: oförändrad - har redan sin egen, direkta omladdning vid samma
+  realtidshändelse (bekräftat via kodgranskning), och uppdraget är uttryckligt att den ska
+  behålla den.
+- **Inget nytt API-kontrakt**: `PlannedTaskResponse`/`CompletedTaskResponse`/`DailyPlanResponse`
+  rörs inte - hela lösningen är ett rent klientlager (`TaskRow`-posten lägger bara
+  `IsRemotelyCompleted` ovanpå den befintliga `PlannedTaskResponse` för rendering).
+- **Tillfälligt E2E-test** (skrivet, kört, sedan raderat - samma konvention som tidigare
+  `DEBUG_*`-tester denna session): bockade av en occurrence direkt via HTTP medan sidan var öppen
+  i webbläsaren (simulerar "någon annan"), bekräftade att `remote-note`n visas med rätt text,
+  att raden stannar kvar som `.task-done-remote` med "Klar: Diska", att bocka-knappen försvinner,
+  att "1 av 1 klara" stämmer (inte "2 av 2" - se dubbelräkningsbuggen ovan) och att notisen
+  försvinner av sig själv inom 7s. Inget namngivet permanent E2E-test för B2 efterfrågades i
+  uppdragets egen lista ("Nya E2E-tester"), så ingen permanent testfil lades till för just detta.
+- **Verifierat**: `dotnet build Hemordna.slnx` (0 fel/varningar). `Hemordna.Domain.Tests`
+  87/87, `Hemordna.Application.Tests` 177/177 (ren klientändring, ingen påverkan väntad eller
+  sedd). Tillfälligt E2E-test grönt (se ovan), sedan raderat. `Hemordna.E2E.Tests` i sin helhet
+  kört (ren klientändring - se den skalade ner testpolicyn i konversationen).
+
 ---
 
 ## 11. Beslut som ännu inte är fattade — `OPEN`

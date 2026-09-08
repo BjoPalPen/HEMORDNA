@@ -24,7 +24,12 @@ else if (Session.NeedsHousehold)
 else
 {
     var hasDayCounts = _day is { } dayForCounts && (dayForCounts.Items.Count > 0 || dayForCounts.Completed.Count > 0);
-    var completedCount = _day?.Completed.Count ?? 0;
+    // A remotely-completed row stays counted in _day.Items (see ReconcileRemoteChangeAsync) so
+    // it can stay in place visually - completedCount has to add it back in by hand, or "N av M
+    // klara" and the progress bar would both undercount until the next full reload. totalCount
+    // needs no such adjustment: the row is still counted exactly once, just via Items instead
+    // of Completed.
+    var completedCount = (_day?.Completed.Count ?? 0) + _remotelyCompletedIds.Count;
     var totalCount = _day is null ? 0 : _day.Items.Count + _day.Completed.Count;
 
     @if (hasDayCounts)
@@ -51,6 +56,11 @@ else
             </div>
         }
     </header>
+
+    @if (_remoteNote is not null)
+    {
+        <p class="remote-note" role="status">@_remoteNote</p>
+    }
 
     @if (!IsFocusMode && _undo is not null)
     {
@@ -117,14 +127,21 @@ else
             {
                 @if (OverdueItems.Count > 0)
                 {
-                    @GroupHeading("Sedan tidigare", OverdueItems.Count)
+                    @GroupHeading("Sedan tidigare", OutstandingCount(OverdueItems))
                     <ul class="task-list" aria-label="Sedan tidigare">
-                        @foreach (var item in OverdueItems)
+                        @foreach (var row in OverdueItems)
                         {
-                            <TaskListItem Item="item" ShowIcon="ShowIcons" ShowOverdueNote="false"
-                                          IsBusy="_busyOccurrence == item.OccurrenceId"
-                                          IsExpanded="_expandedOccurrence == item.OccurrenceId"
-                                          OnComplete="CompleteAsync" OnToggleExpand="ToggleExpand" OnDefer="DeferAsync" />
+                            @if (row.IsRemotelyCompleted)
+                            {
+                                @RemotelyCompletedRow(row.Item)
+                            }
+                            else
+                            {
+                                <TaskListItem Item="row.Item" ShowIcon="ShowIcons" ShowOverdueNote="false"
+                                              IsBusy="_busyOccurrence == row.Item.OccurrenceId"
+                                              IsExpanded="_expandedOccurrence == row.Item.OccurrenceId"
+                                              OnComplete="CompleteAsync" OnToggleExpand="ToggleExpand" OnDefer="DeferAsync" />
+                            }
                         }
                     </ul>
                 }
@@ -137,14 +154,21 @@ else
                     }
                     @foreach (var group in floorGroup.Rooms)
                     {
-                        @GroupHeading(RoomHeadingName(group), group.Items.Count)
+                        @GroupHeading(RoomHeadingName(group), OutstandingCount(group.Items))
                         <ul class="task-list" aria-label="@RoomHeadingName(group)">
-                            @foreach (var item in group.Items)
+                            @foreach (var row in group.Items)
                             {
-                                <TaskListItem Item="item" ShowIcon="ShowIcons" ShowAreaChip="false"
-                                              IsBusy="_busyOccurrence == item.OccurrenceId"
-                                              IsExpanded="_expandedOccurrence == item.OccurrenceId"
-                                              OnComplete="CompleteAsync" OnToggleExpand="ToggleExpand" OnDefer="DeferAsync" />
+                                @if (row.IsRemotelyCompleted)
+                                {
+                                    @RemotelyCompletedRow(row.Item)
+                                }
+                                else
+                                {
+                                    <TaskListItem Item="row.Item" ShowIcon="ShowIcons" ShowAreaChip="false"
+                                                  IsBusy="_busyOccurrence == row.Item.OccurrenceId"
+                                                  IsExpanded="_expandedOccurrence == row.Item.OccurrenceId"
+                                                  OnComplete="CompleteAsync" OnToggleExpand="ToggleExpand" OnDefer="DeferAsync" />
+                                }
                             }
                         </ul>
                     }
@@ -159,7 +183,7 @@ else
         <div class="chips">
             @if (_day.Unplanned.Count > 0)
             {
-                <button type="button" class="chip-action" @onclick="() => _showUnplannedSheet = true">
+                <button type="button" class="chip-action" @onclick="OpenUnplannedSheet">
                     Flytta till en annan dag
                 </button>
             }
@@ -281,6 +305,15 @@ else
     private bool _undoBusy;
     private CancellationTokenSource? _undoCts;
 
+    // "Beslut: Ångra och stabil lista" §B2 - a remote change never redraws the list out from
+    // under an interaction already in progress. See HandleRemoteChangeAsync/
+    // ReconcileRemoteChangeAsync for how these are used together.
+    private readonly HashSet<Guid> _remotelyCompletedIds = [];
+    private DateTimeOffset? _lastInteraction;
+    private string? _remoteNote;
+    private CancellationTokenSource? _remoteNoteCts;
+    private CancellationTokenSource? _remoteRetryCts;
+
     private sealed class ExtraTaskForm
     {
         public string Name { get; set; } = string.Empty;
@@ -303,17 +336,24 @@ else
 
     private bool IsFocusMode => _presentation == "OneAtATime";
 
-    private sealed record TaskGroup(string? AreaName, IReadOnlyList<PlannedTaskResponse> Items);
+    /// <summary>One item plus whether a remote reconciliation (see ReconcileRemoteChangeAsync)
+    /// marked it done without moving or removing its row - the API contract itself is never
+    /// touched, this is purely a client-side rendering concern layered on top of it.</summary>
+    private sealed record TaskRow(PlannedTaskResponse Item, bool IsRemotelyCompleted);
+
+    private sealed record TaskGroup(string? AreaName, IReadOnlyList<TaskRow> Items);
 
     private sealed record FloorGroup(string? Floor, IReadOnlyList<TaskGroup> Rooms);
+
+    private TaskRow ToRow(PlannedTaskResponse item) => new(item, _remotelyCompletedIds.Contains(item.OccurrenceId));
 
     /// <summary>
     /// Overdue items are pulled into their own leading group regardless of room, so something
     /// already late is never buried inside a room's list further down - see
     /// docs/ARCHITECTURE.md "Rumsgruppering på Min dag".
     /// </summary>
-    private List<PlannedTaskResponse> OverdueItems
-        => _day?.Items.Where(item => item.IsOverdue).ToList() ?? [];
+    private List<TaskRow> OverdueItems
+        => (_day?.Items.Where(item => item.IsOverdue) ?? []).Select(ToRow).ToList();
 
     /// <summary>
     /// The rest of today's items (not overdue), grouped by room so the day reads as one room
@@ -325,7 +365,8 @@ else
     /// </summary>
     private List<TaskGroup> RoomGroups
         => (_day?.Items.Where(item => !item.IsOverdue) ?? [])
-            .GroupBy(item => item.AreaName)
+            .Select(ToRow)
+            .GroupBy(row => row.Item.AreaName)
             .Select(group => new TaskGroup(group.Key, [.. group]))
             .ToList();
 
@@ -346,11 +387,21 @@ else
     private static string RoomHeadingName(TaskGroup group)
         => group.AreaName is { } areaName ? RoomFloors.RoomNameOf(areaName) : "Övrigt";
 
+    /// <summary>How many rows in a group are still genuinely outstanding - a remotely-completed
+    /// row stays in the list (see ReconcileRemoteChangeAsync) but must not count toward "N
+    /// kvar" any more than a row already in "Klart idag" would.</summary>
+    private static int OutstandingCount(IEnumerable<TaskRow> rows) => rows.Count(row => !row.IsRemotelyCompleted);
+
     /// <summary>"En uppgift åt gången" (docs/PRODUCT.md §7): the same order the grouped view
     /// would show, just one row deep - completing or deferring it naturally surfaces the next
-    /// one on reload, so no separate index needs to be tracked here.</summary>
+    /// one on reload, so no separate index needs to be tracked here. A row a remote change just
+    /// marked done is skipped - it is no longer anyone's "next" task, remotely completed or
+    /// not.</summary>
     private PlannedTaskResponse? FocusTask
-        => OverdueItems.Concat(RoomGroups.SelectMany(group => group.Items)).FirstOrDefault();
+        => OverdueItems.Concat(RoomGroups.SelectMany(group => group.Items))
+            .Where(row => !row.IsRemotelyCompleted)
+            .Select(row => row.Item)
+            .FirstOrDefault();
 
     private static string IconSrc(string taskName, string? areaName) => $"icons/tasks/{TaskIcons.For(taskName, areaName)}.svg";
 
@@ -360,6 +411,17 @@ else
         <span>@name</span>
         <span>@(showKvar ? $"{count} kvar" : count.ToString())</span>
     </div>;
+
+    /// <summary>A row a remote reconciliation marked done (see ReconcileRemoteChangeAsync) -
+    /// stays exactly where the outstanding row was, dimmed with a filled check like "Klart
+    /// idag"'s own rows, but not a TaskListItem: it is no longer interactive (no swipe, no
+    /// expand, nothing left to defer), same as any other completed row.</summary>
+    private static RenderFragment RemotelyCompletedRow(PlannedTaskResponse item) => @<li class="task task-done-remote">
+        <span class="task-check task-check-done" aria-hidden="true">
+            <Icon Name="check" Size="18" />
+        </span>
+        <span class="task-name">Klar: @item.Name</span>
+    </li>;
 
     /// <summary>Shown directly under the header (or under .focus-card in focus mode) for 8s
     /// after a completion - see ShowUndo. min-height on .undo-bar itself (not a wrapper reserved
@@ -466,18 +528,180 @@ else
         }
     }
 
-    /// <summary>Someone else in the household changed something - refresh rather than guess what.</summary>
-    private void OnOccurrencesChanged() => InvokeAsync(async () =>
+    /// <summary>Someone else in the household changed something. Unlike every other page, Idag
+    /// is a list the member is actively tapping, swiping and expanding rows on - redrawing it
+    /// out from under a finger already mid-interaction is exactly the kind of surprise this
+    /// revision removes (Del C: a household is normally mixed, and this can fire from any other
+    /// member's own action at any moment). See HandleRemoteChangeAsync.</summary>
+    private void OnOccurrencesChanged() => InvokeAsync(HandleRemoteChangeAsync);
+
+    /// <summary>
+    /// A sheet open, or an interaction within the last 2s, defers reconciliation instead of
+    /// applying it: retries itself every 2s (a fresh CancellationTokenSource each time, so a
+    /// second remote change arriving mid-wait does not race the first retry) until neither
+    /// condition holds any more, then reconciles once against whatever the server's CURRENT
+    /// state is - not against every individual change that fired while deferred.
+    /// </summary>
+    private async Task HandleRemoteChangeAsync()
     {
-        await LoadDayAsync();
+        if (IsInteractionBusy())
+        {
+            _remoteRetryCts?.Cancel();
+            _remoteRetryCts?.Dispose();
+            _remoteRetryCts = new CancellationTokenSource();
+            _ = RetryRemoteChangeAfterDelayAsync(_remoteRetryCts.Token);
+            return;
+        }
+
+        await ReconcileRemoteChangeAsync();
         StateHasChanged();
-    });
+    }
+
+    private bool IsInteractionBusy()
+        => _showUnplannedSheet || _showExtraTaskSheet
+            || (_lastInteraction is { } last && TimeProvider.GetUtcNow() - last < TimeSpan.FromSeconds(2));
+
+    private async Task RetryRemoteChangeAfterDelayAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+
+        await InvokeAsync(HandleRemoteChangeAsync);
+    }
+
+    /// <summary>
+    /// Applies a remote change "in place" instead of the full reload LoadDayAsync does: existing
+    /// rows never change order, a row that is no longer outstanding stays exactly where it was
+    /// (marked remotely completed) rather than disappearing, and a genuinely new row is appended
+    /// to the end of its own room group. _day itself is only ever fully replaced again by the
+    /// member's own next action (CompleteAsync/DeferAsync/... all call LoadDayAsync) or by
+    /// leaving and reopening the page - see "Beslut: Ångra och stabil lista" §B2.
+    /// </summary>
+    private async Task ReconcileRemoteChangeAsync()
+    {
+        if (Session.Me is not { HouseholdId: { } householdId, MemberId: { } memberId } || _day is not { } current)
+        {
+            return;
+        }
+
+        var incoming = await Api.GetDailyPlanAsync(householdId, memberId, Today);
+
+        if (incoming is null)
+        {
+            return;
+        }
+
+        var stillOutstandingIds = new HashSet<Guid>(incoming.Items.Select(item => item.OccurrenceId));
+        var previousIds = new HashSet<Guid>(current.Items.Select(item => item.OccurrenceId));
+
+        var mergedItems = new List<PlannedTaskResponse>();
+        var newlyCompletedNames = new List<string>();
+
+        foreach (var item in current.Items)
+        {
+            if (stillOutstandingIds.Contains(item.OccurrenceId))
+            {
+                mergedItems.Add(item);
+                continue;
+            }
+
+            // No longer outstanding - completed remotely, or skipped/deferred away. Only an
+            // actual completion gets the "done remotely" treatment and keeps its row; anything
+            // else just quietly drops out, same as an ordinary reload would already do.
+            if (incoming.Completed.Any(done => done.OccurrenceId == item.OccurrenceId))
+            {
+                _remotelyCompletedIds.Add(item.OccurrenceId);
+                mergedItems.Add(item);
+                newlyCompletedNames.Add(item.Name);
+            }
+        }
+
+        // A genuinely new occurrence (scheduled by someone else, or Idag's own occurrence-
+        // generation catching up) is appended last - RoomGroups/FloorGroups already group by
+        // AreaName and preserve first-appearance order, so appending here is enough; nothing
+        // about the grouping itself changes.
+        foreach (var item in incoming.Items)
+        {
+            if (!previousIds.Contains(item.OccurrenceId))
+            {
+                mergedItems.Add(item);
+            }
+        }
+
+        // A remotely-completed occurrence stays visible via mergedItems (see above) rather than
+        // moving into "Klart idag" - it must not also come along in Completed, or it would be
+        // rendered (and counted) twice for the same one task.
+        var completedExcludingRemote = incoming.Completed
+            .Where(done => !_remotelyCompletedIds.Contains(done.OccurrenceId))
+            .ToList();
+
+        _day = current with
+        {
+            Items = mergedItems,
+            Completed = completedExcludingRemote,
+            Unplanned = incoming.Unplanned,
+            AvailableMinutes = incoming.AvailableMinutes,
+            PlannedMinutes = incoming.PlannedMinutes,
+            RemainingMinutes = incoming.RemainingMinutes,
+            CompletedMinutes = incoming.CompletedMinutes
+        };
+
+        if (newlyCompletedNames.Count > 0)
+        {
+            ShowRemoteNote(newlyCompletedNames);
+        }
+    }
+
+    /// <summary>
+    /// "Helena bockade av Diska." is information, never a comparison (Del C) - and never a name
+    /// PlannedTaskResponse/DailyPlanResponse do not actually carry: neither contract says who
+    /// completed an occurrence, so this always reads "Någon annan" rather than inventing an API
+    /// field for it. Disappears after 6s, the same CancellationTokenSource-based pattern
+    /// ShowUndo already uses.
+    /// </summary>
+    private void ShowRemoteNote(IReadOnlyList<string> completedTaskNames)
+    {
+        _remoteNote = completedTaskNames.Count == 1
+            ? $"Någon annan bockade av {completedTaskNames[0]}."
+            : $"{completedTaskNames.Count} uppgifter blev klara av andra.";
+
+        _remoteNoteCts?.Cancel();
+        _remoteNoteCts?.Dispose();
+        _remoteNoteCts = new CancellationTokenSource();
+
+        _ = HideRemoteNoteAfterDelayAsync(_remoteNoteCts.Token);
+    }
+
+    private async Task HideRemoteNoteAfterDelayAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(6), cancellationToken);
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+
+        _remoteNote = null;
+        await InvokeAsync(StateHasChanged);
+    }
 
     public void Dispose()
     {
         Realtime.OccurrencesChanged -= OnOccurrencesChanged;
         _undoCts?.Cancel();
         _undoCts?.Dispose();
+        _remoteNoteCts?.Cancel();
+        _remoteNoteCts?.Dispose();
+        _remoteRetryCts?.Cancel();
+        _remoteRetryCts?.Dispose();
     }
 
     /// <summary>Called after creating a household, when membership has changed.</summary>
@@ -495,6 +719,17 @@ else
         }
 
         _day = await Api.GetDailyPlanAsync(householdId, memberId, Today);
+
+        // A full reload supersedes any patched-in state from ReconcileRemoteChangeAsync - it is
+        // about to be rebuilt from scratch against the same server truth that state was tracking.
+        _remotelyCompletedIds.Clear();
+        _remoteNote = null;
+        _remoteNoteCts?.Cancel();
+        _remoteNoteCts?.Dispose();
+        _remoteNoteCts = null;
+        _remoteRetryCts?.Cancel();
+        _remoteRetryCts?.Dispose();
+        _remoteRetryCts = null;
 
         if (_day is { Items.Count: 0, Completed.Count: 0 })
         {
@@ -536,6 +771,7 @@ else
             return;
         }
 
+        _lastInteraction = TimeProvider.GetUtcNow();
         _busyOccurrence = occurrenceId;
 
         try
@@ -615,7 +851,10 @@ else
     }
 
     private void ToggleExpand(Guid occurrenceId)
-        => _expandedOccurrence = _expandedOccurrence == occurrenceId ? null : occurrenceId;
+    {
+        _lastInteraction = TimeProvider.GetUtcNow();
+        _expandedOccurrence = _expandedOccurrence == occurrenceId ? null : occurrenceId;
+    }
 
     private async Task DeferAsync(Guid occurrenceId)
     {
@@ -624,6 +863,7 @@ else
             return;
         }
 
+        _lastInteraction = TimeProvider.GetUtcNow();
         _busyOccurrence = occurrenceId;
 
         try
@@ -640,6 +880,15 @@ else
         }
     }
 
+    /// <summary>Opens "Flytta till en annan dag" - a sheet, like "Extra uppgift", counts as busy
+    /// for HandleRemoteChangeAsync/IsInteractionBusy so a remote change never reconciles the list
+    /// out from under it while it is open.</summary>
+    private void OpenUnplannedSheet()
+    {
+        _lastInteraction = TimeProvider.GetUtcNow();
+        _showUnplannedSheet = true;
+    }
+
     /// <summary>
     /// Opens "Extra uppgift" and loads what it needs to offer existing tasks to pick from, not
     /// just the free-text form - every active task the household has, minus whatever is already
@@ -649,6 +898,7 @@ else
     /// </summary>
     private async Task OpenExtraTaskSheetAsync()
     {
+        _lastInteraction = TimeProvider.GetUtcNow();
         _showExtraTaskSheet = true;
         _extraTaskMessage = null;
 
