@@ -72,11 +72,17 @@
        destructive button/link TEXT uses instead - same family, same intent, actually readable. */
     --ronn-ink: #A04128;
 
-    --radius: 14px;
-    --radius-sm: 10px;
+    --radius: 22px;
+    --radius-sm: 14px;
+    --radius-xl: 26px;
     --pill: 999px;
 
-    --shadow-card: 0 1px 2px rgba(34, 40, 46, .06);
+    /* transparent in light mode - white surfaces already read against --kalk without a drawn
+       line; the dark palette below overrides this to --line, where a surface needs a real edge
+       to separate from the background. See "Beslut: Ny form 2026" in docs/ARCHITECTURE.md. */
+    --edge: transparent;
+
+    --shadow-card: 0 1px 0 rgba(34, 40, 46, .04);
 
     color-scheme: light;
 
@@ -124,6 +130,10 @@
         --ronn-soft: #3E211B;
         --ronn-ink: #F0937E;
 
+        /* Unlike light mode, a dark surface needs a real edge to read as separate from the
+           background - see the light-mode definition above. */
+        --edge: var(--line);
+
         --shadow-card: 0 1px 3px rgba(0, 0, 0, .4);
         color-scheme: dark;
     }
@@ -144,6 +154,8 @@
     --ronn: #D97B67;
     --ronn-soft: #3E211B;
     --ronn-ink: #F0937E;
+
+    --edge: var(--line);
 
     --shadow-card: 0 1px 3px rgba(0, 0, 0, .4);
     color-scheme: dark;
@@ -217,8 +229,9 @@ a {
 
 .card {
     background: var(--surface);
-    border: 1px solid var(--line);
+    border: 1px solid var(--edge);
     border-radius: var(--radius);
+    corner-shape: squircle;
     box-shadow: var(--shadow-card);
     padding: var(--space-5);
 }
@@ -241,6 +254,7 @@ a {
     min-height: 44px;
     padding: 0 var(--space-5);
     border-radius: var(--pill);
+    corner-shape: squircle;
     border: 1px solid transparent;
     font: inherit;
     font-family: var(--font-display);
@@ -376,8 +390,9 @@ a {
     list-style: none;
     margin: 0 0 var(--space-4);
     padding: 0;
-    border: 1px solid var(--line);
+    border: 1px solid var(--edge);
     border-radius: var(--radius);
+    corner-shape: squircle;
     background: var(--surface);
     overflow: hidden;
 }

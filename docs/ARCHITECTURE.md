@@ -1367,6 +1367,61 @@ inga dubbletter).
   bevisar hela vägen: skapa uppgift med rum valt → hamnar under rätt rums rubrik på Idag, inte
   "Övrigt".
 
+### Beslut: Ny form 2026 — `IN PROGRESS`
+
+Ett andra visuellt delta ovanpå "Ny form" (steg 1–5, ovan), på samma villkor: enbart
+`Hemordna.Client` och dokumentation, ingen ändring i Domain/Application/Infrastructure/Api eller
+i `DailyPlanner`s urval/ordning/tidsbudget, ingen `@code`-logik i sidorna byts ut. Sex fristående
+delar, varsin egen commit på `feat/ny-form-2026`, mergas till `main` först efter uttryckligt
+godkännande (samma regel som "Ny form" steg 1–5).
+
+**Varför.** Lyfta klienten från "Ny form"s redan etablerade, lugna grund mot ett mer nutida
+mobilt formspråk (mjukare ytor, svävande navigation, kant-till-kant-innehåll med progressiv
+blur, scroll-medveten rubrik, ark med två höjdlägen, fjädrande bekräftelse) - utan att ge upp
+DESIGN.md §10 (kontrast, 44×44px, färg aldrig ensam bärare, fokus, reduced motion) eller §6a
+(tid döljs på Idag).
+
+**Vad som medvetet INTE görs, i något av de sex stegen:** glas-transparens på innehållsytor
+(kort, listor, ark) - bara på navigationspillen och de två tonade fälten, aldrig under AA-
+kontrast för text ovanpå; dynamisk/adaptiv färg (t.ex. färg härledd från ett foto eller
+användarval) - Gustaviansk blå/Saffran (DESIGN.md §2) är identiteten, inte en variabel; widgets
+eller Live Activities - en PWA har ingen plattforms-API-yta för något av detta, och det är
+under alla omständigheter utanför MVP-scope (CLAUDE.md §12/PRODUCT.md §10).
+
+#### Delsteg 1 (punkt 5, "Squircle och kantlösa ytor") — `IMPLEMENTED`
+
+- **Nya tokens** i `app.css`: `--radius` 14px → 22px, `--radius-sm` 10px → 14px, ny
+  `--radius-xl` (26px, används först i delsteg 4:s ark). `--shadow-card` (ljust) från
+  `0 1px 2px rgba(34,40,46,.06)` till `0 1px 0 rgba(34,40,46,.04)` - en tunnare, lägre skugga;
+  mörkt läges egen skugga rörd inte.
+- **Ny token `--edge`**: `transparent` i ljust läge (en vit yta läser redan mot `--kalk` utan
+  en ritad linje), `var(--line)` i mörkt läge (där behövs en riktig kant för att skilja ytan
+  från bakgrunden) - satt i `:root`, samt i båda mörka blocken
+  (`@media (prefers-color-scheme: dark) :root:not([data-theme="light"])` och
+  `:root[data-theme="dark"]`), samma tvåvägsmönster steg 5 redan etablerade.
+- **`border: 1px solid var(--line))` → `var(--edge)`** på sex innehållsytor: `.card`/`.list`
+  (app.css), `.task-list`/`.focus-card` (`MinDag.razor.css`), `.room-tile`
+  (`RoomTile.razor.css`), samt `Hushall.razor.css`s egen `.task-list`-kopia ("Senaste
+  händelser") - den sistnämnda utanför uppdragets uttryckliga selektorlista men en medveten
+  utvidgning (uttryckligt godkänd innan implementation): utan den hade just det kortet varit
+  det enda med synlig kant i ljust läge, en synlig inkonsekvens i skärmbilderna. Radskiljare
+  INUTI listor (`.task`, `.list-item`) behåller `var(--line)` oförändrat - bara den yttre
+  konturen mjukas upp.
+- **`corner-shape: squircle`** (progressiv förbättring, inget fallback-behov) på samma sex
+  selektorer plus `.sheet-shell` (`BottomSheet.razor.css`, bara egenskapen - dess
+  `border-radius`-värde rörs i delsteg 4) och `.btn` (app.css).
+- **Rört uttryckligen inte:** `.chip`/`.chip-today`/`.task-check`/`.avatar` - alla pill-formade
+  (`--pill`, 999px), ingen del av "kantlösa ytor"-uppdraget. `.field input`/`.field select`
+  (app.css) - formulärfält, inte innehållsytor, behåller `var(--line)`.
+- **Verifierat**: `dotnet build Hemordna.slnx` (0 fel/varningar); `Hemordna.Domain.Tests`
+  82/82, `Hemordna.Application.Tests` 173/173, `Hemordna.E2E.Tests` 79/79 - alla oförändrade,
+  ren CSS-ändring. Tolv skärmbilder (Idag/Rum/Hushåll × mobil 390×844/desktop 1280×900 ×
+  ljust/mörkt) via ett tillfälligt `DEBUG_Capture_squircle_edges`-test, granskade manuellt och
+  sedan borttagna igen: `.room-tile` (Kök/Övrigt) och Hushålls kort (Veckan/Idag i
+  hushållet/Senaste händelser) läser helt kantlösa mot `--kalk` i ljust läge, tydligt men
+  diskret avgränsade i mörkt läge; ingen överlappning, avklippt text eller horisontell scroll
+  på någon av de sex sidvarianterna; desktop-railen (72px) oförändrad.
+
 ---
 
 ## 11. Beslut som ännu inte är fattade — `OPEN`

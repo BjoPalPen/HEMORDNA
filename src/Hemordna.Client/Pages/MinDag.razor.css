@@ -72,8 +72,9 @@
     list-style: none;
     margin: 0 0 var(--space-4);
     padding: 0;
-    border: 1px solid var(--line);
+    border: 1px solid var(--edge);
     border-radius: var(--radius);
+    corner-shape: squircle;
     background: var(--surface);
     overflow: hidden;
 }
@@ -175,8 +176,9 @@
     padding: var(--space-6) var(--space-5);
     margin-bottom: var(--space-4);
     background: var(--surface);
-    border: 1px solid var(--line);
+    border: 1px solid var(--edge);
     border-radius: var(--radius);
+    corner-shape: squircle;
 }
 
 .focus-icon {
