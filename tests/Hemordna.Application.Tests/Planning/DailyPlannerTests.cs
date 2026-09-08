@@ -202,6 +202,71 @@ public class DailyPlannerTests
     }
 
     [Fact]
+    public void A_task_sharing_a_room_with_an_already_chosen_task_is_preferred_over_a_shorter_one_elsewhere()
+    {
+        // "Diska" opens the Kök cluster on its own merit (shortest, nothing chosen yet - the
+        // ordinary tie-break rule 6). Once Kök is open, "Torka bänken" (also Kök, 10 min) is
+        // preferred over the shorter "Skölj golvet" (Badrum, 5 min) - clustering (rule 5) sits
+        // above "shorter first" (rule 6), which is the whole point: finishing a room beats
+        // hopping to a shorter task in a different one.
+        var plan = PlanWith(
+            30,
+            PlanCandidateBuilder.Task("Diska").Minutes(3).InArea("Kök").Build(),
+            PlanCandidateBuilder.Task("Torka bänken").Minutes(10).InArea("Kök").Build(),
+            PlanCandidateBuilder.Task("Skölj golvet").Minutes(5).InArea("Badrum").Build());
+
+        Assert.Equal(["Diska", "Torka bänken", "Skölj golvet"], NamesOf(plan));
+    }
+
+    [Fact]
+    public void Two_different_rooms_on_the_same_floor_cluster_together()
+    {
+        // "Övre plan – Sovrum 1" and "Övre plan – Hall" are different rooms but the same floor
+        // (see TaskCluster) - the hall task clusters with the already-open floor even though it
+        // is a different room from the one that opened it, and even though it is longer than
+        // the ground-floor kitchen task competing for the same slot.
+        var plan = PlanWith(
+            30,
+            PlanCandidateBuilder.Task("Vädra").Minutes(3).InArea("Övre plan – Sovrum 1").Build(),
+            PlanCandidateBuilder.Task("Dammsug hallen").Minutes(10).InArea("Övre plan – Hall").Build(),
+            PlanCandidateBuilder.Task("Diska").Minutes(5).InArea("Entré plan – Kök").Build());
+
+        Assert.Equal(["Vädra", "Dammsug hallen", "Diska"], NamesOf(plan));
+    }
+
+    [Fact]
+    public void Tasks_with_no_room_at_all_do_not_cluster_with_each_other()
+    {
+        // Neither area-less task shares a "cluster" with the other - no room at all is not a
+        // shared room. Ordinary shorter-first still decides between them once "Mellan i kok"
+        // (which has a real room, but no cluster is open yet either) is out of the running.
+        var plan = PlanWith(
+            30,
+            PlanCandidateBuilder.Task("Kort utan rum").Minutes(3).Build(),
+            PlanCandidateBuilder.Task("Lang utan rum").Minutes(10).Build(),
+            PlanCandidateBuilder.Task("Mellan i kok").Minutes(5).InArea("Kök").Build());
+
+        Assert.Equal(["Kort utan rum", "Mellan i kok", "Lang utan rum"], NamesOf(plan));
+    }
+
+    [Fact]
+    public void Overdue_still_outranks_continuing_an_already_open_room_cluster()
+    {
+        // "Kok forsta" is not deferrable (rule 1, the single highest-precedence rule), so it
+        // always wins the first pick regardless of the overdue bathroom task and opens the Kök
+        // cluster. Once open, the overdue bathroom task still outranks CONTINUING that cluster -
+        // overdue (rule 2) sits well above clustering (rule 5), whether or not a cluster is
+        // already open.
+        var plan = PlanWith(
+            30,
+            PlanCandidateBuilder.Task("Kok forsta").Minutes(3).InArea("Kök").NotDeferrable().Build(),
+            PlanCandidateBuilder.Task("Kok andra").Minutes(10).InArea("Kök").Build(),
+            PlanCandidateBuilder.Task("Forfallen i badrum").Minutes(8).InArea("Badrum").DueDaysAgo(2).Build());
+
+        Assert.Equal(["Kok forsta", "Forfallen i badrum", "Kok andra"], NamesOf(plan));
+    }
+
+    [Fact]
     public void At_equal_standing_the_shorter_task_comes_first()
     {
         var plan = PlanWith(

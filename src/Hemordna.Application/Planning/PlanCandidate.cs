@@ -29,7 +29,8 @@ public sealed record PlanCandidate
 
     public string TaskName { get; }
 
-    /// <summary>The area this work belongs to, when it has one - display only.</summary>
+    /// <summary>The area this work belongs to, when it has one - drives DailyPlanner's room/
+    /// floor clustering tie-break (see <see cref="TaskCluster"/>) in addition to display.</summary>
     public string? AreaName { get; }
 
     public string? Description { get; }

@@ -25,6 +25,12 @@ namespace Hemordna.Application.Planning;
 ///   slipping.</item>
 ///   <item>Higher priority before lower.</item>
 ///   <item>Earlier original due date first - the oldest work leads.</item>
+///   <item>A task sharing a room, or a floor (see <see cref="TaskCluster"/>), with something
+///   already chosen for this same day-so-far - people naturally finish a room, or a floor,
+///   before moving to the next rather than hopping between them. Only a soft preference among
+///   candidates already tied on everything above: it never promotes a task ahead of something
+///   more overdue or higher-priority, and the very first pick of the day is unaffected (nothing
+///   is chosen yet to share a room with).</item>
 ///   <item>Shorter tasks first. At equal standing, finishing something beats starting
 ///   something, and it fits more of the day's work into the budget.</item>
 ///   <item>A handful of well-known "do X before Y" chore pairs (see
@@ -33,6 +39,9 @@ namespace Hemordna.Application.Planning;
 ///   <item>Occurrence id, ascending. A stable final tie-break so the ordering is total and
 ///   never depends on input order.</item>
 /// </list>
+/// Rule 5 is the only one where a pick depends on picks already made today, so unlike the rest
+/// this cannot be a single static sort: candidates are chosen one at a time, in order, each
+/// pick re-evaluating which rooms/floors are already represented among today's picks so far.
 /// </para>
 /// </remarks>
 public sealed class DailyPlanner
@@ -54,27 +63,37 @@ public sealed class DailyPlanner
 
         var date = request.Date;
 
-        var ordered = request.Candidates
-            .Where(candidate => IsEligible(candidate, date))
-            .OrderBy(candidate => candidate.CanBeDeferred)
-            .ThenByDescending(candidate => candidate.Occurrence.IsOverdueOn(date))
-            .ThenByDescending(candidate => candidate.Priority)
-            .ThenBy(candidate => candidate.Occurrence.OriginalScheduledDate)
-            .ThenBy(candidate => candidate.EstimatedMinutes)
-            .ThenBy(candidate => ChoreSequenceHint.RankFor(candidate.TaskName))
-            .ThenBy(candidate => candidate.Occurrence.Id)
-            .ToList();
-
-        var items = new List<PlannedTask>(ordered.Count);
+        var remaining = request.Candidates.Where(candidate => IsEligible(candidate, date)).ToList();
+        var items = new List<PlannedTask>(remaining.Count);
         var unplanned = new List<UnplannedTask>();
         var remainingMinutes = request.AvailableMinutes;
+        var chosenClusters = new HashSet<string>();
 
-        foreach (var candidate in ordered)
+        while (remaining.Count > 0)
         {
-            if (candidate.EstimatedMinutes <= remainingMinutes)
+            var next = remaining
+                .OrderBy(candidate => candidate.CanBeDeferred)
+                .ThenByDescending(candidate => candidate.Occurrence.IsOverdueOn(date))
+                .ThenByDescending(candidate => candidate.Priority)
+                .ThenBy(candidate => candidate.Occurrence.OriginalScheduledDate)
+                .ThenByDescending(candidate => IsInAnAlreadyChosenCluster(candidate, chosenClusters))
+                .ThenBy(candidate => candidate.EstimatedMinutes)
+                .ThenBy(candidate => ChoreSequenceHint.RankFor(candidate.TaskName))
+                .ThenBy(candidate => candidate.Occurrence.Id)
+                .First();
+
+            remaining.Remove(next);
+
+            if (next.EstimatedMinutes <= remainingMinutes)
             {
-                items.Add(new PlannedTask(candidate, candidate.Occurrence.IsOverdueOn(date)));
-                remainingMinutes -= candidate.EstimatedMinutes;
+                items.Add(new PlannedTask(next, next.Occurrence.IsOverdueOn(date)));
+                remainingMinutes -= next.EstimatedMinutes;
+
+                if (TaskCluster.KeyFor(next.AreaName) is { } chosenKey)
+                {
+                    chosenClusters.Add(chosenKey);
+                }
+
                 continue;
             }
 
@@ -82,11 +101,14 @@ public sealed class DailyPlanner
                 ? UnplannedReason.NoTimeAvailable
                 : UnplannedReason.ExceedsRemainingTime;
 
-            unplanned.Add(new UnplannedTask(candidate, reason));
+            unplanned.Add(new UnplannedTask(next, reason));
         }
 
         return new DailyPlan(request.MemberId, date, request.AvailableMinutes, items, unplanned);
     }
+
+    private static bool IsInAnAlreadyChosenCluster(PlanCandidate candidate, HashSet<string> chosenClusters)
+        => TaskCluster.KeyFor(candidate.AreaName) is { } key && chosenClusters.Contains(key);
 
     /// <summary>
     /// A candidate counts for today only if it still needs doing and is not scheduled for a

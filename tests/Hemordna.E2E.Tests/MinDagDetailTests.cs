@@ -106,4 +106,53 @@ public class MinDagDetailTests
         var row = page.Locator(".task", new() { HasText = "Plocka tvätt" });
         await Assertions.Expect(row.Locator(".chip")).ToHaveTextAsync("Tvättstuga");
     }
+
+    [Fact]
+    public async Task An_overdue_rooms_chip_keeps_its_floor_prefix_to_tell_two_same_named_rooms_apart()
+    {
+        // Real report: two different rooms both named "Hall" (one per floor) both showed just
+        // "Hall" in "Sedan tidigare" once the chip there was stripped to match the grouped
+        // list's shorter room heading - but "Sedan tidigare" has no floor heading (or any
+        // heading) of its own, so stripping the prefix there throws away the only thing telling
+        // the two rows apart.
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Freja");
+
+        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
+        http.DefaultRequestHeaders.Authorization = new("Bearer", token);
+
+        var me = await (await http.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
+        var householdId = me.GetProperty("householdId").GetGuid();
+        var memberId = me.GetProperty("memberId").GetGuid();
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        await http.PutAsJsonAsync(
+            $"/api/households/{householdId}/members/{memberId}/availability",
+            new { date = today, availableMinutes = 60 });
+
+        async Task ScheduleYesterdaysOverdueTaskAsync(string areaName, string taskName)
+        {
+            var area = await (await http.PostAsJsonAsync(
+                $"/api/households/{householdId}/areas", new { name = areaName }))
+                .Content.ReadFromJsonAsync<JsonElement>();
+            var task = await (await http.PostAsJsonAsync(
+                $"/api/households/{householdId}/tasks",
+                new { name = taskName, estimatedMinutes = 5, areaId = area.GetProperty("id").GetGuid() }))
+                .Content.ReadFromJsonAsync<JsonElement>();
+            await http.PostAsJsonAsync(
+                $"/api/households/{householdId}/tasks/{task.GetProperty("id").GetGuid()}/occurrences",
+                new { date = today.AddDays(-1), assignToMemberId = memberId });
+        }
+
+        await ScheduleYesterdaysOverdueTaskAsync("Övre plan – Hall", "Torka trappsteg");
+        await ScheduleYesterdaysOverdueTaskAsync("Entré plan – Hall", "Dammsug hallen");
+
+        await page.ReloadAsync();
+
+        await Assertions.Expect(page.Locator(".task", new() { HasText = "Torka trappsteg" }).Locator(".chip"))
+            .ToHaveTextAsync("Övre plan – Hall");
+        await Assertions.Expect(page.Locator(".task", new() { HasText = "Dammsug hallen" }).Locator(".chip"))
+            .ToHaveTextAsync("Entré plan – Hall");
+    }
 }

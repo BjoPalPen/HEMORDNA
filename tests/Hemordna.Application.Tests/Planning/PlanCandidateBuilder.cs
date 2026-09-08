@@ -17,6 +17,7 @@ internal sealed class PlanCandidateBuilder
     private TaskPriority _priority = TaskPriority.Normal;
     private bool _canBeDeferred = true;
     private DateOnly _scheduledDate = DailyPlannerTests.Friday;
+    private string? _areaName;
 
     public static PlanCandidateBuilder Task(string name) => new() { _name = name };
 
@@ -50,7 +51,13 @@ internal sealed class PlanCandidateBuilder
         return this;
     }
 
-    public PlanCandidate Build() => new(BuildOccurrence(), _name);
+    public PlanCandidateBuilder InArea(string? areaName)
+    {
+        _areaName = areaName;
+        return this;
+    }
+
+    public PlanCandidate Build() => new(BuildOccurrence(), _name, _areaName);
 
     public TaskOccurrence BuildOccurrence()
     {

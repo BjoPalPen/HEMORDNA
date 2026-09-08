@@ -17,7 +17,7 @@
         @Item.Name
         @if (ShowAreaChip && Item.AreaName is { } area)
         {
-            <span class="chip">@RoomFloors.RoomNameOf(area)</span>
+            <span class="chip">@area</span>
         }
         @if (ShowOverdueNote && Item.IsOverdue)
         {
@@ -76,7 +76,9 @@
 
     /// <summary>False inside a group that already carries its own room heading (see
     /// MinDag.razor's RoomGroups), so the room is not named twice on the same row. Still true
-    /// for "Sedan tidigare", the one place this row appears without any room heading above it.</summary>
+    /// for "Sedan tidigare", the one place this row appears without any room OR floor heading
+    /// above it - the chip there shows the full area name, "Våning – " prefix included, since
+    /// it is the only thing distinguishing e.g. two different floors' own "Hall".</summary>
     [Parameter]
     public bool ShowAreaChip { get; set; } = true;
 

@@ -618,22 +618,23 @@ Tillämpas i denna ordning:
 | 2 | Förfallna före det som förfaller idag | Något som redan är sent ska inte fortsätta halka |
 | 3 | Högre prioritet före lägre | Hushållets uttalade viktning |
 | 4 | Tidigast ursprungligt förfallodatum först | Äldst arbete leder |
-| 5 | Kortare uppgift först | Vid lika ställning: att bli klar slår att påbörja, och mer ryms i budgeten |
-| 6 | `ChoreSequenceHint.RankFor` (2026-09-07) | Ett fåtal kända "gör X före Y"-par, se nedan |
-| 7 | Occurrence-id stigande | Stabil slutlig tie-break som gör ordningen total |
+| 5 | Delar rum/våning med något redan valt idag (2026-09-08) | Se "Beslut: rums-/våningsklustring" nedan - bara en mjuk preferens bland redan likvärdiga kandidater |
+| 6 | Kortare uppgift först | Vid lika ställning: att bli klar slår att påbörja, och mer ryms i budgeten |
+| 7 | `ChoreSequenceHint.RankFor` (2026-09-07) | Ett fåtal kända "gör X före Y"-par, se nedan |
+| 8 | Occurrence-id stigande | Stabil slutlig tie-break som gör ordningen total |
 
 Regel 1 före regel 2 och 3 är ett medvetet val: en förfallen uppgift kan fortfarande flyttas,
 en icke uppskjutbar kan inte det.
 
-**`ChoreSequenceHint`** (regel 6) är en medvetet SMAL nudge, inte ett generellt
+**`ChoreSequenceHint`** (regel 7) är en medvetet SMAL nudge, inte ett generellt
 städordnings-system - efterfrågat konkret: dammsug (eller sopa) golvet innan man torkar det,
 eftersom smuts annars bara flyttas runt. Ren nyckelordsmatchning på uppgiftsnamnet
 (`"torka golvet"`/`"moppa"` rankas efter `"dammsug"`/`"sopa golvet"`), tillämpad EFTER allt
-planeringsrelevant (uppskjutbarhet, förfallenhet, prioritet, datum, minuter) - kan alltså aldrig
-ändra VAD som planeras eller skjuts upp, bara i vilken ordning två annars helt likvärdiga
-uppgifter visas när de råkar hamna samma dag. Fler par kan läggas till samma väg om ett
-liknande konkret behov dyker upp - ingen anledning att gissa fram en bredare "damma före
-dammsug före torka"-ontologi som ingen efterfrågat.
+planeringsrelevant (uppskjutbarhet, förfallenhet, prioritet, datum, minuter, rums-/vånings-
+klustring) - kan alltså aldrig ändra VAD som planeras eller skjuts upp, bara i vilken ordning
+två annars helt likvärdiga uppgifter visas när de råkar hamna samma dag. Fler par kan läggas
+till samma väg om ett liknande konkret behov dyker upp - ingen anledning att gissa fram en
+bredare "damma före dammsug före torka"-ontologi som ingen efterfrågat.
 
 ### Urval
 
@@ -658,12 +659,14 @@ se `MinDag.razor.AddExtraTaskAsync`.
 
 ### Beslut: Rumsgruppering på Min dag — `IMPLEMENTED`
 
-`DailyPlanner` har inget begrepp för "rum" i sin egen sortering (den bryr sig om
-uppskjutbarhet/förfallenhet/prioritet/datum/minuter) - en dags uppgifter från olika rum
-interfolieras därför fritt, vilket i praktiken kändes slumpmässigt (efterfrågat konkret: gör
-klart köket innan du går till badrummet, inte köks-uppgift/badrums-uppgift/köks-uppgift om
-vartannat). Löst helt klientsidigt i `MinDag.razor`, utan att röra `DailyPlanner`s redan hårt
-testade urval/prioritering:
+Vid det här stegets implementation hade `DailyPlanner` inget begrepp för "rum" i sin egen
+sortering (den brydde sig om uppskjutbarhet/förfallenhet/prioritet/datum/minuter) - en dags
+uppgifter från olika rum interfolierades därför fritt, vilket i praktiken kändes slumpmässigt
+(efterfrågat konkret: gör klart köket innan du går till badrummet, inte köks-uppgift/badrums-
+uppgift/köks-uppgift om vartannat). Löst helt klientsidigt i `MinDag.razor` här, utan att röra
+`DailyPlanner`s då redan hårt testade urval/prioritering - se dock "Beslut: rums-/
+våningsklustring i urvalet" längre ner, som senare (2026-09-08) faktiskt lade till en
+rums-/våningsmedveten regel i själva urvalet, av samma produktskäl:
 
 - Förfallna uppgifter (`IsOverdue`) lyfts ut i en egen ledande grupp ("Sedan tidigare"),
   oavsett rum - en redan sen uppgift ska aldrig kunna gömmas längre ner i ett rums lista.
@@ -685,6 +688,64 @@ uppgiftsnamn två gånger utan förklaring och lästes som en äkta dubblett. In
 databasen: två skilda occurrences (dagens obehandlade, morgondagens nya), bara samma etikett
 som huvudvyn redan hade som saknades i peek. `MinDag.razor`s peek-rendering visar nu samma
 "sedan tidigare"-chip för `item.IsOverdue` som huvudvyn.
+
+### Beslut: rums-/våningsklustring i urvalet — `IMPLEMENTED` (2026-09-08)
+
+Produktfeedback ett steg längre än ren visning: människor städar naturligt ett rum, eller en
+våning, färdigt i taget - köket + det lilla wc:et, sedan nästa dag ett sovrum på övre plan +
+hallen där - snarare än att hoppa mellan rum. Ren VISNINGS-omgruppering (ovan) räcker inte för
+det: vilka uppgifter som över huvud taget hamnar SAMMA DAG avgörs av `DailyPlanner`s eget
+urval, som fram tills nu var helt rumsblint - detta är alltså den första ändringen som rör
+`DailyPlanner`s urval/prioritering sedan den beskrevs som "redan hårt testad" och medvetet
+orörd ovan. Explicit avstämt med användaren innan implementation, inklusive hur strikt
+(mjuk preferens, aldrig starkare) och om "rum" skulle tolkas smalt (bara exakt samma rum) eller
+brett (rum ELLER våning, som i det egna exemplet) - svaret blev mjuk preferens, rum ELLER
+våning.
+
+- **Regel 5** (ny, se tabellen ovan): bland kandidater redan lika på uppskjutbarhet/
+  förfallenhet/prioritet/förfallodatum, föredras en som delar kluster med något REDAN VALT för
+  dagen. Ren mjuk preferens - kan aldrig lyfta en kandidat förbi något mer förfallet eller
+  högre prioriterat, och den allra första uppgiften för dagen påverkas aldrig (inget är valt än
+  att dela kluster med).
+- **`Planning.TaskCluster.KeyFor(areaName)`** (ny, `internal`): samma rum om `areaName` saknar
+  "Våning – "-prefix, annars våningen. Medvetet duplicerar samma tolkning av
+  "Våning – "-namnkonventionen som klientens `Support.RoomFloors.FloorOf` redan gör - server
+  och klient är separata projekt (Application refererar aldrig Client), så samma lilla, sköra
+  namnkonvention-parsning finns nu på båda ställena. `DailyPlanner` själv förblir formellt
+  "rumsblint" i sin egen kod (den känner bara `TaskCluster`s nyckel, aldrig "Våning – "-strängen
+  själv) - dokumentationsmässigt en nyansering, inte en motsägelse: den ordnar fortfarande inga
+  regler efter ett rums NAMN, bara efter om två kandidaters nycklar råkar vara lika.
+  En kandidat utan rum alls har ingen klusternyckel och matchar aldrig något - två "Övrigt"-
+  uppgifter klustras inte bara för att båda saknar rum.
+- **Algoritmen ändrades från engångssortering till iterativt urval**, eftersom regel 5 är den
+  enda som beror på VAD som redan valts för dagen så här långt - till skillnad från alla andra
+  regler kan den inte uttryckas som en enda statisk sortering. Varje varv väljer den bästa
+  återstående kandidaten (samma regelkedja, bara med regel 5 omvärderad mot vad som redan
+  valts), tar bort den ur den återstående poolen, och upprepar - O(n²) i värsta fall, helt
+  oproblematiskt för en dags realistiska kandidatantal. Samma egenskaper som förut bevarade:
+  fortfarande en ren funktion (inga dependencies, ingen klocka), fortfarande deterministisk
+  (verifierat med roterad input i `DailyPlannerTests`), och en lång uppgift som inte får plats
+  blockerar fortfarande inte kortare uppgifter bakom sig i poolen.
+- **Noll regression i den befintliga testsviten, verifierat innan någon ny test skrevs**: ingen
+  av de 23 befintliga `DailyPlannerTests` sätter `areaName` alls, så `TaskCluster.KeyFor(null)`
+  är `null` för varje kandidat i hela den befintliga sviten - regel 5 är därmed ett garanterat
+  no-op mot allt tidigare testat beteende. Fyra nya tester lades till: klustring vinner över
+  "kortast först", två olika rum på samma våning klustrar ihop, två rumslösa uppgifter klustrar
+  INTE ihop med varandra, och förfallenhet vinner alltid över att fortsätta ett redan öppnat
+  kluster.
+- **`PlanCandidate.AreaName`** var tidigare dokumenterat "display only" - kommentaren
+  uppdaterad, den driver nu även klustringen.
+
+**Bugg hittad direkt efter driftsättning, fixad samma dag:** när "Beslut: Rumsgruppering på
+Min dag" (ovan) fick sin egen uppföljning att INTE upprepa rummets namn som en chip på raden
+(rumsrubriken räcker) togs våningsprefixet bort från chippen rakt av
+(`Support.RoomFloors.RoomNameOf`) - men chippen visas numera BARA i "Sedan tidigare", den enda
+platsen en rad saknar både rums- OCH våningsrubrik. Två olika rum med samma namn på olika
+våningar (två "Hall") blev då omöjliga att skilja åt där. `TaskListItem`s chip visar nu hela
+`AreaName` (våningsprefixet inkluderat) igen - eftersom chippen bara någonsin renderas i just
+det kontext som saknar all annan disambiguering, är den fulla strängen alltid rätt val där.
+Ny regressionstest, `MinDagDetailTests
+.An_overdue_rooms_chip_keeps_its_floor_prefix_to_tell_two_same_named_rooms_apart`.
 
 ---
 
