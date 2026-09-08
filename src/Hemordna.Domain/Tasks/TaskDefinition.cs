@@ -187,13 +187,13 @@ public sealed class TaskDefinition
     /// fields are copied onto the occurrence so that later edits to the definition do not
     /// silently rewrite work that was already scheduled.
     /// </summary>
-    public TaskOccurrence ScheduleFor(DateOnly date, DateTimeOffset createdAt)
+    public TaskOccurrence ScheduleFor(DateOnly date, DateTimeOffset createdAt, bool addedAsExtra = false)
     {
         if (!IsActive)
         {
             throw new DomainException($"Task definition '{Name}' is inactive and cannot be scheduled.");
         }
 
-        return TaskOccurrence.Create(this, date, createdAt);
+        return TaskOccurrence.Create(this, date, createdAt, addedAsExtra);
     }
 }

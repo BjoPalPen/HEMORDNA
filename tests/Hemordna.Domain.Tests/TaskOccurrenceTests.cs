@@ -223,4 +223,89 @@ public class TaskOccurrenceTests
 
         Assert.False(occurrence.IsOverdueOn(Friday));
     }
+
+    [Fact]
+    public void Bringing_a_tomorrow_task_forward_moves_the_date_but_keeps_the_original()
+    {
+        var tomorrow = Friday.AddDays(1);
+        var occurrence = CreateOccurrence(date: tomorrow);
+
+        occurrence.BringForwardTo(Friday);
+
+        Assert.Equal(Friday, occurrence.ScheduledDate);
+        Assert.Equal(tomorrow, occurrence.OriginalScheduledDate);
+        Assert.False(occurrence.IsOverdueOn(Friday));
+        Assert.False(occurrence.IsOverdueOn(tomorrow));
+        Assert.True(occurrence.IsBroughtForwardOn(Friday));
+    }
+
+    [Fact]
+    public void Bringing_a_task_already_due_today_forward_is_rejected()
+    {
+        var occurrence = CreateOccurrence(date: Friday);
+
+        Assert.Throws<DomainException>(() => occurrence.BringForwardTo(Friday));
+        Assert.Equal(Friday, occurrence.ScheduledDate);
+    }
+
+    [Fact]
+    public void Bringing_an_already_overdue_task_forward_is_rejected()
+    {
+        var occurrence = CreateOccurrence(date: Friday.AddDays(-1));
+
+        Assert.Throws<DomainException>(() => occurrence.BringForwardTo(Friday));
+    }
+
+    [Fact]
+    public void A_completed_occurrence_cannot_be_brought_forward()
+    {
+        var occurrence = CreateOccurrence(date: Friday.AddDays(1));
+        occurrence.Complete(Guid.NewGuid(), CompletedAt);
+
+        Assert.Throws<DomainException>(() => occurrence.BringForwardTo(Friday));
+    }
+
+    [Fact]
+    public void A_brought_forward_task_can_still_be_completed_and_deferred()
+    {
+        var tomorrow = Friday.AddDays(1);
+        var occurrence = CreateOccurrence(date: tomorrow);
+        occurrence.BringForwardTo(Friday);
+
+        occurrence.Complete(Guid.NewGuid(), CompletedAt);
+        Assert.Equal(TaskOccurrenceStatus.Completed, occurrence.Status);
+
+        var reopened = CreateOccurrence(date: tomorrow);
+        reopened.BringForwardTo(Friday);
+        reopened.DeferTo(Friday.AddDays(1));
+
+        Assert.Equal(Friday.AddDays(1), reopened.ScheduledDate);
+        Assert.Equal(TaskOccurrenceStatus.Planned, reopened.Status);
+    }
+
+    [Fact]
+    public void IsBroughtForwardOn_is_false_for_an_ordinary_occurrence()
+    {
+        var occurrence = CreateOccurrence(date: Friday);
+
+        Assert.False(occurrence.IsBroughtForwardOn(Friday));
+    }
+
+    [Fact]
+    public void A_new_occurrence_is_not_added_as_extra_by_default()
+    {
+        var occurrence = CreateOccurrence();
+
+        Assert.False(occurrence.AddedAsExtra);
+    }
+
+    [Fact]
+    public void ScheduleFor_can_mark_an_occurrence_as_added_as_extra()
+    {
+        var definition = TaskDefinition.Create(Guid.NewGuid(), "Rensa garderoben", 15, CreatedAt);
+
+        var occurrence = definition.ScheduleFor(Friday, CreatedAt, addedAsExtra: true);
+
+        Assert.True(occurrence.AddedAsExtra);
+    }
 }
