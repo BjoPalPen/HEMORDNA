@@ -1642,9 +1642,61 @@ under alla omständigheter utanför MVP-scope (CLAUDE.md §12/PRODUCT.md §10).
 
 ### Sammanfattning
 
-Alla sex delsteg av "Ny form 2026" är nu `IMPLEMENTED` på `feat/ny-form-2026`, var sitt
-commit, inget mergat till `main` ännu - väntar på uttryckligt godkännande, samma regel som
-"Ny form" steg 1-5 följde.
+Alla sex delsteg av "Ny form 2026" mergades till `main` (`3531eb2`) med uttryckligt
+godkännande och kör i produktion.
+
+### Beslut: Ångra och stabil lista — `IN PROGRESS`
+
+NPF-revisionens åtgärder (`feat/npf-revision`) - en granskning av kognitiv tillgänglighet
+(ADHD, autism, språkstörning, IF) fann att grunden är rätt (skuldfritt språk, fokusläge,
+rumsgruppering) men att några MEKANISMER motverkar den: en avbockning går inte att ångra, en
+realtidsuppdatering ritar om hela listan mitt i en interaktion, "Lugn" sparas men syns aldrig,
+uppskattad tid är antingen helt dold eller en rå minutsiffra. Detta är inget nytt formsteg -
+inget i `DailyPlanner`s urval/ordning eller i det visuella uttrycket från "Ny form"/"Ny form
+2026" ändras. **Inget ord om diagnoser, funktionsnedsättning eller "tillgänglighet" förekommer
+i UI:t** - varje val beskrivs av vad det gör, aldrig av vem det är för; se docs/PRODUCT.md §7.
+
+**Del C, den bärande regeln för hela uppdraget:** ett hushåll är normalt blandat - en medlem
+kan ha valt "Steg för steg", en annan inget alls. Allt i detta uppdrag är antingen per medlem
+(`MemberPreference`) eller per enhet (`localStorage`), aldrig på `Household`. Delade ytor
+(Hushåll, Vecka, Rum) visar aldrig vilket läge någon valt.
+
+#### A1 (Ångra avbockning) — `IMPLEMENTED`
+
+- **`TaskOccurrence.Reopen(Guid byMemberId, DateTimeOffset now)`** (Domain): kastar
+  `DomainException` om occurrensen inte är `Completed`, om `byMemberId` inte är samma person
+  som `CompletedByMemberId`, eller om `now - CompletedAt > 15 minuter`. Annars: `Status` →
+  `Planned`, `CompletedByMemberId`/`CompletedAt` → `null` - exakt samma fält `Complete` satte,
+  nollställda, inte en ny "ångrad"-status. **Varför 15 minuter och bara samma person:** ett
+  felslag ska gå att ta tillbaka snabbt av den som gjorde det - inte en historik någon annan
+  kan skriva om i efterhand. Ett hushåll är blandat (Del C) - den som ångrar sin egen
+  avbockning ska inte behöva förklara sig, och ingen annan ska kunna ångra åt någon.
+- **`Application/Tasks/ReopenTaskOccurrence.cs`** speglar `CompleteTaskOccurrence` exakt
+  (samma tre beroenden, samma `TimeProvider`-mönster - CLAUDE.md §5). Returnerar `bool?`
+  (`null` = occurrensen finns inte i hushållet); ett regelbrott (fel person, utanför
+  fönstret, redan utestående) kastar `DomainException` och fångas INTE här - samma stil som
+  `Complete`/`Defer` redan har, så anroparen får ett riktigt 409 via `DomainExceptionHandler`,
+  inte ett tyst `false`.
+- **`POST /api/households/{householdId}/occurrences/{occurrenceId}/reopen`** bredvid
+  `/complete`, `memberId` från samma `httpContext.GetMembership()` som `/complete` redan
+  använder - anroparen kan bara ångra som sig själv. `204 No Content` på lyckad ångring
+  (inget kroppsinnehåll att returnera - Application-lagret ger bara `bool?`), `404` om
+  occurrensen inte finns, `409` vid regelbrott.
+- **Klient**: `HemordnaApiClient.ReopenOccurrenceAsync(householdId, occurrenceId, ct) → bool`,
+  samma form som `CompleteOccurrenceAsync`. Inte kopplad till något UI ännu - det är B1.
+- **Verifierat**: `dotnet build Hemordna.slnx` (0 fel/varningar). `Hemordna.Domain.Tests`
+  87/87 (82 tidigare + 5 nya: ångra inom fönstret, fel person kastar, efter 15 min kastar,
+  icke-`Completed` kastar, ångra-sedan-bocka-av-igen fungerar). `Hemordna.Application.Tests`
+  177/177 (173 tidigare + 4 nya, `ReopenTaskOccurrenceTests.cs`, samma fejk-mönster som
+  `CompleteAndDeferTests.cs`: notifierar exakt en gång, okänd occurrence → `null`, fel
+  person/utanför fönstret → kastar och skriver ingenting). API:t verifierat riktigt körande
+  (CLAUDE.md §7): ett tillfälligt `DEBUG_ReopenApiTests`-test (två riktiga konton i samma
+  hushåll via den faktiska inbjudningskod-vägen) anropade den skarpa, körande endpointen -
+  ångra före avbockning → riktigt 409, fel persons riktiga HTTP-anrop → riktigt 409, rätt
+  person → riktigt 204 och occurrensen syns åter bland dagens utestående via ett riktigt
+  `GET .../plan`-anrop. Testet togs bort igen efter verifiering; den permanenta,
+  produktnära täckningen är B1:s `UndoTests` (riktigt UI-flöde) och C:s
+  `MixedHouseholdTests`, som läggs till senare i den här grenen.
 
 ---
 

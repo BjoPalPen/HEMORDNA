@@ -603,6 +603,23 @@ public sealed class HemordnaApiClient
         return response.IsSuccessStatusCode;
     }
 
+    /// <summary>Undoes a completion - only the member who completed it can, and only within a
+    /// short window server-side (see TaskOccurrence.Reopen). A rejected attempt (wrong person,
+    /// window closed) comes back as a non-success status, same as any other rule violation.</summary>
+    public async Task<bool> ReopenOccurrenceAsync(
+        Guid householdId,
+        Guid occurrenceId,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Post,
+            $"api/households/{householdId}/occurrences/{occurrenceId}/reopen",
+            cancellationToken);
+
+        var response = await _http.SendAsync(request, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
     public async Task<bool> DeferOccurrenceAsync(
         Guid householdId,
         Guid occurrenceId,

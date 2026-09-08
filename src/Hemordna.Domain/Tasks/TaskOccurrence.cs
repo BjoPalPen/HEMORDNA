@@ -151,6 +151,38 @@ public sealed class TaskOccurrence
         ScheduledDate = newDate;
     }
 
+    /// <summary>
+    /// Undoes a completion - a slip of the thumb, or a task marked done by mistake, should be
+    /// easy to take back without turning into a rewritten history. Only the person who
+    /// completed it can undo it, and only within a short window (15 minutes): long enough for
+    /// "wait, no" but not long enough to quietly edit what actually happened hours or days
+    /// later. Anyone else in the household still just sees the task complete again once the
+    /// window closes, or if a different member tries.
+    /// </summary>
+    public void Reopen(Guid byMemberId, DateTimeOffset now)
+    {
+        Guard.AgainstEmpty(byMemberId, nameof(byMemberId));
+
+        if (Status != TaskOccurrenceStatus.Completed)
+        {
+            throw new DomainException($"A task with status '{Status}' cannot be reopened.");
+        }
+
+        if (byMemberId != CompletedByMemberId)
+        {
+            throw new DomainException("Only the member who completed a task can undo it.");
+        }
+
+        if (now - CompletedAt > TimeSpan.FromMinutes(15))
+        {
+            throw new DomainException("A completed task can only be undone within 15 minutes.");
+        }
+
+        Status = TaskOccurrenceStatus.Planned;
+        CompletedByMemberId = null;
+        CompletedAt = null;
+    }
+
     /// <summary>Drops the task for this date - it was not needed this time.</summary>
     public void Skip()
     {

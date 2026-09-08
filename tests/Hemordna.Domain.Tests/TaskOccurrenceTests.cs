@@ -57,6 +57,66 @@ public class TaskOccurrenceTests
     }
 
     [Fact]
+    public void Reopening_within_the_window_by_the_same_person_makes_it_outstanding_again()
+    {
+        var occurrence = CreateOccurrence();
+        var annaId = Guid.NewGuid();
+        occurrence.Complete(annaId, CompletedAt);
+
+        occurrence.Reopen(annaId, CompletedAt.AddMinutes(10));
+
+        Assert.Equal(TaskOccurrenceStatus.Planned, occurrence.Status);
+        Assert.True(occurrence.IsOutstanding);
+        Assert.Null(occurrence.CompletedAt);
+        Assert.Null(occurrence.CompletedByMemberId);
+    }
+
+    [Fact]
+    public void Only_the_member_who_completed_it_can_reopen_it()
+    {
+        var occurrence = CreateOccurrence();
+        var annaId = Guid.NewGuid();
+        var bjornId = Guid.NewGuid();
+        occurrence.Complete(annaId, CompletedAt);
+
+        Assert.Throws<DomainException>(() => occurrence.Reopen(bjornId, CompletedAt.AddMinutes(1)));
+        Assert.Equal(TaskOccurrenceStatus.Completed, occurrence.Status);
+    }
+
+    [Fact]
+    public void Reopening_after_15_minutes_is_rejected()
+    {
+        var occurrence = CreateOccurrence();
+        var annaId = Guid.NewGuid();
+        occurrence.Complete(annaId, CompletedAt);
+
+        Assert.Throws<DomainException>(() => occurrence.Reopen(annaId, CompletedAt.AddMinutes(15).AddSeconds(1)));
+        Assert.Equal(TaskOccurrenceStatus.Completed, occurrence.Status);
+    }
+
+    [Fact]
+    public void Only_a_completed_occurrence_can_be_reopened()
+    {
+        var occurrence = CreateOccurrence();
+
+        Assert.Throws<DomainException>(() => occurrence.Reopen(Guid.NewGuid(), CompletedAt));
+    }
+
+    [Fact]
+    public void A_reopened_occurrence_can_be_completed_again()
+    {
+        var occurrence = CreateOccurrence();
+        var annaId = Guid.NewGuid();
+        occurrence.Complete(annaId, CompletedAt);
+        occurrence.Reopen(annaId, CompletedAt.AddMinutes(1));
+
+        occurrence.Complete(annaId, CompletedAt.AddMinutes(2));
+
+        Assert.Equal(TaskOccurrenceStatus.Completed, occurrence.Status);
+        Assert.Equal(CompletedAt.AddMinutes(2), occurrence.CompletedAt);
+    }
+
+    [Fact]
     public void A_skipped_occurrence_cannot_be_completed()
     {
         var occurrence = CreateOccurrence();
