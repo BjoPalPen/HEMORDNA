@@ -1816,6 +1816,52 @@ kan ha valt "Steg för steg", en annan inget alls. Allt i detta uppdrag är anti
   och Stor text, 390px) granskade: alla fyra namn syns tydligt i båda lägena, pillen ryms med
   marginal i Stor text.
 
+#### B1 (Ångra på Idag) — `IMPLEMENTED`
+
+- **`MinDag.razor`**: `_undo` (`(Guid OccurrenceId, string Name)?`) sätts i `CompleteAsync`
+  efter en lyckad `Api.CompleteOccurrenceAsync` (namnet slås upp i `_day.Items` INNAN
+  `LoadDayAsync()` ersätter `_day` - occurrensen har inte hunnit flytta till `Completed` än vid
+  det laget). Ett delat `UndoBar`-`RenderFragment` (`role="status"`, "Klar: {namn}" +
+  "Ångra"-knapp) renderas direkt under `header.day-header` i listläge, och direkt under
+  `.focus-card` i fokusläge - samma `_undo`-tillstånd, bara olika placering beroende på
+  `IsFocusMode`, inte två samtidiga kopior.
+- **8s-fönstret**: en `CancellationTokenSource` per "visa ångra"-anrop (`ShowUndo`) - en ny
+  avbockning innan de första 8 sekunderna gått ut avbryter (`Cancel()`) den tidigare timern i
+  stället för att låta två `Task.Delay`-anrop kapplöpa om att nollställa `_undo`.
+  `Task.Delay(TimeSpan, CancellationToken)` (rent klient-UI, ingen domän-/Application-logik -
+  CLAUDE.md §5:s `TimeProvider`-krav gäller inte en visuell auto-dismiss-timer på samma sätt
+  som det gäller planeringslogik) fångar `TaskCanceledException` och returnerar tyst vid
+  avbrott. `Dispose()` avbryter och kastar den kvarvarande `CancellationTokenSource`en.
+- **"Ångra"** anropar `Api.ReopenOccurrenceAsync` (A1) och laddar om dagen vid lyckad ångring;
+  ett avslag (utanför 15-minutersfönstret, fel person - borde i praktiken aldrig hända från
+  denna knapp eftersom den bara syns för den som just bockade av) lämnar raden bockad utan
+  felmeddelande, en medveten, minimal avvägning för ett fel som inte rimligen kan uppstå från
+  UI:t självt.
+- **`min-height: 44px` på `.undo-bar` självt** (inte en alltid närvarande, tom platshållare) -
+  radens EGEN höjd är stabil oavsett hur texten/knappen laddar in, så listan under flyttas i
+  ETT enda, förutsägbart steg när raden dyker upp, i stället för att reflowa flera gånger medan
+  dess eget innehåll sätter sig. En medveten, enklare tolkning av "reservera utrymmet" än en
+  permanent tom platshållare - dokumenterad här som ett aktivt val, inte en spec-avvikelse.
+- **`task-swipe.js`**: `threshold` höjd 72 → 96px. Ny riktnings-låsning: de första 12px rörelse
+  avgör om gesten är horisontell (fortsätt som svep) eller vertikal (`|dy| > |dx|` - avbryt
+  helt, släpp pekar-capture, låt `touch-action: pan-y` sköta scrollningen resten av gesten;
+  beslutet tas EN gång per gest, omprövas inte om fingret senare drar mer horisontellt).
+- **Inte täckt av något E2E-test** (varken nytt eller sedan tidigare): själva
+  svep-gestens JS-logik (tröskelvärde, riktningslåsning) - Playwright-simulerad pekar-drag för
+  denna specifika interaktion har aldrig funnits i testsviten, och inget nytt sådant test
+  efterfrågades i uppdraget. `NOT VERIFIED` för just gest-nivån; verifierat genom kodgranskning
+  och att `[JSInvokable] OnSwipeCompleteAsync`/`OnSwipeDeferAsync`s kontrakt mot
+  `TaskListItem.razor` är oförändrat.
+- **Nytt permanent test** `UndoTests.Undo_brings_a_completed_task_back_and_the_offer_expires_on_its_own`
+  - bockar av, ångrar, bekräftar raden är tillbaka som vanlig utestående uppgift; bockar av
+  igen och låter erbjudandet självdö (riktig 9s väntan, inte en simulerad klocka - matchar
+  uppdragets egen instruktion "vänta 9 s").
+- **Verifierat**: `dotnet build Hemordna.slnx` (0 fel/varningar). `Hemordna.Domain.Tests`
+  87/87, `Hemordna.Application.Tests` 177/177 (ren klientändring). `UndoTests` 1/1.
+  `Hemordna.E2E.Tests` 84/84 rent (83 tidigare + `UndoTests`) - kört i sin helhet. Skärmbilder
+  (ljust/mörkt, 390px) granskade: ångra-raden syns tydligt mellan rubrik och lista, ingen
+  överlappning, "Klart idag" visar den avbockade uppgiften korrekt genomstruken.
+
 ---
 
 ## 11. Beslut som ännu inte är fattade — `OPEN`

@@ -52,6 +52,11 @@ else
         }
     </header>
 
+    @if (!IsFocusMode && _undo is not null)
+    {
+        @UndoBar
+    }
+
     @if (_day is null)
     {
         <p class="muted">Hämtar dagens uppgifter…</p>
@@ -95,6 +100,11 @@ else
                         }
                     </div>
                 </div>
+
+                @if (_undo is not null)
+                {
+                    @UndoBar
+                }
             }
             else
             {
@@ -267,6 +277,10 @@ else
     private bool _showExtraTaskSheet;
     private (DateOnly Date, int Count)? _nextPlanned;
 
+    private (Guid OccurrenceId, string Name)? _undo;
+    private bool _undoBusy;
+    private CancellationTokenSource? _undoCts;
+
     private sealed class ExtraTaskForm
     {
         public string Name { get; set; } = string.Empty;
@@ -345,6 +359,15 @@ else
     private static RenderFragment GroupHeading(string name, int count, bool showKvar = true) => @<div class="task-group-heading">
         <span>@name</span>
         <span>@(showKvar ? $"{count} kvar" : count.ToString())</span>
+    </div>;
+
+    /// <summary>Shown directly under the header (or under .focus-card in focus mode) for 8s
+    /// after a completion - see ShowUndo. min-height on .undo-bar itself (not a wrapper reserved
+    /// regardless of _undo) keeps the row's OWN height stable once it does appear, so it settles
+    /// in one clean shift rather than the button/text loading in separately.</summary>
+    private RenderFragment UndoBar => @<div class="undo-bar" role="status">
+        <span>Klar: @_undo!.Value.Name</span>
+        <button type="button" class="btn btn-link" disabled="@_undoBusy" @onclick="UndoAsync">Ångra</button>
     </div>;
 
     private RenderFragment CalmState => @<div class="calm-state">
@@ -450,7 +473,12 @@ else
         StateHasChanged();
     });
 
-    public void Dispose() => Realtime.OccurrencesChanged -= OnOccurrencesChanged;
+    public void Dispose()
+    {
+        Realtime.OccurrencesChanged -= OnOccurrencesChanged;
+        _undoCts?.Cancel();
+        _undoCts?.Dispose();
+    }
 
     /// <summary>Called after creating a household, when membership has changed.</summary>
     private async Task ReloadAsync()
@@ -512,15 +540,77 @@ else
 
         try
         {
+            // Looked up before LoadDayAsync replaces _day - Completed items carry a name too,
+            // but the occurrence has not moved there yet at this point.
+            var name = _day?.Items.FirstOrDefault(item => item.OccurrenceId == occurrenceId)?.Name;
+
             // Safe to repeat: the server keeps the first completion.
             if (await Api.CompleteOccurrenceAsync(householdId, occurrenceId))
             {
+                ShowUndo(occurrenceId, name ?? "uppgiften");
                 await LoadDayAsync();
             }
         }
         finally
         {
             _busyOccurrence = null;
+        }
+    }
+
+    /// <summary>Starts (or restarts, replacing whatever undo offer was already showing) the 8s
+    /// window a completion can be undone in - see docs/ARCHITECTURE.md "Beslut: Ångra och
+    /// stabil lista". A CancellationTokenSource rather than a raw timer: a second completion
+    /// arriving before the first one's 8s are up should cancel the earlier auto-dismiss, not
+    /// race it.</summary>
+    private void ShowUndo(Guid occurrenceId, string name)
+    {
+        _undoCts?.Cancel();
+        _undoCts?.Dispose();
+        _undoCts = new CancellationTokenSource();
+        _undo = (occurrenceId, name);
+
+        _ = HideUndoAfterDelayAsync(_undoCts.Token);
+    }
+
+    private async Task HideUndoAfterDelayAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(8), cancellationToken);
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+
+        _undo = null;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>"Ångra" - only the member who completed it can, and only within the same 15
+    /// minutes the domain enforces server-side (TaskOccurrence.Reopen); a rejected attempt just
+    /// leaves the row completed, same as if the offer had already expired.</summary>
+    private async Task UndoAsync()
+    {
+        if (_undo is not { OccurrenceId: var occurrenceId } || Session.Me is not { HouseholdId: { } householdId })
+        {
+            return;
+        }
+
+        _undoCts?.Cancel();
+        _undo = null;
+        _undoBusy = true;
+
+        try
+        {
+            if (await Api.ReopenOccurrenceAsync(householdId, occurrenceId))
+            {
+                await LoadDayAsync();
+            }
+        }
+        finally
+        {
+            _undoBusy = false;
         }
     }
 

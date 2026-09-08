@@ -42,6 +42,36 @@
     }
 }
 
+/* "Ångra" (docs/ARCHITECTURE.md "Beslut: Ångra och stabil lista") - shown for 8s after
+   completing a task, under the header (or under .focus-card in focus mode). min-height keeps
+   its own box a stable size once shown, so it settles in a single shift rather than the text/
+   button loading in separately and reflowing again. */
+@keyframes undo-bar-in {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+.undo-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    min-height: 44px;
+    margin-bottom: var(--space-3);
+    padding: var(--space-2) var(--space-4);
+    border-radius: var(--radius-sm);
+    background: var(--gustav-soft);
+    color: var(--sot);
+    animation: undo-bar-in .2s ease;
+}
+
 .day-date {
     margin: 0 0 var(--space-1);
     color: var(--sot-soft);
