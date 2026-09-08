@@ -1934,6 +1934,51 @@ kan ha valt "Steg för steg", en annan inget alls. Allt i detta uppdrag är anti
   sedd). Tillfälligt E2E-test grönt (se ovan), sedan raderat. `Hemordna.E2E.Tests` i sin helhet
   kört (ren klientändring - se den skalade ner testpolicyn i konversationen).
 
+#### B3 ("Lugn" ska göra något) — `IMPLEMENTED`
+
+- **Problemet**: `MotivationLevel.Calm` har funnits i `MemberPreference` sedan tidigare
+  (`Domain/Households/MemberPreference.cs`, `Installningar.razor`s `motivation`-radiogrupp) och
+  gick att välja och spara - men ingenstans i klienten lästes eller visades något baserat på
+  värdet. Ett val som inte gör något är precis den sortens mekanism uppdraget åtgärdar: valet
+  fanns, effekten fanns inte.
+- **`MinDag.razor`**: `_motivation` (nytt fält, läses från `GetPreferenceAsync` bredvid
+  `_presentation` i `OnInitializedAsync`). När `_motivation == "Calm"` renderas
+  `<p class="day-encouragement">` direkt under `p.day-counts`, innanför samma
+  `@if (hasDayCounts)`-block (så den aldrig visas för en tom dag) och i `header.day-header`
+  (samma header som används i både list- och fokusläge - ingen separat kopia för
+  `IsFocusMode`).
+- **`EncouragementFor(outstanding, completed, total)`**: rent deterministisk, prövad i exakt
+  denna ordning (spegel av uppdragstexten):
+  1. `outstanding == 0 && completed > 0` → "Det viktigaste är gjort."
+  2. `completed * 2 >= total && outstanding > 0` → "Det viktigaste är gjort."
+  3. `outstanding > 4` → "En sak i taget räcker."
+  4. annars → "Här är dina uppgifter för idag."
+  Samma tillstånd (samma `Items.Count`/`Completed.Count`/totalt) ger alltid samma fras - ingen
+  slumpmässig variation, ingen tidsbaserad rotation. Frasernas ordning i `EncouragementPhrases`
+  (en `static readonly string[]`) följer samma ordning som villkoren, med en kommentar som
+  pekar på DESIGN.md §5:s "Tillåtet"-lista - alla tre fraser klarar den listan (inga idiom,
+  inga jämförelser mellan medlemmar, ingen skuldbeläggning).
+- **`.day-encouragement`** (CSS): en tyst andra rad, samma tonvikt som `.day-counts` (`--sot-
+  soft`, mindre textstorlek) - ingen egen bakgrund eller ram, ingen banderoll. Ingen ny
+  animation, ingen `prefers-reduced-motion`-hänsyn behövs (statisk text, ingen in/ut-övergång).
+- **`"None"`**: renderar ingenting, exakt som specen kräver - `_motivation` är antingen
+  `"Calm"` eller `"None"` (aldrig `null` i praktiken efter `Installningar.razor`s egen
+  `?? "None"`-fallback, men `_motivation == "Calm"` är ändå det enda villkoret som slår på
+  - `null`/`"None"`/vad som helst annat visar inget).
+- **Del C**: `_motivation` är redan en `MemberPreference` (per medlem sedan tidigare, inte nytt
+  i B3) - ingen ändring krävs för att hålla det utanför delade ytor (Hushåll/Vecka/Rum visar
+  aldrig `.day-encouragement`, den finns bara på `MinDag.razor`).
+- **Nytt permanent test** `CalmMotivationTests`:
+  - `Calm_with_half_the_days_tasks_done_shows_the_most_important_is_done_phrase` - Lugn +
+    1 av 2 klara (regel 2, inte regel 1: `outstanding = 1 > 0`) → "Det viktigaste är gjort."
+    (exakt uppdragets eget exempel).
+  - `None_shows_no_phrase_at_all` - motivation lämnad odiskuterad (default `"None"`), 0 av 1
+    klar → `.day-encouragement` finns inte i DOM:et.
+- **Verifierat**: `dotnet build Hemordna.slnx` (0 fel/varningar). `Hemordna.Domain.Tests`
+  87/87, `Hemordna.Application.Tests` 177/177 (ren klientändring). `CalmMotivationTests` 2/2.
+  `grep -rniE "NPF|ADHD|autis|funktionsned|tillgänglig"` mot ändrade filer: noll träffar.
+  `Hemordna.E2E.Tests` i sin helhet kört (ren klientändring).
+
 ---
 
 ## 11. Beslut som ännu inte är fattade — `OPEN`

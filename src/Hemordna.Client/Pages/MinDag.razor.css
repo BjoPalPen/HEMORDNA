@@ -128,6 +128,14 @@
     margin: var(--space-2) 0 var(--space-3);
 }
 
+/* "Lugn" (docs/ARCHITECTURE.md "Beslut: Ångra och stabil lista" §B3) - a quiet second line,
+   not a banner: same weight/color as .day-counts, no background of its own. */
+.day-encouragement {
+    margin: calc(-1 * var(--space-2)) 0 var(--space-3);
+    color: var(--sot-soft);
+    font-size: calc(var(--font-size-base) * .9);
+}
+
 .progress {
     height: 6px;
     border-radius: var(--pill);

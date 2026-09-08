@@ -51,6 +51,10 @@ else
         @if (hasDayCounts)
         {
             <p class="muted small day-counts">@completedCount av @totalCount klara</p>
+            @if (_motivation == "Calm" && _day is not null)
+            {
+                <p class="day-encouragement">@EncouragementFor(_day.Items.Count, _day.Completed.Count, totalCount)</p>
+            }
             <div class="progress" role="presentation">
                 <i style="width:@(totalCount == 0 ? 0 : completedCount * 100 / totalCount)%"></i>
             </div>
@@ -297,6 +301,7 @@ else
     private Guid? _busyOccurrence;
     private Guid? _expandedOccurrence;
     private string? _presentation;
+    private string? _motivation;
     private bool _showUnplannedSheet;
     private bool _showExtraTaskSheet;
     private (DateOnly Date, int Count)? _nextPlanned;
@@ -402,6 +407,37 @@ else
             .Where(row => !row.IsRemotelyCompleted)
             .Select(row => row.Item)
             .FirstOrDefault();
+
+    /// <summary>"Lugn" (Installningar.razor) - one of these four, chosen by state alone, never
+    /// randomly: the same day-counts state always reads the same phrase, so it never seems to
+    /// change for no reason on a later visit. See docs/DESIGN.md §5 for the "Tillåtet" list
+    /// these are drawn from - no idioms, no comparisons between members, no guilt.</summary>
+    private static readonly string[] EncouragementPhrases =
+    [
+        "Det viktigaste är gjort.",
+        "En sak i taget räcker.",
+        "Här är dina uppgifter för idag."
+    ];
+
+    private static string EncouragementFor(int outstanding, int completed, int total)
+    {
+        if (outstanding == 0 && completed > 0)
+        {
+            return EncouragementPhrases[0];
+        }
+
+        if (completed * 2 >= total && outstanding > 0)
+        {
+            return EncouragementPhrases[0];
+        }
+
+        if (outstanding > 4)
+        {
+            return EncouragementPhrases[1];
+        }
+
+        return EncouragementPhrases[2];
+    }
 
     private static string IconSrc(string taskName, string? areaName) => $"icons/tasks/{TaskIcons.For(taskName, areaName)}.svg";
 
@@ -522,6 +558,7 @@ else
         {
             var preference = await Api.GetPreferenceAsync(householdId, memberId);
             _presentation = preference?.Presentation;
+            _motivation = preference?.Motivation;
 
             Realtime.OccurrencesChanged += OnOccurrencesChanged;
             await Realtime.ConnectAsync(householdId);
