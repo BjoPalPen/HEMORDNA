@@ -546,6 +546,14 @@ html[data-calm] * {
     color: var(--sot);
 }
 
+/* "Tid som nivåord" (docs/ARCHITECTURE.md §B5) - an outline rather than a filled chip, so it
+   reads as a lighter, secondary fact next to a room's own filled .chip, never competing with it. */
+.chip-time {
+    background: transparent;
+    border: 1px solid var(--edge);
+    color: var(--sot-soft);
+}
+
 /* An interactive chip - a secondary action, visually a chip but a real 44px tap target
    (DESIGN.md §10 is unconditional; the concept mockup's own chips are drawn smaller than that
    only because they illustrate proportions, not literal pixel sizes). */

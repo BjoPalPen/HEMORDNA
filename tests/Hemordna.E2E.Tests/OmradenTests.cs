@@ -121,7 +121,9 @@ public class OmradenTests
         // Not just the two rooms' own totals (17 + 28) - a household-wide sum shown once,
         // above the room grid, so the answer to "how much time is this whole setup?" does not
         // require adding up every room by hand. This total is a flat sum (TotalMinutes),
-        // unlike each RoomTile's own "min/v" figure (frequency-weighted, TaskWorkload).
+        // unlike each RoomTile's own "min/v" figure (frequency-weighted, TaskWorkload). Lives
+        // behind "Visa tid" now (docs/ARCHITECTURE.md §B5).
+        await page.GetByText("Visa tid").ClickAsync();
         await Assertions.Expect(page.GetByText("Totalt: 12 uppgifter · 45 min")).ToBeVisibleAsync();
     }
 

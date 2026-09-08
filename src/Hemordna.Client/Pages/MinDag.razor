@@ -91,6 +91,10 @@ else
                     {
                         <span class="chip">@focusArea</span>
                     }
+                    @if (_showTimeLevel && focusTask.EstimatedMinutes > 0)
+                    {
+                        <span class="chip chip-time">@TimeLevel.LabelFor(focusTask.EstimatedMinutes)</span>
+                    }
                     @if (focusTask.IsOverdue)
                     {
                         <p class="muted small">sedan tidigare</p>
@@ -147,7 +151,7 @@ else
                             }
                             else
                             {
-                                <TaskListItem Item="row.Item" ShowIcon="ShowIcons" ShowOverdueNote="false"
+                                <TaskListItem Item="row.Item" ShowIcon="ShowIcons" ShowOverdueNote="false" ShowTimeLevel="_showTimeLevel"
                                               IsBusy="_busyOccurrence == row.Item.OccurrenceId"
                                               IsExpanded="_expandedOccurrence == row.Item.OccurrenceId"
                                               OnComplete="CompleteAsync" OnToggleExpand="ToggleExpand" OnDefer="DeferAsync" />
@@ -174,7 +178,7 @@ else
                                 }
                                 else
                                 {
-                                    <TaskListItem Item="row.Item" ShowIcon="ShowIcons" ShowAreaChip="false"
+                                    <TaskListItem Item="row.Item" ShowIcon="ShowIcons" ShowAreaChip="false" ShowTimeLevel="_showTimeLevel"
                                                   IsBusy="_busyOccurrence == row.Item.OccurrenceId"
                                                   IsExpanded="_expandedOccurrence == row.Item.OccurrenceId"
                                                   OnComplete="CompleteAsync" OnToggleExpand="ToggleExpand" OnDefer="DeferAsync" />
@@ -308,6 +312,7 @@ else
     private Guid? _expandedOccurrence;
     private string? _presentation;
     private string? _motivation;
+    private bool _showTimeLevel;
     private int _focusOffset;
     private bool _showUnplannedSheet;
     private bool _showExtraTaskSheet;
@@ -580,6 +585,7 @@ else
             var preference = await Api.GetPreferenceAsync(householdId, memberId);
             _presentation = preference?.Presentation;
             _motivation = preference?.Motivation;
+            _showTimeLevel = preference?.ShowTimeLevel ?? false;
 
             Realtime.OccurrencesChanged += OnOccurrencesChanged;
             await Realtime.ConnectAsync(householdId);

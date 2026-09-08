@@ -2012,6 +2012,45 @@ kan ha valt "Steg för steg", en annan inget alls. Allt i detta uppdrag är anti
   `grep -rniE "NPF|ADHD|autis|funktionsned|tillgänglig"` mot ändrade filer: noll träffar.
   `Hemordna.E2E.Tests` i sin helhet kört (ren klientändring).
 
+#### B5 (Tid som nivåord) — `IMPLEMENTED`
+
+- **Problemet**: `MemberPreference.ShowTimeLevel` (A2) fanns i kontraktet och gick att spara i
+  Inställningar, men styrde ingenting i klienten - samma "val utan effekt"-mönster som B3:s
+  `Calm`. Dessutom visade `Rum.razor` alltid minuter som råa siffror (`Totalt: N uppgifter · M
+  min`, veckokapacitet) - PRODUCT.md §4/§8:s "tid är en planeringsingång, inte något att räkna
+  i minuter" gällde bara delar av appen.
+- **`TimeLevel.LabelFor(int minutes)`** (`Support/TimeLevel.cs`): närmaste nivåns etikett bland
+  ENDAST de tre positiva nivåerna ("Lite tid"/"Lagom tid"/"Lång tid") - `MinBy` på `All.Where
+  (level.Minutes > 0)`, aldrig "Ingen tid". "0 minuter → ingen chip alls" är uppringarens eget
+  villkor (`EstimatedMinutes > 0`), inte något `LabelFor` självt uttrycker.
+- **`TaskListItem.razor`**: ny parameter `ShowTimeLevel` (`bool`, default false). När sann och
+  `Item.EstimatedMinutes > 0`: `<span class="chip chip-time">@TimeLevel.LabelFor(...)</span>`
+  direkt efter namnet/rumschipen. `.chip-time` (ny CSS): en konturchip (`border: 1px solid
+  var(--edge)`, transparent bakgrund, `--sot-soft`) snarare än en fylld - så den läses som ett
+  lugnare, sekundärt faktum bredvid rummets egen fyllda `.chip`, aldrig konkurrerar med den.
+- **`MinDag.razor`**: `_showTimeLevel` (nytt fält, läst från `GetPreferenceAsync` bredvid
+  `_motivation`) skickas som `ShowTimeLevel="_showTimeLevel"` till båda `<TaskListItem>`-
+  användningarna ("Sedan tidigare" och rumsgrupperna). Fokuskortet visar samma chip direkt
+  under `h2.focus-name`, samma `_showTimeLevel && focusTask.EstimatedMinutes > 0`-villkor -
+  ingen dubblettlogik, bara samma mönster på två ställen eftersom fokuskortet inte går genom
+  `TaskListItem`.
+- **`Rum.razor`**: `Totalt: N uppgifter · M min`, den frekvensvägda `Ungefär … min/vecka`-
+  raden och hushållets kapacitetsnotis flyttades in i `<details class="more-options">
+  <summary>Visa tid</summary>` - samma disclosure-mönster som redan fanns för "Lägg till ett
+  tomt rum i stället". Siffrorna själva är oförändrade (bara Idag ska ALDRIG visa minuter som
+  siffra - Rum får fortsätta göra det, bakom en frivillig disclosure snarare än alltid synligt).
+  `TaskWorkloadTests`/`OmradenTests`: uppdaterade till att klicka `Visa tid` innan de letar
+  efter texten - vad de kontrollerar är oförändrat.
+- **Nytt permanent test** `TimeLevelTests.Toggled_on_shows_a_time_level_chip_and_never_the_minute_count`
+  - av som standard: ingen chip, ingen "5 min" någonstans. Påslaget: `.chip-time` visar "Lite
+  tid" för en 5-minutersuppgift, och varken "5 min" eller den fristående siffran "5" finns i
+  DOM:et i något av lägena.
+- **Verifierat**: `dotnet build Hemordna.slnx` (0 fel/varningar). `Hemordna.Domain.Tests`
+  87/87, `Hemordna.Application.Tests` 177/177 (ren klientändring). `TimeLevelTests` 1/1,
+  `TaskWorkloadTests` + `OmradenTests` (uppdaterade) 16/16 grönt tillsammans.
+  `grep -rniE "NPF|ADHD|autis|funktionsned|tillgänglig"` mot ändrade filer: noll träffar.
+  `Hemordna.E2E.Tests` i sin helhet kört (klientändring).
+
 ---
 
 ## 11. Beslut som ännu inte är fattade — `OPEN`
