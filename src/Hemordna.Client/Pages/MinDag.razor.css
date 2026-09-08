@@ -34,6 +34,21 @@
     }
 }
 
+/* One tier above .task-group-heading (a room) - groups a floor's rooms together instead of
+   letting DailyPlanner's own task-priority order scatter them through the day. Only rendered
+   at all when a household actually has more than one floor - see FloorGroups. */
+.floor-heading {
+    margin: var(--space-6) 0 0;
+    padding-top: var(--space-4);
+    border-top: 1px solid var(--line);
+}
+
+.floor-heading:first-child {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+}
+
 .task-group-heading {
     display: flex;
     justify-content: space-between;

@@ -17,6 +17,15 @@ public static class RoomFloors
         return separatorIndex > 0 ? areaName[..separatorIndex] : null;
     }
 
+    /// <summary>The room's own name with the "Våning – " prefix stripped, if it has one -
+    /// pairs with <see cref="FloorOf"/> so a floor heading and the room heading under it never
+    /// repeat the same words.</summary>
+    public static string RoomNameOf(string areaName)
+    {
+        var separatorIndex = areaName.IndexOf(" – ", StringComparison.Ordinal);
+        return separatorIndex > 0 ? areaName[(separatorIndex + 3)..] : areaName;
+    }
+
     public static int CountDistinct(IEnumerable<AreaResponse> areas)
         => areas.Select(area => FloorOf(area.Name)).Where(floor => floor is not null).Distinct().Count();
 }

@@ -1226,6 +1226,35 @@ en villkorad GET, förbjuder inte cachning helt). En redan cachad webbläsare be
 en sista manuell cache-rensning/ominstallation för att komma loss - fixen gör bara att alla
 framtida driftsättningar upptäcks pålitligt.
 
+### Uppföljning: rumsgruppering hölls inte ihop per våning på Idag — `IMPLEMENTED`
+
+Produktfeedback: "Beslut: Rumsgruppering på Min dag" (steg 1) grupperar redan uppgifter per
+**rum**, men ett hushåll med flera våningar (`RoomFloors`, steg 3/4) fick sina rum utspridda i
+`DailyPlanner`s egen, våningsblinda ordning - "Övre plan"s båda rum kunde hamna långt ifrån
+varandra, med "Entré plan"s rum emellan.
+
+- **`MinDag.razor.FloorGroups`** klustrar det redan beräknade `RoomGroups` ytterligare ett steg,
+  efter `RoomFloors.FloorOf(item.AreaName)`. Samma först-förekomst-ordning som `RoomGroups`
+  redan använde (se steg 1) - en våning eller ett rums plats i listan speglar fortfarande
+  `DailyPlanner`s egen prioritering, aldrig en godtycklig sortering. Ett hushåll utan
+  "Våning – "-namngivning alls samlas i en enda, våningslös klunga - en `<h2
+  class="floor-heading">` renderas bara när det faktiskt finns fler än en våning bland dagens
+  uppgifter, så ett vanligt enplanshushåll ser ingen skillnad.
+- **`Support/RoomFloors.RoomNameOf`** (ny, parar med `FloorOf`) - rummets egna namn med
+  "Våning – "-prefixet bortklippt. Används för rumsrubriken under en våningsrubrik ("Hall" i
+  stället för "Övre plan – Hall", som annars upprepar våningsnamnet).
+- **`TaskListItem` fick en ny `ShowAreaChip`-parameter** (samma mönster som redan fanns för
+  `ShowOverdueNote`), `false` i den rumsgrupperade listan - produktfeedback, mitt i arbetet,
+  att rummet annars stod på RADEN två gånger (rumsrubriken ovanför, och chippen på själva
+  raden). Fortfarande `true` (förvalt) i "Sedan tidigare", den enda platsen en rad visas UTAN
+  någon rumsrubrik ovanför sig - där är chippen fortfarande den enda platsen rummet står alls.
+  `MinDagDetailTests.cs` uppdaterad till två tester (en per läge) i stället för ett, eftersom
+  de nu förväntar sig motsatta saker.
+
+Ny testfil `MinDagFloorGroupingTests.cs`: fyra rum på två våningar, skapade i medvetet
+interfolierad ordning (Entré/Övre/Entré/Övre) - ett grönt test bevisar därför att våningarna
+faktiskt klustras, inte att de råkar redan ligga i rätt ordning.
+
 ---
 
 ## 11. Beslut som ännu inte är fattade — `OPEN`

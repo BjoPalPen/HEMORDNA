@@ -102,18 +102,25 @@ else
                     </ul>
                 }
 
-                @foreach (var group in RoomGroups)
+                @foreach (var floorGroup in FloorGroups)
                 {
-                    @GroupHeading(group.AreaName ?? "Övrigt", group.Items.Count)
-                    <ul class="task-list" aria-label="@(group.AreaName ?? "Övrigt")">
-                        @foreach (var item in group.Items)
-                        {
-                            <TaskListItem Item="item" ShowIcon="ShowIcons"
-                                          IsBusy="_busyOccurrence == item.OccurrenceId"
-                                          IsExpanded="_expandedOccurrence == item.OccurrenceId"
-                                          OnComplete="CompleteAsync" OnToggleExpand="ToggleExpand" OnDefer="DeferAsync" />
-                        }
-                    </ul>
+                    @if (floorGroup.Floor is { } floor)
+                    {
+                        <h2 class="floor-heading">@floor</h2>
+                    }
+                    @foreach (var group in floorGroup.Rooms)
+                    {
+                        @GroupHeading(RoomHeadingName(group), group.Items.Count)
+                        <ul class="task-list" aria-label="@RoomHeadingName(group)">
+                            @foreach (var item in group.Items)
+                            {
+                                <TaskListItem Item="item" ShowIcon="ShowIcons" ShowAreaChip="false"
+                                              IsBusy="_busyOccurrence == item.OccurrenceId"
+                                              IsExpanded="_expandedOccurrence == item.OccurrenceId"
+                                              OnComplete="CompleteAsync" OnToggleExpand="ToggleExpand" OnDefer="DeferAsync" />
+                            }
+                        </ul>
+                    }
                 }
             }
             else
@@ -250,6 +257,8 @@ else
 
     private sealed record TaskGroup(string? AreaName, IReadOnlyList<PlannedTaskResponse> Items);
 
+    private sealed record FloorGroup(string? Floor, IReadOnlyList<TaskGroup> Rooms);
+
     /// <summary>
     /// Overdue items are pulled into their own leading group regardless of room, so something
     /// already late is never buried inside a room's list further down - see
@@ -271,6 +280,23 @@ else
             .GroupBy(item => item.AreaName)
             .Select(group => new TaskGroup(group.Key, [.. group]))
             .ToList();
+
+    /// <summary>
+    /// RoomGroups clustered by floor (see Support/RoomFloors) - product feedback that same-
+    /// floor rooms should "hold together" rather than scatter through the day in whatever order
+    /// DailyPlanner happened to rank their tasks. Same first-appearance-order preservation as
+    /// RoomGroups itself, one level up: a floor's position reflects its earliest-ranked room,
+    /// never an arbitrary (e.g. alphabetical) sort. A household with no "Våning – " naming at
+    /// all collapses to one floor-less cluster, so a single-floor home sees no heading added.
+    /// </summary>
+    private List<FloorGroup> FloorGroups
+        => RoomGroups
+            .GroupBy(group => group.AreaName is { } areaName ? RoomFloors.FloorOf(areaName) : null)
+            .Select(group => new FloorGroup(group.Key, [.. group]))
+            .ToList();
+
+    private static string RoomHeadingName(TaskGroup group)
+        => group.AreaName is { } areaName ? RoomFloors.RoomNameOf(areaName) : "Övrigt";
 
     /// <summary>"En uppgift åt gången" (docs/PRODUCT.md §7): the same order the grouped view
     /// would show, just one row deep - completing or deferring it naturally surfaces the next

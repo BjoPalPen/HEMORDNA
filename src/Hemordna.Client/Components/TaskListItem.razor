@@ -15,9 +15,9 @@
 
     <span class="task-name">
         @Item.Name
-        @if (Item.AreaName is { } area)
+        @if (ShowAreaChip && Item.AreaName is { } area)
         {
-            <span class="chip">@area</span>
+            <span class="chip">@RoomFloors.RoomNameOf(area)</span>
         }
         @if (ShowOverdueNote && Item.IsOverdue)
         {
@@ -73,6 +73,12 @@
     /// same fact is not stated twice.</summary>
     [Parameter]
     public bool ShowOverdueNote { get; set; } = true;
+
+    /// <summary>False inside a group that already carries its own room heading (see
+    /// MinDag.razor's RoomGroups), so the room is not named twice on the same row. Still true
+    /// for "Sedan tidigare", the one place this row appears without any room heading above it.</summary>
+    [Parameter]
+    public bool ShowAreaChip { get; set; } = true;
 
     [Parameter, EditorRequired]
     public EventCallback<Guid> OnComplete { get; set; }

@@ -153,7 +153,11 @@ kväll), aldrig en emoji. Ingen tid visas – varken per uppgift eller som summa
 tid över huvud taget (se §6a) – bara "N av M klara" och en tunn framstegslinje. Uppgifter
 grupperas per rum (`RoomGroups`, oförändrad sorteringslogik) med rumsnamnet i versaler och
 antal kvar till höger; en förfallen uppgift hamnar alltid först i en egen "Sedan tidigare"-grupp,
-oavsett rum. "Klart idag" är en egen grupp längst ner, dämpad (55% opacitet) och genomstruken.
+oavsett rum. Har hushållet fler än en våning klustras rummen ytterligare ett steg
+(`FloorGroups`) - en `<h2>`-våningsrubrik ("Övre plan") följt av dess egna rumsrubriker, så en
+vånings rum alltid står tillsammans i stället för utspridda i `DailyPlanner`s egen,
+våningsblinda ordning. Ett enplanshushåll ser ingen våningsrubrik alls. "Klart idag" är en egen
+grupp längst ner, dämpad (55% opacitet) och genomstruken.
 
 Varje rad (`Components/TaskListItem.razor`): en 44×44px rund bock (gustav-kant, ofylld; fylld
 gustav med vit bock när klar), namn i Familjen Grotesk 600, en chevron till höger som fäller ut
