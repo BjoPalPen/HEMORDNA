@@ -256,6 +256,51 @@ else
             </ul>
         }
 
+        @if (_tomorrow is not null)
+        {
+            <details class="more-options tomorrow-section">
+                <summary>
+                    Imorgon
+                    @(TomorrowItems.Count > 0 ? $" · {TomorrowItems.Count} uppgifter" : null)
+                </summary>
+
+                @if (TomorrowItems.Count == 0)
+                {
+                    <p class="muted small">Inget planerat imorgon än.</p>
+                }
+                else
+                {
+                    <ul class="task-list">
+                        @foreach (var item in TomorrowItems)
+                        {
+                            <li class="task task-rest">
+                                @if (ShowIcons)
+                                {
+                                    <img class="task-icon" src="@IconSrc(item.Name, item.AreaName)" alt="" width="24" height="24" />
+                                }
+                                <span class="task-name">
+                                    @item.Name
+                                    @if (item.AreaName is { } tomorrowArea)
+                                    {
+                                        <span class="chip">@tomorrowArea</span>
+                                    }
+                                </span>
+                                <button type="button" class="btn btn-link" disabled="@(_tomorrowBusyOccurrence == item.OccurrenceId)"
+                                        @onclick="() => BringForwardAsync(item.OccurrenceId)">
+                                    Gör idag i stället
+                                </button>
+                            </li>
+                        }
+                    </ul>
+                }
+
+                @if (_tomorrowNotice is not null)
+                {
+                    <p class="notice notice-problem" role="alert">@_tomorrowNotice</p>
+                }
+            </details>
+        }
+
         <BottomSheet Title="Flytta till en annan dag" @bind-IsOpen="_showUnplannedSheet">
             <p class="muted small">
                 Uppgifter som inte fick plats idag och väntar till en annan dag - inget kan
@@ -332,6 +377,13 @@ else
 
 @code {
     private DailyPlanResponse? _day;
+
+    /// <summary>"Jag ser min morgondag på Idag" - tomorrow's own plan, shown read-only in its
+    /// own collapsed section (see the "Imorgon" details below). Loaded alongside _day so it is
+    /// never stale relative to it - see LoadDayAsync.</summary>
+    private DailyPlanResponse? _tomorrow;
+    private Guid? _tomorrowBusyOccurrence;
+    private string? _tomorrowNotice;
     private Guid? _busyOccurrence;
     private Guid? _expandedOccurrence;
     private string? _presentation;
@@ -441,6 +493,27 @@ else
             .GroupBy(group => group.AreaName is { } areaName ? RoomFloors.FloorOf(areaName) : null)
             .Select(group => new FloorGroup(group.Key, [.. group]))
             .ToList();
+
+    /// <summary>
+    /// Tomorrow's own new work for the "Imorgon" section - excludes anything already on today's
+    /// list. DailyPlanner's own eligibility rule is "outstanding and due by this date or
+    /// earlier" (see DailyPlanner.IsEligible), so without this an occurrence carried over from
+    /// today (still not done) - or one just brought forward onto today via BringForwardAsync -
+    /// would show up in BOTH _day and _tomorrow at once.
+    /// </summary>
+    private List<PlannedTaskResponse> TomorrowItems
+    {
+        get
+        {
+            if (_tomorrow is null)
+            {
+                return [];
+            }
+
+            var todayIds = new HashSet<Guid>((_day?.Items ?? []).Select(item => item.OccurrenceId));
+            return [.. _tomorrow.Items.Where(item => !todayIds.Contains(item.OccurrenceId))];
+        }
+    }
 
     private static string RoomHeadingName(TaskGroup group)
         => group.AreaName is { } areaName ? RoomFloors.RoomNameOf(areaName) : "Övrigt";
@@ -844,7 +917,15 @@ else
             return;
         }
 
+        // Sequential, not Task.WhenAll: both calls make GetDailyPlan run
+        // EnsureOccurrencesGenerated for their own date, and that use case's catch-up logic
+        // reads "does an occurrence already exist" before writing one - two concurrent requests
+        // covering overlapping dates (tomorrow's catch-up walks through today too, when nothing
+        // has been generated yet) can each see "not yet" at the same time and both create one,
+        // duplicating it. Running today's request to completion first means tomorrow's request
+        // always sees today's occurrence already committed.
         _day = await Api.GetDailyPlanAsync(householdId, memberId, Today);
+        _tomorrow = await Api.GetDailyPlanAsync(householdId, memberId, Today.AddDays(1));
         _focusOffset = 0;
 
         // A full reload supersedes any patched-in state from ReconcileRemoteChangeAsync - it is
@@ -1004,6 +1085,38 @@ else
         finally
         {
             _busyOccurrence = null;
+        }
+    }
+
+    /// <summary>"Gör idag i stället" on a row in the "Imorgon" section - "jobba i förväg" for a
+    /// single occurrence (see HemordnaApiClient.BringOccurrenceForwardAsync). A full LoadDayAsync
+    /// on success rather than a local patch: the row needs to disappear from _tomorrow AND appear
+    /// (with its "I förväg" chip) in _day, and both come from the same reload.</summary>
+    private async Task BringForwardAsync(Guid occurrenceId)
+    {
+        if (Session.Me is not { HouseholdId: { } householdId })
+        {
+            return;
+        }
+
+        _lastInteraction = TimeProvider.GetUtcNow();
+        _tomorrowBusyOccurrence = occurrenceId;
+        _tomorrowNotice = null;
+
+        try
+        {
+            if (await Api.BringOccurrenceForwardAsync(householdId, occurrenceId))
+            {
+                await LoadDayAsync();
+            }
+            else
+            {
+                _tomorrowNotice = "Det gick inte att hämta uppgiften till idag. Försök igen.";
+            }
+        }
+        finally
+        {
+            _tomorrowBusyOccurrence = null;
         }
     }
 
