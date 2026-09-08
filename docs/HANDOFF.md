@@ -6,19 +6,20 @@ Lägesbild per 2026-09-08, för en ny session. Arbetssättet styrs av
 
 ## Läge
 
-**"Ny form" (steg 1-5) är mergat och kör i produktion** - `https://app.hemordna.se`, Hetzner
-`62.238.45.45` (delad Caddy/nätverk med BowlingPlatform). `main`s senaste commit är `3f0c426`;
-flera mindre uppföljningar landade också sen merget - se `git log`/ARCHITECTURE.md §10, inte
-denna fil.
+**"Ny form" och "Ny form 2026" är mergade och kör i produktion** - `https://app.hemordna.se`,
+Hetzner `62.238.45.45` (delad Caddy/nätverk med BowlingPlatform). Se ARCHITECTURE.md §10.
 
-**"Ny form 2026" är klart, alla sex delsteg** - ett andra visuellt delta (svävande navpill,
-kant-till-kant-blur, scroll-rubrik, ark med två höjdlägen, squircle/kantlösa ytor, fjädrande
-bekräftelse), se ARCHITECTURE.md §10 "Beslut: Ny form 2026" för beslut och buggar per delsteg.
-Sex commits på `feat/ny-form-2026`, **inget mergat till `main` utan uttryckligt godkännande**.
+**NPF-revisionens åtgärder är klara, alla 14 delar** (A1, A2, B8, B9, B1, B2, B3, B4, B5, B6,
+B7, B10, B11, Del C) - ångra avbockning, stabil lista under realtidsändring, "Lugn" gör nu
+något, tid som nivåord, tak på "Sedan tidigare", alltid synliga knappar/namn, ett språkpass
+utan idiom, ett snabbval som knyter ihop allt utan att peka ut vem det är för. Se
+ARCHITECTURE.md §10 "Beslut: Ångra och stabil lista". 14 commits på `feat/npf-revision`,
+**inget mergat till `main` utan uttryckligt godkännande**.
 
-**Tre produktionsbuggar från första driftsättningen, redan fixade** (se `handoff/`):
-`ContentTypeProvider` för `.dat`/`.blat`/`.wasm`, produktionens egen
-`appsettings.Production.json`, delad Docker-tjänst döpt om `api` → `hemordna-api`.
+**Två rapporterade, olösta kontraktsluckor** (avsiktligt INTE fixade på eget initiativ - se
+ARCHITECTURE.md §B2/§B6): `PlannedTaskResponse` bär varken vem som bockade av en uppgift
+(`remote-note` säger "Någon annan") eller dess ursprungliga schemaläggningsdatum ("Sedan
+tidigare"s tak visar listans egen ordning, inte ålder). Fråga innan ett nytt Api-fält läggs till.
 
 ## Köra
 
@@ -28,23 +29,22 @@ Fullständig uppstart: [../README.md](../README.md). Portar: API `5199`, klient 
 
 ## Fällor som kostat tid
 
-Blazor CSS-isolering döper om `@keyframes`-identifierare, inte bara selektorer
-(`task-spring` → `task-spring-b-xxxxxxxx`) - ett E2E-test som kollar `animationName` måste
-matcha på prefix, inte exakt namn. `::deep` måste stå FÖRE hela den del av en selektor som
-inte hör till komponentens eget renderträd (t.ex. `html[data-scrolled]`), inte bara före
-målklassen - annars försöker isoleringen lägga sitt scope-attribut på `html`, vilket aldrig
-matchar. `SheetDetent.Half` råkar vara enumens nollvärde, samma som ett osatt fälts egen
-default - synka alltid en sådan parameter i `OnParametersSet`, inte `OnAfterRenderAsync` (som
-kör efter den första renderingen som redan behöver värdet).
+Blazor CSS-isolering döper om `@keyframes` (`task-spring` → `task-spring-b-xxx`). `::deep`
+måste stå FÖRE den del av en selektor utanför komponentens renderträd (t.ex.
+`html[data-scrolled]`) - annars matchar scope-attributet aldrig; route den delen genom
+komponentens EGEN rot (`.nav-shell ::deep .nav-link`, inte `::deep html[data-scrolled]
+.nav-link`) - läs den kompilerade bundlen i `obj/.../scopedcss/` för att diagnostisera.
+Playwrights `ClickAsync()` vägrar klicka `aria-disabled="true"` - `ClickAsync(new(){Force=true})`.
 
 ## Kända brister
 
-Ett dokumenterat, medvetet ej fixat race: att välja en roll skickar två samtidiga PUT (roll +
-veckobudget) - budgeten kan under belastning tappas trots att rollen sätts. Synligt i
-`HushallTests`/`SkarmbilderTests` som en retry-loop.
+Medvetet ej fixat race: att välja en roll skickar två samtidiga PUT (roll + veckobudget) -
+budgeten kan tappas trots att rollen sätts (retry-loop i `HushallTests`). Två namngivna
+E2E-fladdrare under parallell körning (`HushallTests.Changing_a_members_role_…`,
+`HouseholdInviteTests.Joining_with_a_valid_code_…`) - kör isolerat innan en röd körning antas.
 
 ## Öppna frågor och nästa steg
 
-**Nästa, väntar på uttryckligt godkännande:** merga `feat/ny-form-2026` till `main` och
-driftsätta. **Beslut, inte öppen fråga:** en användare tillhör exakt ett hushåll
-(ARCHITECTURE.md §4).
+**Nästa, väntar på uttryckligt godkännande:** merga `feat/npf-revision` till `main`.
+**Väntar på svar:** ska de två kontraktsluckorna ovan täppas till med nya Api-fält? **Beslut,
+inte öppen fråga:** en användare tillhör exakt ett hushåll (ARCHITECTURE.md §4).

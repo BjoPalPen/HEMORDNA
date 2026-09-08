@@ -1645,7 +1645,7 @@ under alla omständigheter utanför MVP-scope (CLAUDE.md §12/PRODUCT.md §10).
 Alla sex delsteg av "Ny form 2026" mergades till `main` (`3531eb2`) med uttryckligt
 godkännande och kör i produktion.
 
-### Beslut: Ångra och stabil lista — `IN PROGRESS`
+### Beslut: Ångra och stabil lista — `IMPLEMENTED`
 
 NPF-revisionens åtgärder (`feat/npf-revision`) - en granskning av kognitiv tillgänglighet
 (ADHD, autism, språkstörning, IF) fann att grunden är rätt (skuldfritt språk, fokusläge,
@@ -2243,6 +2243,68 @@ kan ha valt "Steg för steg", en annan inget alls. Allt i detta uppdrag är anti
   i efterföljande bilder). `grep -rniE "NPF|ADHD|autis|funktionsned|tillgänglig"
   src/Hemordna.Client --include="*.razor"`: noll träffar. `Hemordna.E2E.Tests` i sin helhet
   kört (klientändring).
+
+#### Del C (Blandat hushåll) — `IMPLEMENTED`
+
+- **Varför detta är en egen, avslutande del snarare än ett test bland de andra**: varje tidigare
+  delmoment (A1–B11) byggde EN mekanism i taget; Del C är inte en ny mekanism utan ett bevis
+  att de tolv redan byggda håller ihop när två medlemmar faktiskt har olika val samtidigt - det
+  enda scenario resten av uppdraget aldrig testade explicit (varje tidigare test körde med en
+  ensam medlem).
+- **Invarianten (upprepad här som en uttalad regel, inte bara ett genomfört test)**: allt i
+  Del A och B är antingen per medlem (`MemberPreference`: `Presentation`, `Motivation`,
+  `ShowTimeLevel` - A2/B3/B5) eller per enhet (`hemordna.theme`, `hemordna.calm` - B8/B11).
+  Ingenting läser eller skriver en annan medlems preferens; ingenting ligger på `Household`.
+  Bekräftat genom kodgranskning (ingen ny `Household`-egenskap i hela uppdraget, se `git diff
+  A1..HEAD -- src/Hemordna.Domain/Households/Household.cs` = tomt) och genom testet nedan.
+- **Varför listan inte ritas om under en interaktion (B2) hör hemma i Del C:s princip**: en
+  realtidshändelse kan komma från VILKEN ANNAN MEDLEM SOM HELST, när som helst - i ett blandat
+  hushåll är detta inte en sällan förekommande edge case utan den normala driften. B2:s
+  patch-på-plats-lösning skyddar alltså inte bara mot "min egen andra flik", utan mot precis
+  den situation Del C handlar om.
+- **Varför "Lugnare skärm" är per enhet men tid ("Visa tid") är per medlem**: skärmen är en
+  egenskap hos apparaten någon råkar hålla i just då (en delad familjeplatta ska inte plötsligt
+  bli följsam för alla för att en person satte på det på sin telefon) - tiden är en egenskap
+  hos hur PERSONEN vill läsa uppgifter, oavsett vilken enhet hen råkar sitta med (se
+  docs/PRODUCT.md §7, uppdaterad nedan).
+- **15-minutersfönstret och "bara den som bockade av"** (A1) hör redan hemma här utan att vara
+  Del C-specifikt: det är en tidsgräns och en identitetskontroll i domänen
+  (`TaskOccurrence.Reopen`), inte en presentationsfråga - men värt att upprepa i sammanhanget:
+  en kort, snäv ångerrätt (inte en oändlig redigeringshistorik) är vad som gör att en ångrad
+  avbockning kan försvinna TYST ur "Senaste händelser" (Del C) utan att någon behöver undra om
+  historiken manipulerats - fönstret är kort nog att det bara någonsin är den egna, nyss gjorda
+  handlingen som kan tas tillbaka.
+- **Nytt obligatoriskt test** `MixedHouseholdTests.A_mixed_household_never_leaks_one_members_choices_or_undone_actions_to_another`
+  - två riktiga konton i samma hushåll via inbjudningskoden (samma mönster som
+  `HouseholdInviteTests`), alla fem steg i uppdragets egen ordning:
+  1. A väljer "Steg för steg" och sparar.
+  2. B:s Idag: ingen `.chip-time`, ingen `.day-encouragement`, `.task-list` syns (inte
+     `.focus-card`), inget `data-calm`; B:s Inställningar visar fortfarande "Text (standard)"
+     och "Ingen".
+  3. A bockar av och ångrar (direkt mot API:t - UI-sidan av ångra är redan `UndoTests`s jobb,
+     det här testar vad en ANNAN medlem ser efteråt). B:s Idag och Hushåll innehåller varken
+     uppgiftens namn eller ordet "ångra" i sin helhet (`.app-main`s hela textinnehåll
+     genomsökt, inte bara en enskild rad).
+  4. A:s och B:s Hushåll-sidor: `.app-main`s hela textinnehåll jämfört tecken för tecken -
+     identiskt. Sidan har ingen egen personalisering över huvud taget (ingen "Du"-etikett,
+     ingen hälsning) så detta är i praktiken samma kontroll som "inget nytt textinnehåll läcker
+     in", inte bara "ser ungefär likadan ut".
+  5. B sätter på "Lugnare skärm"; A:s separata browser-context saknar `data-calm`.
+  - **En genuin fångst under testskrivandet, inte bara en bugg i testet**: steg 1:s
+    "Steg för steg" sätter OCKSÅ `data-calm` på A:s EGET device omedelbart (samma
+    omedelbara-per-enhet-beteende som B11 redan bygger på) - för att steg 5 ska testa vad det
+    faktiskt påstår (läcker B:s växling till A, inte "har A redan satt på det själv av en
+    annan, redan verifierad anledning") stänger testet uttryckligen av "Lugnare skärm" på A:s
+    enhet igen direkt efter steg 1/2, innan steg 3–5 körs. Ingen produktionskod ändrades - det
+    är korrekt att en preset omedelbart sätter skärmen, testet behövde bara en ren
+    utgångspunkt för just den delen av kontrollen.
+  - Kört tre gånger i rad isolerat för att utesluta flakighet i det multi-context/realtids-tunga
+    flödet: grönt alla tre gångerna.
+- **Verifierat**: `dotnet build Hemordna.slnx` (0 fel/varningar). `Hemordna.Domain.Tests`
+  87/87, `Hemordna.Application.Tests` 177/177 (ren klientändring - Del C lade inte till någon
+  ny domän-/Application-/Api-kod). `MixedHouseholdTests` 1/1 (×3 isolerade körningar).
+  `grep -rniE "NPF|ADHD|autis|funktionsned|tillgänglig" src/Hemordna.Client --include="*.razor"`:
+  noll träffar. `Hemordna.E2E.Tests` i sin helhet kört.
 
 ---
 

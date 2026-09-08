@@ -130,6 +130,21 @@ MVP-prioritet:
 
 Senare: endast bild, uppläsning.
 
+**Ett presentationsval beskrivs alltid av vad det GÖR** ("kompakt lista", "en uppgift åt
+gången", "en vänlig kommentar då och då"), **aldrig av vem det är för.** Inget namn, ingen
+etikett, ingen förklarande text i UI:t hänvisar till en diagnos, en funktionsnedsättning eller
+"tillgänglighet" - inte ens indirekt genom att antyda en målgrupp. Detta gäller varje nytt val
+en person kan göra om hur de vill se sina uppgifter, oavsett hur många sådana val som läggs
+till över tid.
+
+**Ett hushåll förutsätts vara blandat** - grundfallet, inte ett specialfall. Olika medlemmar i
+samma hushåll väljer normalt olika presentationslägen, olika motivationsnivå och olika
+enhetsinställningar (tema, lugnare skärm) samtidigt, utan att någon av dem behöver veta vad de
+andra valt. Delade ytor (hushållsöversikten, veckovyn, rumsvyn) visar aldrig vilket läge en
+enskild medlem har valt - se ARCHITECTURE.md, "Beslut: Ångra och stabil lista", Del C, för den
+tekniska invarianten (per medlem eller per enhet, aldrig ett hushållsgemensamt fält) det här
+kravet vilar på.
+
 ---
 
 ## 8. Motivation utan skuldbeläggning
