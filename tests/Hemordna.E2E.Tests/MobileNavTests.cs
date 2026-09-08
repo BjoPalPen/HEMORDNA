@@ -1,3 +1,5 @@
+using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.Playwright;
 
 namespace Hemordna.E2E.Tests;
@@ -32,5 +34,52 @@ public class MobileNavTests
 
         // The chevron is a decorative SVG icon (Icon.razor), not literal "›" text, since step 4.
         await Assertions.Expect(page.GetByRole(AriaRole.Link, new() { Name = "Inställningar" })).ToBeVisibleAsync();
+    }
+
+    /// <summary>"Ny form 2026" §1: the floating pill sits over the content rather than pushing
+    /// it up in a reserved bar - a long list must still scroll fully clear of the pill's own
+    /// bounding box, not just stop short of where the old full-width bar used to start.</summary>
+    [Fact]
+    public async Task Scrolling_to_the_bottom_clears_the_floating_pill()
+    {
+        var page = await _app.NewPageAsync();
+        await page.SetViewportSizeAsync(390, 844);
+        await SignUpHelper.SignUpAsync(page, "Sigrid");
+
+        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
+        http.DefaultRequestHeaders.Authorization = new("Bearer", token);
+
+        var me = await (await http.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
+        var householdId = me.GetProperty("householdId").GetGuid();
+        var memberId = me.GetProperty("memberId").GetGuid();
+
+        await http.PutAsJsonAsync(
+            $"/api/households/{householdId}/members/{memberId}/weekly-budget",
+            new { monday = 120, tuesday = 120, wednesday = 120, thursday = 120, friday = 120, saturday = 120, sunday = 120 });
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        for (var i = 1; i <= 8; i++)
+        {
+            var task = await (await http.PostAsJsonAsync(
+                $"/api/households/{householdId}/tasks",
+                new { name = $"Uppgift {i}", estimatedMinutes = 5 }))
+                .Content.ReadFromJsonAsync<JsonElement>();
+            await http.PostAsJsonAsync(
+                $"/api/households/{householdId}/tasks/{task.GetProperty("id").GetGuid()}/occurrences",
+                new { date = today, assignToMemberId = memberId });
+        }
+
+        await page.ReloadAsync();
+        var lastTask = page.Locator(".task").Last;
+        await lastTask.ScrollIntoViewIfNeededAsync();
+
+        var lastTaskBox = await lastTask.BoundingBoxAsync();
+        var navBox = await page.Locator("nav.nav-shell").BoundingBoxAsync();
+
+        Assert.NotNull(lastTaskBox);
+        Assert.NotNull(navBox);
+        Assert.True(lastTaskBox!.Y + lastTaskBox.Height <= navBox!.Y,
+            $"Last task (bottom {lastTaskBox.Y + lastTaskBox.Height}) overlaps the floating nav pill (top {navBox.Y}).");
     }
 }

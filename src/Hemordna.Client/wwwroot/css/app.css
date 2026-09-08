@@ -84,6 +84,13 @@
 
     --shadow-card: 0 1px 0 rgba(34, 40, 46, .04);
 
+    /* Glass is reserved for the floating nav pill and the two edge-to-edge fade strips - never
+       a content surface (card/list/sheet), and never under AA contrast for text on top of it.
+       See "Beslut: Ny form 2026" in docs/ARCHITECTURE.md. */
+    --glass: rgba(255, 255, 255, .78);
+    --glass-edge: rgba(255, 255, 255, .55);
+    --shadow-float: 0 6px 20px rgba(34, 40, 46, .16);
+
     color-scheme: light;
 
     --space-1: 4px;
@@ -135,6 +142,11 @@
         --edge: var(--line);
 
         --shadow-card: 0 1px 3px rgba(0, 0, 0, .4);
+
+        --glass: rgba(28, 34, 38, .78);
+        --glass-edge: rgba(255, 255, 255, .08);
+        --shadow-float: 0 6px 20px rgba(0, 0, 0, .5);
+
         color-scheme: dark;
     }
 }
@@ -158,6 +170,11 @@
     --edge: var(--line);
 
     --shadow-card: 0 1px 3px rgba(0, 0, 0, .4);
+
+    --glass: rgba(28, 34, 38, .78);
+    --glass-edge: rgba(255, 255, 255, .08);
+    --shadow-float: 0 6px 20px rgba(0, 0, 0, .5);
+
     color-scheme: dark;
 }
 
@@ -204,6 +221,20 @@ a {
     outline: 3px solid var(--aska);
     outline-offset: 2px;
     border-radius: 4px;
+}
+
+/* Visually hidden but still reachable by assistive tech - never display:none, which would
+   strip the accessible name too (e.g. an inactive nav tab's own label, see NavMenu.razor.css). */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
 }
 
 /* Inline SVG icons via Icon.razor - never Unicode characters as icons. */

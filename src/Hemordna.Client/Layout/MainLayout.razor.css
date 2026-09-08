@@ -24,6 +24,8 @@
         max-width: none;
         margin: 0;
         padding: var(--space-4);
-        padding-bottom: 88px;
+        /* Room for the floating pill (see NavMenu.razor.css) plus its own bottom offset -
+           taller than the pill's own height so the last row never sits under it. */
+        padding-bottom: 112px;
     }
 }

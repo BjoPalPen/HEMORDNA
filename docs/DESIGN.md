@@ -65,9 +65,16 @@ steg 5 för de fullständiga värdena och verifieringen).
 
 ## 3. Form
 
-- Radie: `--radius` (14px) på kort, `--radius-sm` (10px) på knappar och fält (utom piller),
-  `--pill` (999px) på knappar, chips och avatarer.
-- Skugga: mycket subtil, `0 1px 2px rgba(34,40,46,.06)`. Djup skapas med ramar och luft.
+- Radie: `--radius` (22px) på kort och listor, `--radius-sm` (14px) på fält, `--radius-xl`
+  (26px) på det fullhöga arket (se §4a), `--pill` (999px) på knappar, chips och avatarer. Höjt
+  från 14px/10px i "Ny form" (steg 1) - "Ny form 2026" mjukar upp ytorna ytterligare, se
+  ARCHITECTURE.md. Samma sex ytor har också `corner-shape: squircle` (progressiv förbättring).
+- Kant: `--edge` - transparent i ljust läge (en vit yta läser redan mot `--kalk` utan en ritad
+  linje), `var(--line)` i mörkt läge (en mörk yta behöver en riktig kant för att skiljas från
+  bakgrunden). Ersätter `var(--line)` som ytterkontur på kort, listor och rumsbrickor; radskiljare
+  inuti listor behåller `var(--line)` oförändrat.
+- Skugga: mycket subtil, `0 1px 0 rgba(34,40,46,.04)` i ljust läge (mörkt läge oförändrat).
+  Djup skapas med ramar och luft, inte skugga.
 - Avstånd bygger på en 4px-skala: 4, 8, 12, 16, 24, 32, 48 (`--space-1`…`--space-7`,
   oförändrade).
 
@@ -459,9 +466,20 @@ Inställningar samt Logga ut nås som listrader längst ned på Hushåll (se `Hu
 | Yta | Mönster |
 |---|---|
 | Dator (≥ 900 px) | Smal vänster rail (~72 px, ikon + etikett, inget 260 px-sidofält). Innehåll centrerat, max 640 px |
-| Mobil (< 900 px) | Bottenrad med samma fyra flikar |
+| Mobil (< 900 px) | Svävande pill, fristående från kanterna ("Ny form 2026", se nedan) |
 
 Idag är alltid första valet och startvyn.
+
+**Mobil: svävande pill i stället för en fast bottenrad** ("Ny form 2026" - se ARCHITECTURE.md).
+Piller flyter `max(14px, env(safe-area-inset-bottom))` från underkanten, centrerad, med en
+tonad `--glass`-bakgrund (`backdrop-filter: blur(18px) saturate(1.3)`) och `--shadow-float` -
+det enda stället i appen glas-transparens används, eftersom det bär navigation, inte innehåll
+(se ARCHITECTURE.md, "vad som medvetet inte görs"). Bara den aktiva fliken visar sin text i en
+fylld gustav-pill; övriga tre visar bara sin ikon, med etiketten visuellt gömd (`.sr-only`-
+mönster - `clip`, aldrig `display:none`) så det tillgängliga namnet finns kvar för skärmläsare.
+Har sidan scrollats (`html[data-scrolled]`, satt av `Support/ScrollState.cs`) krymper piller
+ytterligare och döljer även den aktiva flikens text, av samma skäl. `.app-main`s bottenmarginal är 112px på
+mobil så sista raden i en lång lista alltid scrollar helt fri från pillens egen ruta.
 
 ---
 

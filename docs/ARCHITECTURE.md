@@ -1422,6 +1422,60 @@ under alla omständigheter utanför MVP-scope (CLAUDE.md §12/PRODUCT.md §10).
   diskret avgränsade i mörkt läge; ingen överlappning, avklippt text eller horisontell scroll
   på någon av de sex sidvarianterna; desktop-railen (72px) oförändrad.
 
+#### Delsteg 2 (punkt 1, "Flytande navigationspill") — `IMPLEMENTED`
+
+- **Nya tokens** i `app.css`: `--glass` (ljust `rgba(255,255,255,.78)`, mörkt
+  `rgba(28,34,38,.78)`), `--glass-edge` (ljust `rgba(255,255,255,.55)`, mörkt
+  `rgba(255,255,255,.08)`), `--shadow-float` (ljust `0 6px 20px rgba(34,40,46,.16)`, mörkt
+  `0 6px 20px rgba(0,0,0,.5)`) - samma `:root` + båda mörka block-mönster som `--edge`. Ny
+  `.sr-only`-utility (klassiskt clip-mönster: `position:absolute; width/height:1px;
+  clip:rect(0,0,0,0)` osv) - visuellt gömmer men behåller det tillgängliga namnet, till
+  skillnad från `display:none` som hade tagit bort det helt.
+- **`NavMenu.razor.css`s mobilblock** (`@media (max-width: 900px)`) skrevs om helt: `.nav-shell`
+  flyter (`position: fixed; left: 50%; transform: translateX(-50%); bottom: max(14px,
+  env(safe-area-inset-bottom))`), pill-formad (`border-radius: var(--pill)`), tonad
+  `--glass`-bakgrund med `backdrop-filter: blur(18px) saturate(1.3)` (+ `-webkit-`-prefix) och
+  `--shadow-float`, ingen `border-top` längre. `.nav-items` blev en rad med `flex: 0 0 auto`-
+  barn (piller storleksätts efter innehåll, inte längre `flex:1` jämnt fördelat över hela
+  bredden). `::deep .nav-link` är rad-layout, aktiv flik fylld gustav-bakgrund med vit text
+  (samma "färg aldrig ensam bärare"-princip som desktop-railens `--gustav-soft`-tint, fast
+  fylld i stället för tonad - en fylld pill behövde mer kontrast mot den halvgenomskinliga
+  `.nav-shell`-bakgrunden bakom sig än en mjuk tint hade gett).
+- **Bara den aktiva fliken visar text.** Inaktiva flikars `span.nav-label` göms med samma
+  clip-mönster som `.sr-only` (skrivet direkt i den scopade regeln, eftersom en global
+  utility-klass inte går att applicera på ett barn-element utan att duplicera Blazors egen
+  `active`-matchning i C#) - `::deep .nav-link:not(.active) .nav-label`. Aldrig
+  `display:none`: `MobileNavTests`/`SkarmbilderTests` hittar varje flik via dess tillgängliga
+  namn (`GetByRole(Link, Name: "Rum")` m.fl.) oavsett vilken som råkar vara aktiv, och det
+  hade slutat fungera annars.
+- **Kompakt läge under scroll**: `::deep html[data-scrolled] .nav-link` (satt av
+  `Support/ScrollState.cs`, se delsteg 4) krymper padding till `0 11px` och göms även den
+  aktiva flikens text. `html` är inget NavMenu renderar själv, så `::deep` måste stå FÖRE
+  `html[...]` i selektorn (inte bara före `.nav-link`) - annars hade Blazors CSS-isolering
+  försökt lägga sitt scope-attribut på `html`, vilket aldrig matchar något. `:global(...)`
+  övervägdes men är inte en verklig Blazor CSS-isolerings-funktion (bara `::deep` är) -
+  verifierat genom att `::deep` redan var det enda mönstret resten av filen använde.
+  `transition: padding .25s, background .2s`, avstängt under `prefers-reduced-motion` i ett
+  nästlat `@media`-block (giltig CSS - "conditional group rules" får nästlas, ingen
+  preprocessor inblandad).
+- **`MainLayout.razor.css`** mobil: `.app-main`s `padding-bottom` 88px → 112px, så sista raden
+  i en lång lista alltid scrollar helt fri från pillens egen ruta snarare än att bara stanna
+  ovanför var den gamla fasta raden brukade börja.
+- **Desktop-railen (≥ 901px) rörd inte** - `@media (max-width: 900px)` omsluter hela
+  ändringen.
+- **Kontrast, uppmätt mot den faktiskt renderade bakgrunden (inte token-värdet)**: `--glass`
+  över `--kalk` ger ≈ `rgb(253,252,251)` ljust och ≈ `rgb(28,34,38)` mörkt (alfakomposition,
+  sRGB). Inaktiva flikars `--sot-soft`-ikonfärg mot den bakgrunden: **5.73:1 ljust, 7.34:1
+  mörkt** - båda långt över både 3:1-golvet för UI-komponenter/ikoner och 4.5:1 för text.
+- **Verifierat**: `dotnet build Hemordna.slnx` (0 fel/varningar); `Hemordna.Domain.Tests`
+  82/82, `Hemordna.Application.Tests` 173/173, `Hemordna.E2E.Tests` 80/80 (79 tidigare + det nya
+  testet nedan). Nytt test `MobileNavTests.Scrolling_to_the_bottom_clears_the_floating_pill` (8 uppgifter seedade
+  via Api, scrollar till botten, verifierar att sista `.task`s `BoundingBox` ligger helt ovanför
+  `nav.nav-shell`s). Tre skärmbilder (Idag/Rum ljust, Idag mörkt, mobil 390×844) via ett
+  tillfälligt `DEBUG_Capture_floating_pill`-test, granskade och borttagna: piller flyter fritt
+  med synlig bakgrund runt om, bara "Idag" visar text i en fylld gustav-pill, övriga tre bara
+  ikon, ingen hård kant mot botten.
+
 ---
 
 ## 11. Beslut som ännu inte är fattade — `OPEN`
