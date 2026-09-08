@@ -175,11 +175,13 @@ samma innehåll som förut, bara i ett ark i stället för en disclosure. "Tjuvk
 har flyttat till Vecka (se nedan).
 
 "Extra uppgift" visar i första hand en lista av hushållets befintliga uppgifter som inte redan
-är på dagens lista (namn, rumschip, kvalitativt tidsläge) - en tryckning schemalägger den
-direkt för i dag, ingen ny uppgift skapas och inget behöver skrivas in på nytt. "Eller skriv en
-ny uppgift" är en disclosure under listan med det gamla formuläret (namn + tidsnivå) för en
-genuint ny, engångssak. Har hushållet inga befintliga uppgifter att erbjuda visas formuläret
-direkt i stället för en tom, meningslös lista.
+är på dagens lista (namn, kvalitativt tidsläge) - grupperad per rum/våning precis som Idags
+egen lista (samma "hålla ihop"-mönster, se §6 nedan), inte en enda platt lista, eftersom den
+annars blev lång och svårbläddrad. En tryckning schemalägger den direkt för i dag, ingen ny
+uppgift skapas och inget behöver skrivas in på nytt. "Eller skriv en ny uppgift" är en
+disclosure under listan med det gamla formuläret (namn + tidsnivå) för en genuint ny,
+engångssak. Har hushållet inga befintliga uppgifter att erbjuda visas formuläret direkt i
+stället för en tom, meningslös lista.
 
 Tomt läge: "Ledigt idag" som en stor, lugn rubrik i stället för en blå informationsruta, med
 "Nästa: onsdag, 2 uppgifter" som underrad när något är planerat inom en vecka framåt (annars

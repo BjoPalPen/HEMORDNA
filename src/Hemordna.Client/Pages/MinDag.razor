@@ -199,24 +199,29 @@ else
 
             @if (_extraTaskCandidates.Count > 0)
             {
-                <ul class="list" aria-label="Befintliga uppgifter">
-                    @foreach (var candidate in _extraTaskCandidates)
+                @foreach (var floorGroup in ExtraTaskFloorGroups)
+                {
+                    @if (floorGroup.Floor is { } floor)
                     {
-                        <li class="list-item list-item-flush">
-                            <button type="button" class="list-row" disabled="@_extraTaskBusy"
-                                    @onclick="() => AddExistingExtraTaskAsync(candidate)">
-                                <span>
-                                    @candidate.Name
-                                    @if (AreaNameFor(candidate.AreaId) is { } areaName)
-                                    {
-                                        <span class="chip">@areaName</span>
-                                    }
-                                </span>
-                                <span class="list-row-value">@TimeLabelFor(candidate.EstimatedMinutes)</span>
-                            </button>
-                        </li>
+                        <h2 class="floor-heading">@floor</h2>
                     }
-                </ul>
+                    @foreach (var group in floorGroup.Rooms)
+                    {
+                        @GroupHeading(ExtraTaskRoomHeadingName(group), group.Items.Count, showKvar: false)
+                        <ul class="list" aria-label="@ExtraTaskRoomHeadingName(group)">
+                            @foreach (var candidate in group.Items)
+                            {
+                                <li class="list-item list-item-flush">
+                                    <button type="button" class="list-row" disabled="@_extraTaskBusy"
+                                            @onclick="() => AddExistingExtraTaskAsync(candidate)">
+                                        <span>@candidate.Name</span>
+                                        <span class="list-row-value">@TimeLabelFor(candidate.EstimatedMinutes)</span>
+                                    </button>
+                                </li>
+                            }
+                        </ul>
+                    }
+                }
 
                 @if (_extraTaskMessage is { } pickedMessage)
                 {
@@ -545,6 +550,29 @@ else
 
     private static string TimeLabelFor(int minutes)
         => TimeLevel.All.First(level => level.Minutes == TimeLevel.ClosestMinutes(minutes)).Label;
+
+    private sealed record ExtraTaskGroup(string? AreaName, IReadOnlyList<TaskDefinitionResponse> Items);
+
+    private sealed record ExtraTaskFloorGroup(string? Floor, IReadOnlyList<ExtraTaskGroup> Rooms);
+
+    /// <summary>Same room/floor grouping as RoomGroups/FloorGroups (see those for the full
+    /// reasoning) applied to the "Extra uppgift" pick list instead of today's own plan -
+    /// product feedback that a flat list of every candidate task got long and hard to scan
+    /// once a household had more than a handful.</summary>
+    private List<ExtraTaskGroup> ExtraTaskRoomGroups
+        => _extraTaskCandidates
+            .GroupBy(task => AreaNameFor(task.AreaId))
+            .Select(group => new ExtraTaskGroup(group.Key, [.. group]))
+            .ToList();
+
+    private List<ExtraTaskFloorGroup> ExtraTaskFloorGroups
+        => ExtraTaskRoomGroups
+            .GroupBy(group => group.AreaName is { } areaName ? RoomFloors.FloorOf(areaName) : null)
+            .Select(group => new ExtraTaskFloorGroup(group.Key, [.. group]))
+            .ToList();
+
+    private static string ExtraTaskRoomHeadingName(ExtraTaskGroup group)
+        => group.AreaName is { } areaName ? RoomFloors.RoomNameOf(areaName) : "Övrigt";
 
     /// <summary>Picking an existing task needs none of AddExtraTaskAsync's own creation step -
     /// just schedule the occurrence it already has everything else for.</summary>

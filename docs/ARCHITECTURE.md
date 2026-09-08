@@ -1328,11 +1328,18 @@ redan sen tidigare steg.
   bort allt som redan är del av dagens plan (`Items`/`Completed`/`Unplanned`, matchat på
   `TaskDefinitionId`) - laddas om från grunden varje gång arket öppnas snarare än cachat, så en
   uppgift som lagts till någon annanstans sen sist syns direkt.
-- **Listan är förstavalet**, en rad per befintlig kandidat (namn, rumschip om uppgiften har ett
-  rum, kvalitativ tidsnivå - aldrig en rå minutsiffra, §6a gäller lika mycket här). En
-  tryckning schemalägger direkt, ingen bekräftelse - samma "widen today's available time"-steg
-  som fanns sen tidigare (`ScheduleForTodayAsync`, nu delad mellan båda vägarna) så uppgiften
-  garanterat hamnar på dagens lista och inte tyst glider till "till en annan dag".
+- **Listan är förstavalet**, en rad per befintlig kandidat (namn, kvalitativ tidsnivå - aldrig
+  en rå minutsiffra, §6a gäller lika mycket här). En tryckning schemalägger direkt, ingen
+  bekräftelse - samma "widen today's available time"-steg som fanns sen tidigare
+  (`ScheduleForTodayAsync`, nu delad mellan båda vägarna) så uppgiften garanterat hamnar på
+  dagens lista och inte tyst glider till "till en annan dag".
+- **Uppföljning samma dag: listan grupperas per rum/våning** - produktfeedback att en platt
+  lista blev lång och svårbläddrad så fort ett hushåll hade fler än en handfull kandidater.
+  Exakt samma `RoomGroups`/`FloorGroups`-mönster som redan fanns för dagens egen lista, applicerat
+  på `_extraTaskCandidates` i stället för `_day.Items` (`ExtraTaskRoomGroups`/
+  `ExtraTaskFloorGroups`, samma `RoomFloors.FloorOf`/`RoomNameOf`). Eftersom rumsrubriken nu
+  redan står ovanför varje rad togs den tidigare per-rad-chippen bort - samma resonemang som
+  redan gällde för `TaskListItem.ShowAreaChip` i huvudlistan.
 - **"Eller skriv en ny uppgift"** är en disclosure under listan med det oförändrade gamla
   formuläret - för en genuint ny engångssak. Har hushållet inga kandidater alls (ett färskt
   hushåll utan uppgifter) visas formuläret direkt, utan en tom lista och en meningslös

@@ -35,7 +35,7 @@ public class ExtraTaskTests
     }
 
     [Fact]
-    public async Task Extra_uppgift_offers_a_pick_list_of_existing_tasks_not_already_on_today()
+    public async Task Extra_uppgift_offers_a_pick_list_grouped_by_room()
     {
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Nils");
@@ -48,14 +48,18 @@ public class ExtraTaskTests
         var householdId = me.GetProperty("householdId").GetGuid();
         var memberId = me.GetProperty("memberId").GetGuid();
 
-        // A real, existing task that is NOT scheduled for today - the whole point of the pick
-        // list is to squeeze in something that already exists without retyping its name/time.
+        // Two candidates in different rooms, plus one with no room at all ("Övrigt") - a pass
+        // here proves the pick list is actually grouped, not just a flat list with a room chip
+        // per row (product feedback: a flat list got long and hard to scan).
         var area = await (await http.PostAsJsonAsync(
             $"/api/households/{householdId}/areas", new { name = "Tvättstuga" }))
             .Content.ReadFromJsonAsync<JsonElement>();
         await http.PostAsJsonAsync(
             $"/api/households/{householdId}/tasks",
             new { name = "Vik tvätt", estimatedMinutes = 15, areaId = area.GetProperty("id").GetGuid() });
+        await http.PostAsJsonAsync(
+            $"/api/households/{householdId}/tasks",
+            new { name = "Rensa garderoben", estimatedMinutes = 30 });
 
         // Already on today's list - must NOT show up again in the pick list.
         var alreadyToday = await (await http.PostAsJsonAsync(
@@ -74,11 +78,14 @@ public class ExtraTaskTests
         await page.GetByRole(AriaRole.Button, new() { Name = "Extra uppgift" }).ClickAsync();
         var sheet = page.GetByRole(AriaRole.Dialog, new() { Name = "Extra uppgift" });
 
-        var pickList = sheet.GetByRole(AriaRole.List, new() { Name = "Befintliga uppgifter" });
-        var candidateRow = pickList.GetByRole(AriaRole.Button, new() { Name = "Vik tvätt" });
-        await Assertions.Expect(candidateRow).ToContainTextAsync("Tvättstuga");
+        var tvattstugaGroup = sheet.Locator("ul[aria-label=\"Tvättstuga\"]");
+        var ovrigtGroup = sheet.Locator("ul[aria-label=\"Övrigt\"]");
+
+        var candidateRow = tvattstugaGroup.GetByRole(AriaRole.Button, new() { Name = "Vik tvätt" });
         await Assertions.Expect(candidateRow).ToContainTextAsync("Lagom tid");
-        await Assertions.Expect(pickList.GetByText("Redan planerad")).Not.ToBeVisibleAsync();
+        await Assertions.Expect(ovrigtGroup.GetByRole(AriaRole.Button, new() { Name = "Rensa garderoben" }))
+            .ToContainTextAsync("Lång tid");
+        await Assertions.Expect(sheet.GetByText("Redan planerad")).Not.ToBeVisibleAsync();
 
         await candidateRow.ClickAsync();
 
