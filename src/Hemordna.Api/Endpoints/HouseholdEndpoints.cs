@@ -176,6 +176,32 @@ internal static class HouseholdEndpoints
             .Produces<DailyPlanResponse>()
             .Produces(StatusCodes.Status404NotFound);
 
+        scoped.MapPost("/occurrences/{occurrenceId:guid}/bring-forward", BringOccurrenceForwardAsync)
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status409Conflict);
+
+        scoped.MapPost("/occurrences/{occurrenceId:guid}/undo-bring-forward", UndoBringForwardAsync)
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status409Conflict);
+
+        scoped.MapPut("/members/{memberId:guid}/days-off/{date}", SetDayOffAsync)
+            .Produces<DayOffResponse>()
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status409Conflict);
+
+        scoped.MapDelete("/members/{memberId:guid}/days-off/{date}", ClearDayOffAsync)
+            .Produces(StatusCodes.Status204NoContent)
+            .Produces(StatusCodes.Status404NotFound);
+
+        scoped.MapGet("/members/{memberId:guid}/days-off", ListDaysOffAsync)
+            .Produces<IReadOnlyList<MemberDayOffResponse>>();
+
+        scoped.MapGet("/time-credit", GetTimeCreditAsync)
+            .Produces<TimeCreditResponse>()
+            .Produces(StatusCodes.Status404NotFound);
+
         return app;
     }
 
@@ -560,7 +586,7 @@ internal static class HouseholdEndpoints
         }
 
         var occurrence = await schedule.HandleAsync(
-            householdId, taskId, request.Date.Value, request.AssignToMemberId, cancellationToken);
+            householdId, taskId, request.Date.Value, request.AssignToMemberId, cancellationToken, request.AddedAsExtra);
 
         return occurrence is null
             ? Results.NotFound()
@@ -691,6 +717,7 @@ internal static class HouseholdEndpoints
         Guid householdId,
         Guid occurrenceId,
         HttpContext httpContext,
+        CompleteOccurrenceRequest? request,
         CompleteTaskOccurrence complete,
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
@@ -699,10 +726,10 @@ internal static class HouseholdEndpoints
         // HouseholdAccessFilter, so it cannot name someone in another household.
         var membership = httpContext.GetMembership();
 
-        // The server's own date, for now - decides whether this completion earns "tid i
-        // förväg" (see CompleteTaskOccurrence). A future body-supplied override (the client's
-        // own "today", per CLAUDE.md §5) is Del E's addition, not made here yet.
-        var today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        // The client's own "today" when it sends one - it decides whether this completion earns
+        // "tid i förväg" (see CompleteTaskOccurrence), and the client's local date can differ
+        // from the server's around midnight. Falls back to the server's own date otherwise.
+        var today = request?.Today ?? DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
 
         var occurrence = await complete.HandleAsync(
             householdId, occurrenceId, membership.MemberId, today, cancellationToken);
@@ -746,6 +773,110 @@ internal static class HouseholdEndpoints
             householdId, occurrenceId, request.Date.Value, cancellationToken);
 
         return occurrence is null ? Results.NotFound() : Results.Ok(ToResponse(occurrence));
+    }
+
+    private static async Task<IResult> BringOccurrenceForwardAsync(
+        Guid householdId,
+        Guid occurrenceId,
+        HttpContext httpContext,
+        BringOccurrenceForward bringForward,
+        TimeProvider timeProvider,
+        CancellationToken cancellationToken)
+    {
+        // Same source for "who is calling" as CompleteOccurrenceAsync - a member can only bring
+        // their own work forward, never name another member's.
+        var membership = httpContext.GetMembership();
+        var today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+
+        var result = await bringForward.HandleAsync(
+            householdId, occurrenceId, membership.MemberId, today, cancellationToken);
+
+        return result is null ? Results.NotFound() : Results.NoContent();
+    }
+
+    private static async Task<IResult> UndoBringForwardAsync(
+        Guid householdId,
+        Guid occurrenceId,
+        HttpContext httpContext,
+        UndoBringForward undoBringForward,
+        CancellationToken cancellationToken)
+    {
+        var membership = httpContext.GetMembership();
+
+        var result = await undoBringForward.HandleAsync(
+            householdId, occurrenceId, membership.MemberId, cancellationToken);
+
+        return result is null ? Results.NotFound() : Results.NoContent();
+    }
+
+    private static async Task<IResult> SetDayOffAsync(
+        Guid householdId,
+        Guid memberId,
+        DateOnly date,
+        SetDayOffRequest request,
+        SetMemberDayOff setDayOff,
+        TimeProvider timeProvider,
+        CancellationToken cancellationToken)
+    {
+        var today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+
+        var result = await setDayOff.HandleAsync(
+            householdId, memberId, date, today, request.Mode, cancellationToken);
+
+        return result is null
+            ? Results.NotFound()
+            : Results.Ok(new DayOffResponse(result.BroughtForward, result.Deferred, result.DeferredTo));
+    }
+
+    private static async Task<IResult> ClearDayOffAsync(
+        Guid householdId,
+        Guid memberId,
+        DateOnly date,
+        ClearMemberDayOff clearDayOff,
+        CancellationToken cancellationToken)
+    {
+        var result = await clearDayOff.HandleAsync(householdId, memberId, date, cancellationToken);
+
+        return result is null ? Results.NotFound() : Results.NoContent();
+    }
+
+    private static async Task<IResult> ListDaysOffAsync(
+        Guid householdId,
+        Guid memberId,
+        DateOnly? from,
+        DateOnly? to,
+        IMemberDayOffRepository daysOff,
+        TimeProvider timeProvider,
+        CancellationToken cancellationToken)
+    {
+        var today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        var rangeStart = from ?? today;
+        var rangeEnd = to ?? today.AddDays(35);
+
+        var rows = await daysOff.ListForHouseholdAsync(householdId, rangeStart, rangeEnd, cancellationToken);
+
+        return Results.Ok(rows
+            .Where(dayOff => dayOff.MemberId == memberId)
+            .Select(dayOff => new MemberDayOffResponse(dayOff.Date))
+            .ToList());
+    }
+
+    private static async Task<IResult> GetTimeCreditAsync(
+        Guid householdId,
+        HttpContext httpContext,
+        GetMemberTimeCredit getTimeCredit,
+        TimeProvider timeProvider,
+        CancellationToken cancellationToken)
+    {
+        // Always the caller's own balance - see MemberTimeCredit's own remarks on why this is
+        // never visible to anyone else. There is deliberately no memberId route parameter to
+        // ask for someone else's.
+        var membership = httpContext.GetMembership();
+        var today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+
+        var minutes = await getTimeCredit.HandleAsync(householdId, membership.MemberId, today, cancellationToken);
+
+        return minutes is null ? Results.NotFound() : Results.Ok(new TimeCreditResponse(minutes.Value));
     }
 
     private static async Task<IResult> GetRecentActivityAsync(
@@ -793,7 +924,7 @@ internal static class HouseholdEndpoints
         var statuses = await weeklyStatus.FindWeeklyStatusAsync(householdId, weekStart, cancellationToken);
 
         return Results.Ok(statuses
-            .Select(s => new MemberDayStatusResponse(s.MemberId, s.Date, s.Status))
+            .Select(s => new MemberDayStatusResponse(s.MemberId, s.Date, s.Status, s.IsDayOff))
             .ToList());
     }
 
@@ -903,6 +1034,7 @@ internal static class HouseholdEndpoints
                 task.Candidate.Priority,
                 task.Candidate.CanBeDeferred,
                 task.Reason,
-                task.Candidate.AreaName))]);
+                task.Candidate.AreaName))],
+            day.IsDayOff);
     }
 }

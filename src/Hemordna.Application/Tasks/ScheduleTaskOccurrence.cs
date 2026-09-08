@@ -55,7 +55,8 @@ public sealed class ScheduleTaskOccurrence
         Guid taskDefinitionId,
         DateOnly date,
         Guid? assignToMemberId,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool addedAsExtra = false)
     {
         var definition = await _definitions.FindByIdAsync(householdId, taskDefinitionId, cancellationToken);
 
@@ -64,7 +65,7 @@ public sealed class ScheduleTaskOccurrence
             return null;
         }
 
-        var occurrence = definition.ScheduleFor(date, _timeProvider.GetUtcNow());
+        var occurrence = definition.ScheduleFor(date, _timeProvider.GetUtcNow(), addedAsExtra);
         var memberId = assignToMemberId;
 
         if (definition.HasRotatingResponsibility)
