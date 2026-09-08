@@ -522,9 +522,14 @@ internal static class HouseholdEndpoints
     private static async Task<IResult> RebalanceAssignmentsAsync(
         Guid householdId,
         RebalanceTaskAssignments rebalanceAssignments,
+        TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        var changed = await rebalanceAssignments.HandleAsync(householdId, cancellationToken);
+        // The server's own date is fine here (see RebalanceTaskAssignments.HandleAsync's own
+        // "today" doc) - unlike most "what does today mean" endpoints, this one does not need
+        // the client's own today.
+        var today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        var changed = await rebalanceAssignments.HandleAsync(householdId, today, cancellationToken);
 
         return changed is null ? Results.NotFound() : Results.Ok(new RebalanceAssignmentsResponse(changed.Value));
     }
