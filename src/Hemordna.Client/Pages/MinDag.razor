@@ -155,7 +155,7 @@ else
                             }
                             else
                             {
-                                <TaskListItem Item="row.Item" ShowIcon="ShowIcons" ShowOverdueNote="false" ShowTimeLevel="_showTimeLevel"
+                                <TaskListItem Item="row.Item" Today="Today" ShowIcon="ShowIcons" ShowOverdueNote="false" ShowTimeLevel="_showTimeLevel"
                                               IsBusy="_busyOccurrence == row.Item.OccurrenceId"
                                               IsExpanded="_expandedOccurrence == row.Item.OccurrenceId"
                                               OnComplete="CompleteAsync" OnToggleExpand="ToggleExpand" OnDefer="DeferAsync" />
@@ -198,7 +198,7 @@ else
                                 }
                                 else
                                 {
-                                    <TaskListItem Item="row.Item" ShowIcon="ShowIcons" ShowAreaChip="false" ShowTimeLevel="_showTimeLevel"
+                                    <TaskListItem Item="row.Item" Today="Today" ShowIcon="ShowIcons" ShowAreaChip="false" ShowTimeLevel="_showTimeLevel"
                                                   IsBusy="_busyOccurrence == row.Item.OccurrenceId"
                                                   IsExpanded="_expandedOccurrence == row.Item.OccurrenceId"
                                                   OnComplete="CompleteAsync" OnToggleExpand="ToggleExpand" OnDefer="DeferAsync" />
