@@ -6,8 +6,9 @@
 @if (IsOpen)
 {
     <div class="sheet-scrim" @onclick="CloseAsync"></div>
-    <div class="sheet-shell" role="dialog" aria-modal="true" aria-label="@Title" @ref="_shellRef" @onkeydown="OnKeyDownAsync">
-        <div class="sheet-handle" aria-hidden="true"></div>
+    <div class="sheet-shell" data-detent="@(_detent == SheetDetent.Half ? "half" : "full")"
+         role="dialog" aria-modal="true" aria-label="@Title" @ref="_shellRef" @onkeydown="OnKeyDownAsync">
+        <div class="sheet-handle" aria-hidden="true" @ref="_handleRef"></div>
         <div class="sheet-header">
             <h2>@Title</h2>
             <button type="button" class="sheet-close" @onclick="CloseAsync">Stäng</button>
@@ -28,12 +29,41 @@
     [Parameter]
     public EventCallback<bool> IsOpenChanged { get; set; }
 
+    /// <summary>Mobile-only starting height - "Half" for a short choice/summary, "Full" for a
+    /// form that needs room to grow (desktop's centered dialog ignores this entirely). A drag
+    /// gesture on the handle/header can move a "Half" sheet to "Full" for the rest of that one
+    /// opening - see <see cref="_detent"/>.</summary>
+    [Parameter]
+    public SheetDetent Detent { get; set; } = SheetDetent.Full;
+
     [Parameter]
     public RenderFragment? ChildContent { get; set; }
 
     private ElementReference _shellRef;
+    private ElementReference _handleRef;
     private bool _wasOpen;
+    private bool _detentWasOpen;
+    private SheetDetent _detent;
     private IJSObjectReference? _module;
+    private IJSObjectReference? _dragHandle;
+    private DotNetObjectReference<BottomSheet>? _selfRef;
+
+    protected override void OnParametersSet()
+    {
+        // Re-synced from the parameter only on a fresh open, not on every render while already
+        // open - otherwise an unrelated parent re-render while the sheet is open would silently
+        // snap an already-expanded sheet back to its authored starting detent, fighting
+        // whatever the drag gesture just did. Done here, in OnParametersSet, rather than
+        // OnAfterRenderAsync below (which runs AFTER the render that first shows the sheet -
+        // that render would otherwise still be using _detent's stray default, SheetDetent.Half,
+        // since it is the enum's first/zero member).
+        if (IsOpen && !_detentWasOpen)
+        {
+            _detent = Detent;
+        }
+
+        _detentWasOpen = IsOpen;
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -41,6 +71,13 @@
         {
             _module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./js/bottom-sheet.js");
             await _module.InvokeVoidAsync("focusIn", _shellRef);
+
+            _selfRef ??= DotNetObjectReference.Create(this);
+            _dragHandle = await _module.InvokeAsync<IJSObjectReference>("attachDrag", _shellRef, _handleRef, _selfRef);
+        }
+        else if (!IsOpen && _wasOpen && _dragHandle is not null)
+        {
+            await DisposeDragHandleAsync();
         }
 
         _wasOpen = IsOpen;
@@ -69,8 +106,42 @@
         }
     }
 
+    /// <summary>Drag-up shortcut (wwwroot/js/bottom-sheet.js) - moves a "Half" sheet to "Full"
+    /// for the rest of this opening. A no-op, harmless call if already "Full".</summary>
+    [JSInvokable]
+    public Task ExpandAsync()
+    {
+        _detent = SheetDetent.Full;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    /// <summary>Drag-down shortcut - the exact same path as pressing "Stäng".</summary>
+    [JSInvokable]
+    public Task DismissAsync() => CloseAsync();
+
+    private async Task DisposeDragHandleAsync()
+    {
+        var dragHandle = _dragHandle!;
+        _dragHandle = null;
+
+        await dragHandle.InvokeVoidAsync("dispose");
+        await dragHandle.DisposeAsync();
+    }
+
     public async ValueTask DisposeAsync()
     {
+        if (_dragHandle is not null)
+        {
+            try
+            {
+                await DisposeDragHandleAsync();
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+        }
+
         if (_module is not null)
         {
             try
@@ -82,5 +153,7 @@
                 // The circuit is already gone - nothing left to clean up client-side.
             }
         }
+
+        _selfRef?.Dispose();
     }
 }

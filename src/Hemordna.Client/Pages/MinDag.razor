@@ -23,8 +23,34 @@ else if (Session.NeedsHousehold)
 }
 else
 {
-    <p class="day-date">@DateLabel</p>
-    <h1>@GreetingWord, @Session.Me!.DisplayName!</h1>
+    var hasDayCounts = _day is { } dayForCounts && (dayForCounts.Items.Count > 0 || dayForCounts.Completed.Count > 0);
+    var completedCount = _day?.Completed.Count ?? 0;
+    var totalCount = _day is null ? 0 : _day.Items.Count + _day.Completed.Count;
+
+    @if (hasDayCounts)
+    {
+        <!-- Sticky summary that fades in once the full header (below) has scrolled past - see
+             docs/ARCHITECTURE.md "Beslut: Ny form 2026" §3. No minutes here or in the header
+             below: DESIGN.md §6a is unconditional on Idag, so this repeats only the same
+             qualitative "N av M klara" wording the full header already shows. -->
+        <div class="day-header-collapsed" aria-hidden="true">
+            <strong>Idag</strong>
+            <span>@completedCount av @totalCount klara</span>
+        </div>
+    }
+
+    <header class="day-header">
+        <p class="day-date">@DateLabel</p>
+        <h1>@GreetingWord, @Session.Me!.DisplayName!</h1>
+
+        @if (hasDayCounts)
+        {
+            <p class="muted small day-counts">@completedCount av @totalCount klara</p>
+            <div class="progress" role="presentation">
+                <i style="width:@(totalCount == 0 ? 0 : completedCount * 100 / totalCount)%"></i>
+            </div>
+        }
+    </header>
 
     @if (_day is null)
     {
@@ -32,15 +58,6 @@ else
     }
     else
     {
-        @if (_day.Items.Count > 0 || _day.Completed.Count > 0)
-        {
-            var total = _day.Items.Count + _day.Completed.Count;
-            <p class="muted small day-counts">@_day.Completed.Count av @total klara</p>
-            <div class="progress" role="presentation">
-                <i style="width:@(total == 0 ? 0 : _day.Completed.Count * 100 / total)%"></i>
-            </div>
-        }
-
         @if (IsFocusMode)
         {
             @if (FocusTask is { } focusTask)

@@ -1367,6 +1367,285 @@ inga dubbletter).
   bevisar hela vägen: skapa uppgift med rum valt → hamnar under rätt rums rubrik på Idag, inte
   "Övrigt".
 
+### Beslut: Ny form 2026 — `IMPLEMENTED` (alla sex delsteg, ej mergat till `main`)
+
+Ett andra visuellt delta ovanpå "Ny form" (steg 1–5, ovan), på samma villkor: enbart
+`Hemordna.Client` och dokumentation, ingen ändring i Domain/Application/Infrastructure/Api eller
+i `DailyPlanner`s urval/ordning/tidsbudget, ingen `@code`-logik i sidorna byts ut. Sex fristående
+delar, varsin egen commit på `feat/ny-form-2026`, mergas till `main` först efter uttryckligt
+godkännande (samma regel som "Ny form" steg 1–5).
+
+**Varför.** Lyfta klienten från "Ny form"s redan etablerade, lugna grund mot ett mer nutida
+mobilt formspråk (mjukare ytor, svävande navigation, kant-till-kant-innehåll med progressiv
+blur, scroll-medveten rubrik, ark med två höjdlägen, fjädrande bekräftelse) - utan att ge upp
+DESIGN.md §10 (kontrast, 44×44px, färg aldrig ensam bärare, fokus, reduced motion) eller §6a
+(tid döljs på Idag).
+
+**Vad som medvetet INTE görs, i något av de sex stegen:** glas-transparens på innehållsytor
+(kort, listor, ark) - bara på navigationspillen och de två tonade fälten, aldrig under AA-
+kontrast för text ovanpå; dynamisk/adaptiv färg (t.ex. färg härledd från ett foto eller
+användarval) - Gustaviansk blå/Saffran (DESIGN.md §2) är identiteten, inte en variabel; widgets
+eller Live Activities - en PWA har ingen plattforms-API-yta för något av detta, och det är
+under alla omständigheter utanför MVP-scope (CLAUDE.md §12/PRODUCT.md §10).
+
+#### Delsteg 1 (punkt 5, "Squircle och kantlösa ytor") — `IMPLEMENTED`
+
+- **Nya tokens** i `app.css`: `--radius` 14px → 22px, `--radius-sm` 10px → 14px, ny
+  `--radius-xl` (26px, används först i delsteg 4:s ark). `--shadow-card` (ljust) från
+  `0 1px 2px rgba(34,40,46,.06)` till `0 1px 0 rgba(34,40,46,.04)` - en tunnare, lägre skugga;
+  mörkt läges egen skugga rörd inte.
+- **Ny token `--edge`**: `transparent` i ljust läge (en vit yta läser redan mot `--kalk` utan
+  en ritad linje), `var(--line)` i mörkt läge (där behövs en riktig kant för att skilja ytan
+  från bakgrunden) - satt i `:root`, samt i båda mörka blocken
+  (`@media (prefers-color-scheme: dark) :root:not([data-theme="light"])` och
+  `:root[data-theme="dark"]`), samma tvåvägsmönster steg 5 redan etablerade.
+- **`border: 1px solid var(--line))` → `var(--edge)`** på sex innehållsytor: `.card`/`.list`
+  (app.css), `.task-list`/`.focus-card` (`MinDag.razor.css`), `.room-tile`
+  (`RoomTile.razor.css`), samt `Hushall.razor.css`s egen `.task-list`-kopia ("Senaste
+  händelser") - den sistnämnda utanför uppdragets uttryckliga selektorlista men en medveten
+  utvidgning (uttryckligt godkänd innan implementation): utan den hade just det kortet varit
+  det enda med synlig kant i ljust läge, en synlig inkonsekvens i skärmbilderna. Radskiljare
+  INUTI listor (`.task`, `.list-item`) behåller `var(--line)` oförändrat - bara den yttre
+  konturen mjukas upp.
+- **`corner-shape: squircle`** (progressiv förbättring, inget fallback-behov) på samma sex
+  selektorer plus `.sheet-shell` (`BottomSheet.razor.css`, bara egenskapen - dess
+  `border-radius`-värde rörs i delsteg 4) och `.btn` (app.css).
+- **Rört uttryckligen inte:** `.chip`/`.chip-today`/`.task-check`/`.avatar` - alla pill-formade
+  (`--pill`, 999px), ingen del av "kantlösa ytor"-uppdraget. `.field input`/`.field select`
+  (app.css) - formulärfält, inte innehållsytor, behåller `var(--line)`.
+- **Verifierat**: `dotnet build Hemordna.slnx` (0 fel/varningar); `Hemordna.Domain.Tests`
+  82/82, `Hemordna.Application.Tests` 173/173, `Hemordna.E2E.Tests` 79/79 - alla oförändrade,
+  ren CSS-ändring. Tolv skärmbilder (Idag/Rum/Hushåll × mobil 390×844/desktop 1280×900 ×
+  ljust/mörkt) via ett tillfälligt `DEBUG_Capture_squircle_edges`-test, granskade manuellt och
+  sedan borttagna igen: `.room-tile` (Kök/Övrigt) och Hushålls kort (Veckan/Idag i
+  hushållet/Senaste händelser) läser helt kantlösa mot `--kalk` i ljust läge, tydligt men
+  diskret avgränsade i mörkt läge; ingen överlappning, avklippt text eller horisontell scroll
+  på någon av de sex sidvarianterna; desktop-railen (72px) oförändrad.
+
+#### Delsteg 2 (punkt 1, "Flytande navigationspill") — `IMPLEMENTED`
+
+- **Nya tokens** i `app.css`: `--glass` (ljust `rgba(255,255,255,.78)`, mörkt
+  `rgba(28,34,38,.78)`), `--glass-edge` (ljust `rgba(255,255,255,.55)`, mörkt
+  `rgba(255,255,255,.08)`), `--shadow-float` (ljust `0 6px 20px rgba(34,40,46,.16)`, mörkt
+  `0 6px 20px rgba(0,0,0,.5)`) - samma `:root` + båda mörka block-mönster som `--edge`. Ny
+  `.sr-only`-utility (klassiskt clip-mönster: `position:absolute; width/height:1px;
+  clip:rect(0,0,0,0)` osv) - visuellt gömmer men behåller det tillgängliga namnet, till
+  skillnad från `display:none` som hade tagit bort det helt.
+- **`NavMenu.razor.css`s mobilblock** (`@media (max-width: 900px)`) skrevs om helt: `.nav-shell`
+  flyter (`position: fixed; left: 50%; transform: translateX(-50%); bottom: max(14px,
+  env(safe-area-inset-bottom))`), pill-formad (`border-radius: var(--pill)`), tonad
+  `--glass`-bakgrund med `backdrop-filter: blur(18px) saturate(1.3)` (+ `-webkit-`-prefix) och
+  `--shadow-float`, ingen `border-top` längre. `.nav-items` blev en rad med `flex: 0 0 auto`-
+  barn (piller storleksätts efter innehåll, inte längre `flex:1` jämnt fördelat över hela
+  bredden). `::deep .nav-link` är rad-layout, aktiv flik fylld gustav-bakgrund med vit text
+  (samma "färg aldrig ensam bärare"-princip som desktop-railens `--gustav-soft`-tint, fast
+  fylld i stället för tonad - en fylld pill behövde mer kontrast mot den halvgenomskinliga
+  `.nav-shell`-bakgrunden bakom sig än en mjuk tint hade gett).
+- **Bara den aktiva fliken visar text.** Inaktiva flikars `span.nav-label` göms med samma
+  clip-mönster som `.sr-only` (skrivet direkt i den scopade regeln, eftersom en global
+  utility-klass inte går att applicera på ett barn-element utan att duplicera Blazors egen
+  `active`-matchning i C#) - `::deep .nav-link:not(.active) .nav-label`. Aldrig
+  `display:none`: `MobileNavTests`/`SkarmbilderTests` hittar varje flik via dess tillgängliga
+  namn (`GetByRole(Link, Name: "Rum")` m.fl.) oavsett vilken som råkar vara aktiv, och det
+  hade slutat fungera annars.
+- **Kompakt läge under scroll**: `::deep html[data-scrolled] .nav-link` (satt av
+  `Support/ScrollState.cs`, se delsteg 4) krymper padding till `0 11px` och göms även den
+  aktiva flikens text. `html` är inget NavMenu renderar själv, så `::deep` måste stå FÖRE
+  `html[...]` i selektorn (inte bara före `.nav-link`) - annars hade Blazors CSS-isolering
+  försökt lägga sitt scope-attribut på `html`, vilket aldrig matchar något. `:global(...)`
+  övervägdes men är inte en verklig Blazor CSS-isolerings-funktion (bara `::deep` är) -
+  verifierat genom att `::deep` redan var det enda mönstret resten av filen använde.
+  `transition: padding .25s, background .2s`, avstängt under `prefers-reduced-motion` i ett
+  nästlat `@media`-block (giltig CSS - "conditional group rules" får nästlas, ingen
+  preprocessor inblandad).
+- **`MainLayout.razor.css`** mobil: `.app-main`s `padding-bottom` 88px → 112px, så sista raden
+  i en lång lista alltid scrollar helt fri från pillens egen ruta snarare än att bara stanna
+  ovanför var den gamla fasta raden brukade börja.
+- **Desktop-railen (≥ 901px) rörd inte** - `@media (max-width: 900px)` omsluter hela
+  ändringen.
+- **Kontrast, uppmätt mot den faktiskt renderade bakgrunden (inte token-värdet)**: `--glass`
+  över `--kalk` ger ≈ `rgb(253,252,251)` ljust och ≈ `rgb(28,34,38)` mörkt (alfakomposition,
+  sRGB). Inaktiva flikars `--sot-soft`-ikonfärg mot den bakgrunden: **5.73:1 ljust, 7.34:1
+  mörkt** - båda långt över både 3:1-golvet för UI-komponenter/ikoner och 4.5:1 för text.
+- **Verifierat**: `dotnet build Hemordna.slnx` (0 fel/varningar); `Hemordna.Domain.Tests`
+  82/82, `Hemordna.Application.Tests` 173/173, `Hemordna.E2E.Tests` 80/80 (79 tidigare + det nya
+  testet nedan). Nytt test `MobileNavTests.Scrolling_to_the_bottom_clears_the_floating_pill` (8 uppgifter seedade
+  via Api, scrollar till botten, verifierar att sista `.task`s `BoundingBox` ligger helt ovanför
+  `nav.nav-shell`s). Tre skärmbilder (Idag/Rum ljust, Idag mörkt, mobil 390×844) via ett
+  tillfälligt `DEBUG_Capture_floating_pill`-test, granskade och borttagna: piller flyter fritt
+  med synlig bakgrund runt om, bara "Idag" visar text i en fylld gustav-pill, övriga tre bara
+  ikon, ingen hård kant mot botten.
+
+#### Delsteg 3 (punkt 2, "Kant-till-kant med progressiv blur") — `IMPLEMENTED`
+
+- **`index.html`**: viewportens `content` fick `viewport-fit=cover` - krävs för att
+  `env(safe-area-inset-*)` ska returnera ett verkligt värde på en iPhone med hemknapp-indikator/
+  hack, i stället för `0px`.
+- **`MainLayout.razor`**: två nya `<div aria-hidden="true">` (`.app-topfade`/`.app-botfade`)
+  direkt i `.app-shell`, före respektive efter `<main>` - fasta, icke-interaktiva
+  (`pointer-events: none`) toningsremsor, bara synliga ≤ 900px (`display:none` på desktop).
+  `.app-main`s eget innehåll scrollar UNDER dem; de rör sig aldrig själva.
+- **`.app-topfade`**: `position: fixed; top:0; height: calc(44px + env(safe-area-inset-top))`,
+  `linear-gradient(var(--kalk) 35%, transparent)` + `backdrop-filter: blur(10px)` (+
+  `-webkit-`) maskerad med en spegelvänd `mask-image`-gradient så själva blur-effekten också
+  tonar ut i stället för att sluta med en egen hård kant. `z-index: 9` - under piller (10) och
+  ark (20/21), över det vanliga sidinnehållet.
+- **`.app-botfade`**: samma mönster spegelvänt (`to top`), `bottom:0; height:110px` - täcker
+  ungefär pillens egen zon plus lite marginal, så sista raden tonar innan den försvinner bakom
+  piller i stället för att klippas tvärt.
+- **`.app-main`** mobil: `padding-top` fick `+ env(safe-area-inset-top)` (var bara
+  `var(--space-4)`) - annars hade `.app-topfade`s nya, säkerhetszon-medvetna höjd kunnat täcka
+  början av innehållet på en enhet med hack.
+- **Verifierat**: `dotnet build Hemordna.slnx` (0 fel/varningar); `Hemordna.Domain.Tests`
+  82/82, `Hemordna.Application.Tests` 173/173, `Hemordna.E2E.Tests` 80/80 (en känd,
+  fördokumenterad flakighet - `HouseholdInviteTests.Joining_with_a_valid_code_...` - föll under
+  full parallell körning, passerade isolerat, och en fullständig omkörning gav 81/81 rent,
+  exakt det mönster CLAUDE.md/uppdraget beskriver som pre-existing snarare än en verklig regression).
+  Fyra viewport-beskurna (inte `FullPage`, som stitchar hela sidan till en komposit och därför
+  inte visar fasta elements verkliga relation till den AKTUELLA viewporten) skärmbilder via ett
+  tillfälligt `DEBUG_Capture_edge_to_edge_fades`-test (tio uppgifter seedade, scrollad till en
+  punkt där en rad faktiskt ligger under toppremsan, och till botten där de sista raderna ligger
+  under piller/bottenremsan), granskade och borttagna: en mjuk, rundad vinjettering syns vid
+  kortens hörn precis där blur-zonen möter kortets skarpa kant - tydligast i mörkt läge - i
+  stället för en hård linje; ingen horisontell scroll eller överlappning.
+
+#### Delsteg 4 (punkt 3, "Scroll-driven rubrik") — `IMPLEMENTED`
+
+- **Ny `wwwroot/js/scroll-state.js`** + **`Support/ScrollState.cs`**: en enda,
+  rAF-strypt (`requestAnimationFrame`) passiv `scroll`-lyssnare som sätter/tar bort
+  `document.documentElement.dataset.scrolled` vid tröskeln 24px - attacherad EN gång från
+  `MainLayout.OnAfterRenderAsync(firstRender)`, ingen per-sida-JS. `animation-timeline:
+  scroll()` hade löst samma sak i ren CSS men saknar stöd i Firefox, därför attributet.
+- **Avvikelse, uttryckligen godkänd innan implementation.** Specen ville visa
+  "N av M klara · N min kvar" i den kollapsade raden - det bryter mot DESIGN.md §6a, ett
+  tidigare uttryckligen bekräftat, hårt beslut (se steg 2, "Tid förblir dold, tvärtemot
+  konceptets egen skiss") att Idag aldrig visar minuter, inte ens summerat. Frågan ställdes
+  innan kod skrevs; svaret var att behålla §6a orört - den kollapsade raden visar bara
+  "N av M klara", samma kvalitativa text som redan står i den fulla rubriken.
+- **`MinDag.razor`**: `p.day-date`/`h1`/`p.day-counts`/`div.progress` samlade i
+  `<header class="day-header">`; `<div class="day-header-collapsed" aria-hidden="true">`
+  (bara `<strong>Idag</strong>` + `<span>N av M klara</span>`) direkt före. `h1` kvar i DOM
+  oförändrad (`SignUpHelper`/`MinDagTests` beror på den). `Hushall.razor` fick samma mönster
+  (`<strong>@_household.Name</strong>` ensam i den kollapsade raden - hushållets sammanfattning
+  har ingen kvalitativ "N av M"-motsvarighet). `h1` på Idag höjdes till
+  `calc(var(--font-size-base) * 2.1)`, `letter-spacing: -0.025em`, `line-height: 1.02` - ingen
+  `white-space: nowrap` fanns att ta bort (grep bekräftade att ingen sådan regel någonsin
+  funnits för `h1`).
+- **Bugg hittad under obligatorisk skärmbildsgranskning, fixad:** den kollapsade raden var helt
+  osynlig - `z-index: 8` (som specen angav) medan `.app-topfade` (steg 3) ligger på `z-index: 9`
+  med en gradient som är HELT OPAK `--kalk` de första 35% av sin egen höjd. Raden hamnade bakom
+  en solid yta, inte bara blurrad. Fixat genom att lyfta `.day-header-collapsed`/
+  `.household-header-collapsed` till samma `z-index: 9` som toppremsan - eftersom den kollapsade
+  raden renderas SENARE i DOM:en (inuti `<main>`, en syskon-`<div>` efter `.app-topfade`), vinner
+  den den vanliga "senare i dokumentordning vid lika z-index"-regeln och målas ovanpå, precis som
+  en riktig iOS-navigationsrad ritar sin egen titel ovanpå den blurrade baren i stället för att
+  blurras av den.
+- **Andra buggen hittad under samma granskning, fixad:** i "Stor text"-läget (större bastext)
+  var "TISDAG 8 SEPTEMBER" halvt osynlig REDAN I VILOLÄGE (ingen scroll alls) - `.app-main`s
+  mobila `padding-top` (bara `var(--space-4)`, 16px) var kortare än `.app-topfade`s egen höjd
+  (44px), så den första raden alltid låg delvis inuti blur-/gradientzonen. Fixat genom att höja
+  `padding-top` till `calc(44px + env(safe-area-inset-top) + var(--space-2))` - ett litet
+  `MainLayout.razor.css`-fel som spårar tillbaka till steg 3 men upptäcktes och fixas här, samma
+  mönster som tidigare steg (t.ex. steg 1 → löst i steg 2).
+- **Nytt permanent test** `ScrollHeaderTests.Idags_collapsed_header_only_becomes_visible_after_scrolling`
+  - verifierar `getComputedStyle(...).opacity`, INTE Playwrights egen `ToBeVisibleAsync`
+    (som varken bryr sig om `opacity` eller kunnat upptäcka den första buggen ovan - en ren
+    stacking-defekt). Två testbuggar hittades och fixades under skrivandet: för lite seedat
+    innehåll (en enda uppgift räckte inte för att sidan skulle bli scrollbar alls - tio
+    uppgifter används nu, samma mönster som skärmbildstesterna) och en race mot den 0.2s CSS-
+    övergången (väntar nu på det faktiska beräknade opacity-värdet, inte bara attributet som
+    triggar det).
+- **Verifierat**: `dotnet build Hemordna.slnx` (0 fel/varningar); `Hemordna.Domain.Tests`
+  82/82, `Hemordna.Application.Tests` 173/173, `Hemordna.E2E.Tests` 81/81. Skärmbilder (Idag/
+  Hushåll, ljust/mörkt, scrollad/ej scrollad) via ett tillfälligt `DEBUG_Capture_scroll_header`-
+  test samt ett separat `DEBUG_Capture_large_text_h1`-test (Stor text-läge, 390px), granskade
+  och borttagna: den kollapsade raden syns tydligt och läsbart först efter scroll i båda teman,
+  h1 klipps inte och radbryter inte i Stor text vid 390px, "TISDAG ..."-etiketten är helt skarp
+  i viloläge efter padding-fixen.
+
+#### Delsteg 5 (punkt 4, "Ark med två lägen") — `IMPLEMENTED`
+
+- **Ny `Components/SheetDetent.cs`** (`enum SheetDetent { Half, Full }`) + ny `[Parameter]
+  Detent` på `BottomSheet.razor` (förvalt `Full`, oförändrat beteende för allt som inte
+  uttryckligen sätter `Half`). `data-detent="half|full"` renderas på `.sheet-shell`.
+- **`BottomSheet.razor.css`**: `.sheet-shell[data-detent="half"] { max-height: 56vh }` (mobil
+  bara - desktopdialogen, `@media (min-width:640px)`, återställer uttryckligen 80vh för BÅDA
+  attributvärdena, eftersom attributselektorn annars vinner över den vanliga `.sheet-shell`-
+  regeln på specificitet oavsett `@media`-block, och skulle annars läcka in 56vh på desktop
+  också). `.sheet-scrim` fick `backdrop-filter: blur(3px)`. Radie höjd till `var(--radius-xl)`
+  (26px) på båda övre hörnen.
+- **Drag i `wwwroot/js/bottom-sheet.js`** (ny `attachDrag`): pekar-events på BÅDE `.sheet-handle`
+  och `.sheet-header` (samma `setPointerCapture`-mönster som `task-swipe.js` redan använder).
+  Drag uppåt > 60px anropar `ExpandAsync` (Blazor-sidan sätter `Detent = Full`); drag nedåt >
+  80px anropar `DismissAsync` (samma `CloseAsync`-väg som "Stäng"-knappen). Visuell
+  `translateY`, klampad 0..120 (aldrig negativ - ett uppåtdrag är bara en gest, ingen visuell
+  förflyttning, eftersom "half" redan visar arket i viloläge). Hoppar över `transform` under
+  `prefers-reduced-motion` (samma teknik som `task-swipe.js`), men behåller själva
+  tröskellogiken - matchar det etablerade mönstret i `task-swipe.js`s egen
+  reduced-motion-hantering.
+- **Bugg hittad under egen testskrivning, fixad:** ett nyskapat `RoomSheet` (ingen `Detent`
+  satt, ska förvalt bli `Full`) öppnades med `data-detent="half"`. Orsak: `SheetDetent`s första
+  medlem (`Half`) har det numeriska värdet `0` - samma värde som ett ofyllt `private SheetDetent
+  _detent`-fälts eget default. Den ursprungliga koden synkade bara `_detent = Detent` inuti
+  `OnAfterRenderAsync`, som körs EFTER den första renderingen som redan visar arket - den
+  renderingen använde alltså fältets kvarvarande default (`Half`) i stället för den satta
+  parametern. Fixat genom att flytta synkroniseringen till `OnParametersSet` (körs FÖRE
+  rendering), med en egen `_detentWasOpen`-flagga skild från `_wasOpen` (som `OnAfterRenderAsync`
+  fortfarande äger för sin egen JS-interop-timing) - ett nytt test,
+  `SheetDetentTests.TaskOptionsSheet_opens_half_and_RoomSheet_opens_full_and_Esc_closes_each`,
+  fångade buggen direkt.
+- **`Detent="SheetDetent.Half"` satt på:** `TaskOptionsSheet` (dess egen `BottomSheet`),
+  `MemberSheet`, Hushålls "Bjud in"/"Pausa hushållet"/"Balansera om vem som gör vad". **`Full`
+  (förvalt, ingen ändring):** `RoomSheet`, "Nytt rum", "Extra uppgift", "Flytta till en annan
+  dag", "Lägg till uppgift i …".
+- **Verifierat**: `dotnet build Hemordna.slnx` (0 fel/varningar); `Hemordna.Domain.Tests`
+  82/82, `Hemordna.Application.Tests` 173/173, `Hemordna.E2E.Tests` 82/82 (81 tidigare + det nya
+  `SheetDetentTests` nedan). Sex skärmbilder
+  (`RoomSheet`=full/`TaskOptionsSheet`=half ljust+mörkt, "Pausa hushållet"/"Balansera om vem som
+  gör vad"/"Bjud in" i halvt läge mörkt) via ett tillfälligt `DEBUG_Capture_sheet_detents`-test,
+  granskade och borttagna: `TaskOptionsSheet` visar `RoomSheet`s brickor/rader synliga bakom sig
+  genom scrimmets blur, inget innehåll klipps i något av de tre halva Hushålls-arken - allt
+  ryms inom 56vh eller scrollar internt.
+
+#### Delsteg 6 (punkt 6, "Fjädrande bekräftelse") — `IMPLEMENTED`
+
+- **`Components/TaskListItem.razor.css`**: `.task-confirm` bytte från en ren
+  `background-color`-övergång till en `@keyframes task-spring`-animation (`0% scale(1)` →
+  `40% scale(1.025)` + `background: var(--gustav-soft)` → `100% scale(1)`,
+  `animation: task-spring .32s cubic-bezier(.2, 1.4, .4, 1)`) - en mjuk, studsande bekräftelse
+  i stället för en platt färgflash.
+- **`wwwroot/js/task-swipe.js`**: timeouten som tar bort `.task-confirm` höjd från 220ms till
+  340ms, så klassen aldrig hinner plockas bort mitt i animationens egna .32s.
+- **`navigator.vibrate(10)` kvar oförändrad**, men nu uttryckligen dokumenterad (DESIGN.md §4a):
+  iOS Safari ignorerar `navigator.vibrate` helt och tyst - det är därför aldrig beskrivet i
+  produkttext som en funktion appen har, bara ett bästa-möjliga tillägg på plattformar som
+  faktiskt stödjer det.
+- **`prefers-reduced-motion`**: `confirm()` returnerade redan tidigt innan denna klass någonsin
+  sätts - verifierat (se nedan), inget ytterligare att stänga av.
+- **Verifierat, med ett skript snarare än en skärmbild** (en animation syns inte i en stillbild):
+  ett tillfälligt test anropade `task-swipe.js`s `confirm()` direkt på en riktig, redan
+  renderad `.task`-rad (inte ett syntetiskt `document.createElement`-element - Blazors
+  CSS-isolering stämplar bara verkligt renderade element med sitt scope-attribut, så en
+  konstruerad `<div>` hade aldrig matchat den scopade `.task-confirm`-regeln). Bekräftade att
+  `getComputedStyle(el).animationName` normalt börjar med `task-spring` (Blazors
+  CSS-isolering döper om även `@keyframes`-identifierare, inte bara selektorer, till
+  `task-spring-b-xxxxxxxx` - förväntat, inte en bugg) och att `.task-confirm` ALDRIG läggs till
+  under `ReducedMotion.Reduce`. Testet togs bort igen efter verifiering, samma
+  tillfälliga-test-mönster som skärmbilderna genom hela detta uppdrag - den ursprungliga
+  bock-/svep-bekräftelsen (steg 5) har heller aldrig haft ett eget permanent E2E-test av samma
+  skäl (skärmbildsgranskning i stället), så inget nytt permanent test lades till här.
+- `dotnet build Hemordna.slnx` (0 fel/varningar); `Hemordna.Domain.Tests` 82/82,
+  `Hemordna.Application.Tests` 173/173, `Hemordna.E2E.Tests` 82/82 (en enskild,
+  orelaterad flakighet - `PasswordResetTests.Following_the_reset_link_...`, rör
+  lösenordsåterställning, inget den här commiten rör - föll under full parallell körning,
+  passerade isolerat, ny fullständig körning gav 82/82 rent).
+
+### Sammanfattning
+
+Alla sex delsteg av "Ny form 2026" är nu `IMPLEMENTED` på `feat/ny-form-2026`, var sitt
+commit, inget mergat till `main` ännu - väntar på uttryckligt godkännande, samma regel som
+"Ny form" steg 1-5 följde.
+
 ---
 
 ## 11. Beslut som ännu inte är fattade — `OPEN`

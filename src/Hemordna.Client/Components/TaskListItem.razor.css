@@ -22,13 +22,28 @@
     border-bottom: none;
 }
 
-/* A brief, non-essential confirmation flash after completing a task - swipe or the ordinary
-   check button, both go through task-swipe.js's confirm() (see TaskListItem.razor). Never the
-   only signal (the row still leaves the list once the day reloads) and skipped entirely under
-   prefers-reduced-motion (confirm() never adds this class in that case). */
+/* A brief, non-essential confirmation after completing a task - swipe or the ordinary check
+   button, both go through task-swipe.js's confirm() (see TaskListItem.razor). Never the only
+   signal (the row still leaves the list once the day reloads) and skipped entirely under
+   prefers-reduced-motion (confirm() never adds this class in that case, so these keyframes
+   never run - nothing further to disable here). */
+@keyframes task-spring {
+    0% {
+        transform: scale(1);
+    }
+
+    40% {
+        transform: scale(1.025);
+        background: var(--gustav-soft);
+    }
+
+    100% {
+        transform: scale(1);
+    }
+}
+
 .task-confirm {
-    background: var(--gustav-soft);
-    transition: background-color .2s ease;
+    animation: task-spring .32s cubic-bezier(.2, 1.4, .4, 1);
 }
 
 .task-check {

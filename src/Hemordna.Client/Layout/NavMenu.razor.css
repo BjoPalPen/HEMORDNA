@@ -84,19 +84,28 @@
     flex-shrink: 0;
 }
 
-/* Mobile: a bottom bar with all four destinations, same order as the rail. */
+/* Mobile: a floating pill instead of a full-width bar - see docs/DESIGN.md §8 and "Beslut: Ny
+   form 2026" in docs/ARCHITECTURE.md. Only the active tab shows its label; the rest keep their
+   accessible name via .sr-only rather than losing it to display:none (MobileNavTests/
+   SkarmbilderTests locate every tab by its accessible name regardless of which is active). */
 @media (max-width: 900px) {
     .nav-shell {
         position: fixed;
-        bottom: 0;
-        left: 0;
-        right: 0;
+        left: 50%;
+        bottom: max(14px, env(safe-area-inset-bottom));
+        transform: translateX(-50%);
         z-index: 10;
         flex-direction: row;
         width: auto;
-        padding: var(--space-2) var(--space-2) max(var(--space-2), env(safe-area-inset-bottom));
+        padding: 6px;
+        border-radius: var(--pill);
+        border: 1px solid var(--glass-edge);
         border-right: none;
-        border-top: 1px solid var(--line);
+        border-top: none;
+        background: var(--glass);
+        -webkit-backdrop-filter: blur(18px) saturate(1.3);
+        backdrop-filter: blur(18px) saturate(1.3);
+        box-shadow: var(--shadow-float);
     }
 
     .brand,
@@ -106,17 +115,70 @@
 
     .nav-items {
         flex-direction: row;
-        justify-content: space-around;
-        width: 100%;
-        gap: 0;
+        gap: 2px;
+        width: auto;
     }
 
     .nav-items li {
-        flex: 1;
+        flex: 0 0 auto;
     }
 
     ::deep .nav-link {
-        min-height: 52px;
-        font-size: calc(var(--font-size-base) * .72);
+        flex-direction: row;
+        gap: 7px;
+        width: auto;
+        min-height: 44px;
+        padding: 0 14px;
+        border-radius: var(--pill);
+        font-size: calc(var(--font-size-base) * .85);
+        color: var(--sot-soft);
+        background: transparent;
+        transition: padding .25s, background .2s;
+    }
+
+    /* Active state carries both colour and background, never colour alone - same rule as the
+       desktop rail above, just a filled pill instead of a soft tint (a filled pill needs to
+       stay legible against the translucent .nav-shell behind it, where --gustav-soft would not
+       have enough contrast). */
+    ::deep .nav-link.active {
+        background: var(--gustav);
+        color: #fff;
+    }
+
+    ::deep .nav-link:not(.active) .nav-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+    }
+
+    /* Compact mode once the page has scrolled (html[data-scrolled], set by
+       Support/ScrollState.cs - see "Beslut: Ny form 2026" §3): even the active tab's own label
+       hides, and the pill shrinks, so it takes up less of the viewport while reading. */
+    ::deep html[data-scrolled] .nav-link {
+        padding: 0 11px;
+    }
+
+    ::deep html[data-scrolled] .nav-link .nav-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        ::deep .nav-link {
+            transition: none;
+        }
     }
 }

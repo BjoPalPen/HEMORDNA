@@ -1,3 +1,47 @@
+/* Scroll-driven collapse (docs/ARCHITECTURE.md "Beslut: Ny form 2026" §3): the full header
+   below scrolls away naturally rather than being faded out itself (h1 must stay put for screen
+   readers, never opacity:0) - this sticky summary row fades IN once html[data-scrolled] is set
+   (Support/ScrollState.cs) and takes over the visual "where am I" role instead. */
+.day-header-collapsed {
+    position: sticky;
+    top: env(safe-area-inset-top);
+    /* Same z-index as .app-topfade (MainLayout.razor.css) - this row is rendered later in the
+       DOM (inside <main>, after that sibling), so it paints on top of the fade's own opaque-
+       near-the-top gradient rather than being hidden behind it (found via the mandatory
+       screenshot review: at z-index 8 this row was fully invisible, sitting exactly where the
+       topfade's gradient is still solid --kalk). */
+    z-index: 9;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: var(--space-2) 0;
+    opacity: 0;
+    transform: translateY(-6px);
+    transition: opacity .2s, transform .2s;
+    pointer-events: none;
+}
+
+:root[data-scrolled] .day-header-collapsed {
+    opacity: 1;
+    transform: none;
+}
+
+.day-header {
+    transition: opacity .2s;
+}
+
+.day-header h1 {
+    font-size: calc(var(--font-size-base) * 2.1);
+    letter-spacing: -0.025em;
+    line-height: 1.02;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .day-header-collapsed {
+        transition: none;
+    }
+}
+
 .day-date {
     margin: 0 0 var(--space-1);
     color: var(--sot-soft);
@@ -72,8 +116,9 @@
     list-style: none;
     margin: 0 0 var(--space-4);
     padding: 0;
-    border: 1px solid var(--line);
+    border: 1px solid var(--edge);
     border-radius: var(--radius);
+    corner-shape: squircle;
     background: var(--surface);
     overflow: hidden;
 }
@@ -175,8 +220,9 @@
     padding: var(--space-6) var(--space-5);
     margin-bottom: var(--space-4);
     background: var(--surface);
-    border: 1px solid var(--line);
+    border: 1px solid var(--edge);
     border-radius: var(--radius);
+    corner-shape: squircle;
 }
 
 .focus-icon {

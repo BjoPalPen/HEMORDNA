@@ -2,7 +2,7 @@
 @inject HemordnaApiClient Api
 @inject TimeProvider TimeProvider
 
-<BottomSheet Title="@Member.DisplayName" IsOpen="IsOpen" IsOpenChanged="OnIsOpenChanged">
+<BottomSheet Title="@Member.DisplayName" IsOpen="IsOpen" IsOpenChanged="OnIsOpenChanged" Detent="SheetDetent.Half">
     <div class="field">
         <span>Vilken roll har personen i hushållet?</span>
         <div class="level-picker">

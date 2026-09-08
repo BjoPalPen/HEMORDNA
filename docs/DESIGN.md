@@ -65,9 +65,16 @@ steg 5 för de fullständiga värdena och verifieringen).
 
 ## 3. Form
 
-- Radie: `--radius` (14px) på kort, `--radius-sm` (10px) på knappar och fält (utom piller),
-  `--pill` (999px) på knappar, chips och avatarer.
-- Skugga: mycket subtil, `0 1px 2px rgba(34,40,46,.06)`. Djup skapas med ramar och luft.
+- Radie: `--radius` (22px) på kort och listor, `--radius-sm` (14px) på fält, `--radius-xl`
+  (26px) på det fullhöga arket (se §4a), `--pill` (999px) på knappar, chips och avatarer. Höjt
+  från 14px/10px i "Ny form" (steg 1) - "Ny form 2026" mjukar upp ytorna ytterligare, se
+  ARCHITECTURE.md. Samma sex ytor har också `corner-shape: squircle` (progressiv förbättring).
+- Kant: `--edge` - transparent i ljust läge (en vit yta läser redan mot `--kalk` utan en ritad
+  linje), `var(--line)` i mörkt läge (en mörk yta behöver en riktig kant för att skiljas från
+  bakgrunden). Ersätter `var(--line)` som ytterkontur på kort, listor och rumsbrickor; radskiljare
+  inuti listor behåller `var(--line)` oförändrat.
+- Skugga: mycket subtil, `0 1px 0 rgba(34,40,46,.04)` i ljust läge (mörkt läge oförändrat).
+  Djup skapas med ramar och luft, inte skugga.
 - Avstånd bygger på en 4px-skala: 4, 8, 12, 16, 24, 32, 48 (`--space-1`…`--space-7`,
   oförändrade).
 
@@ -99,7 +106,27 @@ ikoner. Namngivna ikoner: `sun`, `grid`, `calendar`, `people`, `chevron-right`, 
 
 `Components/BottomSheet.razor`: ark från botten på mobil (scrim, drag-handtag, stängs med Esc,
 scrim-tryck eller "Stäng", fokus flyttas in vid öppning och tillbaka vid stängning), centrerad
-dialog på skärmar ≥ 640px. Används av formulär/valmenyer som byggs i senare steg.
+dialog på skärmar ≥ 640px, `corner-shape: squircle` och `--radius-xl` (26px) på det översta
+hörnparet.
+
+**Två höjdlägen** ("Ny form 2026", `Components/SheetDetent.cs`): `Half` (56vh) för ett kort
+val/en sammanfattning som inte behöver hela skärmen, `Full` (85vh, oförändrat) för ett formulär
+som kan behöva växa. Desktopdialogen ignorerar detent helt - alltid 80vh. Ett drag uppåt (> 60px)
+på handtaget eller rubrikraden flyttar ett `Half`-ark till `Full` för resten av den öppningen;
+ett drag nedåt (> 80px) stänger arket samma väg som "Stäng" gör. Rent tillägg, aldrig enda vägen
+- "Stäng"-knappen och Esc fungerar precis som förut oavsett läge. `--sheet-scrim` fick
+`backdrop-filter: blur(3px)` - den tonade ytan bakom arket, inte arket självt (glas-transparens
+är annars förbehållet navigationspillen, se §8).
+
+**Fjädrande bekräftelse** ("Ny form 2026"): `task-swipe.js`s delade `confirm()` (bock-knappen
+och svepet på Idag, se §6) lägger på `.task-confirm`, en `task-spring`-keyframe-animation (skala
+1 → 1.025 → 1, `cubic-bezier(.2, 1.4, .4, 1)`, .32s) i stället för bara en färgövergång - en
+mjuk, "studsande" bekräftelse snarare än en platt flash. `navigator.vibrate(10)` körs fortfarande
+på mobil där webbläsaren stödjer det, men **iOS Safari ignorerar `navigator.vibrate` helt och
+tyst** - det beskrivs därför aldrig i produkttext eller marknadsföring som en funktion appen har,
+bara som ett bästa-möjliga tillägg på de plattformar (i praktiken de flesta Android-webbläsare)
+som faktiskt stödjer det. Under `prefers-reduced-motion` lägger `confirm()` aldrig till klassen
+alls (returnerar tidigt) - keyframes körs därför aldrig, ingen ytterligare avstängning behövs.
 
 ---
 
@@ -162,12 +189,13 @@ grupp längst ner, dämpad (55% opacitet) och genomstruken.
 Varje rad (`Components/TaskListItem.razor`): en 44×44px rund bock (gustav-kant, ofylld; fylld
 gustav med vit bock när klar), namn i Familjen Grotesk 600, en chevron till höger som fäller ut
 beskrivning och "Skjut upp till imorgon". Att bocka av - via bock-knappen ELLER genom att svepa
-höger på raden - ger samma korta gustav-soft-bekräftelse och `navigator.vibrate(10)` på mobil
-(`task-swipe.js`s delade `confirm()`, se ARCHITECTURE.md "Ny form" steg 5); svep vänster = flytta
-till imorgon. Bock- och skjut-upp-knapparna finns alltid kvar som vanliga knappar för
-tangentbord och skärmläsare, och ett svep som börjar på en knapp gör ingenting (annars skulle
-det stjäla klicket). Under `prefers-reduced-motion`: ingen dragrörelse, ingen bekräftelseflash,
-ingen haptik – bara den vanliga klick-hanteringen, oavsett om den kom från bocken eller svepet.
+höger på raden - ger samma korta, fjädrande bekräftelse (se §4a) och `navigator.vibrate(10)` på
+mobil (`task-swipe.js`s delade `confirm()`, se ARCHITECTURE.md "Ny form" steg 5 och "Ny form
+2026"); svep vänster = flytta till imorgon. Bock- och skjut-upp-knapparna finns alltid kvar som
+vanliga knappar för tangentbord och skärmläsare, och ett svep som börjar på en knapp gör
+ingenting (annars skulle det stjäla klicket). Under `prefers-reduced-motion`: ingen dragrörelse,
+ingen bekräftelseflash, ingen haptik – bara den vanliga klick-hanteringen, oavsett om den kom
+från bocken eller svepet.
 
 De två gamla ▶-utfällningarna ("N till en annan dag", "Lägg till en extra uppgift") är nu chips
 under listan ("Flytta till en annan dag", "Extra uppgift") som öppnar `BottomSheet.razor` –
@@ -459,9 +487,20 @@ Inställningar samt Logga ut nås som listrader längst ned på Hushåll (se `Hu
 | Yta | Mönster |
 |---|---|
 | Dator (≥ 900 px) | Smal vänster rail (~72 px, ikon + etikett, inget 260 px-sidofält). Innehåll centrerat, max 640 px |
-| Mobil (< 900 px) | Bottenrad med samma fyra flikar |
+| Mobil (< 900 px) | Svävande pill, fristående från kanterna ("Ny form 2026", se nedan) |
 
 Idag är alltid första valet och startvyn.
+
+**Mobil: svävande pill i stället för en fast bottenrad** ("Ny form 2026" - se ARCHITECTURE.md).
+Piller flyter `max(14px, env(safe-area-inset-bottom))` från underkanten, centrerad, med en
+tonad `--glass`-bakgrund (`backdrop-filter: blur(18px) saturate(1.3)`) och `--shadow-float` -
+det enda stället i appen glas-transparens används, eftersom det bär navigation, inte innehåll
+(se ARCHITECTURE.md, "vad som medvetet inte görs"). Bara den aktiva fliken visar sin text i en
+fylld gustav-pill; övriga tre visar bara sin ikon, med etiketten visuellt gömd (`.sr-only`-
+mönster - `clip`, aldrig `display:none`) så det tillgängliga namnet finns kvar för skärmläsare.
+Har sidan scrollats (`html[data-scrolled]`, satt av `Support/ScrollState.cs`) krymper piller
+ytterligare och döljer även den aktiva flikens text, av samma skäl. `.app-main`s bottenmarginal är 112px på
+mobil så sista raden i en lång lista alltid scrollar helt fri från pillens egen ruta.
 
 ---
 

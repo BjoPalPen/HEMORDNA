@@ -6,8 +6,9 @@
     min-height: 96px;
     padding: var(--space-3);
     background: var(--surface);
-    border: 1px solid var(--line);
+    border: 1px solid var(--edge);
     border-radius: var(--radius);
+    corner-shape: squircle;
     text-align: left;
     font: inherit;
     color: inherit;

@@ -1,7 +1,7 @@
 @using Hemordna.Client.Support
 @inject HemordnaApiClient Api
 
-<BottomSheet Title="@Task.Name" IsOpen="IsOpen" IsOpenChanged="OnIsOpenChanged">
+<BottomSheet Title="@Task.Name" IsOpen="IsOpen" IsOpenChanged="OnIsOpenChanged" Detent="SheetDetent.Half">
     @switch (_view)
     {
         case View.Frequency:
