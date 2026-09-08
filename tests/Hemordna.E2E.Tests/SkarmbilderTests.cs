@@ -151,6 +151,17 @@ public class SkarmbilderTests
         await page.GetByRole(AriaRole.Heading, new() { Name = "Min visning" }).WaitForAsync();
         await ShootAsync(page, "07-installningar");
 
+        await page.GetByRole(AriaRole.Button, new() { Name = "Steg för steg" }).ClickAsync();
+        await Assertions.Expect(page.GetByLabel("Lugnare skärm – inga rörelser eller genomskinliga effekter"))
+            .ToBeCheckedAsync();
+        await ShootAsync(page, "07b-installningar-steg-for-steg");
+
+        // "Lugnare skärm" applies immediately and persists (localStorage, not "Spara") - undo it
+        // before the mode captures below, or every later screenshot in this run would carry it.
+        await page.GetByRole(AriaRole.Button, new() { Name = "Kompakt" }).ClickAsync();
+        await Assertions.Expect(page.GetByLabel("Lugnare skärm – inga rörelser eller genomskinliga effekter"))
+            .Not.ToBeCheckedAsync();
+
         await CaptureIdagInModeAsync(page, "Bild + text - med bilder för tydlighet", "08-idag-bild-text");
         await CaptureIdagInModeAsync(page, "Stor text - större och tydligare", "09-idag-stor-text");
         await CaptureIdagInModeAsync(page, "En uppgift åt gången - fokusläge", "10-idag-en-i-taget");

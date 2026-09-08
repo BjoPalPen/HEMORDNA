@@ -33,6 +33,39 @@ public class InstallningarTests
         await Assertions.Expect(page.GetByLabel("Lugn - en vänlig kommentar då och då")).ToBeCheckedAsync();
     }
 
+    /// <summary>"Beslut: Ångra och stabil lista" §B11 - a preset chip is a shortcut into the
+    /// same radios/toggles a member could set by hand, never a separate mode of its own: pick
+    /// one, and every one of the four underlying choices reads back exactly as if set one at a
+    /// time.</summary>
+    [Fact]
+    public async Task Steg_for_steg_sets_all_four_choices_and_kompakt_resets_them()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Freja");
+
+        await page.GotoAsync("/installningar");
+        await page.GetByRole(AriaRole.Heading, new() { Name = "Min visning" }).WaitForAsync();
+
+        await page.GetByRole(AriaRole.Button, new() { Name = "Steg för steg" }).ClickAsync();
+
+        await Assertions.Expect(page.GetByLabel("En uppgift åt gången - fokusläge")).ToBeCheckedAsync();
+        await Assertions.Expect(page.GetByLabel("Lugn - en vänlig kommentar då och då")).ToBeCheckedAsync();
+        await Assertions.Expect(page.GetByLabel("Visa ungefär hur lång tid en uppgift tar")).ToBeCheckedAsync();
+        await Assertions.Expect(page.GetByLabel("Lugnare skärm – inga rörelser eller genomskinliga effekter"))
+            .ToBeCheckedAsync();
+        // The chip itself reflects the match, not just the fields it filled in.
+        await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Steg för steg" }))
+            .ToHaveClassAsync(new System.Text.RegularExpressions.Regex("chip-primary"));
+
+        await page.GetByRole(AriaRole.Button, new() { Name = "Kompakt" }).ClickAsync();
+
+        await Assertions.Expect(page.GetByLabel("Text (standard) - kompakt lista")).ToBeCheckedAsync();
+        await Assertions.Expect(page.GetByLabel("Ingen - bara fakta")).ToBeCheckedAsync();
+        await Assertions.Expect(page.GetByLabel("Visa ungefär hur lång tid en uppgift tar")).Not.ToBeCheckedAsync();
+        await Assertions.Expect(page.GetByLabel("Lugnare skärm – inga rörelser eller genomskinliga effekter"))
+            .Not.ToBeCheckedAsync();
+    }
+
     [Fact]
     public async Task Changing_the_password_lets_the_user_sign_in_with_the_new_one_but_not_the_old_one()
     {

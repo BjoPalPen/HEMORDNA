@@ -2180,6 +2180,70 @@ kan ha valt "Steg för steg", en annan inget alls. Allt i detta uppdrag är anti
   oförändrade - de beskriver vad som var sant DÅ) och DESIGN.md:s egna nya exempel-citat kvar.
   `Hemordna.E2E.Tests` i sin helhet kört (klientändring).
 
+#### B11 (Lägesval i Inställningar) — `IMPLEMENTED`
+
+- **Problemet**: A2/B3/B5/B8 byggde fyra oberoende, sparbara/enhetsval (presentation,
+  motivation, `ShowTimeLevel`, `CalmScreen`) - men att faktiskt kombinera dem till "en lugnare,
+  tydligare upplevelse" krävde att veta att alla fyra fanns och höra ihop. Inget i UI:t sa det.
+- **`Installningar.razor`**: en rad chips (`<div class="chips" aria-label="Snabbval">`) överst i
+  "Hur vill du se dina uppgifter?"-kortet, innan `.notice`-raden. Tre `Preset`-poster (en
+  `private sealed record` med `Label`/`Presentation`/`Motivation`/`ShowTimeLevel`/`CalmScreen`):
+  - **Kompakt**: `Text`, `None`, av, av.
+  - **Tydlig**: `ImageAndText`, `None`, PÅ, av.
+  - **Steg för steg**: `OneAtATime`, `Calm`, PÅ, PÅ.
+  Inget namn på chippen säger vem den är för - bara vad den ställer in, i linje med uppdragets
+  hårda krav (PRODUCT.md §7 får sin egen, uttryckliga version av samma regel i Del C:s
+  dokumentationspass).
+- **`ActivePreset`**: en beräknad egenskap (INTE ett en gång ihågkommet "senast tryckta chip"-
+  tillstånd) som jämför de FYRA nuvarande fälten mot varje preset och returnerar den som
+  matchar exakt, annars `null`. Ändrar medlemmen en enskild radioknapp eller växel för hand
+  efteråt slocknar `chip-primary`-markeringen automatiskt - den ljuger aldrig om att en
+  kombination fortfarande är ett namngivet läge när den inte längre är det.
+- **Två olika "sparar"-betydelser i samma tryck**: `ApplyPresetAsync` sätter
+  `_presentation`/`_motivation`/`_showTimeLevel` rent lokalt (osparat till servern förrän
+  "Spara" trycks, exakt som att fylla i radioknapparna för hand) MEN anropar
+  `CalmScreen.SetAsync` omedelbart - "Lugnare skärm" har (sedan B8) aldrig haft ett sparat/
+  osparat tillstånd över huvud taget, den ÄR bara vad den är just nu, per enhet, precis som
+  temat. Att låtsas den väntade på "Spara" hade varit en ny, påhittad regel; att den redan alltid
+  varit omedelbar är den regel som redan gällde.
+- **Ny lista** `<ul class="list" aria-label="Fler val">` (två `<li class="list-item">`,
+  `<label class="field-check">` - INTE `field field-check`, spec bad uttryckligen om den
+  fristående klassen eftersom `.list-item` redan ger radavstånd/kantlinje) mellan
+  presentation-radioknapparna och `<h2>Motivation</h2>`: "Visa ungefär hur lång tid en uppgift
+  tar" (`_showTimeLevel`, sparas med "Spara" som alla andra fält i kortet) och "Lugnare skärm –
+  inga rörelser eller genomskinliga effekter" (`_calmScreen`, `ToggleCalmScreenAsync`, samma
+  omedelbara `CalmScreen.SetAsync`-anrop som en chip gör). "Gäller den här enheten" (`muted
+  small`) under den senare - den exakta strängen specen angav; ingen tidigare identisk fras
+  fanns att återanvända (temats egen är en längre mening, "Det här gäller bara den här
+  enheten, inte hushållet eller dina andra enheter.").
+- **`<h2>Motivation</h2>` orört** utöver att den nu faktiskt gör något (B3) - ingen ny text,
+  ingen ny logik här.
+- **Nya/uppdaterade tester**:
+  - `InstallningarTests.Steg_for_steg_sets_all_four_choices_and_kompakt_resets_them` - "Steg för
+    steg" sätter alla fyra (inklusive att chippet själv visas `chip-primary`), "Kompakt"
+    nollställer alla fyra.
+  - `ThemeTests.Toggling_calm_screen_sets_and_clears_data_calm_immediately_without_saving` -
+    `data-calm` sätts/tas bort direkt vid växling, ingen "Spara" inblandad (samma fil som redan
+    äger `data-theme`-motsvarigheten, för samma "per enhet, omedelbart"-familj av beteende).
+  - `SkarmbilderTests`: `07b-installningar-steg-for-steg` tillagd direkt efter `07-installningar`
+    - trycker "Steg för steg", tar bilden, trycker sedan OMEDELBART "Kompakt" igen för att
+      återställa `data-calm` (ett upptäckt, nödvändigt steg: `CalmScreen`s omedelbara,
+      `localStorage`-baserade tillstånd hade annars läckt in i alla efterföljande skärmbilder i
+      samma testkörning - `08-idag-bild-text` och framåt - eftersom `SetPresentationModeAsync`
+      bara sköter presentation-radioknappen, aldrig `motivation`/`calmScreen`).
+  - **Ett kortvarigt, felaktigt intryck under granskning**: `chip-primary`/`chip-action` ser
+    mycket lika ut vid en snabb blick på skärmbilden (`--gustav-soft` mot `--surface-2`, båda
+    ljusa, olika nyans snarare än ljushet) - verifierat med ett tillfälligt debug-test (`class`-
+    attributet läst direkt, `chip-action chip-primary` bekräftat närvarande) i stället för att
+    lita på ögat, sedan raderat. Ingen kodändring behövdes - CSS:en fungerade redan korrekt.
+- **Verifierat**: `dotnet build Hemordna.slnx` (0 fel/varningar). `Hemordna.Domain.Tests`
+  87/87, `Hemordna.Application.Tests` 177/177 (ren klientändring). `InstallningarTests` +
+  `ThemeTests` 8/8. `SkarmbilderTests` 2/2, båda skärmbilderna granskade (ingen överlappning,
+  kryssrutorna och "Gäller den här enheten" sitter rätt, inget kvarvarande `data-calm`-läckage
+  i efterföljande bilder). `grep -rniE "NPF|ADHD|autis|funktionsned|tillgänglig"
+  src/Hemordna.Client --include="*.razor"`: noll träffar. `Hemordna.E2E.Tests` i sin helhet
+  kört (klientändring).
+
 ---
 
 ## 11. Beslut som ännu inte är fattade — `OPEN`
