@@ -209,9 +209,16 @@ och ingen redigering här. Helt läsläge; rollen (se §6b, satt från Hushålls
 enda sättet att ändra veckan.
 
 "Tjuvkika på ett schema" (en titt på i morgon, eller på någon annans dag, skrivskyddat) bor nu
-här i stället för på Idag – samma disclosure och logik, oförändrad, bara flyttad. "Ser
-fördelningen skev ut?" (sprid om återkommande uppgifter över veckan, `RebalanceSchedule`) bor
-nu här också - flyttad hit från Rum, i ett eget ark.
+här i stället för på Idag – samma disclosure och logik, flyttad. Listan visar bara en kryssruta
+(ifylld för avklarat, tom annars) och uppgiftens namn - ingen områdeschip, för att hålla den
+korta, skrivskyddade listan så enkel som möjligt; "sedan tidigare" behålls dock på en
+utestående uppgift, annars ser en dags gamla, ej avklarade uppgift ut som en rak dubblett av
+morgondagens egna nya förekomst (se `PeekScheduleTests`, en tidigare rapporterad förvirring).
+Under listan: "Totalt: N min" (`DailyPlanResponse.PlannedMinutes + CompletedMinutes`) - ett
+uttryckligt, medvetet undantag från §6a på produktfeedback: att tjuvkika på en dag är att
+bedöma hur full den är, närmare planeringsläget Rum/RoomTile redan har ett minutundantag för
+än den egna dagliga vyn. "Ser fördelningen skev ut?" (sprid om återkommande uppgifter över
+veckan, `RebalanceSchedule`) bor nu här också - flyttad hit från Rum, i ett eget ark.
 
 ### Hushållsöversikt
 
@@ -303,7 +310,9 @@ det visade sig kännas som "tid som ett val".
 Undantaget gäller uttryckligen bara den dagliga vyn (Idag). Rum-skärmens `RoomTile`/
 `RoomSheet` visar minuter per rum och per uppgift ("N min/v", "M min") - samma redan
 etablerade undantag som `Omraden.razor`s totalrad alltid haft: under planering av hemmet är
-"hur lång tid tar det här?" en rimlig fråga att svara på med en siffra.
+"hur lång tid tar det här?" en rimlig fråga att svara på med en siffra. "Tjuvkika på ett
+schema" (§6, Vecka) har samma undantag för sin egen "Totalt: N min"-rad under den tjuvkikade
+dagens lista - att bedöma en dags omfång är planering, inte den dagliga vyn själv.
 
 ### 6b. Roller och rumsmallar – färre val vid start
 

@@ -140,12 +140,9 @@ else
                         @foreach (var item in peekDay.Items)
                         {
                             <li class="task">
+                                <span class="task-check" aria-hidden="true"></span>
                                 <span class="task-name">
                                     @item.Name
-                                    @if (item.AreaName is { } peekArea)
-                                    {
-                                        <span class="chip">@peekArea</span>
-                                    }
                                     @if (item.IsOverdue)
                                     {
                                         <span class="task-note muted small">sedan tidigare</span>
@@ -154,6 +151,10 @@ else
                             </li>
                         }
                     </ul>
+
+                    <p class="muted small">
+                        Totalt: @(peekDay.PlannedMinutes + peekDay.CompletedMinutes) min
+                    </p>
                 }
             }
         }

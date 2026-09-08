@@ -1176,6 +1176,29 @@ klienten - annars hade "Ingen tid" fortfarande kastats ut:
   bara `Sum`/multiplikation någonstans (`DailyPlan`, `TaskWorkload`, `RebalanceTaskAssignments`
   m.fl.), aldrig division.
 
+### Uppföljning: förenklad tjuvkik-lista med totaltid — `IMPLEMENTED`
+
+Produktfeedback: "Tjuvkika på ett schema"s lista (Vecka) kändes rörig - varje rad visade namn,
+en valfri områdeschip och ibland "sedan tidigare", men bara avklarade rader hade en egen
+kryssruta/bock. Förenklat till namn + kryssruta för alla rader (tom cirkel för ej avklarat,
+ifylld gustav-bock för avklarat - samma `.task-check`/`.task-check-done` som redan fanns för
+de avklarade raderna), områdeschippen borttagen. "Sedan tidigare" behölls medvetet trots att
+den strider mot "bara namn och kryssruta": utan den ser en gammal, fortfarande utestående
+förekomst ut som en rak dubblett av morgondagens nya förekomst - en tidigare rapporterad,
+riktig förvirring som `PeekScheduleTests
+.Peeking_at_tomorrow_labels_todays_still_outstanding_occurrence_separately_from_tomorrows_own`
+skyddar mot. Ingen fråga ställdes om just den här avvägningen; den är dokumenterad här i
+stället, lätt att ändra om användaren ändå vill ha bort den.
+
+**Ny "Totalt: N min"-rad** under listan (`DailyPlanResponse.PlannedMinutes +
+CompletedMinutes`, redan beräknat serverside - ingen ny Api-yta). Ett uttryckligt, nytt
+undantag från §6a (se DESIGN.md §6a) - att tjuvkika på en dag är, liksom Rum, en
+planeringshandling ("hur full är den här dagen?"), inte den dagliga vyn själv.
+
+Ingen ny testning för listans utseende krävdes utöver `PeekScheduleTests` (redan gröna,
+oförändrade förväntningar på `.task`/"sedan tidigare"); en tillfällig skärmbild togs manuellt
+för visuell granskning under arbetet, inte sparad som permanent test.
+
 ---
 
 ## 11. Beslut som ännu inte är fattade — `OPEN`
