@@ -39,6 +39,7 @@ public static class DependencyInjection
         services.AddScoped<IHouseholdRepository, HouseholdRepository>();
         services.AddScoped<IHouseholdMembershipQuery, HouseholdMembershipQuery>();
         services.AddScoped<IMemberAvailabilityRepository, MemberAvailabilityRepository>();
+        services.AddScoped<IMemberTimeCreditRepository, MemberTimeCreditRepository>();
         services.AddScoped<IMemberPreferenceRepository, MemberPreferenceRepository>();
         services.AddScoped<ITaskDefinitionRepository, TaskDefinitionRepository>();
         services.AddScoped<ITaskOccurrenceRepository, TaskOccurrenceRepository>();

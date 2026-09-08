@@ -2,6 +2,7 @@ using Hemordna.Application.Tasks;
 using Hemordna.Application.Tests.Households;
 using Hemordna.Application.Tests.Realtime;
 using Hemordna.Domain.Common;
+using Hemordna.Domain.Households;
 using Hemordna.Domain.Tasks;
 
 namespace Hemordna.Application.Tests.Tasks;
@@ -14,6 +15,7 @@ public class CompleteAndDeferTests
     private static readonly Guid AnnaId = Guid.NewGuid();
 
     private readonly InMemoryTaskOccurrenceRepository _occurrences = new();
+    private readonly InMemoryMemberTimeCreditRepository _credits = new();
     private readonly SpyHouseholdNotifier _notifier = new();
 
     private TaskOccurrence Seed(bool canBeDeferred = true)
@@ -25,7 +27,15 @@ public class CompleteAndDeferTests
         return occurrence;
     }
 
-    private CompleteTaskOccurrence Complete() => new(_occurrences, _notifier, new FixedTimeProvider(Now));
+    private TaskOccurrence SeedFor(DateOnly date, int estimatedMinutes = 30, bool addedAsExtra = false)
+    {
+        var definition = TaskDefinition.Create(HouseholdId, $"Uppgift {Guid.NewGuid()}", estimatedMinutes, Now);
+        var occurrence = definition.ScheduleFor(date, Now, addedAsExtra);
+        _occurrences.Seed(occurrence);
+        return occurrence;
+    }
+
+    private CompleteTaskOccurrence Complete() => new(_occurrences, _credits, _notifier, new FixedTimeProvider(Now));
 
     private DeferTaskOccurrence Defer() => new(_occurrences, _notifier);
 
@@ -34,7 +44,7 @@ public class CompleteAndDeferTests
     {
         var occurrence = Seed();
 
-        var result = await Complete().HandleAsync(HouseholdId, occurrence.Id, AnnaId, CancellationToken.None);
+        var result = await Complete().HandleAsync(HouseholdId, occurrence.Id, AnnaId, Friday, CancellationToken.None);
 
         Assert.NotNull(result);
         Assert.Equal(TaskOccurrenceStatus.Completed, result.Status);
@@ -51,8 +61,8 @@ public class CompleteAndDeferTests
         var occurrence = Seed();
         var bjornId = Guid.NewGuid();
 
-        await Complete().HandleAsync(HouseholdId, occurrence.Id, AnnaId, CancellationToken.None);
-        var second = await Complete().HandleAsync(HouseholdId, occurrence.Id, bjornId, CancellationToken.None);
+        await Complete().HandleAsync(HouseholdId, occurrence.Id, AnnaId, Friday, CancellationToken.None);
+        var second = await Complete().HandleAsync(HouseholdId, occurrence.Id, bjornId, Friday, CancellationToken.None);
 
         Assert.NotNull(second);
         Assert.Equal(AnnaId, second.CompletedByMemberId);
@@ -64,7 +74,7 @@ public class CompleteAndDeferTests
         var occurrence = Seed();
 
         var result = await Complete()
-            .HandleAsync(Guid.NewGuid(), occurrence.Id, AnnaId, CancellationToken.None);
+            .HandleAsync(Guid.NewGuid(), occurrence.Id, AnnaId, Friday, CancellationToken.None);
 
         Assert.Null(result);
         Assert.Equal(0, _occurrences.UpdateCallCount);
@@ -111,5 +121,64 @@ public class CompleteAndDeferTests
             .HandleAsync(HouseholdId, Guid.NewGuid(), Friday.AddDays(1), CancellationToken.None);
 
         Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task Completing_something_before_its_own_due_date_earns_worked_ahead_credit()
+    {
+        var tomorrow = Friday.AddDays(1);
+        var occurrence = SeedFor(tomorrow, estimatedMinutes: 30);
+
+        await Complete().HandleAsync(HouseholdId, occurrence.Id, AnnaId, Friday, CancellationToken.None);
+
+        var entry = Assert.Single(await _credits.ListForMemberAsync(HouseholdId, AnnaId, Friday, Friday, CancellationToken.None));
+        Assert.Equal(30, entry.Minutes);
+        Assert.Equal(TimeCreditReason.WorkedAhead, entry.Reason);
+    }
+
+    [Fact]
+    public async Task Completing_something_on_its_own_due_date_earns_no_credit()
+    {
+        var occurrence = SeedFor(Friday, estimatedMinutes: 30);
+
+        await Complete().HandleAsync(HouseholdId, occurrence.Id, AnnaId, Friday, CancellationToken.None);
+
+        Assert.Empty(await _credits.ListForMemberAsync(HouseholdId, AnnaId, Friday, Friday, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Completing_an_extra_task_on_its_own_due_date_earns_extra_task_credit()
+    {
+        var occurrence = SeedFor(Friday, estimatedMinutes: 5, addedAsExtra: true);
+
+        await Complete().HandleAsync(HouseholdId, occurrence.Id, AnnaId, Friday, CancellationToken.None);
+
+        var entry = Assert.Single(await _credits.ListForMemberAsync(HouseholdId, AnnaId, Friday, Friday, CancellationToken.None));
+        Assert.Equal(5, entry.Minutes);
+        Assert.Equal(TimeCreditReason.ExtraTask, entry.Reason);
+    }
+
+    [Fact]
+    public async Task An_extra_task_completed_ahead_of_its_own_date_earns_worked_ahead_not_both()
+    {
+        var tomorrow = Friday.AddDays(1);
+        var occurrence = SeedFor(tomorrow, estimatedMinutes: 5, addedAsExtra: true);
+
+        await Complete().HandleAsync(HouseholdId, occurrence.Id, AnnaId, Friday, CancellationToken.None);
+
+        var entry = Assert.Single(await _credits.ListForMemberAsync(HouseholdId, AnnaId, Friday, Friday, CancellationToken.None));
+        Assert.Equal(TimeCreditReason.WorkedAhead, entry.Reason);
+    }
+
+    [Fact]
+    public async Task Completing_an_already_completed_occurrence_does_not_earn_credit_twice()
+    {
+        var tomorrow = Friday.AddDays(1);
+        var occurrence = SeedFor(tomorrow, estimatedMinutes: 30);
+
+        await Complete().HandleAsync(HouseholdId, occurrence.Id, AnnaId, Friday, CancellationToken.None);
+        await Complete().HandleAsync(HouseholdId, occurrence.Id, AnnaId, Friday, CancellationToken.None);
+
+        Assert.Single(await _credits.ListForMemberAsync(HouseholdId, AnnaId, Friday, Friday, CancellationToken.None));
     }
 }

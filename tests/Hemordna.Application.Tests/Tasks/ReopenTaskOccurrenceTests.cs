@@ -2,6 +2,7 @@ using Hemordna.Application.Tasks;
 using Hemordna.Application.Tests.Households;
 using Hemordna.Application.Tests.Realtime;
 using Hemordna.Domain.Common;
+using Hemordna.Domain.Households;
 using Hemordna.Domain.Tasks;
 
 namespace Hemordna.Application.Tests.Tasks;
@@ -14,6 +15,7 @@ public class ReopenTaskOccurrenceTests
     private static readonly Guid AnnaId = Guid.NewGuid();
 
     private readonly InMemoryTaskOccurrenceRepository _occurrences = new();
+    private readonly InMemoryMemberTimeCreditRepository _credits = new();
     private readonly SpyHouseholdNotifier _notifier = new();
 
     private TaskOccurrence Seed(DateTimeOffset now)
@@ -25,7 +27,7 @@ public class ReopenTaskOccurrenceTests
         return occurrence;
     }
 
-    private ReopenTaskOccurrence Reopen(DateTimeOffset now) => new(_occurrences, _notifier, new FixedTimeProvider(now));
+    private ReopenTaskOccurrence Reopen(DateTimeOffset now) => new(_occurrences, _credits, _notifier, new FixedTimeProvider(now));
 
     [Fact]
     public async Task Reopening_within_the_window_notifies_exactly_once()
@@ -75,5 +77,33 @@ public class ReopenTaskOccurrenceTests
             Reopen(CompletedAt.AddMinutes(20)).HandleAsync(HouseholdId, occurrence.Id, AnnaId, CancellationToken.None));
 
         Assert.Equal(0, _occurrences.UpdateCallCount);
+    }
+
+    [Fact]
+    public async Task Reopening_removes_the_credit_that_completion_earned()
+    {
+        var occurrence = Seed(CompletedAt);
+        _credits.Seed(MemberTimeCredit.Earned(
+            HouseholdId, AnnaId, Friday, TimeCreditReason.WorkedAhead, 30, occurrence.Id));
+
+        await Reopen(CompletedAt.AddMinutes(5)).HandleAsync(HouseholdId, occurrence.Id, AnnaId, CancellationToken.None);
+
+        Assert.Empty(await _credits.ListForMemberAsync(HouseholdId, AnnaId, Friday, Friday, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Reopening_never_touches_a_rotation_skipped_credit_row_for_this_occurrence()
+    {
+        // A RotationSkipped row on THIS occurrence's id records a DIFFERENT member's own
+        // rotation history from when the occurrence was generated - reopening this completion
+        // must never remove it.
+        var occurrence = Seed(CompletedAt);
+        var bjornId = Guid.NewGuid();
+        _credits.Seed(MemberTimeCredit.Consumed(
+            HouseholdId, bjornId, Friday, TimeCreditReason.RotationSkipped, 10, occurrence.Id));
+
+        await Reopen(CompletedAt.AddMinutes(5)).HandleAsync(HouseholdId, occurrence.Id, AnnaId, CancellationToken.None);
+
+        Assert.Single(await _credits.ListForMemberAsync(HouseholdId, bjornId, Friday, Friday, CancellationToken.None));
     }
 }

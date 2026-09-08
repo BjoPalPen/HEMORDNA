@@ -163,7 +163,7 @@ internal static class DevelopmentDataSeeder
 
                     if (occurrence is not null && date < today)
                     {
-                        await completeTask.HandleAsync(household.Id, occurrence.Id, demoMember.Id, cancellationToken);
+                        await completeTask.HandleAsync(household.Id, occurrence.Id, demoMember.Id, today, cancellationToken);
                     }
                 }
             }

@@ -692,14 +692,20 @@ internal static class HouseholdEndpoints
         Guid occurrenceId,
         HttpContext httpContext,
         CompleteTaskOccurrence complete,
+        TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
         // The caller completes it as themselves. The membership was resolved and verified by
         // HouseholdAccessFilter, so it cannot name someone in another household.
         var membership = httpContext.GetMembership();
 
+        // The server's own date, for now - decides whether this completion earns "tid i
+        // förväg" (see CompleteTaskOccurrence). A future body-supplied override (the client's
+        // own "today", per CLAUDE.md §5) is Del E's addition, not made here yet.
+        var today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+
         var occurrence = await complete.HandleAsync(
-            householdId, occurrenceId, membership.MemberId, cancellationToken);
+            householdId, occurrenceId, membership.MemberId, today, cancellationToken);
 
         return occurrence is null ? Results.NotFound() : Results.Ok(ToResponse(occurrence));
     }
