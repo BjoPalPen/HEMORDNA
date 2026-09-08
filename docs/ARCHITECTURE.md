@@ -1316,6 +1316,28 @@ Ny testfil `MinDagFloorGroupingTests.cs`: fyra rum på två våningar, skapade i
 interfolierad ordning (Entré/Övre/Entré/Övre) - ett grönt test bevisar därför att våningarna
 faktiskt klustras, inte att de råkar redan ligga i rätt ordning.
 
+### Uppföljning: "Extra uppgift" erbjuder befintliga uppgifter — `IMPLEMENTED`
+
+Produktfeedback: "Extra uppgift" var alltid ett tomt formulär - varje gång, oavsett om
+hushållet redan hade en passande uppgift att bara plocka fram igen, skapades en helt ny
+`TaskDefinition`. Löst helt klientsidigt i `MinDag.razor`, ingen ny Api-yta - `Api
+.ListTasksAsync`/`GetHouseholdAsync`/`ScheduleOccurrenceAsync`/`SetAvailabilityAsync` fanns
+redan sen tidigare steg.
+
+- **`OpenExtraTaskSheetAsync`** laddar hushållets aktiva uppgifter (för rumsnamn) och filtrerar
+  bort allt som redan är del av dagens plan (`Items`/`Completed`/`Unplanned`, matchat på
+  `TaskDefinitionId`) - laddas om från grunden varje gång arket öppnas snarare än cachat, så en
+  uppgift som lagts till någon annanstans sen sist syns direkt.
+- **Listan är förstavalet**, en rad per befintlig kandidat (namn, rumschip om uppgiften har ett
+  rum, kvalitativ tidsnivå - aldrig en rå minutsiffra, §6a gäller lika mycket här). En
+  tryckning schemalägger direkt, ingen bekräftelse - samma "widen today's available time"-steg
+  som fanns sen tidigare (`ScheduleForTodayAsync`, nu delad mellan båda vägarna) så uppgiften
+  garanterat hamnar på dagens lista och inte tyst glider till "till en annan dag".
+- **"Eller skriv en ny uppgift"** är en disclosure under listan med det oförändrade gamla
+  formuläret - för en genuint ny engångssak. Har hushållet inga kandidater alls (ett färskt
+  hushåll utan uppgifter) visas formuläret direkt, utan en tom lista och en meningslös
+  disclosure runt den.
+
 ---
 
 ## 11. Beslut som ännu inte är fattade — `OPEN`

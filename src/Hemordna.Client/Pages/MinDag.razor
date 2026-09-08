@@ -136,7 +136,7 @@ else
                     Flytta till en annan dag
                 </button>
             }
-            <button type="button" class="chip-action" @onclick="() => _showExtraTaskSheet = true">
+            <button type="button" class="chip-action" @onclick="OpenExtraTaskSheetAsync">
                 Extra uppgift
             </button>
         </div>
@@ -194,39 +194,44 @@ else
 
         <BottomSheet Title="Extra uppgift" @bind-IsOpen="_showExtraTaskSheet">
             <p class="muted small">
-                Något du vill göra i dag utöver det som redan är inplanerat - t.ex. en
-                engångssak som inte behöver upprepas.
+                Något du vill göra i dag utöver det som redan är inplanerat.
             </p>
 
-            <EditForm Model="_extraForm" OnValidSubmit="AddExtraTaskAsync">
-                <label class="field">
-                    <span>Namn</span>
-                    <InputText @bind-Value="_extraForm.Name" placeholder="T.ex. Rensa garderoben" />
-                </label>
-
-                <div class="field">
-                    <span>Ungefär hur mycket tid tar det?</span>
-                    <div class="level-picker">
-                        @foreach (var level in TimeLevel.All)
-                        {
-                            <button type="button"
-                                    class="@(_extraForm.EstimatedMinutes == level.Minutes ? "btn btn-primary" : "btn btn-secondary")"
-                                    @onclick="() => _extraForm.EstimatedMinutes = level.Minutes">
-                                @level.Label
+            @if (_extraTaskCandidates.Count > 0)
+            {
+                <ul class="list" aria-label="Befintliga uppgifter">
+                    @foreach (var candidate in _extraTaskCandidates)
+                    {
+                        <li class="list-item list-item-flush">
+                            <button type="button" class="list-row" disabled="@_extraTaskBusy"
+                                    @onclick="() => AddExistingExtraTaskAsync(candidate)">
+                                <span>
+                                    @candidate.Name
+                                    @if (AreaNameFor(candidate.AreaId) is { } areaName)
+                                    {
+                                        <span class="chip">@areaName</span>
+                                    }
+                                </span>
+                                <span class="list-row-value">@TimeLabelFor(candidate.EstimatedMinutes)</span>
                             </button>
-                        }
-                    </div>
-                </div>
+                        </li>
+                    }
+                </ul>
 
-                @if (_extraTaskMessage is { } extraTaskMessage)
+                @if (_extraTaskMessage is { } pickedMessage)
                 {
-                    <div class="notice notice-problem" role="alert">@extraTaskMessage</div>
+                    <div class="notice notice-problem" role="alert">@pickedMessage</div>
                 }
 
-                <button type="submit" class="btn btn-primary" disabled="@_extraTaskBusy">
-                    @(_extraTaskBusy ? "Lägger till..." : "Lägg till för i dag")
-                </button>
-            </EditForm>
+                <details class="more-options">
+                    <summary>Eller skriv en ny uppgift</summary>
+                    @NewExtraTaskForm
+                </details>
+            }
+            else
+            {
+                @NewExtraTaskForm
+            }
         </BottomSheet>
     }
 }
@@ -249,6 +254,8 @@ else
     private readonly ExtraTaskForm _extraForm = new();
     private string? _extraTaskMessage;
     private bool _extraTaskBusy;
+    private HouseholdResponse? _household;
+    private IReadOnlyList<TaskDefinitionResponse> _extraTaskCandidates = [];
 
     // "Bild + text" - an individual preference (PRODUCT.md §7), not a household setting.
     private bool ShowIcons => _presentation == "ImageAndText";
@@ -327,6 +334,39 @@ else
             }
         }
     </div>;
+
+    /// <summary>The free-text path in "Extra uppgift" - a genuinely new, one-off task. Shared
+    /// between the "Eller skriv en ny uppgift" disclosure (when there are existing tasks to
+    /// pick from instead) and the plain top-level form (when there are none to pick from).</summary>
+    private RenderFragment NewExtraTaskForm => @<EditForm Model="_extraForm" OnValidSubmit="AddExtraTaskAsync">
+        <label class="field">
+            <span>Namn</span>
+            <InputText @bind-Value="_extraForm.Name" placeholder="T.ex. Rensa garderoben" />
+        </label>
+
+        <div class="field">
+            <span>Ungefär hur mycket tid tar det?</span>
+            <div class="level-picker">
+                @foreach (var level in TimeLevel.All)
+                {
+                    <button type="button"
+                            class="@(_extraForm.EstimatedMinutes == level.Minutes ? "btn btn-primary" : "btn btn-secondary")"
+                            @onclick="() => _extraForm.EstimatedMinutes = level.Minutes">
+                        @level.Label
+                    </button>
+                }
+            </div>
+        </div>
+
+        @if (_extraTaskMessage is { } extraTaskMessage)
+        {
+            <div class="notice notice-problem" role="alert">@extraTaskMessage</div>
+        }
+
+        <button type="submit" class="btn btn-primary" disabled="@_extraTaskBusy">
+            @(_extraTaskBusy ? "Lägger till..." : "Lägg till för i dag")
+        </button>
+    </EditForm>;
 
     // The date is resolved from an injected clock here at the edge; nothing below reads one.
     // TimeProvider rather than DateTime.Now so the page can be rendered at a fixed date.
@@ -470,6 +510,76 @@ else
     }
 
     /// <summary>
+    /// Opens "Extra uppgift" and loads what it needs to offer existing tasks to pick from, not
+    /// just the free-text form - every active task the household has, minus whatever is already
+    /// part of today's plan (planned, completed or unplanned - re-offering something already on
+    /// the list makes no sense). Reloaded fresh on every open rather than cached, so a task
+    /// added elsewhere in the meantime shows up.
+    /// </summary>
+    private async Task OpenExtraTaskSheetAsync()
+    {
+        _showExtraTaskSheet = true;
+        _extraTaskMessage = null;
+
+        if (Session.Me is not { HouseholdId: { } householdId })
+        {
+            return;
+        }
+
+        var tasksTask = Api.ListTasksAsync(householdId);
+        var householdTask = Api.GetHouseholdAsync(householdId);
+        await Task.WhenAll(tasksTask, householdTask);
+
+        _household = await householdTask;
+
+        var idsAlreadyToday = new HashSet<Guid>(
+            (_day?.Items ?? []).Select(item => item.TaskDefinitionId)
+                .Concat((_day?.Completed ?? []).Select(item => item.TaskDefinitionId))
+                .Concat((_day?.Unplanned ?? []).Select(item => item.TaskDefinitionId)));
+
+        _extraTaskCandidates = [.. (await tasksTask).Where(task => !idsAlreadyToday.Contains(task.Id))];
+    }
+
+    private string? AreaNameFor(Guid? areaId)
+        => areaId is { } id ? _household?.Areas.FirstOrDefault(area => area.Id == id)?.Name : null;
+
+    private static string TimeLabelFor(int minutes)
+        => TimeLevel.All.First(level => level.Minutes == TimeLevel.ClosestMinutes(minutes)).Label;
+
+    /// <summary>Picking an existing task needs none of AddExtraTaskAsync's own creation step -
+    /// just schedule the occurrence it already has everything else for.</summary>
+    private async Task AddExistingExtraTaskAsync(TaskDefinitionResponse task)
+    {
+        if (Session.Me is not { HouseholdId: { } householdId, MemberId: { } memberId })
+        {
+            return;
+        }
+
+        _extraTaskBusy = true;
+        _extraTaskMessage = null;
+
+        try
+        {
+            if (!await ScheduleForTodayAsync(householdId, memberId, task.Id, task.EstimatedMinutes))
+            {
+                _extraTaskMessage = "Det gick inte att lägga till uppgiften. Försök igen.";
+                return;
+            }
+
+            _showExtraTaskSheet = false;
+            await LoadDayAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _extraTaskMessage = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _extraTaskBusy = false;
+        }
+    }
+
+    /// <summary>
     /// A one-off task the person wants to do today, on top of what is already planned - not
     /// tied to a room and never repeats, so it needs no recurrence: create the definition
     /// (see Components/RoomSheet.razor's "Ingen - schemaläggs för hand" for the same shape) and schedule
@@ -503,19 +613,11 @@ else
                 Recurrence: null));
 
             if (task is null
-                || !await Api.ScheduleOccurrenceAsync(householdId, task.Id, Today, memberId))
+                || !await ScheduleForTodayAsync(householdId, memberId, task.Id, _extraForm.EstimatedMinutes))
             {
                 _extraTaskMessage = "Det gick inte att lägga till uppgiften. Försök igen.";
                 return;
             }
-
-            // The planner never invents time it was not told about (a non-deferrable task that
-            // does not fit is still reported as unplanned, not forced in - see DailyPlanner) -
-            // so an "extra" task actually landing on today's list, rather than silently sliding
-            // to "till en annan dag", means genuinely making room for it: today's available
-            // time goes up by exactly what this task is estimated to take.
-            await Api.SetAvailabilityAsync(
-                householdId, memberId, Today, (_day?.AvailableMinutes ?? 0) + _extraForm.EstimatedMinutes);
 
             _extraForm.Name = string.Empty;
             _extraForm.EstimatedMinutes = 0;
@@ -530,5 +632,22 @@ else
         {
             _extraTaskBusy = false;
         }
+    }
+
+    /// <summary>Shared tail for both "Extra uppgift" paths (pick an existing task, or write a
+    /// new one): schedule the occurrence for today, then widen today's own available time by
+    /// exactly what it takes. The planner never invents time it was not told about (a non-
+    /// deferrable task that does not fit is still reported as unplanned, not forced in - see
+    /// DailyPlanner), so this is what makes an "extra" task actually land on today's list
+    /// instead of silently sliding to "till en annan dag".</summary>
+    private async Task<bool> ScheduleForTodayAsync(Guid householdId, Guid memberId, Guid taskId, int estimatedMinutes)
+    {
+        if (!await Api.ScheduleOccurrenceAsync(householdId, taskId, Today, memberId))
+        {
+            return false;
+        }
+
+        await Api.SetAvailabilityAsync(householdId, memberId, Today, (_day?.AvailableMinutes ?? 0) + estimatedMinutes);
+        return true;
     }
 }
