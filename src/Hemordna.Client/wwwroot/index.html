@@ -9,15 +9,20 @@
     <meta name="description" content="Ett enklare hem, en lugnare vardag." />
     <title>Hemordna</title>
     <base href="/" />
-    <!-- Applies a forced light/dark choice (Support/Theme.cs, wwwroot/js/theme.js) before
-         app.css loads, so there is no flash of the wrong theme on first paint. Keep the
-         storage key and attribute logic here in sync with theme.js if either changes. -->
+    <!-- Applies a forced light/dark choice (Support/Theme.cs, wwwroot/js/theme.js) and
+         "Lugnare skärm" (Support/CalmScreen.cs, wwwroot/js/calm-screen.js) before app.css
+         loads, so there is no flash of the wrong theme or of motion/blur on first paint. Keep
+         the storage keys and attribute logic here in sync with theme.js/calm-screen.js if
+         either changes. -->
     <script>
         (function () {
             try {
                 var theme = localStorage.getItem('hemordna.theme');
                 if (theme === 'light' || theme === 'dark') {
                     document.documentElement.setAttribute('data-theme', theme);
+                }
+                if (localStorage.getItem('hemordna.calm') === '1') {
+                    document.documentElement.setAttribute('data-calm', '');
                 }
             } catch (e) {}
         })();

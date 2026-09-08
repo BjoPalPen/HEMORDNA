@@ -256,6 +256,20 @@ a {
     }
 }
 
+/* "Lugnare skärm" (Inställningar, Support/CalmScreen.cs) - a per-device choice, same
+   data-attribute-on-html mechanism as data-theme. Same effect as prefers-reduced-motion above,
+   but as an explicit opt-in rather than an OS setting - someone may want a calmer screen
+   without their OS being set to reduce motion generally. This alone covers .task-confirm's
+   spring animation and .progress > i's transition (both plain animation-/transition-duration),
+   since neither needs its own separate rule; the translucency overrides below (nav pill,
+   edge fades, sheet scrim) are static visual effects this cannot reach on its own. */
+html[data-calm] * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+}
+
 /* ---------- Surfaces ---------- */
 
 .card {

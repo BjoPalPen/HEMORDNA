@@ -182,3 +182,13 @@
         }
     }
 }
+
+/* "Lugnare skärm" (app.css, Support/CalmScreen.cs) - the pill's translucency is exactly the
+   kind of "genomskinlig effekt" that setting promises to remove, so it becomes a plain solid
+   surface instead of glass, same as an ordinary card. Written as a plain (not ::deep) rule -
+   .nav-shell is this component's own root element, so the usual scoping already reaches it. */
+html[data-calm] .nav-shell {
+    background: var(--surface);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}

@@ -24,7 +24,14 @@ export function confirm(element) {
 }
 
 export function attach(element, dotNetRef) {
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    // "Lugnare skärm" (Installningar.razor, Support/CalmScreen.cs) skips the same drag visual
+    // as an OS-level prefers-reduced-motion would - it is a "rörelse" either way, just an
+    // explicit per-device opt-in instead of an OS setting. Snapshotted once per attach(), same
+    // as the OS check to its left: toggling either mid-session will not affect a row already
+    // attached, only the next one a list reload creates - matches this file's existing
+    // reduceMotion behaviour rather than adding new reactivity data-calm alone would not have.
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        || document.documentElement.hasAttribute('data-calm');
 
     let startX = null;
     let dx = 0;

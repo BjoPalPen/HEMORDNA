@@ -1726,6 +1726,49 @@ kan ha valt "Steg för steg", en annan inget alls. Allt i detta uppdrag är anti
   `Hemordna.E2E.Tests` 82/82 rent - kört i sin helhet eftersom commiten rör klientkod
   (`Installningar.razor`, `HemordnaApiClient`, delade kontrakt), inte bara backend.
 
+#### B8 (Lugnare skärm) — `IMPLEMENTED`
+
+- **`Support/CalmScreen.cs` + `wwwroot/js/calm-screen.js`** speglar `Theme.cs`/`theme.js`
+  exakt: `localStorage`-nyckel `hemordna.calm` (`"1"`/saknas), attribut `data-calm` på
+  `<html>`, samma synkrona inline-snutt i `index.html` (utökad, inte duplicerad) så det gäller
+  innan Blazor och `app.css` hinner måla något. Per enhet, inte per medlem (Del C) - exakt
+  samma motivering som temat redan har: det är en egenskap hos skärmen man håller i.
+- **Global neutraliserande regel** i `app.css`, `html[data-calm] * { animation-duration:
+  .001ms!important; ... }` - en ordagrann kopia av det redan befintliga
+  `prefers-reduced-motion`-blocket, bara nyckla på attributet i stället för media-frågan. Detta
+  ensamt räcker för `.task-confirm`s fjädring och `.progress > i`s övergång - ingen egen regel
+  behövdes för någon av dem, eftersom båda bara är vanliga `animation-`/`transition-duration`-
+  värden som den generella regeln redan fångar.
+- **Tre statiska, riktade overrides** för sådant den generella regeln INTE når (genomskinlighet
+  är inte en varaktighet): `NavMenu.razor.css` (`.nav-shell` → `var(--surface)`, ingen
+  `backdrop-filter`), `MainLayout.razor.css` (`.app-topfade`/`.app-botfade` → solid `--kalk`
+  med en `var(--line)`-kant - INTE `--edge`, som medvetet är genomskinlig i ljust läge; utan en
+  alltid synlig linje hade "hård kant" varit osynlig exakt där den behövs, eftersom remsans
+  bakgrund annars är identisk med sidans egen), `BottomSheet.razor.css` (`.sheet-scrim` utan
+  blur, mörkläggningen kvar - arket är fortfarande modalt).
+- **`task-swipe.js`**: `reduceMotion`-flaggan (redan avläst en gång per `attach()`) blir
+  `prefers-reduced-motion ELLER data-calm` - svepets dragrörelse är en "rörelse" oavsett källa.
+  Samma ögonblicksbilds-begränsning som `prefers-reduced-motion` redan har (ändras inte live
+  för en redan fäst rad, bara nästa gång en lista laddas om) - medvetet, inte en ny svaghet.
+- **Medveten avgränsning, inte en spec-avvikelse jag ändrat på eget initiativ:** `wwwroot/js/
+  bottom-sheet.js`s egen drag-till-expandera/stäng-gest (`attachDrag`, "Ny form 2026" steg 5)
+  har KVAR bara sin egen `prefers-reduced-motion`-koll, ingen `data-calm`-koll - B8:s filuppsättning
+  namnger uttryckligen `task-swipe.js`, inte `bottom-sheet.js`. En riktig, om än liten,
+  produktinkonsekvens (ett halvt arks drag skulle fortfarande animeras under "Lugnare skärm"),
+  flaggad här snarare än tyst utökad utanför den angivna filuppsättningen.
+- **Ingen kontroll i UI:t ännu** - `data-calm` går bara att sätta via `localStorage` direkt
+  fram till B11.
+- **Verifierat**: `dotnet build Hemordna.slnx` (0 fel/varningar). `Hemordna.Domain.Tests`
+  87/87, `Hemordna.Application.Tests` 177/177 (ingen ändring - ren klientfunktion).
+  `Hemordna.E2E.Tests` 82/82 rent. Eftersom ingen UI-kontroll finns än verifierades den
+  faktiska effekten med ett tillfälligt `DEBUG_CalmScreenTests`-test (satte `localStorage`
+  direkt, precis som den riktiga knappen kommer göra, och laddade om) - bekräftade att
+  navpillen blir solid `--surface` utan `backdrop-filter`, att `.app-topfade` blir solid
+  `--kalk` utan blur/mask och med en riktig 1px-kant, och att `.progress > i`s övergångstid
+  faller till den neutraliserande regelns `0.001ms` (`getComputedStyle` rapporterar det som
+  `1e-06s` - sekunder, inte millisekunder, samma tal). Testet togs bort igen efter
+  verifiering.
+
 ---
 
 ## 11. Beslut som ännu inte är fattade — `OPEN`

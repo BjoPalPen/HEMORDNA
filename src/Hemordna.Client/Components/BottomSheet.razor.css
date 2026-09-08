@@ -7,6 +7,13 @@
     z-index: 20;
 }
 
+/* "Lugnare skärm" (app.css, Support/CalmScreen.cs) - the scrim keeps darkening the page behind
+   the sheet (still needed to show it is modal), just without blurring it. */
+html[data-calm] .sheet-scrim {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+}
+
 .sheet-shell {
     position: fixed;
     left: 0;
