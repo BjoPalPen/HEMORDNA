@@ -1979,6 +1979,39 @@ kan ha valt "Steg för steg", en annan inget alls. Allt i detta uppdrag är anti
   `grep -rniE "NPF|ADHD|autis|funktionsned|tillgänglig"` mot ändrade filer: noll träffar.
   `Hemordna.E2E.Tests` i sin helhet kört (ren klientändring).
 
+#### B4 (Fokusläget: "Visa nästa") — `IMPLEMENTED`
+
+- **Problemet**: i fokusläge (`OneAtATime`) visade `.focus-card` alltid den första utestående
+  uppgiften i ordningen - ingen väg förbi den utan att bocka av eller skjuta upp den, även om
+  medlemmen bara ville se vad som väntade längre fram.
+- **`MinDag.razor`**: `FocusTask` (tidigare en beräknad `.FirstOrDefault()`) delades i två:
+  `FocusOrder` (samma `OverdueItems.Concat(RoomGroups...)`-kedja som förut, nu materialiserad
+  till en `List<PlannedTaskResponse>` i stället för att bara ta första träffen) och `FocusTask`
+  som indexerar `FocusOrder[_focusOffset % FocusOrder.Count]` (`null` om listan är tom - samma
+  `@CalmState`-fallback som innan). Rader en `ReconcileRemoteChangeAsync` markerat
+  `IsRemotelyCompleted` filtreras fortfarande bort - de är inte längre någons "nästa".
+- **`_focusOffset`** (nytt `int`-fält, default 0): ökar med ett vid varje tryck på "Visa nästa"
+  (`ShowNextFocusTask`) - ingen egen modulo-räkning vid ökningen, `FocusTask`s egen `%
+  FocusOrder.Count` håller den inom gränserna oavsett hur många gånger den ökats. Nollställs i
+  `LoadDayAsync()` - en ny dag, en omladdning efter egen handling, eller att lämna och komma
+  tillbaka till sidan börjar alltid om från den första uppgiften i ordningen, aldrig kvar på en
+  tidigare "nästa"-position.
+- **Knappen**: tredje knappen i `.focus-actions`, `class="btn btn-link"` (skiljer den visuellt
+  från de två primära handlingarna "Bocka av"/"Skjut upp till imorgon" - det här är en titt,
+  inte en handling), dold när `FocusOrder.Count <= 1` (inget att rotera till).
+- **Ändrar ingenting på servern eller på Vecka**: `ShowNextFocusTask` rör varken `_day`, någon
+  `Api.*`-anrop eller occurrensernas ordning/status - rent lokalt UI-tillstånd, samma kategori
+  som `_expandedOccurrence`.
+- **Nytt permanent test** `FocusNextTests.Visa_nasta_cycles_the_focus_card_without_changing_the_days_schedule`
+  - tre uppgifter, "Visa nästa" tryckt tre gånger visar tre olika namn och går sedan runt till
+  det första igen (bevisar cykeln, inte bara "byter till NÅGOT"); en avslutande `GET .../plan`
+  bekräftar att alla tre fortfarande är i `items` (ingen flyttad till `completed`) - "ändrar
+  inget på servern" verifierat, inte bara antaget.
+- **Verifierat**: `dotnet build Hemordna.slnx` (0 fel/varningar). `Hemordna.Domain.Tests`
+  87/87, `Hemordna.Application.Tests` 177/177 (ren klientändring). `FocusNextTests` 1/1.
+  `grep -rniE "NPF|ADHD|autis|funktionsned|tillgänglig"` mot ändrade filer: noll träffar.
+  `Hemordna.E2E.Tests` i sin helhet kört (ren klientändring).
+
 ---
 
 ## 11. Beslut som ännu inte är fattade — `OPEN`

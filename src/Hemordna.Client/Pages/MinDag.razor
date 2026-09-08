@@ -112,6 +112,12 @@ else
                                 Skjut upp till imorgon
                             </button>
                         }
+                        @if (FocusOrder.Count > 1)
+                        {
+                            <button type="button" class="btn btn-link" @onclick="ShowNextFocusTask">
+                                Visa nästa
+                            </button>
+                        }
                     </div>
                 </div>
 
@@ -302,6 +308,7 @@ else
     private Guid? _expandedOccurrence;
     private string? _presentation;
     private string? _motivation;
+    private int _focusOffset;
     private bool _showUnplannedSheet;
     private bool _showExtraTaskSheet;
     private (DateOnly Date, int Count)? _nextPlanned;
@@ -398,15 +405,29 @@ else
     private static int OutstandingCount(IEnumerable<TaskRow> rows) => rows.Count(row => !row.IsRemotelyCompleted);
 
     /// <summary>"En uppgift åt gången" (docs/PRODUCT.md §7): the same order the grouped view
-    /// would show, just one row deep - completing or deferring it naturally surfaces the next
-    /// one on reload, so no separate index needs to be tracked here. A row a remote change just
-    /// marked done is skipped - it is no longer anyone's "next" task, remotely completed or
-    /// not.</summary>
-    private PlannedTaskResponse? FocusTask
+    /// would show. A row a remote change just marked done is skipped - it is no longer anyone's
+    /// "next" task, remotely completed or not.</summary>
+    private List<PlannedTaskResponse> FocusOrder
         => OverdueItems.Concat(RoomGroups.SelectMany(group => group.Items))
             .Where(row => !row.IsRemotelyCompleted)
             .Select(row => row.Item)
-            .FirstOrDefault();
+            .ToList();
+
+    /// <summary>The task the focus card shows - normally the first outstanding one, but "Visa
+    /// nästa" (ShowNextFocusTask) rotates _focusOffset through FocusOrder without changing
+    /// anything on the server or on Vecka: purely "let me see a different one for now", reset
+    /// back to the start on the next LoadDayAsync (a fresh visit, or the member's own next
+    /// action).</summary>
+    private PlannedTaskResponse? FocusTask
+    {
+        get
+        {
+            var order = FocusOrder;
+            return order.Count == 0 ? null : order[_focusOffset % order.Count];
+        }
+    }
+
+    private void ShowNextFocusTask() => _focusOffset++;
 
     /// <summary>"Lugn" (Installningar.razor) - one of these four, chosen by state alone, never
     /// randomly: the same day-counts state always reads the same phrase, so it never seems to
@@ -756,6 +777,7 @@ else
         }
 
         _day = await Api.GetDailyPlanAsync(householdId, memberId, Today);
+        _focusOffset = 0;
 
         // A full reload supersedes any patched-in state from ReconcileRemoteChangeAsync - it is
         // about to be rebuilt from scratch against the same server truth that state was tracking.
