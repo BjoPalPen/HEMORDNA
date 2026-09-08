@@ -2,6 +2,8 @@
     position: fixed;
     inset: 0;
     background: rgba(34, 40, 46, .35);
+    -webkit-backdrop-filter: blur(3px);
+    backdrop-filter: blur(3px);
     z-index: 20;
 }
 
@@ -14,10 +16,17 @@
     max-height: 85vh;
     overflow-y: auto;
     background: var(--surface);
-    border-radius: 22px 22px 0 0;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
     corner-shape: squircle;
     box-shadow: 0 -10px 40px rgba(0, 0, 0, .18);
     padding: var(--space-2) var(--space-4) var(--space-5);
+}
+
+/* Two mobile heights (Components/SheetDetent.cs) - a short choice/summary does not need the
+   full screen, a form that can grow does. A "half" sheet that gets more content than fits
+   still scrolls within itself (overflow-y: auto above), never clips. */
+.sheet-shell[data-detent="half"] {
+    max-height: 56vh;
 }
 
 .sheet-handle {
@@ -59,7 +68,8 @@
 
 /* Desktop: the same component renders as a centered dialog, not an edge-anchored sheet. */
 @media (min-width: 640px) {
-    .sheet-shell {
+    .sheet-shell,
+    .sheet-shell[data-detent="half"] {
         left: 50%;
         right: auto;
         bottom: auto;

@@ -1563,6 +1563,50 @@ under alla omständigheter utanför MVP-scope (CLAUDE.md §12/PRODUCT.md §10).
   h1 klipps inte och radbryter inte i Stor text vid 390px, "TISDAG ..."-etiketten är helt skarp
   i viloläge efter padding-fixen.
 
+#### Delsteg 5 (punkt 4, "Ark med två lägen") — `IMPLEMENTED`
+
+- **Ny `Components/SheetDetent.cs`** (`enum SheetDetent { Half, Full }`) + ny `[Parameter]
+  Detent` på `BottomSheet.razor` (förvalt `Full`, oförändrat beteende för allt som inte
+  uttryckligen sätter `Half`). `data-detent="half|full"` renderas på `.sheet-shell`.
+- **`BottomSheet.razor.css`**: `.sheet-shell[data-detent="half"] { max-height: 56vh }` (mobil
+  bara - desktopdialogen, `@media (min-width:640px)`, återställer uttryckligen 80vh för BÅDA
+  attributvärdena, eftersom attributselektorn annars vinner över den vanliga `.sheet-shell`-
+  regeln på specificitet oavsett `@media`-block, och skulle annars läcka in 56vh på desktop
+  också). `.sheet-scrim` fick `backdrop-filter: blur(3px)`. Radie höjd till `var(--radius-xl)`
+  (26px) på båda övre hörnen.
+- **Drag i `wwwroot/js/bottom-sheet.js`** (ny `attachDrag`): pekar-events på BÅDE `.sheet-handle`
+  och `.sheet-header` (samma `setPointerCapture`-mönster som `task-swipe.js` redan använder).
+  Drag uppåt > 60px anropar `ExpandAsync` (Blazor-sidan sätter `Detent = Full`); drag nedåt >
+  80px anropar `DismissAsync` (samma `CloseAsync`-väg som "Stäng"-knappen). Visuell
+  `translateY`, klampad 0..120 (aldrig negativ - ett uppåtdrag är bara en gest, ingen visuell
+  förflyttning, eftersom "half" redan visar arket i viloläge). Hoppar över `transform` under
+  `prefers-reduced-motion` (samma teknik som `task-swipe.js`), men behåller själva
+  tröskellogiken - matchar det etablerade mönstret i `task-swipe.js`s egen
+  reduced-motion-hantering.
+- **Bugg hittad under egen testskrivning, fixad:** ett nyskapat `RoomSheet` (ingen `Detent`
+  satt, ska förvalt bli `Full`) öppnades med `data-detent="half"`. Orsak: `SheetDetent`s första
+  medlem (`Half`) har det numeriska värdet `0` - samma värde som ett ofyllt `private SheetDetent
+  _detent`-fälts eget default. Den ursprungliga koden synkade bara `_detent = Detent` inuti
+  `OnAfterRenderAsync`, som körs EFTER den första renderingen som redan visar arket - den
+  renderingen använde alltså fältets kvarvarande default (`Half`) i stället för den satta
+  parametern. Fixat genom att flytta synkroniseringen till `OnParametersSet` (körs FÖRE
+  rendering), med en egen `_detentWasOpen`-flagga skild från `_wasOpen` (som `OnAfterRenderAsync`
+  fortfarande äger för sin egen JS-interop-timing) - ett nytt test,
+  `SheetDetentTests.TaskOptionsSheet_opens_half_and_RoomSheet_opens_full_and_Esc_closes_each`,
+  fångade buggen direkt.
+- **`Detent="SheetDetent.Half"` satt på:** `TaskOptionsSheet` (dess egen `BottomSheet`),
+  `MemberSheet`, Hushålls "Bjud in"/"Pausa hushållet"/"Balansera om vem som gör vad". **`Full`
+  (förvalt, ingen ändring):** `RoomSheet`, "Nytt rum", "Extra uppgift", "Flytta till en annan
+  dag", "Lägg till uppgift i …".
+- **Verifierat**: `dotnet build Hemordna.slnx` (0 fel/varningar); `Hemordna.Domain.Tests`
+  82/82, `Hemordna.Application.Tests` 173/173, `Hemordna.E2E.Tests` 82/82 (81 tidigare + det nya
+  `SheetDetentTests` nedan). Sex skärmbilder
+  (`RoomSheet`=full/`TaskOptionsSheet`=half ljust+mörkt, "Pausa hushållet"/"Balansera om vem som
+  gör vad"/"Bjud in" i halvt läge mörkt) via ett tillfälligt `DEBUG_Capture_sheet_detents`-test,
+  granskade och borttagna: `TaskOptionsSheet` visar `RoomSheet`s brickor/rader synliga bakom sig
+  genom scrimmets blur, inget innehåll klipps i något av de tre halva Hushålls-arken - allt
+  ryms inom 56vh eller scrollar internt.
+
 ---
 
 ## 11. Beslut som ännu inte är fattade — `OPEN`

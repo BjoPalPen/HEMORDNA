@@ -106,7 +106,17 @@ ikoner. Namngivna ikoner: `sun`, `grid`, `calendar`, `people`, `chevron-right`, 
 
 `Components/BottomSheet.razor`: ark från botten på mobil (scrim, drag-handtag, stängs med Esc,
 scrim-tryck eller "Stäng", fokus flyttas in vid öppning och tillbaka vid stängning), centrerad
-dialog på skärmar ≥ 640px. Används av formulär/valmenyer som byggs i senare steg.
+dialog på skärmar ≥ 640px, `corner-shape: squircle` och `--radius-xl` (26px) på det översta
+hörnparet.
+
+**Två höjdlägen** ("Ny form 2026", `Components/SheetDetent.cs`): `Half` (56vh) för ett kort
+val/en sammanfattning som inte behöver hela skärmen, `Full` (85vh, oförändrat) för ett formulär
+som kan behöva växa. Desktopdialogen ignorerar detent helt - alltid 80vh. Ett drag uppåt (> 60px)
+på handtaget eller rubrikraden flyttar ett `Half`-ark till `Full` för resten av den öppningen;
+ett drag nedåt (> 80px) stänger arket samma väg som "Stäng" gör. Rent tillägg, aldrig enda vägen
+- "Stäng"-knappen och Esc fungerar precis som förut oavsett läge. `--sheet-scrim` fick
+`backdrop-filter: blur(3px)` - den tonade ytan bakom arket, inte arket självt (glas-transparens
+är annars förbehållet navigationspillen, se §8).
 
 ---
 
