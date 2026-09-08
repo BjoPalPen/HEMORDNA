@@ -11,6 +11,7 @@ public sealed class GetDailyPlan
 {
     private readonly IHouseholdRepository _households;
     private readonly IMemberAvailabilityRepository _availabilities;
+    private readonly IMemberDayOffRepository _daysOff;
     private readonly IPlanCandidateQuery _candidates;
     private readonly EnsureOccurrencesGenerated _ensureOccurrencesGenerated;
     private readonly DailyPlanner _planner;
@@ -18,12 +19,14 @@ public sealed class GetDailyPlan
     public GetDailyPlan(
         IHouseholdRepository households,
         IMemberAvailabilityRepository availabilities,
+        IMemberDayOffRepository daysOff,
         IPlanCandidateQuery candidates,
         EnsureOccurrencesGenerated ensureOccurrencesGenerated,
         DailyPlanner planner)
     {
         _households = households;
         _availabilities = availabilities;
+        _daysOff = daysOff;
         _candidates = candidates;
         _ensureOccurrencesGenerated = ensureOccurrencesGenerated;
         _planner = planner;
@@ -67,6 +70,8 @@ public sealed class GetDailyPlan
 
         var plan = _planner.Plan(new DailyPlanRequest(memberId, date, availableMinutes, candidates));
 
-        return new MemberDay(plan, completed);
+        var isDayOff = await _daysOff.FindAsync(householdId, memberId, date, cancellationToken) is not null;
+
+        return new MemberDay(plan, completed, isDayOff);
     }
 }

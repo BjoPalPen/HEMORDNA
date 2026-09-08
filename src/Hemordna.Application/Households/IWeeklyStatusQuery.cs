@@ -13,7 +13,11 @@ public enum DayStatus
     Done
 }
 
-public sealed record MemberDayStatus(Guid MemberId, DateOnly Date, DayStatus Status);
+/// <param name="IsDayOff">Whether the member marked this date as their own day off (see
+/// Hemordna.Domain.Households.MemberDayOff). A row can carry <c>IsDayOff</c> true with
+/// <see cref="DayStatus.NoPlan"/> - taking the day off does not require anything to have been
+/// scheduled first.</param>
+public sealed record MemberDayStatus(Guid MemberId, DateOnly Date, DayStatus Status, bool IsDayOff);
 
 /// <summary>
 /// Read-only status per member and date, straight from <see cref="Tasks.TaskOccurrence"/> -

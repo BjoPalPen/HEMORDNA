@@ -33,7 +33,29 @@ internal sealed class WeeklyStatusQuery : IWeeklyStatusQuery
             })
             .ToListAsync(cancellationToken);
 
-        return [.. rows.Select(row => new MemberDayStatus(
-            row.MemberId, row.ScheduledDate, row.AllCompleted ? DayStatus.Done : DayStatus.Planned))];
+        var daysOff = await _dbContext.MemberDaysOff
+            .AsNoTracking()
+            .Where(dayOff => dayOff.HouseholdId == householdId
+                && dayOff.Date >= weekStart
+                && dayOff.Date < weekEnd)
+            .Select(dayOff => new { dayOff.MemberId, dayOff.Date })
+            .ToListAsync(cancellationToken);
+
+        var daysOffKeys = daysOff.Select(dayOff => (dayOff.MemberId, dayOff.Date)).ToHashSet();
+
+        var statusByKey = rows.ToDictionary(
+            row => (MemberId: row.MemberId, Date: row.ScheduledDate),
+            row => row.AllCompleted ? DayStatus.Done : DayStatus.Planned);
+
+        // A day off needs its own row even when nothing was ever scheduled that day - taking the
+        // day off does not require a plan to have existed first (e.g. it was cleared by
+        // SetMemberDayOff.DeferAll, or the member never had anything due).
+        var keys = statusByKey.Keys.Concat(daysOffKeys).Distinct();
+
+        return [.. keys.Select(key => new MemberDayStatus(
+            key.MemberId,
+            key.Date,
+            statusByKey.GetValueOrDefault(key, DayStatus.NoPlan),
+            daysOffKeys.Contains(key)))];
     }
 }
