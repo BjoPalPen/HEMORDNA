@@ -1345,6 +1345,28 @@ redan sen tidigare steg.
   hushåll utan uppgifter) visas formuläret direkt, utan en tom lista och en meningslös
   disclosure runt den.
 
+### Uppföljning: "Skriv en ny uppgift"-formuläret saknade rumsval — `IMPLEMENTED`
+
+Bugg: `AddExtraTaskAsync` skickade alltid `AreaId: null` till `Api.CreateTaskAsync` - en
+genuint ny uppgift (skriven via "Eller skriv en ny uppgift", inte plockad ur listan) kunde
+därför aldrig hamna i ett rum, oavsett avsikt, och landade alltid under "Övrigt" på dagens
+lista. Det andra flödet (plocka en befintlig kandidat, `AddExistingExtraTaskAsync`) var redan
+korrekt - verifierat med ett nytt strikt E2E-test innan felsökningen smalnades av till just
+skapa-formuläret (tre kandidater i tre olika rum, klick på den mittersta, verifierar rätt rum,
+inga dubbletter).
+
+- `ExtraTaskForm` fick ett `AreaId`-fält (`string`, inte `Guid?`) - samma konvention som
+  `TaskOptionsSheet._roomAreaId` redan använder, eftersom ett `<select>`s `@bind` inte stödjer
+  `Guid?` direkt.
+- `NewExtraTaskForm` fick ett villkorligt rum-`<select>` (bara synligt när hushållet har minst
+  ett aktivt område), mellan tidsnivå-väljaren och felmeddelandet.
+- `AddExtraTaskAsync` parsar nu `_extraForm.AreaId` till `Guid?` vid inskick i stället för att
+  hårdkoda `null`, och nollställer fältet efter en lyckad inskickning tillsammans med
+  `Name`/`EstimatedMinutes`.
+- Nytt E2E-test `Writing_a_brand_new_task_with_a_room_selected_lands_under_that_rooms_heading_on_idag`
+  bevisar hela vägen: skapa uppgift med rum valt → hamnar under rätt rums rubrik på Idag, inte
+  "Övrigt".
+
 ---
 
 ## 11. Beslut som ännu inte är fattade — `OPEN`

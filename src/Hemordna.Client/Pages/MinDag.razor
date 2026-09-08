@@ -254,6 +254,11 @@ else
     {
         public string Name { get; set; } = string.Empty;
         public int EstimatedMinutes { get; set; }
+
+        // A <select>'s @bind does not support Guid?/Guid out of the box - kept as the raw
+        // string value and parsed at submission time, same convention TaskOptionsSheet's own
+        // room picker (_roomAreaId) already uses.
+        public string AreaId { get; set; } = string.Empty;
     }
 
     private readonly ExtraTaskForm _extraForm = new();
@@ -362,6 +367,20 @@ else
                 }
             </div>
         </div>
+
+        @if (_household?.Areas.Where(area => area.IsActive).ToList() is { Count: > 0 } activeAreas)
+        {
+            <label class="field">
+                <span>Vilket rum?</span>
+                <select @bind="_extraForm.AreaId">
+                    <option value="">Övrigt</option>
+                    @foreach (var area in activeAreas)
+                    {
+                        <option value="@area.Id">@area.Name</option>
+                    }
+                </select>
+            </label>
+        }
 
         @if (_extraTaskMessage is { } extraTaskMessage)
         {
@@ -627,11 +646,13 @@ else
 
         try
         {
+            var areaId = string.IsNullOrEmpty(_extraForm.AreaId) ? (Guid?)null : Guid.Parse(_extraForm.AreaId);
+
             var task = await Api.CreateTaskAsync(householdId, new CreateTaskRequest(
                 Name: _extraForm.Name,
                 EstimatedMinutes: _extraForm.EstimatedMinutes,
                 Description: null,
-                AreaId: null,
+                AreaId: areaId,
                 Priority: "Normal",
                 DefaultResponsibleMemberId: memberId,
                 PreferredWeekday: null,
@@ -649,6 +670,7 @@ else
 
             _extraForm.Name = string.Empty;
             _extraForm.EstimatedMinutes = 0;
+            _extraForm.AreaId = string.Empty;
             _showExtraTaskSheet = false;
             await LoadDayAsync();
         }
