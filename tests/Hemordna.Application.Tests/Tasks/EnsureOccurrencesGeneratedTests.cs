@@ -17,9 +17,11 @@ public class EnsureOccurrencesGeneratedTests
     private readonly InMemoryTaskDefinitionRepository _definitions = new();
     private readonly InMemoryTaskOccurrenceRepository _occurrences = new();
     private readonly InMemoryTaskAssignmentRepository _assignments = new();
+    private readonly InMemoryMemberDayOffRepository _daysOff = new();
+    private readonly InMemoryMemberTimeCreditRepository _credits = new();
 
     private EnsureOccurrencesGenerated CreateUseCase()
-        => new(_households, _definitions, _occurrences, _assignments, new FixedTimeProvider(Now));
+        => new(_households, _definitions, _occurrences, _assignments, _daysOff, _credits, new FixedTimeProvider(Now));
 
     private async Task<Guid> ArrangeHouseholdAsync()
     {
@@ -398,5 +400,127 @@ public class EnsureOccurrencesGeneratedTests
 
         await CreateUseCase().HandleAsync(household.Id, Monday.AddDays(3), CancellationToken.None);
         Assert.Equal(1, _occurrences.AddCallCount);
+    }
+
+    [Fact]
+    public async Task A_member_on_a_day_off_is_never_picked_even_when_everyone_else_is_full()
+    {
+        var household = await new CreateHousehold(_households, new FixedTimeProvider(Now))
+            .HandleAsync("Familjen", Guid.NewGuid(), "Anna", CancellationToken.None);
+        var anna = household.Members.Single();
+        // Bjorn has almost no room today - if the "nobody has room" fallback fell back to
+        // EVERY active member rather than just the eligible ones, Anna (off, but otherwise
+        // "eligible" by every other rule) could still end up picked here.
+        var bjorn = household.AddMember("Bjorn", WeeklyTimeBudget.Uniform(5), Now.AddMinutes(1));
+        await _households.UpdateAsync(household, CancellationToken.None);
+
+        _daysOff.Seed(MemberDayOff.Create(household.Id, anna.Id, Monday, Monday));
+
+        var definition = TaskDefinition.Create(household.Id, "Diska", 20, Now);
+        definition.SetRecurrence(RecurrenceRule.Daily(Monday));
+        definition.SetRotatingResponsibility(true);
+        _definitions.Seed(definition);
+
+        await CreateUseCase().HandleAsync(household.Id, Monday, CancellationToken.None);
+
+        var last = await _assignments.FindMostRecentAsync(household.Id, definition.Id, CancellationToken.None);
+        Assert.Equal(bjorn.Id, last!.MemberId);
+    }
+
+    [Fact]
+    public async Task A_fixed_tasks_owner_being_off_pushes_it_to_their_own_next_free_day_never_someone_else()
+    {
+        var household = await new CreateHousehold(_households, new FixedTimeProvider(Now))
+            .HandleAsync("Familjen", Guid.NewGuid(), "Anna", CancellationToken.None);
+        var anna = household.Members.Single();
+        household.AddMember("Bjorn", WeeklyTimeBudget.Uniform(60), Now.AddMinutes(1));
+        await _households.UpdateAsync(household, CancellationToken.None);
+
+        _daysOff.Seed(MemberDayOff.Create(household.Id, anna.Id, Monday, Monday));
+
+        var definition = TaskDefinition.Create(household.Id, "Betala räkningar", 20, Now);
+        definition.SetRecurrence(RecurrenceRule.Daily(Monday));
+        definition.SetDefaultResponsibleMember(anna.Id);
+        _definitions.Seed(definition);
+
+        await CreateUseCase().HandleAsync(household.Id, Monday, CancellationToken.None);
+
+        var occurrence = Assert.Single(await _occurrences.ListOutstandingByHouseholdAsync(household.Id, CancellationToken.None));
+        Assert.Equal(anna.Id, occurrence.AssignedMemberId);
+        Assert.Equal(Monday, occurrence.OriginalScheduledDate);
+        Assert.Equal(Monday.AddDays(1), occurrence.ScheduledDate);
+    }
+
+    [Fact]
+    public async Task Outstanding_time_credit_biases_the_pick_toward_the_other_member_and_records_exactly_one_consumed_row()
+    {
+        var household = await new CreateHousehold(_households, new FixedTimeProvider(Now))
+            .HandleAsync("Familjen", Guid.NewGuid(), "Anna", CancellationToken.None);
+        var anna = household.Members.Single();
+        anna.ChangeWeeklyTimeBudget(WeeklyTimeBudget.Uniform(60));
+        var bjorn = household.AddMember("Bjorn", WeeklyTimeBudget.Uniform(60), Now.AddMinutes(1));
+        await _households.UpdateAsync(household, CancellationToken.None);
+
+        // Equal capacities, zero prior assignments - without credit this would be a tie, broken
+        // in Anna's favour (created first). 30 minutes of Anna's own credit is enough to make
+        // her look more loaded than Bjorn for this 20-minute task.
+        _credits.Seed(MemberTimeCredit.Earned(household.Id, anna.Id, Monday, TimeCreditReason.WorkedAhead, 30, Guid.NewGuid()));
+
+        var definition = TaskDefinition.Create(household.Id, "Diska", 20, Now);
+        definition.SetRecurrence(RecurrenceRule.Daily(Monday));
+        definition.SetRotatingResponsibility(true);
+        _definitions.Seed(definition);
+
+        await CreateUseCase().HandleAsync(household.Id, Monday, CancellationToken.None);
+
+        var last = await _assignments.FindMostRecentAsync(household.Id, definition.Id, CancellationToken.None);
+        Assert.Equal(bjorn.Id, last!.MemberId);
+
+        var occurrence = Assert.Single(await _occurrences.ListOutstandingByHouseholdAsync(household.Id, CancellationToken.None));
+        var consumedRows = await _credits.ListForMemberAsync(household.Id, anna.Id, Monday, Monday, CancellationToken.None);
+        var consumed = Assert.Single(consumedRows, row => row.Reason == TimeCreditReason.RotationSkipped);
+        Assert.Equal(-20, consumed.Minutes);
+        Assert.Equal(occurrence.Id, consumed.OccurrenceId);
+    }
+
+    [Fact]
+    public async Task Credit_consumption_across_a_batch_uses_the_running_balance_not_the_starting_one()
+    {
+        var household = await new CreateHousehold(_households, new FixedTimeProvider(Now))
+            .HandleAsync("Familjen", Guid.NewGuid(), "Anna", CancellationToken.None);
+        var anna = household.Members.Single();
+        anna.ChangeWeeklyTimeBudget(WeeklyTimeBudget.Uniform(60));
+        var bjorn = household.AddMember("Bjorn", WeeklyTimeBudget.Uniform(60), Now.AddMinutes(1));
+        await _households.UpdateAsync(household, CancellationToken.None);
+
+        // 40 minutes of credit. The 1st occurrence spends 20 of it (Bjorn picked instead of
+        // Anna); by the 2nd, Anna's remaining credit (20) exactly cancels Bjorn's new 20
+        // minutes of real load, so the tie lands back on Anna - proving the running balance
+        // updated in place rather than staying at its starting snapshot for the whole batch.
+        // The 3rd sees the ratios diverge again (Bjorn still lower) and spends the last 20.
+        _credits.Seed(MemberTimeCredit.Earned(household.Id, anna.Id, Monday, TimeCreditReason.WorkedAhead, 40, Guid.NewGuid()));
+
+        for (var i = 0; i < 3; i++)
+        {
+            var definition = TaskDefinition.Create(household.Id, $"Uppgift {i}", 20, Now);
+            definition.SetRecurrence(RecurrenceRule.Daily(Monday));
+            definition.SetRotatingResponsibility(true);
+            _definitions.Seed(definition);
+        }
+
+        await CreateUseCase().HandleAsync(household.Id, Monday, CancellationToken.None);
+
+        var consumedRows = (await _credits.ListForMemberAsync(household.Id, anna.Id, Monday, Monday, CancellationToken.None))
+            .Where(row => row.Reason == TimeCreditReason.RotationSkipped)
+            .ToList();
+
+        // Exactly two skips (40 minutes' worth) - the third occurrence found Anna's credit
+        // exhausted and landed back on her by ratio, same as if she had never had any.
+        Assert.Equal(2, consumedRows.Count);
+        Assert.Equal(-40, consumedRows.Sum(row => row.Minutes));
+
+        var totals = await _assignments.GetAssignedMinutesByMemberAsync(household.Id, CancellationToken.None);
+        Assert.Equal(20, totals[anna.Id]);
+        Assert.Equal(40, totals[bjorn.Id]);
     }
 }

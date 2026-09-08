@@ -29,6 +29,8 @@ public class GetDailyPlanTests
                 new InMemoryTaskDefinitionRepository(),
                 new InMemoryTaskOccurrenceRepository(),
                 new InMemoryTaskAssignmentRepository(),
+                new InMemoryMemberDayOffRepository(),
+                new InMemoryMemberTimeCreditRepository(),
                 new FixedTimeProvider(Now)),
             new DailyPlanner());
 
@@ -181,6 +183,8 @@ public class MemberDayCompletionTests
                 new InMemoryTaskDefinitionRepository(),
                 new InMemoryTaskOccurrenceRepository(),
                 new InMemoryTaskAssignmentRepository(),
+                new InMemoryMemberDayOffRepository(),
+                new InMemoryMemberTimeCreditRepository(),
                 new FixedTimeProvider(Now)),
             new DailyPlanner());
 

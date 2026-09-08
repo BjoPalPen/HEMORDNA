@@ -19,10 +19,24 @@ public sealed class EnsureOccurrencesGenerated
     /// </summary>
     private const int MaxCatchUpPerDefinition = 366;
 
+    /// <summary>
+    /// How far back days off and time credit are read for this run - see docs/ARCHITECTURE.md
+    /// "Beslut: Kvarlämnat, Imorgon på Idag, ledig dag och tid i förväg". A day off older than
+    /// this is not looked up at all (an occurrence catching up on a slot that far in the past
+    /// would be an extreme edge case already bounded by <see cref="MaxCatchUpPerDefinition"/>,
+    /// and a day off is inherently a near-term thing - it can only ever be SET up to 7 days
+    /// ahead, see <c>MemberDayOff.Create</c>). Credit older than this is likewise ignored by
+    /// <c>MemberTimeCredit.BalanceOf</c>'s caller here, for the same "near-term, not a growing
+    /// history" reasoning that keeps it out of the UI too (CLAUDE.md §12).
+    /// </summary>
+    private const int LookbackDays = 60;
+
     private readonly IHouseholdRepository _households;
     private readonly ITaskDefinitionRepository _definitions;
     private readonly ITaskOccurrenceRepository _occurrences;
     private readonly ITaskAssignmentRepository _assignments;
+    private readonly IMemberDayOffRepository _daysOff;
+    private readonly IMemberTimeCreditRepository _credits;
     private readonly TimeProvider _timeProvider;
 
     public EnsureOccurrencesGenerated(
@@ -30,12 +44,16 @@ public sealed class EnsureOccurrencesGenerated
         ITaskDefinitionRepository definitions,
         ITaskOccurrenceRepository occurrences,
         ITaskAssignmentRepository assignments,
+        IMemberDayOffRepository daysOff,
+        IMemberTimeCreditRepository credits,
         TimeProvider timeProvider)
     {
         _households = households;
         _definitions = definitions;
         _occurrences = occurrences;
         _assignments = assignments;
+        _daysOff = daysOff;
+        _credits = credits;
         _timeProvider = timeProvider;
     }
 
@@ -60,6 +78,22 @@ public sealed class EnsureOccurrencesGenerated
         // time, as generation actually reaches it - see RotationPicker's daily-cap remarks.
         var assignedMinutesByDate = new Dictionary<DateOnly, Dictionary<Guid, int>>();
 
+        var lookbackStart = today.AddDays(-LookbackDays);
+
+        var daysOffInRange = await _daysOff.ListForHouseholdAsync(householdId, lookbackStart, today, cancellationToken);
+        var daysOff = daysOffInRange.Select(dayOff => (dayOff.MemberId, dayOff.Date)).ToHashSet();
+
+        // Also updated in place as credit is consumed below (see RotationPicker's "tid i
+        // förväg" remarks) - so a second occurrence generated in the same batch sees the FIRST
+        // one's consumption, not a stale balance.
+        var creditMinutes = new Dictionary<Guid, int>();
+
+        foreach (var member in household.Members.Where(member => member.IsActive))
+        {
+            var entries = await _credits.ListForMemberAsync(householdId, member.Id, lookbackStart, today, cancellationToken);
+            creditMinutes[member.Id] = MemberTimeCredit.BalanceOf(entries, member.WeeklyTimeBudget.TotalWeeklyMinutes);
+        }
+
         foreach (var definition in definitions)
         {
             if (!definition.IsActive)
@@ -71,13 +105,13 @@ public sealed class EnsureOccurrencesGenerated
             {
                 await GenerateOnScheduleAsync(
                     household, definition, recurrence, today, assignedMinutesByMember, assignedMinutesByDate,
-                    cancellationToken);
+                    daysOff, creditMinutes, cancellationToken);
             }
             else if (definition.StaleAfterDays is { } staleAfterDays)
             {
                 await GenerateIfStaleAsync(
                     household, definition, staleAfterDays, today, assignedMinutesByMember, assignedMinutesByDate,
-                    cancellationToken);
+                    daysOff, creditMinutes, cancellationToken);
             }
         }
     }
@@ -89,6 +123,8 @@ public sealed class EnsureOccurrencesGenerated
         DateOnly today,
         Dictionary<Guid, int> assignedMinutesByMember,
         Dictionary<DateOnly, Dictionary<Guid, int>> assignedMinutesByDate,
+        HashSet<(Guid MemberId, DateOnly Date)> daysOff,
+        Dictionary<Guid, int> creditMinutes,
         CancellationToken cancellationToken)
     {
         var lastDate = await _occurrences.FindMostRecentOriginalDateAsync(
@@ -112,7 +148,8 @@ public sealed class EnsureOccurrencesGenerated
                 && !await _occurrences.HasOutstandingOnDateAsync(household.Id, definition.Id, next, cancellationToken))
             {
                 await ScheduleGeneratedOccurrenceAsync(
-                    household, definition, next, assignedMinutesByMember, assignedMinutesByDate, cancellationToken);
+                    household, definition, next, today, assignedMinutesByMember, assignedMinutesByDate,
+                    daysOff, creditMinutes, cancellationToken);
             }
 
             iterations++;
@@ -131,6 +168,8 @@ public sealed class EnsureOccurrencesGenerated
         DateOnly today,
         Dictionary<Guid, int> assignedMinutesByMember,
         Dictionary<DateOnly, Dictionary<Guid, int>> assignedMinutesByDate,
+        HashSet<(Guid MemberId, DateOnly Date)> daysOff,
+        Dictionary<Guid, int> creditMinutes,
         CancellationToken cancellationToken)
     {
         if (await _occurrences.HasOutstandingAsync(household.Id, definition.Id, cancellationToken))
@@ -158,7 +197,8 @@ public sealed class EnsureOccurrencesGenerated
         }
 
         await ScheduleGeneratedOccurrenceAsync(
-            household, definition, today, assignedMinutesByMember, assignedMinutesByDate, cancellationToken);
+            household, definition, today, today, assignedMinutesByMember, assignedMinutesByDate,
+            daysOff, creditMinutes, cancellationToken);
     }
 
     /// <summary>
@@ -191,8 +231,11 @@ public sealed class EnsureOccurrencesGenerated
         Household household,
         TaskDefinition definition,
         DateOnly date,
+        DateOnly today,
         Dictionary<Guid, int> assignedMinutesByMember,
         Dictionary<DateOnly, Dictionary<Guid, int>> assignedMinutesByDate,
+        HashSet<(Guid MemberId, DateOnly Date)> daysOff,
+        Dictionary<Guid, int> creditMinutes,
         CancellationToken cancellationToken)
     {
         var occurrence = definition.ScheduleFor(date, _timeProvider.GetUtcNow());
@@ -203,20 +246,53 @@ public sealed class EnsureOccurrencesGenerated
             var assignedMinutesOnDate = await GetOrLoadAssignedMinutesOnDateAsync(
                 household.Id, date, assignedMinutesByDate, cancellationToken);
 
-            memberId = RotationPicker.PickNext(household, definition, assignedMinutesByMember, assignedMinutesOnDate, date);
+            var pick = RotationPicker.PickNext(
+                household, definition, assignedMinutesByMember, assignedMinutesOnDate, date, daysOff, creditMinutes);
 
-            if (memberId is { } rotatingMemberId)
+            if (pick is { } result)
             {
+                memberId = result.MemberId;
+
                 await _assignments.AddAsync(
                     TaskAssignment.Create(
-                        household.Id, definition.Id, rotatingMemberId, date, _timeProvider.GetUtcNow(),
+                        household.Id, definition.Id, result.MemberId, date, _timeProvider.GetUtcNow(),
                         definition.EstimatedMinutes),
                     cancellationToken);
 
-                assignedMinutesByMember[rotatingMemberId] =
-                    assignedMinutesByMember.GetValueOrDefault(rotatingMemberId) + definition.EstimatedMinutes;
-                assignedMinutesOnDate[rotatingMemberId] =
-                    assignedMinutesOnDate.GetValueOrDefault(rotatingMemberId) + definition.EstimatedMinutes;
+                assignedMinutesByMember[result.MemberId] =
+                    assignedMinutesByMember.GetValueOrDefault(result.MemberId) + definition.EstimatedMinutes;
+                assignedMinutesOnDate[result.MemberId] =
+                    assignedMinutesOnDate.GetValueOrDefault(result.MemberId) + definition.EstimatedMinutes;
+
+                // "Tid i förväg" actually changed who got this occurrence - record it as spent,
+                // and update the running balance so a second occurrence generated later in this
+                // same batch sees the already-reduced amount, not what the ledger said at the
+                // start of the whole run.
+                if (result.ConsumedFromMemberId is { } consumedFrom && result.ConsumedMinutes > 0)
+                {
+                    await _credits.AddAsync(
+                        MemberTimeCredit.Consumed(
+                            household.Id, consumedFrom, today, TimeCreditReason.RotationSkipped,
+                            result.ConsumedMinutes, occurrence.Id),
+                        cancellationToken);
+
+                    creditMinutes[consumedFrom] = creditMinutes.GetValueOrDefault(consumedFrom) - result.ConsumedMinutes;
+                }
+            }
+        }
+        else if (occurrence.AssignedMemberId is { } fixedOwnerId && daysOff.Contains((fixedOwnerId, date)))
+        {
+            // A fixed task's owner is off on the day it would normally land on - it stays
+            // theirs (never anyone else's, no credit involved), just pushed to their own next
+            // available day, same 14-day search SetMemberDayOff's own DeferAll uses. If nothing
+            // deferrable turns up within that window, or the task itself cannot be deferred at
+            // all, it is left exactly where it is rather than left unscheduled or thrown away -
+            // this runs silently in the background, not as a direct request someone is waiting
+            // on an answer to.
+            if (occurrence.CanBeDeferred
+                && FindNextAvailableDate(fixedOwnerId, date, daysOff, maxDaysAhead: 14) is { } nextAvailable)
+            {
+                occurrence.DeferTo(nextAvailable);
             }
         }
 
@@ -226,6 +302,22 @@ public sealed class EnsureOccurrencesGenerated
         }
 
         await _occurrences.AddAsync(occurrence, cancellationToken);
+    }
+
+    private static DateOnly? FindNextAvailableDate(
+        Guid memberId, DateOnly date, HashSet<(Guid MemberId, DateOnly Date)> daysOff, int maxDaysAhead)
+    {
+        for (var offset = 1; offset <= maxDaysAhead; offset++)
+        {
+            var candidate = date.AddDays(offset);
+
+            if (!daysOff.Contains((memberId, candidate)))
+            {
+                return candidate;
+            }
+        }
+
+        return null;
     }
 
     private async Task<Dictionary<Guid, int>> GetOrLoadAssignedMinutesOnDateAsync(

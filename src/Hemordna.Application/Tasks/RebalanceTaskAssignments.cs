@@ -88,17 +88,20 @@ public sealed class RebalanceTaskAssignments
     private readonly IHouseholdRepository _households;
     private readonly ITaskDefinitionRepository _definitions;
     private readonly ITaskOccurrenceRepository _occurrences;
+    private readonly IMemberDayOffRepository _daysOff;
     private readonly IHouseholdNotifier _notifier;
 
     public RebalanceTaskAssignments(
         IHouseholdRepository households,
         ITaskDefinitionRepository definitions,
         ITaskOccurrenceRepository occurrences,
+        IMemberDayOffRepository daysOff,
         IHouseholdNotifier notifier)
     {
         _households = households;
         _definitions = definitions;
         _occurrences = occurrences;
+        _daysOff = daysOff;
         _notifier = notifier;
     }
 
@@ -149,6 +152,13 @@ public sealed class RebalanceTaskAssignments
             return 0;
         }
 
+        // A candidate is never eligible for a date they are off on - see RotationPicker, whose
+        // EligibleMembers this reuses below. Loaded once, for exactly the date span this run
+        // could possibly touch.
+        var daysOffInRange = await _daysOff.ListForHouseholdAsync(
+            householdId, movable[0].ScheduledDate, movable[^1].ScheduledDate, cancellationToken);
+        var daysOff = daysOffInRange.Select(dayOff => (dayOff.MemberId, dayOff.Date)).ToHashSet();
+
         var fixedOccurrences = relevant.Except(movable);
 
         // Seeded from every fixed occurrence's own date/member - the daily cap below judges a
@@ -176,7 +186,7 @@ public sealed class RebalanceTaskAssignments
             var definition = definitionsById[occurrence.TaskDefinitionId];
             var date = occurrence.ScheduledDate;
 
-            var eligible = RotationPicker.EligibleMembers(household, definition, date);
+            var eligible = RotationPicker.EligibleMembers(household, definition, date, daysOff);
             var withRoom = eligible
                 .Where(member => HasRoomForOccurrenceToday(member, date, dateTally, occurrence))
                 .ToList();

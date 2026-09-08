@@ -25,10 +25,11 @@ public class RebalanceTaskAssignmentsTests
     private readonly InMemoryHouseholdRepository _households = new();
     private readonly InMemoryTaskDefinitionRepository _definitions = new();
     private readonly InMemoryTaskOccurrenceRepository _occurrences = new();
+    private readonly InMemoryMemberDayOffRepository _daysOff = new();
     private readonly SpyHouseholdNotifier _notifier = new();
 
     private RebalanceTaskAssignments CreateUseCase()
-        => new(_households, _definitions, _occurrences, _notifier);
+        => new(_households, _definitions, _occurrences, _daysOff, _notifier);
 
     /// <summary>Anna: 35 min/day (245/week) - Bjorn: 65 min/day (455/week). The exact 7:13 split
     /// the new AdultFullTime/Retired presets produce.</summary>
@@ -273,7 +274,8 @@ public class RebalanceTaskAssignmentsTests
                 seeded.Add(occurrence);
             }
 
-            var changed = await new RebalanceTaskAssignments(households, definitions, occurrences, new SpyHouseholdNotifier())
+            var changed = await new RebalanceTaskAssignments(
+                    households, definitions, occurrences, new InMemoryMemberDayOffRepository(), new SpyHouseholdNotifier())
                 .HandleAsync(household.Id, Monday, CancellationToken.None);
 
             var annaMinutes = seeded.Where(o => o.AssignedMemberId == anna.Id).Sum(o => o.EstimatedMinutes);

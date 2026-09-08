@@ -14,10 +14,13 @@ namespace Hemordna.Application.Tasks;
 /// </remarks>
 public sealed class ScheduleTaskOccurrence
 {
+    private static readonly Dictionary<Guid, int> NoCredit = [];
+
     private readonly IHouseholdRepository _households;
     private readonly ITaskDefinitionRepository _definitions;
     private readonly ITaskOccurrenceRepository _occurrences;
     private readonly ITaskAssignmentRepository _assignments;
+    private readonly IMemberDayOffRepository _daysOff;
     private readonly IHouseholdNotifier _notifier;
     private readonly TimeProvider _timeProvider;
 
@@ -26,6 +29,7 @@ public sealed class ScheduleTaskOccurrence
         ITaskDefinitionRepository definitions,
         ITaskOccurrenceRepository occurrences,
         ITaskAssignmentRepository assignments,
+        IMemberDayOffRepository daysOff,
         IHouseholdNotifier notifier,
         TimeProvider timeProvider)
     {
@@ -33,6 +37,7 @@ public sealed class ScheduleTaskOccurrence
         _definitions = definitions;
         _occurrences = occurrences;
         _assignments = assignments;
+        _daysOff = daysOff;
         _notifier = notifier;
         _timeProvider = timeProvider;
     }
@@ -74,7 +79,17 @@ public sealed class ScheduleTaskOccurrence
                         householdId, cancellationToken);
                     var assignedMinutesOnDate = await _assignments.GetAssignedMinutesByMemberOnDateAsync(
                         householdId, date, cancellationToken);
-                    memberId = RotationPicker.PickNext(household, definition, assignedMinutesByMember, assignedMinutesOnDate, date);
+                    var daysOffOnDate = (await _daysOff.ListForHouseholdAsync(householdId, date, date, cancellationToken))
+                        .Select(dayOff => (dayOff.MemberId, dayOff.Date))
+                        .ToHashSet();
+
+                    // Manual scheduling never consumes "tid i förväg" - that only ever happens
+                    // as a side effect of automatic rotation (EnsureOccurrencesGenerated)
+                    // choosing between candidates on the household's behalf, not a household
+                    // member's own explicit "put this on the calendar" action.
+                    memberId = RotationPicker.PickNext(
+                        household, definition, assignedMinutesByMember, assignedMinutesOnDate, date, daysOffOnDate, NoCredit)
+                        ?.MemberId;
                 }
             }
 
