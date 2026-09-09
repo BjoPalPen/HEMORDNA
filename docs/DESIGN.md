@@ -261,7 +261,10 @@ under listan ("Flytta till en annan dag", "Extra uppgift") som öppnar `BottomSh
 samma innehåll som förut, bara i ett ark i stället för en disclosure. "Flytta till en annan dag"
 rendras alltid (aldrig villkorligt gömd) - utan något att flytta blir den `aria-disabled` och
 svarar med en statusrad i stället för att öppna ett tomt ark (se "Beslut: Ångra och stabil
-lista" §B7 i ARCHITECTURE.md). "Se någon annans dag" har flyttat till Vecka (se nedan).
+lista" §B7 i ARCHITECTURE.md). "Se någon annans dag" har flyttat till Vecka (se nedan). De tre
+chipparna delar alltid en rad och krymper hellre sin egen text (`flex-wrap: nowrap`, samma
+teknik som `.level-picker` och orkenchipparna, §10 är ovillkorligt) - annars kunde "Ta ledigt
+idag" bli ensam kvar på en egen rad vid 390px, en riktig bugg en användare rapporterade.
 
 "Extra uppgift" visar i första hand en lista av hushållets befintliga uppgifter som inte redan
 är på dagens lista (namn, kvalitativt tidsläge) - grupperad per rum/våning precis som Idags

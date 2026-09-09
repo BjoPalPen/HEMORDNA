@@ -2504,6 +2504,16 @@ skärmbild:
   ovanför knapparna i stället för inline med dem. Ny test `EnergyTests.All_three_energy_chips_
   stay_on_one_row_at_390px` (båda presentationslägena) mäter att alla tre chippens `BoundingBox`
   delar samma Y-position.
+- **Samma bugg, samma dag, en annan rad**: `.chips` (`Flytta till en annan dag`/`Extra
+  uppgift`/`Ta ledigt idag`) hade exakt samma svaghet - rapporterad av en användare från en
+  egen skärmbild direkt efter förra fixen. Löst med samma `flex-wrap: nowrap`, men `flex: 0 1
+  auto` snarare än `1 1 0`: till skillnad från de tre kortare, ungefär lika långa orkenetiketterna
+  är "Flytta till en annan dag" märkbart längre än de andra två, så lika tredjedelar hade gjort
+  den trång och de andra två luftiga i onödan - krymp-till-innehåll låter var och en behålla sin
+  egen naturliga bredd tills raden faktiskt tar slut. Ny test
+  `AlwaysVisibleChipTests.All_three_day_chips_stay_on_one_row_at_390px` (båda
+  presentationslägena), bekräftad att den faktiskt fångar regressionen (körd både med och utan
+  fixen).
 
 | Fråga | Varför den väntar |
 |---|---|
