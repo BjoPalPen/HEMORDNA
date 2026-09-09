@@ -520,6 +520,9 @@ Se §7. Skärmen avslutas med raden:
 
 > Detta är din personliga inställning och påverkar inte andra i hushållet.
 
+Inställningar sparas när de ändras. Ingen Spara-knapp, ingen blandning av direkt och
+uppskjutet. Undantag: lösenordsbyte.
+
 Ett eget "Utseende"-kort (ljust/mörkt/systemets eget) sitter direkt under - se §2 för
 tokenvärdena. Till skillnad från "Min visning" ovanför sparas valet inte mot servern
 (`MemberPreference`), utan i `localStorage` och appliceras direkt vid val: rätt tema hör till

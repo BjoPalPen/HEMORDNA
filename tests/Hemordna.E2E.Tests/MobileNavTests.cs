@@ -117,9 +117,7 @@ public class MobileNavTests
         await page.GotoAsync("/installningar");
         await page.GetByRole(AriaRole.Heading, new() { Name = "Min visning" }).WaitForAsync();
         await page.GetByLabel("Stor text - större och tydligare").CheckAsync();
-        var saveButton = page.GetByRole(AriaRole.Button, new() { Name = "Spara" });
-        await saveButton.ClickAsync();
-        await Assertions.Expect(saveButton).ToBeEnabledAsync();
+        await Assertions.Expect(page.GetByText("Sparat")).ToBeVisibleAsync(new() { Timeout = 5_000 });
 
         await page.GotoAsync("/");
         await page.Locator("h1", new() { HasText = "Xenia" }).WaitForAsync();

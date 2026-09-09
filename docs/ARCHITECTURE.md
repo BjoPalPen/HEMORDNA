@@ -2269,6 +2269,22 @@ skapelseordningen, är den faktiska sorteringsnyckeln.
   src/Hemordna.Client --include="*.razor"`: noll träffar. `Hemordna.E2E.Tests` i sin helhet
   kört (klientändring).
 
+**Uppföljning: presentation/motivation/tid sparas direkt, ingen "Spara"-knapp längre.**
+Kortet hade tidigare två olika regler samtidigt - tema och "Lugnare skärm" slog igenom direkt,
+resten väntade på en knapp - vilket var oförutsägbart (samma sida, olika beteende beroende på
+vilket fält). En regel gäller nu genomgående: allt i "Min visning" sparas i samma stund det
+ändras. Varje `@onchange` (presentationsradio, motivationsradio, "Visa ungefär hur lång tid en
+uppgift tar") och varje snabbvalschip anropar `SaveAsync` direkt i stället för att bara sätta
+fält. `SaveAsync` är en `while`-loop innanför en `_saving`-vakt snarare än ett enda försök: ett
+fält som ändras MEDAN ett sparande redan pågår startar aldrig ett andra, parallellt anrop - det
+märks av loopen efter att det pågående anropet är klart och sparar då om, med de senaste
+värdena. Misslyckas ett sparande återställs fälten till senast bekräftat sparade värden
+(`_savedPresentation`/`_savedMotivation`/`_savedShowTimeLevel`) och en `.notice-problem` med en
+"Försök igen"-knapp visas; lyckas det visas "Sparat" i två sekunder (samma
+`CancellationTokenSource`-mönster som `MinDag.razor`s `remote-note`/`undo-bar`). "Byt
+lösenord" är oförändrat - ett lösenordsbyte ska förbli en avsiktlig handling med sin egen
+knapp, inte något som sparas medan man skriver.
+
 #### Del C (Blandat hushåll) — `IMPLEMENTED`
 
 - **Varför detta är en egen, avslutande del snarare än ett test bland de andra**: varje tidigare

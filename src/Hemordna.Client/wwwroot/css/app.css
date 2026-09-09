@@ -628,6 +628,31 @@ html[data-calm] * {
     background: var(--ronn-soft);
 }
 
+/* Inställningar's own "Sparat" - same brief fade-in as .remote-note, its closest relative (a
+   short-lived confirmation, not a persistent state). html[data-calm] * already neutralises
+   every animation app-wide, so only prefers-reduced-motion needs its own rule here. */
+.settings-saved {
+    animation: settings-saved-in .2s ease;
+}
+
+@keyframes settings-saved-in {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .settings-saved {
+        animation: none;
+    }
+}
+
 /* ---------- Boot and error states ---------- */
 
 .app-loading {

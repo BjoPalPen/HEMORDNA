@@ -262,10 +262,7 @@ public class SkarmbilderTests
         await page.GetByRole(AriaRole.Heading, new() { Name = "Min visning" }).WaitForAsync();
 
         await page.GetByLabel(presentationLabel).CheckAsync();
-
-        var saveButton = page.GetByRole(AriaRole.Button, new() { Name = "Spara" });
-        await saveButton.ClickAsync();
-        await Assertions.Expect(saveButton).ToBeEnabledAsync();
+        await Assertions.Expect(page.GetByText("Sparat")).ToBeVisibleAsync(new() { Timeout = 5_000 });
     }
 
     private static async Task CaptureIdagInModeAsync(IPage page, string presentationLabel, string screenshotName)
