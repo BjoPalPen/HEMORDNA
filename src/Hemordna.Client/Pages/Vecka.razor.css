@@ -150,6 +150,13 @@
     border: 2px solid var(--gustav);
 }
 
+/* Ledig dag (MemberDayOff) - dashed rather than .dot-planned's solid ring, and muted rather
+   than --gustav, so it never reads as "still to do" at a glance. */
+.dot-off {
+    background: var(--surface);
+    border: 2px dashed var(--sot-soft);
+}
+
 .vecka-section-heading {
     margin-top: var(--space-6);
 }
