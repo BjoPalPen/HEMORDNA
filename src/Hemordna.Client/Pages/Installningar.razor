@@ -227,10 +227,9 @@ else
 
     /// <summary>"Beslut: Ångra och stabil lista" §B11 - one press sets everything A2/B3/B5/B8
     /// already built, but reads as an ordinary app choice: no name here says who a preset is
-    /// for, only what it does. A press only fills in the radios/toggles below (nothing saved
-    /// until "Spara") EXCEPT CalmScreen, which - like the rest of "Lugnare skärm" - always
-    /// applies immediately, preset or not (it has no "unsaved" state to begin with; see
-    /// ToggleCalmScreenAsync).</summary>
+    /// for, only what it does. A press fills in the radios/toggles below AND saves them, same as
+    /// setting one by hand (see ApplyPresetAsync) - there is no "unsaved" state to be in any
+    /// more, for a preset or for a single field (see SaveAsync's own remarks).</summary>
     private sealed record Preset(string Label, string Presentation, string Motivation, bool ShowTimeLevel, bool CalmScreen);
 
     private static readonly Preset[] Presets =
