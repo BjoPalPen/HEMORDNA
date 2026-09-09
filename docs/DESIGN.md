@@ -525,11 +525,22 @@ Individuell preferens, aldrig en hushållsinställning. Beskrivs alltid av vad e
 | Text (standard) | MVP |
 | Bild + text | MVP |
 | Stor text | MVP |
+| Bild + stor text | MVP |
 | En uppgift åt gången | MVP |
+| En uppgift åt gången med bild + stor text | MVP |
 | Endast bild | Senare |
 | Uppläsning | Senare |
 
 Lägena ska byta *presentation* av samma data – inte vilken data som visas.
+
+**Bild + stor text, och samma kombination i fokusläge**: `PresentationMode` bär tre
+saker - bild, stor text, en-i-taget-läge - som fasta, namngivna kombinationer snarare än tre
+oberoende växlar (se `Client/Support/PresentationModes.cs`, den enda platsen som vet vilket
+namngivet läge som slår på vilka fakta). `ImageAndLargeText` visar samma grupperade lista som
+"Bild + text" men med stor text påslagen också; `OneAtATimeImageAndLargeText` är fokuskortet
+("En uppgift åt gången") med både ikon och stor text. Lagras som enumens ordinaltal
+(`integer`-kolumn, inte en sträng) - nya lägen läggs alltid till sist, aldrig in mellan
+befintliga, annars byter en redan sparad rad tyst mening.
 
 **Motivation** (`Installningar.razor`s eget `<h2>Motivation</h2>`-kort, `MotivationLevel {
 None, Calm }`) är nu på riktigt kopplad in: "Lugn" visar en av tre fasta fraser

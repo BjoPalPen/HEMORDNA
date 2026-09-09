@@ -456,9 +456,9 @@ else
     private IReadOnlyList<TaskDefinitionResponse> _extraTaskCandidates = [];
 
     // "Bild + text" - an individual preference (PRODUCT.md §7), not a household setting.
-    private bool ShowIcons => _presentation == "ImageAndText";
+    private bool ShowIcons => PresentationModes.ShowsImages(_presentation);
 
-    private bool IsFocusMode => _presentation == "OneAtATime";
+    private bool IsFocusMode => PresentationModes.IsFocusMode(_presentation);
 
     /// <summary>One item plus whether a remote reconciliation (see ReconcileRemoteChangeAsync)
     /// marked it done without moving or removing its row - the API contract itself is never

@@ -67,7 +67,7 @@
         _textSizeAppliedForMember = memberId;
 
         var preference = await Api.GetPreferenceAsync(householdId, memberId);
-        await TextSize.ApplyAsync(JS, preference?.Presentation == "LargeText");
+        await TextSize.ApplyAsync(JS, PresentationModes.IsLargeText(preference?.Presentation));
     }
 
     public void Dispose() => Session.Changed -= OnSessionChanged;

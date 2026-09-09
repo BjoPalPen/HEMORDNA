@@ -8,6 +8,11 @@ namespace Hemordna.Domain.Households;
 /// ImageOnly and ReadAloud are modelled now so the enum will not need a breaking change later,
 /// but nothing implements them yet.
 /// </summary>
+/// <remarks>
+/// Persisted as the ordinal <c>integer</c> (see <c>MemberPreferenceConfiguration</c>), not a
+/// string - new members must always be appended at the end, never inserted or reordered, or an
+/// already-saved preference would silently change meaning.
+/// </remarks>
 public enum PresentationMode
 {
     Text,
@@ -15,7 +20,13 @@ public enum PresentationMode
     LargeText,
     OneAtATime,
     ImageOnly,
-    ReadAloud
+    ReadAloud,
+
+    /// <summary>Bild + text, and stor text, at once - see Client/Support/PresentationModes.cs.</summary>
+    ImageAndLargeText,
+
+    /// <summary>En uppgift åt gången, with bild + stor text on the focus card too.</summary>
+    OneAtATimeImageAndLargeText
 }
 
 /// <summary>MVP has exactly two levels - see docs/PRODUCT.md §8.</summary>
