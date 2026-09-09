@@ -101,14 +101,14 @@ else
 <BottomSheet Title="Nytt rum" @bind-IsOpen="_showNewRoomSheet">
     <p class="muted small">
         Namnge våningen (valfritt) och lägg till de rumstyper som finns där - varje rum får en
-        färdig checklista. Ange fler än ett för att skapa flera likadana rum på en gång, t.ex.
-        tre sovrum, i stället för att göra det ett i taget.
+        färdig checklista. Ange fler än ett för att skapa flera likadana rum på en gång, till
+        exempel tre sovrum, i stället för att göra det ett i taget.
     </p>
 
     <EditForm Model="_floorForm" OnValidSubmit="CreateFloorAsync">
         <label class="field">
             <span>Våning (valfritt)</span>
-            <InputText @bind-Value="_floorForm.FloorName" placeholder="T.ex. Våning 1" />
+            <InputText @bind-Value="_floorForm.FloorName" placeholder="Till exempel Våning 1" />
         </label>
 
         @foreach (var row in _floorForm.Rooms)
@@ -188,7 +188,7 @@ else
         <EditForm Model="_form" OnValidSubmit="CreateAsync">
             <label class="field">
                 <span>Rummets namn</span>
-                <InputText @bind-Value="_form.Name" placeholder="T.ex. Hund, Garage" />
+                <InputText @bind-Value="_form.Name" placeholder="Till exempel Hund, Garage" />
             </label>
 
             @if (_message is { } message)

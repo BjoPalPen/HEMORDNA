@@ -229,14 +229,14 @@ else
     <details class="more-options">
         <summary>Eller lägg till en medlem utan eget konto</summary>
         <p class="muted small">
-            För någon som inte skapar ett eget konto än, t.ex. ett barn - namnet syns i
+            För någon som inte skapar ett eget konto än, till exempel ett barn - namnet syns i
             hushållet direkt.
         </p>
 
         <EditForm Model="_form" OnValidSubmit="AddMemberAsync">
             <label class="field">
                 <span>Namn</span>
-                <InputText @bind-Value="_form.DisplayName" placeholder="T.ex. Bjorn" />
+                <InputText @bind-Value="_form.DisplayName" placeholder="Till exempel Björn" />
             </label>
 
             <div class="field">
@@ -295,7 +295,7 @@ else
 
     @if (_household?.PausedUntil is { } householdPausedUntil)
     {
-        <p class="notice" role="status">Hushållet är pausat t.o.m. @householdPausedUntil.ToString("d MMMM", SwedishCulture).</p>
+        <p class="notice" role="status">Hushållet är pausat till och med @householdPausedUntil.ToString("d MMMM", SwedishCulture).</p>
     }
 
     <label class="field">
@@ -325,8 +325,8 @@ else
     <p class="muted small">
         Flyttar bara redan utestående, roterande uppgifter mellan medlemmar - så mycket som
         möjligt lämnas orört - så att var och ens andel av det som återstår att göra matchar
-        deras egen tid bättre. Uppgifter som bara en viss person kan eller får göra (t.ex. bara
-        vuxna, eller någons eget rum) rörs aldrig. Uppgifter som redan borde varit gjorda flyttas
+        deras egen tid bättre. Uppgifter som bara en viss person kan eller får göra (till exempel
+        bara vuxna, eller någons eget rum) rörs aldrig. Uppgifter som redan borde varit gjorda flyttas
         inte — de stannar hos den som har dem.
     </p>
 

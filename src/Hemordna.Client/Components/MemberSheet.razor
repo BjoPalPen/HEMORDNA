@@ -49,7 +49,7 @@
 
     @if (Member.PausedUntil is { } pausedUntil)
     {
-        <div class="notice" role="status">Pausad t.o.m. @pausedUntil.ToString("d MMMM", SwedishCulture).</div>
+        <div class="notice" role="status">Pausad till och med @pausedUntil.ToString("d MMMM", SwedishCulture).</div>
     }
 
     @if (_pauseMessage is { } pauseMessage)

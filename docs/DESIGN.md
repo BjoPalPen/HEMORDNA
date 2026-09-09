@@ -157,6 +157,8 @@ fördela om dagarna?", knappen själv "Sprid ut över veckan" (idiom - sprider m
 något?) blev "Fördela om dagarna". Samma regel gäller retroaktivt för allt nytt språk i denna
 revision - se "Beslut: Ångra och stabil lista" i ARCHITECTURE.md.
 
+**Inga förkortningar i UI-text**: "till och med", inte "t.o.m.". Enheter ("min") är tillåtna.
+
 ---
 
 ## 6. Skärmar

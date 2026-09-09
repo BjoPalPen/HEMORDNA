@@ -24,13 +24,13 @@ public class HouseholdPauseTests
         await sheet.GetByLabel("Pausa till och med").FillAsync("2026-12-24");
         await sheet.GetByRole(AriaRole.Button, new() { Name = "Pausa", Exact = true }).ClickAsync();
 
-        await Assertions.Expect(sheet.GetByText("Pausad t.o.m.")).ToBeVisibleAsync();
+        await Assertions.Expect(sheet.GetByText("Pausad till och med")).ToBeVisibleAsync();
 
         // Reload and reopen to confirm the pause actually persisted, not just an optimistic
         // client-side flag.
         await page.ReloadAsync();
         sheet = await HushallHelper.OpenMemberSheetAsync(page, "Sven");
-        await Assertions.Expect(sheet.GetByText("Pausad t.o.m.")).ToBeVisibleAsync();
+        await Assertions.Expect(sheet.GetByText("Pausad till och med")).ToBeVisibleAsync();
     }
 
     [Fact]
@@ -46,9 +46,9 @@ public class HouseholdPauseTests
         await sheet.GetByLabel("Pausa till och med").FillAsync("2026-12-24");
         await sheet.GetByRole(AriaRole.Button, new() { Name = "Pausa hushållet" }).ClickAsync();
 
-        await Assertions.Expect(sheet.GetByText("Hushållet är pausat t.o.m.")).ToBeVisibleAsync();
+        await Assertions.Expect(sheet.GetByText("Hushållet är pausat till och med")).ToBeVisibleAsync();
 
         await sheet.GetByRole(AriaRole.Button, new() { Name = "Återuppta nu" }).ClickAsync();
-        await Assertions.Expect(sheet.GetByText("Hushållet är pausat t.o.m.")).Not.ToBeVisibleAsync();
+        await Assertions.Expect(sheet.GetByText("Hushållet är pausat till och med")).Not.ToBeVisibleAsync();
     }
 }
