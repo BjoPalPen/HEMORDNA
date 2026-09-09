@@ -1993,6 +1993,23 @@ riktiga konton, samma inbjudningskodsmönster som `MixedHouseholdTests`) - grön
   `grep -rniE "NPF|ADHD|autis|funktionsned|tillgänglig"` mot ändrade filer: noll träffar.
   `Hemordna.E2E.Tests` i sin helhet kört (ren klientändring).
 
+**Uppföljning: fem fraser i stället för tre, ett läge var.** De ursprungliga tre fraserna
+delade en fras ("Det viktigaste är gjort.") mellan två olika tillstånd (allt klart, och hälften
+eller mer klart) - `EncouragementFor` skiljer nu de fem tillstånden åt, en fras var, i denna
+ordning: `outstanding == 0 && completed > 0` → `null` (se nedan) · `completed * 2 >= total &&
+outstanding > 0` → "Det viktigaste är gjort." · `completed > 0` → "Vill du fortsätta där du
+slutade?" · `outstanding > 4` → "En sak i taget räcker." · annars → "Här är dina uppgifter för
+idag." `EncouragementFor` returnerar `string?` numera, inte `string` - `null` exakt när allt är
+klart, eftersom `.calm-state` redan visar samma sak ("Dagens uppgifter är klara.") som sin egen
+rubrik då; att också rendera `.day-encouragement` hade sagt det två gånger på samma skärm.
+Anropsstället (`MinDag.razor`) beräknar `encouragement` en gång i samma kodblock som
+`hasDayCounts`/`completedCount`, och villkorar `<p class="day-encouragement">` på
+`encouragement is not null` i stället för på `_motivation == "Calm"` direkt - samma
+"beräkna en gång, rendera på resultatet"-mönster som `hasDayCounts` redan följde.
+`CalmMotivationTests` utökad till sex fall: ett per fras (inklusive den `null`-returnerande
+"allt klart"-grenen, verifierad genom att `.day-encouragement` inte syns ALLS OCH att
+"Dagens uppgifter är klara." bara finns en gång på sidan) plus `None`-fallet.
+
 #### B4 (Fokusläget: "Visa nästa") — `IMPLEMENTED`
 
 - **Problemet**: i fokusläge (`OneAtATime`) visade `.focus-card` alltid den första utestående
