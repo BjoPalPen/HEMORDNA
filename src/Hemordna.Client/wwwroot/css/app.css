@@ -554,6 +554,15 @@ html[data-calm] * {
     color: var(--sot-soft);
 }
 
+/* Marks a task pulled forward from tomorrow (TaskListItem's IsBroughtForward) - a plain fact
+   about the task, not a warning, so it stays as quiet as .chip-time rather than the filled
+   .chip-primary. */
+.chip-forward {
+    background: transparent;
+    border: 1px solid var(--edge);
+    color: var(--sot-soft);
+}
+
 /* An interactive chip - a secondary action, visually a chip but a real 44px tap target
    (DESIGN.md §10 is unconditional; the concept mockup's own chips are drawn smaller than that
    only because they illustrate proportions, not literal pixel sizes). */

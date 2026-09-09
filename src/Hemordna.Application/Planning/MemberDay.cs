@@ -8,7 +8,11 @@ namespace Hemordna.Application.Planning;
 /// are composed on top here rather than pushed into the planner, which has no business
 /// knowing about them.
 /// </remarks>
-public sealed record MemberDay(DailyPlan Plan, IReadOnlyList<PlanCandidate> Completed)
+/// <param name="IsDayOff">Whether the member has marked this date as their own day off (see
+/// Hemordna.Domain.Households.MemberDayOff) - purely informational here. It does not change
+/// what is in <paramref name="Plan"/>: work due today still shows, and taking the day off is
+/// the member's own choice to act on (or not) via "Ta ledigt idag".</param>
+public sealed record MemberDay(DailyPlan Plan, IReadOnlyList<PlanCandidate> Completed, bool IsDayOff)
 {
     /// <summary>Minutes' worth of work already done today.</summary>
     public int CompletedMinutes => Completed.Sum(candidate => candidate.EstimatedMinutes);

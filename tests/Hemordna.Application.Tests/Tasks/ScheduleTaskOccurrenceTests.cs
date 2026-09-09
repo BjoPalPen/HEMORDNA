@@ -16,10 +16,11 @@ public class ScheduleTaskOccurrenceTests
     private readonly InMemoryTaskDefinitionRepository _definitions = new();
     private readonly InMemoryTaskOccurrenceRepository _occurrences = new();
     private readonly InMemoryTaskAssignmentRepository _assignments = new();
+    private readonly InMemoryMemberDayOffRepository _daysOff = new();
     private readonly SpyHouseholdNotifier _notifier = new();
 
     private ScheduleTaskOccurrence CreateUseCase()
-        => new(_households, _definitions, _occurrences, _assignments, _notifier, new FixedTimeProvider(Now));
+        => new(_households, _definitions, _occurrences, _assignments, _daysOff, _notifier, new FixedTimeProvider(Now));
 
     private async Task<(Guid HouseholdId, HouseholdMember Anna, HouseholdMember Bjorn, HouseholdMember Cecilia)>
         ArrangeThreeMemberHouseholdAsync()

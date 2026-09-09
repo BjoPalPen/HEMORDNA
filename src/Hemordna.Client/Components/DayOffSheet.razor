@@ -1,0 +1,162 @@
+@using Hemordna.Client.Support
+@inject HemordnaApiClient Api
+
+<BottomSheet Title="Ledig dag" IsOpen="IsOpen" IsOpenChanged="OnIsOpenChanged" Detent="SheetDetent.Half">
+    @if (IsCurrentlyOff)
+    {
+        <p class="muted small">Du är ledig @DateLabel. Inget nytt läggs på dig den dagen.</p>
+
+        @if (_message is { } offMessage)
+        {
+            <div class="notice notice-problem" role="alert">@offMessage</div>
+        }
+
+        <button type="button" class="btn btn-secondary btn-block" disabled="@_busy" @onclick="ClearAsync">
+            @(_busy ? "Sparar..." : "Ångra ledig dag")
+        </button>
+    }
+    else
+    {
+        <p class="muted small">
+            Inget nytt läggs på dig @DateLabel. Det du redan har inplanerat den dagen:
+        </p>
+
+        <button type="button" class="btn btn-secondary btn-block" disabled="@_busy" @onclick="BringAllForwardAsync">
+            Ta med till idag
+        </button>
+        <button type="button" class="btn btn-secondary btn-block" disabled="@_busy" @onclick="DeferAllAsync">
+            Skjut upp till nästa lediga dag
+        </button>
+
+        @if (_message is { } message)
+        {
+            <div class="notice @(_messageIsError ? "notice-problem" : null)" role="@(_messageIsError ? "alert" : "status")">@message</div>
+        }
+    }
+</BottomSheet>
+
+@code {
+    /// <summary>"Jag kan ... ta ledigt" - marks (or clears) one date as the signed-in member's
+    /// own day off (see SetMemberDayOff/ClearMemberDayOff). Always acts on the signed-in member;
+    /// there is no "set someone else's day off" from here.</summary>
+    [Parameter, EditorRequired]
+    public Guid HouseholdId { get; set; }
+
+    [Parameter, EditorRequired]
+    public Guid MemberId { get; set; }
+
+    [Parameter, EditorRequired]
+    public DateOnly Date { get; set; }
+
+    /// <summary>Whether Date is already a day off - decides which of the two views above shows.
+    /// Supplied by the caller (MinDag.razor's own IsDayOff for the date in question) rather than
+    /// looked up here, so this component reads no state of its own.</summary>
+    [Parameter]
+    public bool IsCurrentlyOff { get; set; }
+
+    [Parameter]
+    public bool IsOpen { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> IsOpenChanged { get; set; }
+
+    /// <summary>Raised after a successful set or clear, so the parent reloads - a day off can
+    /// move work off either today's or tomorrow's plan, depending on which date this is.</summary>
+    [Parameter, EditorRequired]
+    public EventCallback OnChanged { get; set; }
+
+    private bool _busy;
+    private string? _message;
+    private bool _messageIsError;
+
+    private static readonly System.Globalization.CultureInfo SwedishCulture = new("sv-SE");
+
+    private string DateLabel => Date.ToString("dddd d MMMM", SwedishCulture);
+
+    protected override void OnParametersSet()
+    {
+        if (!IsOpen)
+        {
+            _message = null;
+        }
+    }
+
+    private async Task OnIsOpenChanged(bool isOpen)
+    {
+        IsOpen = isOpen;
+        await IsOpenChanged.InvokeAsync(isOpen);
+    }
+
+    private Task BringAllForwardAsync() => SetAsync("BringAllForward");
+
+    private Task DeferAllAsync() => SetAsync("DeferAll");
+
+    private async Task SetAsync(string mode)
+    {
+        _busy = true;
+        _message = null;
+
+        try
+        {
+            var result = await Api.SetDayOffAsync(HouseholdId, MemberId, Date, mode);
+
+            if (result is null)
+            {
+                _message = "Det gick inte att spara. Försök igen.";
+                _messageIsError = true;
+                return;
+            }
+
+            _message = DescriptionFor(result);
+            _messageIsError = false;
+            await OnChanged.InvokeAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _message = "Vi når inte servern just nu. Försök igen om en stund.";
+            _messageIsError = true;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>What actually happened to whatever was already planned that day - "0 uppgifter"
+    /// is still worth saying, so a day with nothing on it does not look like the tap silently
+    /// failed.</summary>
+    private static string DescriptionFor(DayOffResponse result) => result switch
+    {
+        { BroughtForward: > 0 } => $"{result.BroughtForward} uppgifter flyttades till idag.",
+        { Deferred: > 0, DeferredTo: { } deferredTo } =>
+            $"{result.Deferred} uppgifter flyttades till {deferredTo.ToString("d MMMM", SwedishCulture)}.",
+        _ => "Inget behövde flyttas."
+    };
+
+    private async Task ClearAsync()
+    {
+        _busy = true;
+        _message = null;
+
+        try
+        {
+            if (!await Api.ClearDayOffAsync(HouseholdId, MemberId, Date))
+            {
+                _message = "Det gick inte att spara. Försök igen.";
+                _messageIsError = true;
+                return;
+            }
+
+            await OnChanged.InvokeAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _message = "Vi når inte servern just nu. Försök igen om en stund.";
+            _messageIsError = true;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

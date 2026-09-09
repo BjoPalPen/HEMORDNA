@@ -21,7 +21,8 @@ public sealed class TaskOccurrence
         int estimatedMinutes,
         TaskPriority priority,
         bool canBeDeferred,
-        DateTimeOffset createdAt)
+        DateTimeOffset createdAt,
+        bool addedAsExtra)
     {
         Id = id;
         HouseholdId = householdId;
@@ -33,6 +34,7 @@ public sealed class TaskOccurrence
         CanBeDeferred = canBeDeferred;
         Status = TaskOccurrenceStatus.Planned;
         CreatedAt = createdAt;
+        AddedAsExtra = addedAsExtra;
     }
 
     public Guid Id { get; private set; }
@@ -67,10 +69,22 @@ public sealed class TaskOccurrence
 
     public Guid? CompletedByMemberId { get; private set; }
 
+    /// <summary>
+    /// True when this occurrence was created through the "Extra uppgift" flow - a genuinely
+    /// new, one-off task someone added to their own day, not something the household already
+    /// planned for. Drives time credit (<c>MemberTimeCredit.Reason.ExtraTask</c>): completing
+    /// an extra task earns credit the same way completing something ahead of its own due date
+    /// does, since both mean "I did more than my day already called for". Set only at creation
+    /// time - there is no domain operation to change it afterwards, since an occurrence's origin
+    /// does not change once it exists.
+    /// </summary>
+    public bool AddedAsExtra { get; private set; }
+
     /// <summary>True while the occurrence still needs doing.</summary>
     public bool IsOutstanding => Status == TaskOccurrenceStatus.Planned;
 
-    internal static TaskOccurrence Create(TaskDefinition definition, DateOnly date, DateTimeOffset createdAt)
+    internal static TaskOccurrence Create(
+        TaskDefinition definition, DateOnly date, DateTimeOffset createdAt, bool addedAsExtra = false)
     {
         ArgumentNullException.ThrowIfNull(definition);
 
@@ -82,7 +96,8 @@ public sealed class TaskOccurrence
             definition.EstimatedMinutes,
             definition.Priority,
             definition.CanBeDeferred,
-            createdAt);
+            createdAt,
+            addedAsExtra);
 
         if (definition.DefaultResponsibleMemberId is { } responsibleMemberId)
         {
@@ -149,6 +164,55 @@ public sealed class TaskOccurrence
         }
 
         ScheduledDate = newDate;
+    }
+
+    /// <summary>
+    /// Pulls a not-yet-due task onto <paramref name="today"/> - "jobba i förväg": the member
+    /// chose to do their own, genuinely future work now rather than waiting. Only
+    /// <see cref="ScheduledDate"/> moves; <see cref="OriginalScheduledDate"/> is untouched, so
+    /// this can never look overdue (<see cref="IsOverdueOn"/> compares against
+    /// <see cref="OriginalScheduledDate"/>, which stays in the future) and never earns the
+    /// "kvarlämnat" treatment an actually overdue task gets from the rebalance use case
+    /// (<c>RebalanceTaskAssignments</c>, in <c>Hemordna.Application</c>).
+    /// </summary>
+    public void BringForwardTo(DateOnly today)
+    {
+        EnsureOutstanding("brought forward");
+
+        if (today >= ScheduledDate)
+        {
+            throw new DomainException("Only a task not yet due can be brought forward.");
+        }
+
+        ScheduledDate = today;
+    }
+
+    /// <summary>
+    /// True when this occurrence sits on <paramref name="date"/> only because it was pulled
+    /// forward from a later date it was not yet due on - see <see cref="BringForwardTo"/>. Used
+    /// to show the "från imorgon"-style chip, and to let the daily planner
+    /// (<c>DailyPlanner</c>, in <c>Hemordna.Application</c>) always keep a self-chosen task in
+    /// <c>Items</c> rather than bumping it to <c>Unplanned</c> for lack of room.
+    /// </summary>
+    public bool IsBroughtForwardOn(DateOnly date) => IsOutstanding && ScheduledDate == date && OriginalScheduledDate > date;
+
+    /// <summary>
+    /// Puts a brought-forward occurrence back on the date it was originally due -
+    /// "Ångra" on the "från imorgon" chip's own undo offer. Deliberately its own operation
+    /// rather than a call to <see cref="DeferTo"/>: <see cref="BringForwardTo"/> never checked
+    /// <see cref="CanBeDeferred"/> (bringing something forward is not "pushing it later", so a
+    /// non-deferrable task can be brought forward same as any other), so undoing that move must
+    /// not suddenly require deferability either - it is simply reversing the member's own last
+    /// action, not asking for a new, ordinary deferral.
+    /// </summary>
+    public void UndoBringForward()
+    {
+        if (!IsBroughtForwardOn(ScheduledDate))
+        {
+            throw new DomainException("This task was not brought forward, so there is nothing to undo.");
+        }
+
+        ScheduledDate = OriginalScheduledDate;
     }
 
     /// <summary>

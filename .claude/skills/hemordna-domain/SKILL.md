@@ -1,6 +1,6 @@
 ---
 name: hemordna-domain
-description: Hemordnas produkt- och domänregler - hushall, medlemmar, tidsbudget, omraden, uppgifter, occurrences och planering. Anvands nar domanmodellen ska andras eller utokas, nar en produktregel ska tolkas, eller nar det ar oklart var ett begrepp hor hemma. Triggers - "Household", "HouseholdMember", "TaskDefinition", "TaskOccurrence", "DailyPlanner", "tidsbudget", "recurrence", "min dag", "hushall", "uppgift", "domanmodell", "domain model".
+description: Hemordnas produkt- och domänregler - hushall, medlemmar, tidsbudget, omraden, uppgifter, occurrences och planering. Anvands nar domanmodellen ska andras eller utokas, nar en produktregel ska tolkas, eller nar det ar oklart var ett begrepp hor hemma. Triggers - "Household", "HouseholdMember", "TaskDefinition", "TaskOccurrence", "DailyPlanner", "tidsbudget", "recurrence", "min dag", "hushall", "uppgift", "domanmodell", "domain model", "MemberDayOff", "MemberTimeCredit", "ledig dag", "tid i forvag", "kvarlamnat", "BringForwardTo".
 ---
 
 # Hemordna – Domän
@@ -26,10 +26,12 @@ Följdregler som ofta glöms:
 ```text
 Household (tenant- och säkerhetsgräns)
 ├── HouseholdMember ── WeeklyTimeBudget (value object, minuter per veckodag)
-│        └── MemberAvailability   (undantag för ETT datum)
+│        ├── MemberAvailability   (undantag för ETT datum)
+│        ├── MemberDayOff         (hård rotationsuteslutning för ETT datum)
+│        └── MemberTimeCredit     (ledger - "tid i förväg", aldrig ett saldofält)
 └── Area
 
-TaskDefinition ──ScheduleFor──► TaskOccurrence
+TaskDefinition ──ScheduleFor──► TaskOccurrence ──BringForwardTo──► (samma occurrence, tidigare ScheduledDate)
 ```
 
 | Typ | Regel som inte får brytas |
@@ -38,12 +40,14 @@ TaskDefinition ──ScheduleFor──► TaskOccurrence
 | `HouseholdMember` | Deaktiveras, raderas aldrig – historik måste peka på en verklig medlem |
 | `WeeklyTimeBudget` | Immutable. Noll minuter en veckodag är giltigt och betyder "ingen tid" |
 | `MemberAvailability` | Gäller ett datum. Ändrar aldrig veckobudgeten |
+| `MemberDayOff` | Hård uteslutning ur rotationen för ETT datum. Utesluter alltid - kan aldrig övertrumfas av kredit |
+| `MemberTimeCredit` | Ledger (`Earned`/`Consumed`-rader), inte ett muterbart fält. Balans golvad vid 0, takad vid egen veckobudget. Förskjuter bara ordning bland redan valbara medlemmar - utesluter aldrig någon |
 | `Area` | Behöver inte vara ett rum – "Hund" och "Trädgård" är giltiga områden |
 | `TaskDefinition` | Beskriver **normen**. `EstimatedMinutes > 0` |
 | `TaskOccurrence` | Bär allt **tillfälligt**. Snapshottar minuter, prioritet och deferability |
 | `TaskOccurrenceStatus` | `Planned` / `Completed` / `Skipped`. Uppskjutning är *inte* en status |
 
-## De tre reglerna som styr det mesta
+## De fyra reglerna som styr det mesta
 
 1. **Definition kontra occurrence.** Ändra aldrig `TaskDefinition` för att uttrycka något
    tillfälligt – bortrest medlem, en uppgift som hoppas över en gång, en tillfällig
@@ -58,6 +62,15 @@ TaskDefinition ──ScheduleFor──► TaskOccurrence
 3. **Uppskjutning flyttar datum.** `DeferTo` flyttar `ScheduledDate` framåt medan
    `OriginalScheduledDate` ligger kvar, så uppskjutning kan inte dölja att något är försenat.
    Statusen förblir `Planned`.
+
+4. **Kvarlämnat stannar; jobba-i-förväg döljer aldrig att det var i förväg.** En förfallen
+   occurrence (`OriginalScheduledDate < today`) byter aldrig ägare via ombalansering - det
+   flyttar bara problemet. `BringForwardTo` (motsatsen: göra imorgondagens uppgift idag) rör
+   bara `ScheduledDate`, aldrig `OriginalScheduledDate` - exakt samma
+   snapshot-håller-historien-ärlig-princip som regel 3, fast i andra riktningen. Ledig dag
+   (`MemberDayOff`) och tid i förväg (`MemberTimeCredit`) löser en näraliggande fråga på två
+   olika sätt: en hård uteslutning ur rotationen kontra en mjuk förskjutning av ordningen bland
+   redan valbara medlemmar - blanda aldrig ihop de två.
 
 ## Tidsbudget
 
@@ -81,9 +94,9 @@ inte får plats blockerar inte de kortare bakom sig.
 
 ## Ännu inte byggt – bygg det inte i förväg
 
-`RecurrenceRule`, `TaskAssignment` och `TaskCompletion` som egna entiteter,
-`MemberPreference`, `NotificationPreference`. Alla är `PROPOSED` i `docs/ARCHITECTURE.md`
-med villkoret för när de ska införas. Recurrence-motorn är projektets mest sannolika
-överdesign – bygg den när ett verkligt use case kräver den, inte innan.
+`TaskCompletion` som en egen entitet (completion är fortfarande bara fält på `TaskOccurrence`),
+`NotificationPreference`. Se `docs/ARCHITECTURE.md` §11 för vad som ännu inte är beslutat.
+`RecurrenceRule`, `TaskAssignment` och `MemberPreference` är sedan tidigare `IMPLEMENTED` - byggda
+entiteter, inte längre proposals.
 
 Relaterat: `senior-dotnet-architect`, `senior-dotnet-developer`, `hemordna-review`.

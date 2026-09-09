@@ -160,12 +160,12 @@ public sealed record RecentActivityResponse(
 /// <summary>Household-wide (never per-member) count for one day - see IHouseholdDailyActivityQuery.</summary>
 public sealed record DailyActivitySummaryResponse(DateOnly Date, int CompletedCount, int TotalCount);
 
-public sealed record MemberDayStatusResponse(Guid MemberId, DateOnly Date, DayStatus Status);
+public sealed record MemberDayStatusResponse(Guid MemberId, DateOnly Date, DayStatus Status, bool IsDayOff);
 
 public sealed record PreferenceResponse(
     Guid MemberId, PresentationMode Presentation, MotivationLevel Motivation, bool ShowTimeLevel);
 
-public sealed record ScheduleOccurrenceRequest(DateOnly? Date, Guid? AssignToMemberId);
+public sealed record ScheduleOccurrenceRequest(DateOnly? Date, Guid? AssignToMemberId, bool AddedAsExtra = false);
 
 public sealed record TaskOccurrenceResponse(
     Guid Id,
@@ -194,7 +194,8 @@ public sealed record DailyPlanResponse(
     int CompletedMinutes,
     IReadOnlyList<PlannedTaskResponse> Items,
     IReadOnlyList<CompletedTaskResponse> Completed,
-    IReadOnlyList<UnplannedTaskResponse> Unplanned);
+    IReadOnlyList<UnplannedTaskResponse> Unplanned,
+    bool IsDayOff);
 
 public sealed record CompletedTaskResponse(
     Guid OccurrenceId,
@@ -225,3 +226,19 @@ public sealed record UnplannedTaskResponse(
     bool CanBeDeferred,
     UnplannedReason Reason,
     string? AreaName);
+
+public sealed record SetDayOffRequest(DayOffMode Mode);
+
+/// <summary>How many of the member's own occurrences on the day off actually moved - see
+/// <c>SetMemberDayOff</c>.</summary>
+public sealed record DayOffResponse(int BroughtForward, int Deferred, DateOnly? DeferredTo);
+
+public sealed record MemberDayOffResponse(DateOnly Date);
+
+/// <summary><c>Today</c> lets the client name its own local date - the server's own date is
+/// used when it is <c>null</c>, see <c>CompleteTaskOccurrence</c>.</summary>
+public sealed record CompleteOccurrenceRequest(DateOnly? Today);
+
+/// <summary>A member's own "tid i förväg" balance - see <c>GetMemberTimeCredit</c>. Always the
+/// calling member's own balance; there is no way to ask for anyone else's.</summary>
+public sealed record TimeCreditResponse(int Minutes);

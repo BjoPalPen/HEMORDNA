@@ -23,6 +23,10 @@
         {
             <span class="chip chip-time">@TimeLevel.LabelFor(Item.EstimatedMinutes)</span>
         }
+        @if (IsBroughtForward)
+        {
+            <span class="chip chip-forward">I förväg</span>
+        }
         @if (ShowOverdueNote && Item.IsOverdue)
         {
             <span class="task-note muted small">sedan tidigare</span>
@@ -63,6 +67,12 @@
     /// see MinDag.razor.</summary>
     [Parameter, EditorRequired]
     public PlannedTaskResponse Item { get; set; } = null!;
+
+    /// <summary>The day this row is being shown on - used only to tell a task brought forward
+    /// from tomorrow (<see cref="IsBroughtForward"/>) apart from an ordinary one, never to
+    /// re-derive anything the API already decided.</summary>
+    [Parameter]
+    public DateOnly Today { get; set; }
 
     [Parameter]
     public bool ShowIcon { get; set; }
@@ -148,6 +158,12 @@
             await OnDefer.InvokeAsync(Item.OccurrenceId);
         }
     }
+
+    /// <summary>Mirrors TaskOccurrence.IsBroughtForwardOn: outstanding work due today only
+    /// because it was deliberately pulled forward from a later date (see
+    /// HemordnaApiClient.BringOccurrenceForwardAsync) - never true for a task that was simply
+    /// scheduled for today all along.</summary>
+    private bool IsBroughtForward => Item.OriginalScheduledDate > Today;
 
     private static string IconSrc(string taskName, string? areaName) => $"icons/tasks/{TaskIcons.For(taskName, areaName)}.svg";
 

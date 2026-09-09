@@ -14,7 +14,11 @@ namespace Hemordna.Application.Planning;
 /// The algorithm is deliberately simple - sort, then greedy first-fit. It is not an
 /// optimiser and does not try to pack the day perfectly. It walks the ordered list and takes
 /// every task that still fits in the remaining time, so a long task that does not fit does
-/// not block the shorter ones behind it.
+/// not block the shorter ones behind it. The one exception is a task brought forward from
+/// tomorrow (<see cref="Hemordna.Domain.Tasks.TaskOccurrence.IsBroughtForwardOn"/>): choosing
+/// to do it today already happened elsewhere, so it always lands in <c>Items</c>, even past the
+/// budget - see docs/ARCHITECTURE.md "Beslut: Kvarlämnat, Imorgon på Idag, ledig dag och tid i
+/// förväg".
 /// </para>
 /// <para>
 /// <b>Ordering rules</b>, applied in this order:
@@ -84,7 +88,10 @@ public sealed class DailyPlanner
 
             remaining.Remove(next);
 
-            if (next.EstimatedMinutes <= remainingMinutes)
+            // A task brought forward from tomorrow (see TaskOccurrence.BringForwardTo) was
+            // already a deliberate choice to do it today - the budget cannot un-choose it, so it
+            // is never bumped to Unplanned for lack of room, even when it pushes the day over.
+            if (next.EstimatedMinutes <= remainingMinutes || next.Occurrence.IsBroughtForwardOn(date))
             {
                 items.Add(new PlannedTask(next, next.Occurrence.IsOverdueOn(date)));
                 remainingMinutes -= next.EstimatedMinutes;

@@ -145,6 +145,26 @@ namespace Hemordna.Infrastructure.Migrations
                     b.ToTable("MemberAvailabilities", (string)null);
                 });
 
+            modelBuilder.Entity("Hemordna.Domain.Households.MemberDayOff", b =>
+                {
+                    b.Property<Guid>("HouseholdId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("MemberId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date");
+
+                    b.HasKey("HouseholdId", "MemberId", "Date");
+
+                    b.HasIndex("MemberId");
+
+                    b.HasIndex("HouseholdId", "Date");
+
+                    b.ToTable("MemberDaysOff", (string)null);
+                });
+
             modelBuilder.Entity("Hemordna.Domain.Households.MemberPreference", b =>
                 {
                     b.Property<Guid>("MemberId")
@@ -167,6 +187,41 @@ namespace Hemordna.Infrastructure.Migrations
                     b.HasIndex("HouseholdId");
 
                     b.ToTable("MemberPreferences", (string)null);
+                });
+
+            modelBuilder.Entity("Hemordna.Domain.Households.MemberTimeCredit", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("HouseholdId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("MemberId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Minutes")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly>("OccurredOn")
+                        .HasColumnType("date");
+
+                    b.Property<Guid>("OccurrenceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MemberId");
+
+                    b.HasIndex("OccurrenceId");
+
+                    b.HasIndex("HouseholdId", "MemberId", "OccurredOn");
+
+                    b.ToTable("MemberTimeCredits", (string)null);
                 });
 
             modelBuilder.Entity("Hemordna.Domain.Tasks.TaskAssignment", b =>
@@ -277,6 +332,9 @@ namespace Hemordna.Infrastructure.Migrations
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
+
+                    b.Property<bool>("AddedAsExtra")
+                        .HasColumnType("boolean");
 
                     b.Property<Guid?>("AssignedMemberId")
                         .HasColumnType("uuid");
@@ -581,7 +639,25 @@ namespace Hemordna.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Hemordna.Domain.Households.MemberDayOff", b =>
+                {
+                    b.HasOne("Hemordna.Domain.Households.HouseholdMember", null)
+                        .WithMany()
+                        .HasForeignKey("MemberId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Hemordna.Domain.Households.MemberPreference", b =>
+                {
+                    b.HasOne("Hemordna.Domain.Households.HouseholdMember", null)
+                        .WithMany()
+                        .HasForeignKey("MemberId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Hemordna.Domain.Households.MemberTimeCredit", b =>
                 {
                     b.HasOne("Hemordna.Domain.Households.HouseholdMember", null)
                         .WithMany()

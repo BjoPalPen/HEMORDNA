@@ -61,6 +61,11 @@ else
         }
     </header>
 
+    @if (_day is { IsDayOff: true })
+    {
+        <p class="notice" role="status">Du är ledig idag. Inget nytt läggs på dig.</p>
+    }
+
     @if (_remoteNote is not null)
     {
         <p class="remote-note" role="status">@_remoteNote</p>
@@ -155,7 +160,7 @@ else
                             }
                             else
                             {
-                                <TaskListItem Item="row.Item" ShowIcon="ShowIcons" ShowOverdueNote="false" ShowTimeLevel="_showTimeLevel"
+                                <TaskListItem Item="row.Item" Today="Today" ShowIcon="ShowIcons" ShowOverdueNote="false" ShowTimeLevel="_showTimeLevel"
                                               IsBusy="_busyOccurrence == row.Item.OccurrenceId"
                                               IsExpanded="_expandedOccurrence == row.Item.OccurrenceId"
                                               OnComplete="CompleteAsync" OnToggleExpand="ToggleExpand" OnDefer="DeferAsync" />
@@ -198,7 +203,7 @@ else
                                 }
                                 else
                                 {
-                                    <TaskListItem Item="row.Item" ShowIcon="ShowIcons" ShowAreaChip="false" ShowTimeLevel="_showTimeLevel"
+                                    <TaskListItem Item="row.Item" Today="Today" ShowIcon="ShowIcons" ShowAreaChip="false" ShowTimeLevel="_showTimeLevel"
                                                   IsBusy="_busyOccurrence == row.Item.OccurrenceId"
                                                   IsExpanded="_expandedOccurrence == row.Item.OccurrenceId"
                                                   OnComplete="CompleteAsync" OnToggleExpand="ToggleExpand" OnDefer="DeferAsync" />
@@ -222,6 +227,9 @@ else
             </button>
             <button type="button" class="chip-action" @onclick="OpenExtraTaskSheetAsync">
                 Extra uppgift
+            </button>
+            <button type="button" class="chip-action" @onclick="() => OpenDayOffSheet(Today)">
+                @(_day.IsDayOff ? "Ledig idag" : "Ta ledigt idag")
             </button>
         </div>
 
@@ -255,6 +263,58 @@ else
                 }
             </ul>
         }
+
+        @if (_tomorrow is not null)
+        {
+            <details class="more-options tomorrow-section">
+                <summary>
+                    Imorgon
+                    @(TomorrowItems.Count > 0 ? $" · {TomorrowItems.Count} uppgifter" : null)
+                </summary>
+
+                @if (TomorrowItems.Count == 0)
+                {
+                    <p class="muted small">Inget planerat imorgon än.</p>
+                }
+                else
+                {
+                    <ul class="task-list">
+                        @foreach (var item in TomorrowItems)
+                        {
+                            <li class="task task-rest">
+                                @if (ShowIcons)
+                                {
+                                    <img class="task-icon" src="@IconSrc(item.Name, item.AreaName)" alt="" width="24" height="24" />
+                                }
+                                <span class="task-name">
+                                    @item.Name
+                                    @if (item.AreaName is { } tomorrowArea)
+                                    {
+                                        <span class="chip">@tomorrowArea</span>
+                                    }
+                                </span>
+                                <button type="button" class="btn btn-link" disabled="@(_tomorrowBusyOccurrence == item.OccurrenceId)"
+                                        @onclick="() => BringForwardAsync(item.OccurrenceId)">
+                                    Gör idag i stället
+                                </button>
+                            </li>
+                        }
+                    </ul>
+                }
+
+                @if (_tomorrowNotice is not null)
+                {
+                    <p class="notice notice-problem" role="alert">@_tomorrowNotice</p>
+                }
+
+                <button type="button" class="btn btn-link" @onclick="() => OpenDayOffSheet(Today.AddDays(1))">
+                    @(_tomorrow.IsDayOff ? "Ledig imorgon" : "Ta ledigt imorgon")
+                </button>
+            </details>
+        }
+
+        <DayOffSheet HouseholdId="HouseholdId" MemberId="MemberId" Date="_dayOffDate" IsCurrentlyOff="DayOffSheetIsCurrentlyOff"
+                     @bind-IsOpen="_showDayOffSheet" OnChanged="LoadDayAsync" />
 
         <BottomSheet Title="Flytta till en annan dag" @bind-IsOpen="_showUnplannedSheet">
             <p class="muted small">
@@ -332,7 +392,20 @@ else
 
 @code {
     private DailyPlanResponse? _day;
+
+    /// <summary>"Jag ser min morgondag på Idag" - tomorrow's own plan, shown read-only in its
+    /// own collapsed section (see the "Imorgon" details below). Loaded alongside _day so it is
+    /// never stale relative to it - see LoadDayAsync.</summary>
+    private DailyPlanResponse? _tomorrow;
+    private Guid? _tomorrowBusyOccurrence;
+    private string? _tomorrowNotice;
     private Guid? _busyOccurrence;
+
+    /// <summary>"Jag kan ... ta ledigt" - which date DayOffSheet is currently open for: either
+    /// Today (the chip in .chips) or Today.AddDays(1) (the link inside "Imorgon"). One shared
+    /// sheet instance rather than two, since only one can be open at a time anyway.</summary>
+    private bool _showDayOffSheet;
+    private DateOnly _dayOffDate;
     private Guid? _expandedOccurrence;
     private string? _presentation;
     private string? _motivation;
@@ -441,6 +514,27 @@ else
             .GroupBy(group => group.AreaName is { } areaName ? RoomFloors.FloorOf(areaName) : null)
             .Select(group => new FloorGroup(group.Key, [.. group]))
             .ToList();
+
+    /// <summary>
+    /// Tomorrow's own new work for the "Imorgon" section - excludes anything already on today's
+    /// list. DailyPlanner's own eligibility rule is "outstanding and due by this date or
+    /// earlier" (see DailyPlanner.IsEligible), so without this an occurrence carried over from
+    /// today (still not done) - or one just brought forward onto today via BringForwardAsync -
+    /// would show up in BOTH _day and _tomorrow at once.
+    /// </summary>
+    private List<PlannedTaskResponse> TomorrowItems
+    {
+        get
+        {
+            if (_tomorrow is null)
+            {
+                return [];
+            }
+
+            var todayIds = new HashSet<Guid>((_day?.Items ?? []).Select(item => item.OccurrenceId));
+            return [.. _tomorrow.Items.Where(item => !todayIds.Contains(item.OccurrenceId))];
+        }
+    }
 
     private static string RoomHeadingName(TaskGroup group)
         => group.AreaName is { } areaName ? RoomFloors.RoomNameOf(areaName) : "Övrigt";
@@ -672,7 +766,7 @@ else
     }
 
     private bool IsInteractionBusy()
-        => _showUnplannedSheet || _showExtraTaskSheet
+        => _showUnplannedSheet || _showExtraTaskSheet || _showDayOffSheet
             || (_lastInteraction is { } last && TimeProvider.GetUtcNow() - last < TimeSpan.FromSeconds(2));
 
     private async Task RetryRemoteChangeAfterDelayAsync(CancellationToken cancellationToken)
@@ -844,7 +938,15 @@ else
             return;
         }
 
+        // Sequential, not Task.WhenAll: both calls make GetDailyPlan run
+        // EnsureOccurrencesGenerated for their own date, and that use case's catch-up logic
+        // reads "does an occurrence already exist" before writing one - two concurrent requests
+        // covering overlapping dates (tomorrow's catch-up walks through today too, when nothing
+        // has been generated yet) can each see "not yet" at the same time and both create one,
+        // duplicating it. Running today's request to completion first means tomorrow's request
+        // always sees today's occurrence already committed.
         _day = await Api.GetDailyPlanAsync(householdId, memberId, Today);
+        _tomorrow = await Api.GetDailyPlanAsync(householdId, memberId, Today.AddDays(1));
         _focusOffset = 0;
 
         // A full reload supersedes any patched-in state from ReconcileRemoteChangeAsync - it is
@@ -1007,6 +1109,38 @@ else
         }
     }
 
+    /// <summary>"Gör idag i stället" on a row in the "Imorgon" section - "jobba i förväg" for a
+    /// single occurrence (see HemordnaApiClient.BringOccurrenceForwardAsync). A full LoadDayAsync
+    /// on success rather than a local patch: the row needs to disappear from _tomorrow AND appear
+    /// (with its "I förväg" chip) in _day, and both come from the same reload.</summary>
+    private async Task BringForwardAsync(Guid occurrenceId)
+    {
+        if (Session.Me is not { HouseholdId: { } householdId })
+        {
+            return;
+        }
+
+        _lastInteraction = TimeProvider.GetUtcNow();
+        _tomorrowBusyOccurrence = occurrenceId;
+        _tomorrowNotice = null;
+
+        try
+        {
+            if (await Api.BringOccurrenceForwardAsync(householdId, occurrenceId))
+            {
+                await LoadDayAsync();
+            }
+            else
+            {
+                _tomorrowNotice = "Det gick inte att hämta uppgiften till idag. Försök igen.";
+            }
+        }
+        finally
+        {
+            _tomorrowBusyOccurrence = null;
+        }
+    }
+
     /// <summary>"Låt Hemordna sprida ut dem" (§B6) - re-anchors the household's recurring tasks
     /// across the week instead of leaving them clustered on whatever day they were first
     /// scheduled or deferred to (RebalanceSchedule). Set after LoadDayAsync, not before - the
@@ -1055,6 +1189,25 @@ else
 
         _lastInteraction = TimeProvider.GetUtcNow();
         _showUnplannedSheet = true;
+    }
+
+    /// <summary>Guaranteed non-empty by the time DayOffSheet is actually rendered - it only
+    /// appears once _day is not null, which itself requires Session.Me to have carried both.</summary>
+    private Guid HouseholdId => Session.Me?.HouseholdId ?? Guid.Empty;
+
+    private Guid MemberId => Session.Me?.MemberId ?? Guid.Empty;
+
+    /// <summary>Which of _day/_tomorrow's own IsDayOff applies to whichever date DayOffSheet is
+    /// currently open for - it only ever opens for one of those two exact dates (see
+    /// OpenDayOffSheet), never an arbitrary one.</summary>
+    private bool DayOffSheetIsCurrentlyOff
+        => _dayOffDate == Today ? (_day?.IsDayOff ?? false) : (_tomorrow?.IsDayOff ?? false);
+
+    private void OpenDayOffSheet(DateOnly date)
+    {
+        _lastInteraction = TimeProvider.GetUtcNow();
+        _dayOffDate = date;
+        _showDayOffSheet = true;
     }
 
     private void ShowUnplannedNotice()

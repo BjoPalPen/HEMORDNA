@@ -59,6 +59,11 @@ else
     <h2 class="vecka-section-heading">Min vecka</h2>
     <p class="muted small">Hur mycket tid du normalt brukar ha, dag för dag.</p>
 
+    @if (_timeCreditMinutes is > 0 and { } credit)
+    {
+        <p class="muted small">Tid i förväg: @credit min</p>
+    }
+
     <ul class="list" aria-label="Veckans normala tid">
         @foreach (var day in Weekdays(_member))
         {
@@ -174,7 +179,12 @@ else
 @code {
     private HouseholdResponse? _household;
     private HouseholdMemberResponse? _member;
-    private readonly Dictionary<(Guid MemberId, DateOnly Date), string> _weeklyStatus = [];
+    private readonly Dictionary<(Guid MemberId, DateOnly Date), MemberDayStatusResponse> _weeklyStatus = [];
+
+    /// <summary>"Det jag gör i förväg märks, och jag kan se hur" - the signed-in member's own
+    /// "tid i förväg" balance (see GetMemberTimeCredit). Always the caller's own; there is no
+    /// way to ask for anyone else's, so this is never shown next to another member's name.</summary>
+    private int? _timeCreditMinutes;
 
     private IReadOnlyList<HouseholdMemberResponse>? _householdMembers;
     private Guid _peekMemberId;
@@ -206,8 +216,10 @@ else
         _weeklyStatus.Clear();
         foreach (var status in await Api.GetWeeklyStatusAsync(householdId, Today))
         {
-            _weeklyStatus[(status.MemberId, status.Date)] = status.Status;
+            _weeklyStatus[(status.MemberId, status.Date)] = status;
         }
+
+        _timeCreditMinutes = (await Api.GetTimeCreditAsync(householdId))?.Minutes;
     }
 
     private static IEnumerable<(string Label, string MinutesLabel)> Weekdays(HouseholdMemberResponse member)
@@ -237,17 +249,24 @@ else
         }
     }
 
+    /// <summary>A day off (see MemberDayOff) always shows as "off", regardless of what else is
+    /// true for that day - it is the more decision-relevant fact for anyone glancing at the
+    /// week ("nothing new is landing on them today"), and it is neutral planning information
+    /// the whole household already sees here (docs/ARCHITECTURE.md Del C/G), not a private
+    /// fact like the time-credit balance above.</summary>
     private string DotClass(Guid memberId, DateOnly date) => _weeklyStatus.GetValueOrDefault((memberId, date)) switch
     {
-        "Done" => "dot-done",
-        "Planned" => "dot-planned",
+        { IsDayOff: true } => "dot-off",
+        { Status: "Done" } => "dot-done",
+        { Status: "Planned" } => "dot-planned",
         _ => "dot-none"
     };
 
     private string DotTitle(Guid memberId, DateOnly date) => _weeklyStatus.GetValueOrDefault((memberId, date)) switch
     {
-        "Done" => "Klart",
-        "Planned" => "Planerat",
+        { IsDayOff: true } => "Ledig",
+        { Status: "Done" } => "Klart",
+        { Status: "Planned" } => "Planerat",
         _ => "Inget planerat"
     };
 

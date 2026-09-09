@@ -29,6 +29,10 @@ public sealed class HemordnaDbContext : IdentityDbContext<HemordnaUser, Identity
 
     public DbSet<MemberAvailability> MemberAvailabilities => Set<MemberAvailability>();
 
+    public DbSet<MemberTimeCredit> MemberTimeCredits => Set<MemberTimeCredit>();
+
+    public DbSet<MemberDayOff> MemberDaysOff => Set<MemberDayOff>();
+
     public DbSet<Area> Areas => Set<Area>();
 
     public DbSet<TaskDefinition> TaskDefinitions => Set<TaskDefinition>();

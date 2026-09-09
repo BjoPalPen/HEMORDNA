@@ -178,6 +178,12 @@
     border: 2px solid var(--gustav);
 }
 
+/* Ledig dag (MemberDayOff) - see Vecka.razor.css's own copy of this rule. */
+.dot-off {
+    background: var(--surface);
+    border: 2px dashed var(--sot-soft);
+}
+
 .activity-day {
     margin-bottom: var(--space-5);
 }

@@ -74,23 +74,34 @@ namespace Hemordna.Application.Tasks;
 /// half-migrated on failure. <see cref="IHouseholdNotifier.NotifyOccurrencesChangedAsync"/> is
 /// likewise called at most once, and only when at least one assignment actually changed.
 /// </para>
+/// <para>
+/// <b>Never touches time credit.</b> "Tid i förväg" (<c>MemberTimeCredit</c>, see
+/// docs/ARCHITECTURE.md "Beslut: Kvarlämnat, Imorgon på Idag, ledig dag och tid i förväg")
+/// only ever influences a NEW occurrence's rotation pick (<see cref="RotationPicker"/>, via
+/// <see cref="EnsureOccurrencesGenerated"/>). This use case moves ALREADY-assigned work between
+/// members - credit has nothing to say about that, and nothing here reads or writes a credit
+/// balance.
+/// </para>
 /// </remarks>
 public sealed class RebalanceTaskAssignments
 {
     private readonly IHouseholdRepository _households;
     private readonly ITaskDefinitionRepository _definitions;
     private readonly ITaskOccurrenceRepository _occurrences;
+    private readonly IMemberDayOffRepository _daysOff;
     private readonly IHouseholdNotifier _notifier;
 
     public RebalanceTaskAssignments(
         IHouseholdRepository households,
         ITaskDefinitionRepository definitions,
         ITaskOccurrenceRepository occurrences,
+        IMemberDayOffRepository daysOff,
         IHouseholdNotifier notifier)
     {
         _households = households;
         _definitions = definitions;
         _occurrences = occurrences;
+        _daysOff = daysOff;
         _notifier = notifier;
     }
 
@@ -98,7 +109,15 @@ public sealed class RebalanceTaskAssignments
     /// Rebalances the household's outstanding rotating work, or returns <c>null</c> if it does
     /// not exist. Returns how many occurrences actually changed owner.
     /// </summary>
-    public async Task<int?> HandleAsync(Guid householdId, CancellationToken cancellationToken)
+    /// <param name="today">
+    /// Used only to decide which occurrences are movable at all (see the "kvarlämnat" filter
+    /// below) - an occurrence already overdue as of <paramref name="today"/> is excluded before
+    /// any ratio math runs. The server's own clock is fine here (unlike most "what does today
+    /// mean" call sites, see CLAUDE.md §5): a client a day off from the server only changes
+    /// whether TODAY's own occurrences count as "due today" or "overdue by one day" for
+    /// movability purposes, which is harmless either way.
+    /// </param>
+    public async Task<int?> HandleAsync(Guid householdId, DateOnly today, CancellationToken cancellationToken)
     {
         var household = await _households.FindByIdAsync(householdId, cancellationToken);
 
@@ -118,8 +137,11 @@ public sealed class RebalanceTaskAssignments
             .Where(occurrence => definitionsById.TryGetValue(occurrence.TaskDefinitionId, out var definition) && definition.IsActive)
             .ToList();
 
+        // Kvarlämnat stannar hos den som lämnade det - en försenad uppgift är aldrig
+        // flyttbar, oavsett kapacitet. Se docs/ARCHITECTURE.md.
         var movable = relevant
-            .Where(occurrence => definitionsById[occurrence.TaskDefinitionId].HasRotatingResponsibility)
+            .Where(occurrence => definitionsById[occurrence.TaskDefinitionId].HasRotatingResponsibility
+                && occurrence.OriginalScheduledDate >= today)
             .OrderBy(occurrence => occurrence.ScheduledDate)
             .ThenBy(occurrence => occurrence.TaskDefinitionId)
             .ThenBy(occurrence => occurrence.Id)
@@ -129,6 +151,13 @@ public sealed class RebalanceTaskAssignments
         {
             return 0;
         }
+
+        // A candidate is never eligible for a date they are off on - see RotationPicker, whose
+        // EligibleMembers this reuses below. Loaded once, for exactly the date span this run
+        // could possibly touch.
+        var daysOffInRange = await _daysOff.ListForHouseholdAsync(
+            householdId, movable[0].ScheduledDate, movable[^1].ScheduledDate, cancellationToken);
+        var daysOff = daysOffInRange.Select(dayOff => (dayOff.MemberId, dayOff.Date)).ToHashSet();
 
         var fixedOccurrences = relevant.Except(movable);
 
@@ -157,7 +186,7 @@ public sealed class RebalanceTaskAssignments
             var definition = definitionsById[occurrence.TaskDefinitionId];
             var date = occurrence.ScheduledDate;
 
-            var eligible = RotationPicker.EligibleMembers(household, definition, date);
+            var eligible = RotationPicker.EligibleMembers(household, definition, date, daysOff);
             var withRoom = eligible
                 .Where(member => HasRoomForOccurrenceToday(member, date, dateTally, occurrence))
                 .ToList();

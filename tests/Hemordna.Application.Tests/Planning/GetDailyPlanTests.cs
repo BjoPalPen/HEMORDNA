@@ -17,18 +17,22 @@ public class GetDailyPlanTests
 
     private readonly InMemoryHouseholdRepository _households = new();
     private readonly InMemoryMemberAvailabilityRepository _availabilities = new();
+    private readonly InMemoryMemberDayOffRepository _daysOff = new();
     private readonly InMemoryPlanCandidateQuery _candidates = new();
 
     private GetDailyPlan CreateUseCase()
         => new(
             _households,
             _availabilities,
+            _daysOff,
             _candidates,
             new EnsureOccurrencesGenerated(
                 _households,
                 new InMemoryTaskDefinitionRepository(),
                 new InMemoryTaskOccurrenceRepository(),
                 new InMemoryTaskAssignmentRepository(),
+                _daysOff,
+                new InMemoryMemberTimeCreditRepository(),
                 new FixedTimeProvider(Now)),
             new DailyPlanner());
 
@@ -160,6 +164,46 @@ public class GetDailyPlanTests
 
         Assert.Null(day);
     }
+
+    [Fact]
+    public async Task A_member_who_marked_the_date_as_a_day_off_sees_that_on_their_day()
+    {
+        var (householdId, member) = await ArrangeHouseholdAsync(fridayMinutes: 30);
+        _daysOff.Seed(MemberDayOff.Create(householdId, member.Id, Friday, Friday));
+
+        var day = await CreateUseCase()
+            .HandleAsync(householdId, member.Id, Friday, CancellationToken.None);
+
+        Assert.NotNull(day);
+        Assert.True(day.IsDayOff);
+    }
+
+    [Fact]
+    public async Task An_ordinary_day_is_not_a_day_off()
+    {
+        var (householdId, member) = await ArrangeHouseholdAsync(fridayMinutes: 30);
+
+        var day = await CreateUseCase()
+            .HandleAsync(householdId, member.Id, Friday, CancellationToken.None);
+
+        Assert.NotNull(day);
+        Assert.False(day.IsDayOff);
+    }
+
+    [Fact]
+    public async Task A_day_off_does_not_hide_or_remove_work_still_due_that_day()
+    {
+        var (householdId, member) = await ArrangeHouseholdAsync(fridayMinutes: 30);
+        GiveMemberTask(householdId, member.Id, "Hall", 7);
+        _daysOff.Seed(MemberDayOff.Create(householdId, member.Id, Friday, Friday));
+
+        var day = await CreateUseCase()
+            .HandleAsync(householdId, member.Id, Friday, CancellationToken.None);
+
+        Assert.NotNull(day);
+        Assert.True(day.IsDayOff);
+        Assert.Equal("Hall", Assert.Single(day.Plan.Items).Candidate.TaskName);
+    }
 }
 
 public class MemberDayCompletionTests
@@ -169,18 +213,22 @@ public class MemberDayCompletionTests
 
     private readonly InMemoryHouseholdRepository _households = new();
     private readonly InMemoryMemberAvailabilityRepository _availabilities = new();
+    private readonly InMemoryMemberDayOffRepository _daysOff = new();
     private readonly InMemoryPlanCandidateQuery _candidates = new();
 
     private GetDailyPlan CreateUseCase()
         => new(
             _households,
             _availabilities,
+            _daysOff,
             _candidates,
             new EnsureOccurrencesGenerated(
                 _households,
                 new InMemoryTaskDefinitionRepository(),
                 new InMemoryTaskOccurrenceRepository(),
                 new InMemoryTaskAssignmentRepository(),
+                _daysOff,
+                new InMemoryMemberTimeCreditRepository(),
                 new FixedTimeProvider(Now)),
             new DailyPlanner());
 

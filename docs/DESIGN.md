@@ -256,6 +256,18 @@ länkar - "Visa alla" (lokalt, ingen server-ändring) och "Låt Hemordna sprida 
 ombalansering som Vecka har, laddar om dagen, visar "N uppgifter fördelades på andra dagar.").
 Rubrikens eget "N kvar" räknar alltid hela listan, capad eller inte.
 
+**"Imorgon" och att jobba i förväg** (denna revision): ett hopfällt `<details>`-avsnitt längst
+ner - "Imorgon" plus antal uppgifter i sammanfattningen, öppnat visar antingen "Inget planerat
+imorgon än." eller en enkel, skrivskyddad lista med varje rads egen "Gör idag i stället"-länk.
+En rad som förs fram flyttar sig omedelbart till Idags egen lista med en tyst "I
+förväg"-chip (samma stil som tidsnivå-chippen, aldrig en varning) och försvinner ur "Imorgon" -
+listan filtrerar uttryckligen bort allt som redan finns på dagens egen lista, annars skulle
+`DailyPlanner`s "kvarstående och senast denna dag"-regel visa samma rad på båda ställena. En egen
+chip i `.chips`-raden, "Ta ledigt idag" (blir "Ledig idag" när dagen redan är markerad), öppnar
+`Components/DayOffSheet.razor` - ett val mellan att ta med redan planerat till idag eller skjuta
+upp det till nästa lediga dag, och en banderoll "Du är ledig idag. Inget nytt läggs på dig." när
+dagen är markerad. Samma ark, samma val, nås även från "Imorgon" för morgondagens datum.
+
 **Kända begränsningar (dokumenterade, inte lösta i detta steg):** meta-raden under namnet
 visar bara "sedan tidigare" när en uppgift är försenad, inte hur ofta den återkommer –
 `PlannedTaskResponse` (Api-kontraktet) bär ingen sådan text, och ett nytt fält är utanför
@@ -276,12 +288,22 @@ Hushållets veckogrid är hjälte överst: en prickmatris, en rad per medlem, en
 veckodag (idag markerad), samma matris som tidigare bara levde på Hushållsöversikten.
 Sträckt ner till hela hushållet flyttar sidan fokus från "min egen vecka" till "hur ser
 veckan ut för oss" utan att blanda in någon minutsiffra eller jämförelse mellan medlemmar
-(PRODUCT.md §8) - bara prickar för klart/planerat/inget planerat.
+(PRODUCT.md §8) - bara prickar för klart/planerat/inget planerat, plus (denna revision) en
+streckad ring - `dot-off` - för en dag medlemmen själv markerat ledig. En ledig dag är avsiktligt
+lika synlig för hela hushållet som klart/planerat: neutral planeringsinformation, inte en privat
+uppgift (se ARCHITECTURE.md Del C/G).
 
 Under, som ett eget `<h2>Min vecka</h2>`-avsnitt: sju rader, en per veckodag, med bara ett
 kvalitativt läge i text (t.ex. "Ingen tid", "Lagom tid") – inget stapeldiagram, inga minuter,
 och ingen redigering här. Helt läsläge; rollen (se §6b, satt från Hushålls `MemberSheet`) är
 enda sättet att ändra veckan.
+
+Direkt under rubriken, bara när den inloggade medlemmen faktiskt har någon: "Tid i förväg: N
+min" (denna revision, `GetMemberTimeCredit`) - ett tal, en mening, ingenting mer (se §6a). Aldrig
+"0 min" när saldot är noll - raden utelämnas helt i stället, så den aldrig läses som ett mål att
+nå. Bara den inloggade medlemmens egen balans - ingen annan medlems siffra visas någonstans, till
+skillnad från prickmatrisens `dot-off` ovan (se ARCHITECTURE.md Del C/G för varför de två skiljer
+sig åt).
 
 "Se någon annans dag" (en titt på i morgon, eller på någon annans dag, skrivskyddat) bor nu
 här i stället för på Idag – samma disclosure och logik, flyttad. Listan visar en kryssruta
@@ -392,7 +414,10 @@ Undantaget gäller uttryckligen bara den dagliga vyn (Idag). Rum-skärmens `Room
 etablerade undantag som `Omraden.razor`s totalrad alltid haft: under planering av hemmet är
 "hur lång tid tar det här?" en rimlig fråga att svara på med en siffra. "Tjuvkika på ett
 schema" (§6, Vecka) har samma undantag för sin egen "Totalt: N min"-rad under den tjuvkikade
-dagens lista - att bedöma en dags omfång är planering, inte den dagliga vyn själv.
+dagens lista - att bedöma en dags omfång är planering, inte den dagliga vyn själv. Vecka har
+ytterligare ett, snävare undantag (denna revision): "Tid i förväg: N min" under "Min vecka" -
+avsiktligt bara ETT tal och EN mening, aldrig ett diagram, en historik eller en streak (CLAUDE.md
+§12) - se ARCHITECTURE.md "Beslut: Kvarlämnat, Imorgon på Idag, ledig dag och tid i förväg".
 
 ### 6b. Roller och rumsmallar – färre val vid start
 

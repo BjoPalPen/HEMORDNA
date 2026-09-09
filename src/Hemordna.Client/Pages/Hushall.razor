@@ -322,7 +322,8 @@ else
         Flyttar bara redan utestående, roterande uppgifter mellan medlemmar - så mycket som
         möjligt lämnas orört - så att var och ens andel av det som återstår att göra matchar
         deras egen tid bättre. Uppgifter som bara en viss person kan eller får göra (t.ex. bara
-        vuxna, eller någons eget rum) rörs aldrig.
+        vuxna, eller någons eget rum) rörs aldrig. Uppgifter som redan borde varit gjorda flyttas
+        inte — de stannar hos den som har dem.
     </p>
 
     @if (_rebalanceAssignmentsMessage is { } rebalanceAssignmentsMessage)
@@ -348,7 +349,7 @@ else
     private HouseholdResponse? _household;
     private IReadOnlyList<RecentActivityResponse> _activity = [];
     private IReadOnlyList<DailyActivitySummaryResponse> _dailySummaries = [];
-    private readonly Dictionary<(Guid MemberId, DateOnly Date), string> _weeklyStatus = [];
+    private readonly Dictionary<(Guid MemberId, DateOnly Date), MemberDayStatusResponse> _weeklyStatus = [];
     private string? _message;
     private bool _busy;
     private string? _inviteMessage;
@@ -478,7 +479,7 @@ else
         _weeklyStatus.Clear();
         foreach (var status in await Api.GetWeeklyStatusAsync(householdId, Today))
         {
-            _weeklyStatus[(status.MemberId, status.Date)] = status.Status;
+            _weeklyStatus[(status.MemberId, status.Date)] = status;
         }
     }
 
@@ -589,17 +590,21 @@ else
         }
     }
 
+    /// <summary>See Vecka.razor's own DotClass for why a day off always wins visually over
+    /// Done/Planned.</summary>
     private string DotClass(Guid memberId, DateOnly date) => _weeklyStatus.GetValueOrDefault((memberId, date)) switch
     {
-        "Done" => "dot-done",
-        "Planned" => "dot-planned",
+        { IsDayOff: true } => "dot-off",
+        { Status: "Done" } => "dot-done",
+        { Status: "Planned" } => "dot-planned",
         _ => "dot-none"
     };
 
     private string DotTitle(Guid memberId, DateOnly date) => _weeklyStatus.GetValueOrDefault((memberId, date)) switch
     {
-        "Done" => "Klart",
-        "Planned" => "Planerat",
+        { IsDayOff: true } => "Ledig",
+        { Status: "Done" } => "Klart",
+        { Status: "Planned" } => "Planerat",
         _ => "Inget planerat"
     };
 

@@ -25,10 +25,11 @@ public class RebalanceTaskAssignmentsTests
     private readonly InMemoryHouseholdRepository _households = new();
     private readonly InMemoryTaskDefinitionRepository _definitions = new();
     private readonly InMemoryTaskOccurrenceRepository _occurrences = new();
+    private readonly InMemoryMemberDayOffRepository _daysOff = new();
     private readonly SpyHouseholdNotifier _notifier = new();
 
     private RebalanceTaskAssignments CreateUseCase()
-        => new(_households, _definitions, _occurrences, _notifier);
+        => new(_households, _definitions, _occurrences, _daysOff, _notifier);
 
     /// <summary>Anna: 35 min/day (245/week) - Bjorn: 65 min/day (455/week). The exact 7:13 split
     /// the new AdultFullTime/Retired presets produce.</summary>
@@ -66,7 +67,7 @@ public class RebalanceTaskAssignmentsTests
     [Fact]
     public async Task Returns_null_for_an_unknown_household()
     {
-        var result = await CreateUseCase().HandleAsync(Guid.NewGuid(), CancellationToken.None);
+        var result = await CreateUseCase().HandleAsync(Guid.NewGuid(), Monday, CancellationToken.None);
 
         Assert.Null(result);
     }
@@ -87,7 +88,7 @@ public class RebalanceTaskAssignmentsTests
             .Select((minutes, index) => SeedRotatingOccurrence(householdId, Monday.AddDays(index), minutes, anna.Id))
             .ToList();
 
-        var changed = await CreateUseCase().HandleAsync(householdId, CancellationToken.None);
+        var changed = await CreateUseCase().HandleAsync(householdId, Monday, CancellationToken.None);
 
         Assert.Equal(3, changed);
         Assert.Equal(anna.Id, occurrences[0].AssignedMemberId);
@@ -117,10 +118,10 @@ public class RebalanceTaskAssignmentsTests
         }
 
         var useCase = CreateUseCase();
-        var firstRun = await useCase.HandleAsync(householdId, CancellationToken.None);
+        var firstRun = await useCase.HandleAsync(householdId, Monday, CancellationToken.None);
         Assert.True(firstRun > 0);
 
-        var secondRun = await useCase.HandleAsync(householdId, CancellationToken.None);
+        var secondRun = await useCase.HandleAsync(householdId, Monday, CancellationToken.None);
 
         Assert.Equal(0, secondRun);
         Assert.Equal(1, _notifier.CallCount); // only the first run's change notified, not a second empty one
@@ -138,7 +139,7 @@ public class RebalanceTaskAssignmentsTests
         var big = SeedRotatingOccurrence(householdId, Monday, 90, bjorn.Id);
         var small = SeedRotatingOccurrence(householdId, Monday.AddDays(1), 10, anna.Id);
 
-        var changed = await CreateUseCase().HandleAsync(householdId, CancellationToken.None);
+        var changed = await CreateUseCase().HandleAsync(householdId, Monday, CancellationToken.None);
 
         Assert.Equal(0, changed);
         Assert.Equal(bjorn.Id, big.AssignedMemberId);
@@ -178,7 +179,7 @@ public class RebalanceTaskAssignmentsTests
         archivedDefinition.Deactivate();
         _occurrences.Seed(archived);
 
-        await CreateUseCase().HandleAsync(householdId, CancellationToken.None);
+        await CreateUseCase().HandleAsync(householdId, Monday, CancellationToken.None);
 
         Assert.Equal(bjorn.Id, completed.AssignedMemberId);
         Assert.Equal(bjorn.Id, skipped.AssignedMemberId);
@@ -200,7 +201,7 @@ public class RebalanceTaskAssignmentsTests
         // not just a no-op test.
         SeedRotatingOccurrence(householdId, Monday, 60, anna.Id);
 
-        await CreateUseCase().HandleAsync(householdId, CancellationToken.None);
+        await CreateUseCase().HandleAsync(householdId, Monday, CancellationToken.None);
 
         Assert.Equal(bjorn.Id, fixedOccurrence.AssignedMemberId);
     }
@@ -220,7 +221,7 @@ public class RebalanceTaskAssignmentsTests
         // child, despite the child's much higher capacity making them look "underused" by ratio.
         var occurrence = SeedRotatingOccurrence(household.Id, Monday, 20, child.Id, requiresAdult: true);
 
-        var changed = await CreateUseCase().HandleAsync(household.Id, CancellationToken.None);
+        var changed = await CreateUseCase().HandleAsync(household.Id, Monday, CancellationToken.None);
 
         Assert.Equal(1, changed);
         Assert.Equal(anna.Id, occurrence.AssignedMemberId);
@@ -234,7 +235,7 @@ public class RebalanceTaskAssignmentsTests
 
         var occurrence = SeedRotatingOccurrence(householdId, Monday, 20, bjorn.Id);
 
-        var changed = await CreateUseCase().HandleAsync(householdId, CancellationToken.None);
+        var changed = await CreateUseCase().HandleAsync(householdId, Monday, CancellationToken.None);
 
         Assert.Equal(1, changed);
         Assert.Equal(anna.Id, occurrence.AssignedMemberId);
@@ -273,8 +274,9 @@ public class RebalanceTaskAssignmentsTests
                 seeded.Add(occurrence);
             }
 
-            var changed = await new RebalanceTaskAssignments(households, definitions, occurrences, new SpyHouseholdNotifier())
-                .HandleAsync(household.Id, CancellationToken.None);
+            var changed = await new RebalanceTaskAssignments(
+                    households, definitions, occurrences, new InMemoryMemberDayOffRepository(), new SpyHouseholdNotifier())
+                .HandleAsync(household.Id, Monday, CancellationToken.None);
 
             var annaMinutes = seeded.Where(o => o.AssignedMemberId == anna.Id).Sum(o => o.EstimatedMinutes);
             var bjornMinutes = seeded.Where(o => o.AssignedMemberId == bjorn.Id).Sum(o => o.EstimatedMinutes);
@@ -286,5 +288,49 @@ public class RebalanceTaskAssignmentsTests
         var second = await RunOnceAsync();
 
         Assert.Equal(first, second);
+    }
+
+    /// <summary>"Kvarlämnat stannar" - docs/ARCHITECTURE.md, "Beslut: Kvarlämnat, Imorgon på
+    /// Idag, ledig dag och tid i förväg". An occurrence already overdue as of <c>today</c> is
+    /// excluded from the movable pool entirely - its minutes never enter the ratio math at all,
+    /// so it stays with whoever already has it no matter how lopsided that leaves the split;
+    /// only the genuinely on-time occurrence is free to move.</summary>
+    [Fact]
+    public async Task A_task_that_is_already_overdue_never_changes_owner_even_when_the_split_is_skewed()
+    {
+        var (householdId, anna, bjorn) = await ArrangeTwoMemberHouseholdAsync();
+
+        // Anna (lower capacity, 35 min/day) already has a 60-minute task overdue from last
+        // week - it is never even considered movable, so it plays no part in the ratio below.
+        // Bjorn (higher capacity) has a single 5-minute task due today.
+        var overdue = SeedRotatingOccurrence(householdId, Monday.AddDays(-7), 60, anna.Id);
+        var dueToday = SeedRotatingOccurrence(householdId, Monday, 5, bjorn.Id);
+
+        var changed = await CreateUseCase().HandleAsync(householdId, Monday, CancellationToken.None);
+
+        // The overdue task never moves - it was never a candidate. The one movable task (5 min)
+        // is too small to create a strict ratio advantage either way, so ties favor keeping its
+        // current owner too - nothing changes.
+        Assert.Equal(anna.Id, overdue.AssignedMemberId);
+        Assert.Equal(bjorn.Id, dueToday.AssignedMemberId);
+        Assert.Equal(0, changed);
+    }
+
+    /// <summary>The mirror case: an occurrence due exactly today (never deferred, never late)
+    /// is still fully movable, same as before this feature existed.</summary>
+    [Fact]
+    public async Task A_task_due_today_is_still_movable()
+    {
+        var (householdId, anna, bjorn) = await ArrangeTwoMemberHouseholdAsync();
+
+        // A single, indivisible 60-minute task, currently on Anna (35 min/day - far too little
+        // room for it), due exactly today. With nobody else currently holding any movable work,
+        // Bjorn (65 min/day) is the only legal home for it.
+        var occurrence = SeedRotatingOccurrence(householdId, Monday, 60, anna.Id);
+
+        var changed = await CreateUseCase().HandleAsync(householdId, Monday, CancellationToken.None);
+
+        Assert.Equal(1, changed);
+        Assert.Equal(bjorn.Id, occurrence.AssignedMemberId);
     }
 }

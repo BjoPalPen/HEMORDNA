@@ -156,4 +156,97 @@ public class MixedHouseholdTests
         await aPage.GetByRole(AriaRole.Heading, new() { Name = "Familjen Blandad" }).WaitForAsync();
         Assert.False(await aPage.EvaluateAsync<bool>("() => document.documentElement.hasAttribute('data-calm')"));
     }
+
+    /// <summary>
+    /// Del C/G's "neutral planning info" exception: unlike a completion or an undo, a member's
+    /// own day off IS meant to be visible to the rest of the household - see Vecka.razor's own
+    /// DotClass remarks. This is the flip side of the next test below, where time credit stays
+    /// strictly private.
+    /// </summary>
+    [Fact]
+    public async Task A_members_day_off_shows_to_the_rest_of_the_household_as_a_neutral_dot()
+    {
+        var aPage = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(aPage, "Kerstin", "Familjen Ledig");
+        var inviteCode = await ReadInviteCodeAsync(aPage);
+
+        var bPage = await _app.NewPageAsync();
+        await SignUpHelper.RegisterAsync(bPage, "Lennart");
+        await bPage.GetByText("Har du en inbjudningskod?").ClickAsync();
+        await bPage.GetByLabel("Inbjudningskod").FillAsync(inviteCode);
+        await bPage.GetByRole(AriaRole.Button, new() { Name = "Gå med i hushållet" }).ClickAsync();
+        await bPage.Locator("h1", new() { HasText = "Lennart" }).WaitForAsync(new() { Timeout = 15_000 });
+
+        await aPage.GotoAsync("/");
+        await aPage.GetByRole(AriaRole.Button, new() { Name = "Ta ledigt idag" }).ClickAsync();
+        var sheet = aPage.GetByRole(AriaRole.Dialog, new() { Name = "Ledig dag" });
+        await sheet.WaitForAsync();
+        await sheet.GetByRole(AriaRole.Button, new() { Name = "Ta med till idag" }).ClickAsync();
+        await Assertions.Expect(sheet.GetByRole(AriaRole.Button, new() { Name = "Ångra ledig dag" }))
+            .ToBeVisibleAsync(new() { Timeout = 10_000 });
+
+        // B never touched anything - this is A's day off appearing on B's OWN view of the
+        // shared weekly grid, not a reflection of B's own state.
+        await bPage.GotoAsync("/vecka");
+        var kerstinRow = bPage.Locator("tr", new() { HasText = "Kerstin" });
+        await Assertions.Expect(kerstinRow.Locator(".dot-off")).ToBeVisibleAsync(new() { Timeout = 15_000 });
+    }
+
+    /// <summary>
+    /// The strict opposite of the day-off test above: "tid i förväg" is deliberately NEVER
+    /// visible to anyone but the member it belongs to (see MemberTimeCredit's own remarks, and
+    /// GetMemberTimeCredit's endpoint having no memberId route parameter to ask for someone
+    /// else's). A completes an extra task and earns real credit; B's own page must show nothing
+    /// about it at all.
+    /// </summary>
+    [Fact]
+    public async Task A_members_time_credit_never_leaks_to_another_member()
+    {
+        var aPage = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(aPage, "Marta", "Familjen Privat");
+        var inviteCode = await ReadInviteCodeAsync(aPage);
+
+        var bPage = await _app.NewPageAsync();
+        await SignUpHelper.RegisterAsync(bPage, "Niklas");
+        await bPage.GetByText("Har du en inbjudningskod?").ClickAsync();
+        await bPage.GetByLabel("Inbjudningskod").FillAsync(inviteCode);
+        await bPage.GetByRole(AriaRole.Button, new() { Name = "Gå med i hushållet" }).ClickAsync();
+        await bPage.Locator("h1", new() { HasText = "Niklas" }).WaitForAsync(new() { Timeout = 15_000 });
+
+        using var aHttp = await AuthorizedHttpAsync(aPage, _app.ApiUrl);
+        using var bHttp = await AuthorizedHttpAsync(bPage, _app.ApiUrl);
+        var (householdId, aMemberId) = await MeAsync(aHttp);
+        var (_, bMemberId) = await MeAsync(bHttp);
+
+        await GiveFullWeekAsync(aHttp, householdId, aMemberId);
+
+        var task = await (await aHttp.PostAsJsonAsync(
+            $"/api/households/{householdId}/tasks", new { name = "Extra diskning", estimatedMinutes = 30 }))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        var occurrence = await (await aHttp.PostAsJsonAsync(
+            $"/api/households/{householdId}/tasks/{task.GetProperty("id").GetGuid()}/occurrences",
+            new { date = today, assignToMemberId = aMemberId, addedAsExtra = true }))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        await aHttp.PostAsync(
+            $"/api/households/{householdId}/occurrences/{occurrence.GetProperty("id").GetGuid()}/complete", null);
+
+        // A really does have credit now - proves the setup worked, not that the endpoint is
+        // broken in a way that would make the leak check below meaningless.
+        var aCredit = await (await aHttp.GetAsync($"/api/households/{householdId}/time-credit"))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(30, aCredit.GetProperty("minutes").GetInt32());
+
+        // B's own balance is genuinely zero, and B's own page must say nothing at all - not "0
+        // min" (see GetMemberTimeCreditTests - the whole line is omitted below >0) and certainly
+        // not A's 30.
+        await bPage.GotoAsync("/vecka");
+        await bPage.GetByRole(AriaRole.Heading, new() { Name = "Min vecka" }).WaitForAsync(new() { Timeout = 15_000 });
+        await Assertions.Expect(bPage.GetByText("Tid i förväg")).Not.ToBeVisibleAsync();
+
+        // Belt and braces: the endpoint itself, called as B, returns B's own zero - never A's.
+        var bCredit = await (await bHttp.GetAsync($"/api/households/{householdId}/time-credit"))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(0, bCredit.GetProperty("minutes").GetInt32());
+    }
 }
