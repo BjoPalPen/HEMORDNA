@@ -227,7 +227,13 @@ public sealed record UnplannedTaskResponse(
     UnplannedReason Reason,
     string? AreaName);
 
-public sealed record SetDayOffRequest(DayOffMode Mode);
+/// <summary><c>Today</c> lets the client name its own local date - see
+/// <c>CompleteOccurrenceRequest</c> for why. Used both as the validity-window reference for the
+/// day off itself and, for <c>DayOffMode.BringAllForward</c>, as the date work moves TO.</summary>
+public sealed record SetDayOffRequest(DayOffMode Mode, DateOnly? Today = null);
+
+/// <summary>See <c>CompleteOccurrenceRequest</c> for why <c>Today</c> is client-suppliable.</summary>
+public sealed record BringForwardRequest(DateOnly? Today);
 
 /// <summary>How many of the member's own occurrences on the day off actually moved - see
 /// <c>SetMemberDayOff</c>.</summary>

@@ -615,17 +615,28 @@ public sealed class HemordnaApiClient
         return response.IsSuccessStatusCode;
     }
 
-    /// <summary>"Jobba i förväg" for a single occurrence - pulls a not-yet-due task to today.
-    /// Only the member it is assigned to may bring it forward.</summary>
+    /// <summary>
+    /// "Jobba i förväg" for a single occurrence - pulls a not-yet-due task to today. Only the
+    /// member it is assigned to may bring it forward. <paramref name="today"/> is this device's
+    /// own local date - it decides the "not yet due" boundary, same reasoning as
+    /// <see cref="CompleteOccurrenceAsync"/>'s own <c>today</c>. Left null falls back to the
+    /// server's date.
+    /// </summary>
     public async Task<bool> BringOccurrenceForwardAsync(
         Guid householdId,
         Guid occurrenceId,
+        DateOnly? today = null,
         CancellationToken cancellationToken = default)
     {
         var request = await AuthorizedAsync(
             HttpMethod.Post,
             $"api/households/{householdId}/occurrences/{occurrenceId}/bring-forward",
             cancellationToken);
+
+        if (today is { } value)
+        {
+            request.Content = JsonContent.Create(new { today = value.ToString("yyyy-MM-dd") });
+        }
 
         var response = await _http.SendAsync(request, cancellationToken);
         return response.IsSuccessStatusCode;
@@ -649,19 +660,24 @@ public sealed class HemordnaApiClient
     /// <summary>
     /// Marks a date as the member's own day off. <paramref name="mode"/> is
     /// "BringAllForward" or "DeferAll" - see SetMemberDayOff.DayOffMode.
+    /// <paramref name="today"/> is this device's own local date - see
+    /// <see cref="CompleteOccurrenceAsync"/>'s own <c>today</c> for why. Left null falls back to
+    /// the server's date.
     /// </summary>
     public async Task<DayOffResponse?> SetDayOffAsync(
         Guid householdId,
         Guid memberId,
         DateOnly date,
         string mode,
+        DateOnly? today = null,
         CancellationToken cancellationToken = default)
     {
         var request = await AuthorizedAsync(
             HttpMethod.Put,
             $"api/households/{householdId}/members/{memberId}/days-off/{date:yyyy-MM-dd}",
             cancellationToken);
-        request.Content = JsonContent.Create(new { mode });
+        request.Content = JsonContent.Create(
+            new { mode, today = today?.ToString("yyyy-MM-dd") });
 
         var response = await _http.SendAsync(request, cancellationToken);
 
@@ -694,12 +710,21 @@ public sealed class HemordnaApiClient
         => await GetAsync<IReadOnlyList<MemberDayOffResponse>>(
             $"api/households/{householdId}/members/{memberId}/days-off", cancellationToken) ?? [];
 
-    /// <summary>The signed-in member's own "tid i förväg" balance - never anyone else's, see
-    /// GetMemberTimeCredit.</summary>
+    /// <summary>
+    /// The signed-in member's own "tid i förväg" balance - never anyone else's, see
+    /// GetMemberTimeCredit. <paramref name="today"/> is this device's own local date, bounding
+    /// the balance's 60-day lookback window - see <see cref="CompleteOccurrenceAsync"/>'s own
+    /// <c>today</c> for why. Left null falls back to the server's date.
+    /// </summary>
     public async Task<TimeCreditResponse?> GetTimeCreditAsync(
         Guid householdId,
+        DateOnly? today = null,
         CancellationToken cancellationToken = default)
-        => await GetAsync<TimeCreditResponse>($"api/households/{householdId}/time-credit", cancellationToken);
+        => await GetAsync<TimeCreditResponse>(
+            today is { } value
+                ? $"api/households/{householdId}/time-credit?today={value:yyyy-MM-dd}"
+                : $"api/households/{householdId}/time-credit",
+            cancellationToken);
 
     /// <summary>Undoes a completion - only the member who completed it can, and only within a
     /// short window server-side (see TaskOccurrence.Reopen). A rejected attempt (wrong person,
