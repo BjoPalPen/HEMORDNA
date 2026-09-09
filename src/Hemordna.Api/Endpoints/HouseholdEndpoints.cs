@@ -779,6 +779,7 @@ internal static class HouseholdEndpoints
         Guid householdId,
         Guid occurrenceId,
         HttpContext httpContext,
+        BringForwardRequest? request,
         BringOccurrenceForward bringForward,
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
@@ -786,7 +787,11 @@ internal static class HouseholdEndpoints
         // Same source for "who is calling" as CompleteOccurrenceAsync - a member can only bring
         // their own work forward, never name another member's.
         var membership = httpContext.GetMembership();
-        var today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+
+        // The client's own "today" when it sends one - see CompleteOccurrenceAsync's own remarks
+        // on why this can differ from the server's around midnight, and matters here too: it is
+        // exactly the boundary BringForwardTo checks ("not yet due").
+        var today = request?.Today ?? DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
 
         var result = await bringForward.HandleAsync(
             householdId, occurrenceId, membership.MemberId, today, cancellationToken);
@@ -818,7 +823,10 @@ internal static class HouseholdEndpoints
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        var today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        // The client's own "today" when it sends one - see CompleteOccurrenceAsync's own
+        // remarks. Matters doubly here: it both bounds MemberDayOff's own validity window and,
+        // for DayOffMode.BringAllForward, is the exact date work moves to.
+        var today = request.Today ?? DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
 
         var result = await setDayOff.HandleAsync(
             householdId, memberId, date, today, request.Mode, cancellationToken);
@@ -863,6 +871,7 @@ internal static class HouseholdEndpoints
 
     private static async Task<IResult> GetTimeCreditAsync(
         Guid householdId,
+        DateOnly? today,
         HttpContext httpContext,
         GetMemberTimeCredit getTimeCredit,
         TimeProvider timeProvider,
@@ -872,9 +881,12 @@ internal static class HouseholdEndpoints
         // never visible to anyone else. There is deliberately no memberId route parameter to
         // ask for someone else's.
         var membership = httpContext.GetMembership();
-        var today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
 
-        var minutes = await getTimeCredit.HandleAsync(householdId, membership.MemberId, today, cancellationToken);
+        // The client's own "today" when it sends one - see CompleteOccurrenceAsync's own
+        // remarks. Bounds the 60-day lookback window this balance is summed over.
+        today ??= DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+
+        var minutes = await getTimeCredit.HandleAsync(householdId, membership.MemberId, today.Value, cancellationToken);
 
         return minutes is null ? Results.NotFound() : Results.Ok(new TimeCreditResponse(minutes.Value));
     }

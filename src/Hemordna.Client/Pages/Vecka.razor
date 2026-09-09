@@ -219,7 +219,7 @@ else
             _weeklyStatus[(status.MemberId, status.Date)] = status;
         }
 
-        _timeCreditMinutes = (await Api.GetTimeCreditAsync(householdId))?.Minutes;
+        _timeCreditMinutes = (await Api.GetTimeCreditAsync(householdId, Today))?.Minutes;
     }
 
     private static IEnumerable<(string Label, string MinutesLabel)> Weekdays(HouseholdMemberResponse member)

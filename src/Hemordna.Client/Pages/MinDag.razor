@@ -313,7 +313,7 @@ else
             </details>
         }
 
-        <DayOffSheet HouseholdId="HouseholdId" MemberId="MemberId" Date="_dayOffDate" IsCurrentlyOff="DayOffSheetIsCurrentlyOff"
+        <DayOffSheet HouseholdId="HouseholdId" MemberId="MemberId" Date="_dayOffDate" Today="Today" IsCurrentlyOff="DayOffSheetIsCurrentlyOff"
                      @bind-IsOpen="_showDayOffSheet" OnChanged="LoadDayAsync" />
 
         <BottomSheet Title="Flytta till en annan dag" @bind-IsOpen="_showUnplannedSheet">
@@ -1009,8 +1009,10 @@ else
             // but the occurrence has not moved there yet at this point.
             var name = _day?.Items.FirstOrDefault(item => item.OccurrenceId == occurrenceId)?.Name;
 
-            // Safe to repeat: the server keeps the first completion.
-            if (await Api.CompleteOccurrenceAsync(householdId, occurrenceId))
+            // Safe to repeat: the server keeps the first completion. This device's own local
+            // Today, not the server's - it decides whether the completion earns "tid i förväg"
+            // (see CompleteTaskOccurrence), and the two can disagree around midnight.
+            if (await Api.CompleteOccurrenceAsync(householdId, occurrenceId, Today))
             {
                 ShowUndo(occurrenceId, name ?? "uppgiften");
                 await LoadDayAsync();
@@ -1126,7 +1128,7 @@ else
 
         try
         {
-            if (await Api.BringOccurrenceForwardAsync(householdId, occurrenceId))
+            if (await Api.BringOccurrenceForwardAsync(householdId, occurrenceId, Today))
             {
                 await LoadDayAsync();
             }

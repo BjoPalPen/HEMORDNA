@@ -48,6 +48,13 @@
     [Parameter, EditorRequired]
     public DateOnly Date { get; set; }
 
+    /// <summary>This device's own local "today" - passed on to SetDayOffAsync, since it decides
+    /// the day off's validity window and (for "Ta med till idag") the exact date work moves to.
+    /// See HemordnaApiClient.CompleteOccurrenceAsync's own "today" for why this must be the
+    /// caller's own date, not the server's.</summary>
+    [Parameter, EditorRequired]
+    public DateOnly Today { get; set; }
+
     /// <summary>Whether Date is already a day off - decides which of the two views above shows.
     /// Supplied by the caller (MinDag.razor's own IsDayOff for the date in question) rather than
     /// looked up here, so this component reads no state of its own.</summary>
@@ -98,7 +105,7 @@
 
         try
         {
-            var result = await Api.SetDayOffAsync(HouseholdId, MemberId, Date, mode);
+            var result = await Api.SetDayOffAsync(HouseholdId, MemberId, Date, mode, Today);
 
             if (result is null)
             {
