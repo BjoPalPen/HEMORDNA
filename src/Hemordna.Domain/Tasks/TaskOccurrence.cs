@@ -167,6 +167,34 @@ public sealed class TaskOccurrence
     }
 
     /// <summary>
+    /// Moves the task to a new date as though it had been scheduled there from the start -
+    /// unlike <see cref="DeferTo"/>, <see cref="OriginalScheduledDate"/> moves too, so the
+    /// occurrence stops reading as overdue (<see cref="IsOverdueOn"/>) once its new date
+    /// arrives. Used only by <c>RebalanceSchedule</c> (in <c>Hemordna.Application</c>) to
+    /// un-cluster a household's stale backlog onto a sensible cadence - a system-chosen
+    /// re-anchor, not a member consciously choosing to push an already-late task further out
+    /// (that stays <see cref="DeferTo"/>, which deliberately keeps the original date so the
+    /// task still shows how overdue it was).
+    /// </summary>
+    public void ReanchorTo(DateOnly newDate)
+    {
+        EnsureOutstanding("rescheduled");
+
+        if (!CanBeDeferred)
+        {
+            throw new DomainException("This task cannot be rescheduled.");
+        }
+
+        if (newDate <= ScheduledDate)
+        {
+            throw new DomainException("A task can only be rescheduled to a later date.");
+        }
+
+        ScheduledDate = newDate;
+        OriginalScheduledDate = newDate;
+    }
+
+    /// <summary>
     /// Pulls a not-yet-due task onto <paramref name="today"/> - "jobba i förväg": the member
     /// chose to do their own, genuinely future work now rather than waiting. Only
     /// <see cref="ScheduledDate"/> moves; <see cref="OriginalScheduledDate"/> is untouched, so

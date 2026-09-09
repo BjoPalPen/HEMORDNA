@@ -21,7 +21,7 @@ namespace Hemordna.Application.Tasks;
 /// existed (or before it was last run) would stay clustered forever, since a defintion's own
 /// recurrence rule only governs occurrences generated <em>after</em> it changes. An occurrence
 /// already due in the future, or already completed/skipped, is left alone - see
-/// <see cref="TaskOccurrence.DeferTo"/>.
+/// <see cref="TaskOccurrence.ReanchorTo"/>.
 /// </para>
 /// </remarks>
 public sealed class RebalanceSchedule
@@ -115,7 +115,7 @@ public sealed class RebalanceSchedule
 
         foreach (var occurrence in backlog)
         {
-            // DeferTo only accepts a strictly later date (and only when CanBeDeferred) - an
+            // ReanchorTo only accepts a strictly later date (and only when CanBeDeferred) - an
             // occurrence already sitting exactly on the target, or one that cannot be pushed at
             // all, is left as-is rather than attempted and failing.
             if (!occurrence.CanBeDeferred || targetDate <= occurrence.ScheduledDate)
@@ -123,7 +123,14 @@ public sealed class RebalanceSchedule
                 continue;
             }
 
-            occurrence.DeferTo(targetDate);
+            // ReanchorTo, not DeferTo: this backlog item isn't a member consciously choosing to
+            // push an already-late task further out (see TaskOccurrence.DeferTo, which
+            // deliberately keeps it reading as overdue for exactly that case) - it's un-
+            // clustering a stale schedule onto its new cadence, so it should read as freshly
+            // scheduled once its new date arrives, not still "sedan tidigare" forever. Real
+            // production bug: a household's rebalanced backlog stayed permanently overdue
+            // because this used DeferTo (docs/ARCHITECTURE.md, "Beslut: Kvarlämnat...").
+            occurrence.ReanchorTo(targetDate);
             await _occurrences.UpdateAsync(occurrence, cancellationToken);
             rescheduledAny = true;
         }

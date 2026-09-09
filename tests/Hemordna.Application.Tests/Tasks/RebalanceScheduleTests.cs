@@ -203,6 +203,27 @@ public class RebalanceScheduleTests
     }
 
     [Fact]
+    public async Task An_already_generated_outstanding_occurrence_due_today_stops_reading_as_overdue()
+    {
+        // Real production bug: rescheduling a backlog occurrence onto the new cadence used to
+        // move only ScheduledDate (TaskOccurrence.DeferTo), so an occurrence that was already
+        // overdue when this ran stayed permanently "sedan tidigare" even once its brand new
+        // date arrived - see docs/ARCHITECTURE.md, "Beslut: Kvarlämnat...". ReanchorTo moves
+        // OriginalScheduledDate too, since this is the system un-clustering a stale schedule,
+        // not a member consciously deferring a task they know is late.
+        var household = await SeedHouseholdAsync();
+        var kitchen = SeedTask(household, "Diska", RecurrenceRule.Weekly(Today, Today.DayOfWeek), Guid.NewGuid());
+        SeedTask(household, "Skrubba badkar", RecurrenceRule.Weekly(Today, Today.DayOfWeek), Guid.NewGuid());
+        var overdueSince = Today.AddDays(-5);
+        var occurrence = kitchen.ScheduleFor(overdueSince, CreatedAt);
+        _occurrences.Seed(occurrence);
+
+        await CreateUseCase().HandleAsync(household.Id, CancellationToken.None);
+
+        Assert.False(occurrence.IsOverdueOn(occurrence.ScheduledDate));
+    }
+
+    [Fact]
     public async Task An_occurrence_already_scheduled_in_the_future_is_left_alone()
     {
         var household = await SeedHouseholdAsync();
