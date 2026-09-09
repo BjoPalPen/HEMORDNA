@@ -408,17 +408,37 @@ html[data-calm] * {
 
 /* A row of qualitative choices (Ingen/Lite/Lagom/Lång tid) standing in for a minute count -
    see Hemordna.Client.Support.TimeLevel for why nothing in the app asks for a number instead. */
+/* nowrap + each button's own flex-basis:0 (below) rather than flex-wrap - a row of level
+   buttons must always stay a single row (DESIGN.md §10: "Stor text-läget får inte bryta
+   layouten"), so a row that doesn't fit shrinks every button equally and wraps THEIR OWN text
+   onto a second line, instead of one button jumping down to a row of its own. */
 .level-picker {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: var(--space-2);
     margin: var(--space-3) 0;
 }
 
+/* Two lines - the level word, and (for every level but "Ingen tid") the exact minutes it
+   means, so choosing among the four is never a guess at what "Lite tid" actually saves as -
+   see docs/DESIGN.md §6a. min-height matches .btn's own 44px (DESIGN.md §10's touch-target
+   floor) rather than the narrower one-line height this used before the second line existed.
+   flex-basis:0 makes every button share the row equally regardless of how many there are (3
+   role-preset buttons, 4 time-level ones) rather than sizing to its own content; min-width:0
+   overrides flex's default "never shrink below the content's natural width", the one line that
+   actually makes text wrap instead of overflow once Stor text makes the words wider than the
+   row has room for. */
 .level-picker .btn {
-    flex: 1 1 auto;
-    padding: 0 var(--space-3);
-    min-height: 40px;
+    flex: 1 1 0;
+    min-width: 0;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--space-2) var(--space-3);
+    min-height: 44px;
+}
+
+.level-picker .btn .small {
+    font-weight: 400;
 }
 
 .more-options summary {

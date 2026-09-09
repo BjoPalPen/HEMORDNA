@@ -397,10 +397,22 @@ ARCHITECTURE.md för hur de räknas ut).
 
 Domänen räknar fortfarande i minuter (uppskattad tid, veckobudget, `availableMinutes` från
 API:t) – det är vad `RecurrenceRule`, `DailyPlanner` och rotationslogiken behöver för att
-räkna ut vad som får plats en given dag. Men inget UI-lager visar den siffran. Klienten
-mappar minuter till fyra kvalitativa lägen (`Hemordna.Client.Support.TimeLevel`: Ingen tid/
-Lite tid/Lagom tid/Lång tid → 0/5/15/30 min - "Ingen tid" är ett giltigt, sparbart val, inte
-bara ett tomt förval) och visar bara läget, aldrig talet.
+räkna ut vad som får plats en given dag. Klienten mappar minuter till fyra kvalitativa lägen
+(`Hemordna.Client.Support.TimeLevel`: Ingen tid/Lite tid/Lagom tid/Lång tid → 0/5/15/30 min -
+"Ingen tid" är ett giltigt, sparbart val, inte bara ett tomt förval).
+
+**Nivåorden används när man VÄLJER; minuter visas där tid VISAS, efter eget val.**
+Nivåorden är bra som val (fyra alternativ att jämföra) men vaga som information - "Lite tid"
+säger inte om det är 5 eller 12 minuter, och en 45-minutersuppgift läses som "Lång tid" precis
+som en 30-minuters. En rad som visar en redan sparad tid (`TaskListItem`s `.chip-time`,
+fokuskortets egen chip) står därför alltid som minuter rakt av - "5 min" - via
+`TimeLevel.MinutesLabel`, aldrig avrundat till närmaste nivå och aldrig `TimeLevel.LabelFor`s
+nivåord. `ShowTimeLevel` styr fortfarande OM tiden visas alls (av som standard - se nedan);
+detta gäller bara VAD den visar som när den är på. Inga förkortningar eller hedge-ord ("ca",
+"ungefär") på raderna - att tiderna är uppskattningar sägs en gång, i Inställningar vid valet,
+inte upprepat varje gång en tid visas. Nivåordens knappar (`.level-picker` - "Extra uppgift",
+`TaskOptionsSheet`, `RoomSheet`, medlemsformulären) visar sitt eget ord OCH minuterna under, så
+valet aldrig är en gissning om vad ett nivåord som "Lite tid" faktiskt sparas som.
 
 Bakgrund: alltför mycket tidsvisning (minuträknare, progress-ringar, stapeldiagram) skapar
 stress snarare än lugn – motsatsen till appens syfte. Uppgiften och bocken räcker; tiden är

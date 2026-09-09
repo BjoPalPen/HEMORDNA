@@ -98,7 +98,7 @@ else
                     }
                     @if (_showTimeLevel && focusTask.EstimatedMinutes > 0)
                     {
-                        <span class="chip chip-time">@TimeLevel.LabelFor(focusTask.EstimatedMinutes)</span>
+                        <span class="chip chip-time">@TimeLevel.MinutesLabel(focusTask.EstimatedMinutes)</span>
                     }
                     @if (focusTask.IsOverdue)
                     {
@@ -661,7 +661,11 @@ else
                     <button type="button"
                             class="@(_extraForm.EstimatedMinutes == level.Minutes ? "btn btn-primary" : "btn btn-secondary")"
                             @onclick="() => _extraForm.EstimatedMinutes = level.Minutes">
-                        @level.Label
+                        <span>@level.Label</span>
+                        @if (level.Minutes > 0)
+                        {
+                            <span class="muted small">@TimeLevel.MinutesLabel(level.Minutes)</span>
+                        }
                     </button>
                 }
             </div>
