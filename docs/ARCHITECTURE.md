@@ -2463,7 +2463,17 @@ brist att fixa.
 
 ---
 
-## 11. Beslut som ännu inte är fattade — `OPEN`
+### Beslut: Sju enkla lösningar — `IMPLEMENTED`
+
+Sju små, oberoende klientmekanismer för ork, igångsättning och tydlighet - varje del sin egen
+commit, ingen rör Domain/Application/Api. Samma bärande regel som Del C i "Beslut: Ångra och
+stabil lista": allt är per medlem eller per enhet, aldrig ett hushållsgemensamt fält - se den
+regeln där för det fullständiga resonemanget, inte upprepat sju gånger här.
+
+| Del | Vad | Varför per medlem/enhet | Medvetet inte byggt |
+|---|---|---|---|
+| 7. Genvägar | `manifest.webmanifest` fick `shortcuts` till Idag och Rum | Statisk PWA-metadata, ingen egen data | Fler genvägar än de två efterfrågade |
+| 4. Steg i beskrivningen | En rad per steg renderas som numrerad lista (`Support/TaskSteps.cs`) i den utfällda raden och fokuskortet | Beskrivningen är redan uppgiftens egen, delad text - ingen ny per-person-dimension | Redigering av en BEFINTLIG uppgifts beskrivning i `TaskOptionsSheet` - `TaskDefinition.ChangeDescription` finns i Domain (oanvänd, samma gap som `ChangeEstimatedMinutes` innan B5), men inget `PUT`-endpoint exponerar den; att lägga till ett är backend-arbete utanför detta uppdrags scope. Beskrivningsfältet med platshållaren byggdes bara där det redan gick utan ny endpoint: "Extra uppgift" (skapar en ny uppgift, `CreateTaskRequest.Description` fanns redan). Se rapporten för denna del. |
 
 | Fråga | Varför den väntar |
 |---|---|

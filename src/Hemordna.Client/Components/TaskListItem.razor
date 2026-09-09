@@ -44,7 +44,16 @@
 @if (IsExpanded)
 {
     <li class="task-details">
-        @if (!string.IsNullOrWhiteSpace(Item.Description))
+        @if (TaskSteps.Parse(Item.Description) is { } steps)
+        {
+            <ol class="task-steps muted small">
+                @foreach (var step in steps)
+                {
+                    <li>@step</li>
+                }
+            </ol>
+        }
+        else if (!string.IsNullOrWhiteSpace(Item.Description))
         {
             <p class="muted small">@Item.Description</p>
         }

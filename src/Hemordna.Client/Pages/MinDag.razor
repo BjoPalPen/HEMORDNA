@@ -107,7 +107,16 @@ else
                     {
                         <p class="muted small">sedan tidigare</p>
                     }
-                    @if (!string.IsNullOrWhiteSpace(focusTask.Description))
+                    @if (TaskSteps.Parse(focusTask.Description) is { } focusSteps)
+                    {
+                        <ol class="task-steps muted small focus-description">
+                            @foreach (var step in focusSteps)
+                            {
+                                <li>@step</li>
+                            }
+                        </ol>
+                    }
+                    else if (!string.IsNullOrWhiteSpace(focusTask.Description))
                     {
                         <p class="muted small focus-description">@focusTask.Description</p>
                     }
@@ -445,6 +454,7 @@ else
     {
         public string Name { get; set; } = string.Empty;
         public int EstimatedMinutes { get; set; }
+        public string Description { get; set; } = string.Empty;
 
         // A <select>'s @bind does not support Guid?/Guid out of the box - kept as the raw
         // string value and parsed at submission time, same convention TaskOptionsSheet's own
@@ -704,6 +714,11 @@ else
                 </select>
             </label>
         }
+
+        <label class="field">
+            <span>Beskrivning</span>
+            <InputTextArea @bind-Value="_extraForm.Description" placeholder="En rad per steg om du vill" />
+        </label>
 
         @if (_extraTaskMessage is { } extraTaskMessage)
         {
@@ -1378,10 +1393,12 @@ else
         {
             var areaId = string.IsNullOrEmpty(_extraForm.AreaId) ? (Guid?)null : Guid.Parse(_extraForm.AreaId);
 
+            var description = string.IsNullOrWhiteSpace(_extraForm.Description) ? null : _extraForm.Description.Trim();
+
             var task = await Api.CreateTaskAsync(householdId, new CreateTaskRequest(
                 Name: _extraForm.Name,
                 EstimatedMinutes: _extraForm.EstimatedMinutes,
-                Description: null,
+                Description: description,
                 AreaId: areaId,
                 Priority: "Normal",
                 DefaultResponsibleMemberId: memberId,
@@ -1401,6 +1418,7 @@ else
             _extraForm.Name = string.Empty;
             _extraForm.EstimatedMinutes = 0;
             _extraForm.AreaId = string.Empty;
+            _extraForm.Description = string.Empty;
             _showExtraTaskSheet = false;
             await LoadDayAsync();
         }

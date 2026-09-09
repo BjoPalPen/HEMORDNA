@@ -206,6 +206,13 @@ ingenting (annars skulle det stjäla klicket). Under `prefers-reduced-motion`: i
 ingen bekräftelseflash, ingen haptik – bara den vanliga klick-hanteringen, oavsett om den kom
 från bocken eller svepet.
 
+**Steg i beskrivningen** (denna revision): en beskrivning skriven en rad per steg (t.ex. "Ta
+fram hinken", ny rad, "Fyll med varmt vatten") renders som en numrerad lista i stället för ett
+enda textstycke, i den utfällda raden och i fokuskortet (`Support/TaskSteps.cs`). En
+enradsbeskrivning renderas som idag, ett vanligt stycke. En redan självnumrerad rad ("1. Ta fram
+hinken") får sin egen siffra bortstädad så listan aldrig visar dubbla nummer. Beskrivningsfältet
+i "Extra uppgift" har platshållartexten "En rad per steg om du vill" - ett förslag, inget krav.
+
 De två gamla ▶-utfällningarna ("N till en annan dag", "Lägg till en extra uppgift") är nu chips
 under listan ("Flytta till en annan dag", "Extra uppgift") som öppnar `BottomSheet.razor` –
 samma innehåll som förut, bara i ett ark i stället för en disclosure. "Flytta till en annan dag"
