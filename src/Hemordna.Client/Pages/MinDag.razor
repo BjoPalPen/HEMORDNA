@@ -123,9 +123,21 @@ else
             @if (FocusTask is { } focusTask)
             {
                 <div class="focus-card">
+                    @if (_speechAvailable)
+                    {
+                        <button type="button" class="btn btn-icon focus-speak"
+                                aria-label="@(_isSpeaking ? "Tyst" : "Läs upp")"
+                                @onclick="() => ToggleSpeakAsync(focusTask)">
+                            <Icon Name="@(_isSpeaking ? "speaker-off" : "speaker")" Size="20" />
+                        </button>
+                    }
                     @if (ShowIcons)
                     {
                         <img class="focus-icon" src="@IconSrc(focusTask.Name, focusTask.AreaName)" alt="" width="48" height="48" />
+                    }
+                    @if (_startedOccurrenceId == focusTask.OccurrenceId)
+                    {
+                        <span class="chip chip-primary">Pågår</span>
                     }
                     <h2 class="focus-name">@focusTask.Name</h2>
                     @if (focusTask.AreaName is { } focusArea)
@@ -157,38 +169,42 @@ else
                     <div class="focus-actions">
                         <button type="button" class="btn btn-primary btn-block" disabled="@(_busyOccurrence == focusTask.OccurrenceId)"
                                 @onclick="() => CompleteAsync(focusTask.OccurrenceId)">
+                            <Icon Name="check" Size="20" />
                             Bocka av
                         </button>
                         <button type="button" class="btn btn-secondary btn-block" disabled="@(_busyOccurrence == focusTask.OccurrenceId)"
                                 @onclick="() => ToggleStartAsync(focusTask.OccurrenceId)">
+                            <Icon Name="play" Size="20" />
                             @(_startedOccurrenceId == focusTask.OccurrenceId ? "Avbryt start" : "Jag börjar nu")
                         </button>
-                        @if (_speechAvailable)
-                        {
-                            <button type="button" class="btn btn-secondary btn-block"
-                                    @onclick="() => ToggleSpeakAsync(focusTask)">
-                                @(_isSpeaking ? "Tyst" : "Läs upp")
-                            </button>
-                            @if (!_speechHasSwedishVoice)
-                            {
-                                <p class="muted small">Ingen svensk röst hittades på den här enheten.</p>
-                            }
-                        }
-                        @if (focusTask.CanBeDeferred)
-                        {
-                            <button type="button" class="btn btn-secondary btn-block" disabled="@(_busyOccurrence == focusTask.OccurrenceId)"
-                                    @onclick="() => DeferAsync(focusTask.OccurrenceId)">
-                                Skjut upp till imorgon
-                            </button>
-                        }
-                        @if (FocusOrder.Count > 1)
-                        {
-                            <button type="button" class="btn btn-link" @onclick="ShowNextFocusTask">
-                                Visa nästa
-                            </button>
-                        }
                     </div>
+
+                    @if (focusTask.CanBeDeferred || FocusOrder.Count > 1)
+                    {
+                        <div class="focus-escape">
+                            @if (focusTask.CanBeDeferred)
+                            {
+                                <button type="button" class="btn btn-link" disabled="@(_busyOccurrence == focusTask.OccurrenceId)"
+                                        @onclick="() => DeferAsync(focusTask.OccurrenceId)">
+                                    <Icon Name="arrow-right" Size="16" />
+                                    Skjut upp till imorgon
+                                </button>
+                            }
+                            @if (FocusOrder.Count > 1)
+                            {
+                                <button type="button" class="btn btn-link" @onclick="ShowNextFocusTask">
+                                    Visa nästa
+                                    <Icon Name="chevron-right" Size="16" />
+                                </button>
+                            }
+                        </div>
+                    }
                 </div>
+
+                @if (_speechAvailable && !_speechHasSwedishVoice)
+                {
+                    <p class="muted small">Ingen svensk röst hittades på den här enheten.</p>
+                }
 
                 @if (_undo is not null)
                 {

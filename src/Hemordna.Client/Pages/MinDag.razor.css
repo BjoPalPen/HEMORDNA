@@ -364,6 +364,7 @@
 }
 
 .focus-card {
+    position: relative;
     text-align: center;
     padding: var(--space-6) var(--space-5);
     margin-bottom: var(--space-4);
@@ -373,9 +374,25 @@
     corner-shape: squircle;
 }
 
+/* "Läs upp" - the only icon-only button in the app (DESIGN.md §4a), so it lives in its own
+   corner rather than competing with .focus-actions' two full-width buttons below. 12px in from
+   both edges, same distance BottomSheet.razor's own "Stäng" keeps from its sheet's corner. */
+.focus-speak {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+}
+
 .focus-icon {
     display: block;
     margin: 0 auto var(--space-3);
+}
+
+/* "Jag börjar nu" (Sju enkla lösningar, del 2) in the focus card - same chip as the list row's
+   own .chip-primary, but above the name rather than beside it: the card is centered, one column
+   wide, so "beside" has no room to mean anything here. */
+.focus-card .chip-primary {
+    margin-bottom: var(--space-2);
 }
 
 .focus-name {
@@ -387,9 +404,36 @@
     margin-top: var(--space-3);
 }
 
+/* Only the two primary actions now - "Bocka av" (the most common outcome, so it leads even
+   before a member has pressed "Jag börjar nu") and "Jag börjar nu"/"Avbryt start". "Läs upp"
+   moved to .focus-speak; "Skjut upp till imorgon" and "Visa nästa" moved to .focus-escape below
+   - see docs/ARCHITECTURE.md "Uppföljning: fokuskortets hierarki". */
 .focus-actions {
     display: flex;
     flex-direction: column;
     gap: var(--space-2);
     margin-top: var(--space-5);
+}
+
+/* The two "look away from this card" actions - deferring or peeking ahead - are neither as
+   important nor as frequent as the two full-width buttons above, so they read as a quieter,
+   smaller escape hatch rather than a third and fourth button of equal weight. A single
+   surviving child (only one of the two applies) sits at flex-start on its own, same as
+   justify-content: space-between already does with one item - no extra rule needed. */
+.focus-escape {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-top: var(--space-4);
+    font-size: calc(var(--font-size-base) * .9);
+}
+
+/* Stor text (DESIGN.md §10 "Stor text får inte bryta layouten" is unconditional): at the
+   scaled-up base size, two link-styled buttons side by side would collide or wrap their own
+   text mid-word - stacked, left-aligned reads cleanly instead. */
+:root[data-text-size="large"] .focus-escape {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-3);
 }

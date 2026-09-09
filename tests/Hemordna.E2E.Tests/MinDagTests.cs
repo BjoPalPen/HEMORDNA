@@ -190,4 +190,137 @@ public class MinDagTests
 
         Assert.NotEqual(firstName, secondName);
     }
+
+    /// <summary>"Uppdrag: fokuskortet" - a real, deliberate hierarchy instead of five identical
+    /// text buttons: exactly two full-width primary actions, "Läs upp" moved to its own 44×44
+    /// icon button, "Skjut upp till imorgon"/"Visa nästa" moved down to a quieter escape row.</summary>
+    [Fact]
+    public async Task Fokuskortet_has_two_primary_buttons_a_44px_speak_button_and_an_escape_row()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpAsync(page, "Elin");
+
+        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
+        http.DefaultRequestHeaders.Authorization = new("Bearer", token);
+
+        var me = await (await http.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
+        var householdId = me.GetProperty("householdId").GetGuid();
+        var memberId = me.GetProperty("memberId").GetGuid();
+
+        await http.PutAsJsonAsync(
+            $"/api/households/{householdId}/members/{memberId}/weekly-budget",
+            new { monday = 60, tuesday = 60, wednesday = 60, thursday = 60, friday = 60, saturday = 60, sunday = 60 });
+        await http.PutAsJsonAsync(
+            $"/api/households/{householdId}/members/{memberId}/preferences",
+            new { presentation = "OneAtATime", motivation = "None", showTimeLevel = false });
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        string[] names = ["Diska", "Damma"];
+
+        foreach (var name in names)
+        {
+            var task = await (await http.PostAsJsonAsync(
+                $"/api/households/{householdId}/tasks", new { name, estimatedMinutes = 5 }))
+                .Content.ReadFromJsonAsync<JsonElement>();
+            await http.PostAsJsonAsync(
+                $"/api/households/{householdId}/tasks/{task.GetProperty("id").GetGuid()}/occurrences",
+                new { date = today, assignToMemberId = memberId });
+        }
+
+        await page.ReloadAsync();
+        await page.Locator(".focus-card").WaitForAsync();
+
+        // Only "Bocka av" and "Jag börjar nu" fill .focus-actions now - "Läs upp" and the escape
+        // row's two links are no longer among the five identical stacked buttons the bug report
+        // showed.
+        await Assertions.Expect(page.Locator(".focus-actions .btn-block")).ToHaveCountAsync(2);
+
+        var escape = page.Locator(".focus-escape");
+        await Assertions.Expect(escape.GetByRole(AriaRole.Button, new() { Name = "Skjut upp till imorgon" }))
+            .ToBeVisibleAsync();
+        await Assertions.Expect(escape.GetByRole(AriaRole.Button, new() { Name = "Visa nästa" }))
+            .ToBeVisibleAsync();
+
+        var speakBox = await page.GetByRole(AriaRole.Button, new() { Name = "Läs upp" }).BoundingBoxAsync();
+        Assert.NotNull(speakBox);
+        Assert.InRange(speakBox!.Width, 43, 45);
+        Assert.InRange(speakBox.Height, 43, 45);
+    }
+
+    /// <summary>"Uppdrag: fokuskortet" - the duplicated-header bug: a Blazor route change never
+    /// reloads the page, so the browser never runs its own scroll reset, and a scrollY left over
+    /// from wherever the member was survives straight into the newly rendered page - even a
+    /// stray few px, enough to cross the 24px threshold without ever looking "scrolled" to the
+    /// person looking at it. Root-caused to MainLayout never resetting scroll state on
+    /// navigation; fixed via Navigation.LocationChanged calling ScrollState.ResetAsync.</summary>
+    [Fact]
+    public async Task Navigating_away_and_back_never_leaves_a_stale_collapsed_header()
+    {
+        var page = await _app.NewPageAsync();
+        // Short, not the usual 390x844 - unlike the grouped list ScrollHeaderTests exercises
+        // (where ten seeded rows make the page tall), "En uppgift åt gången" only ever renders
+        // ONE card no matter how many tasks exist, so a normal phone-height viewport would never
+        // need to scroll at all and window.scrollTo(0, 200) would silently do nothing.
+        await page.SetViewportSizeAsync(390, 500);
+        await SignUpAsync(page, "Iris");
+
+        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
+        http.DefaultRequestHeaders.Authorization = new("Bearer", token);
+
+        var me = await (await http.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
+        var householdId = me.GetProperty("householdId").GetGuid();
+        var memberId = me.GetProperty("memberId").GetGuid();
+
+        await http.PutAsJsonAsync(
+            $"/api/households/{householdId}/members/{memberId}/weekly-budget",
+            new { monday = 120, tuesday = 120, wednesday = 120, thursday = 120, friday = 120, saturday = 120, sunday = 120 });
+        await http.PutAsJsonAsync(
+            $"/api/households/{householdId}/members/{memberId}/preferences",
+            new { presentation = "OneAtATime", motivation = "None", showTimeLevel = false });
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var task = await (await http.PostAsJsonAsync(
+            $"/api/households/{householdId}/tasks", new { name = "Vädra rummet", estimatedMinutes = 5 }))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        await http.PostAsJsonAsync(
+            $"/api/households/{householdId}/tasks/{task.GetProperty("id").GetGuid()}/occurrences",
+            new { date = today, assignToMemberId = memberId });
+
+        await page.ReloadAsync();
+        await page.Locator(".focus-card").WaitForAsync();
+
+        // Baseline: at rest, the collapsed header is invisible even in focus mode.
+        Assert.Equal("0", await CollapsedOpacityAsync(page));
+
+        await page.EvaluateAsync("window.scrollTo(0, 200)");
+        await page.WaitForFunctionAsync(
+            "() => getComputedStyle(document.querySelector('.day-header-collapsed')).opacity === '1'");
+        Assert.Equal("1", await CollapsedOpacityAsync(page));
+
+        await page.EvaluateAsync("window.scrollTo(0, 0)");
+        await page.WaitForFunctionAsync(
+            "() => getComputedStyle(document.querySelector('.day-header-collapsed')).opacity === '0'");
+        Assert.Equal("0", await CollapsedOpacityAsync(page));
+
+        // The actual repro: scroll down, then navigate away and back WITHOUT a full page reload
+        // (a real in-app link click, not GotoAsync) - a route change alone must not leave a
+        // stale data-scrolled behind for the next page to inherit.
+        await page.EvaluateAsync("window.scrollTo(0, 200)");
+        await page.WaitForFunctionAsync("() => document.documentElement.hasAttribute('data-scrolled')");
+
+        await page.GetByRole(AriaRole.Link, new() { Name = "Rum" }).ClickAsync();
+        await page.GetByRole(AriaRole.Heading, new() { Name = "Rum" }).WaitForAsync();
+        Assert.False(await page.EvaluateAsync<bool>("() => document.documentElement.hasAttribute('data-scrolled')"));
+
+        await page.GetByRole(AriaRole.Link, new() { Name = "Idag" }).ClickAsync();
+        await page.Locator(".focus-card").WaitForAsync();
+        Assert.False(await page.EvaluateAsync<bool>("() => document.documentElement.hasAttribute('data-scrolled')"));
+        Assert.Equal("0", await CollapsedOpacityAsync(page));
+    }
+
+    private static async Task<string> CollapsedOpacityAsync(IPage page)
+        => await page.EvaluateAsync<string>(
+            "() => getComputedStyle(document.querySelector('.day-header-collapsed')).opacity");
 }
