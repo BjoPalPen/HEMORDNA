@@ -2414,17 +2414,19 @@ respektive `A_members_time_credit_never_leaks_to_another_member`.
 egna lokala datum, inte bara serverns UTC-datum (se nästa stycke). `POST
 .../tasks/{taskId}/occurrences` tar `addedAsExtra`.
 
-**Känd, ej åtgärdad brist**: klienten löser "idag" via `TimeProvider.GetLocalNow()`
-(`MinDag.razor`/`Vecka.razor`), medan flertalet redan existerande endpoints löser sitt eget "idag"
-via `TimeProvider.GetUtcNow()` på servern. I en tidszon med positiv UTC-offset stämmer de två inte
-överens under fönstret mellan lokal midnatt och UTC-midnatt (t.ex. svensk sommartid, UTC+2: cirka
-kl. 00.00–02.00 lokal tid). Upptäckt under denna revisions egen E2E-körning (flera, till synes
-orelaterade, redan existerande tester föll samtidigt, alla med samma "fel dag"-signatur). `POST
-.../complete`s nya valfria `{ today }`-kropp (denna revision) är den enda platsen detta faktiskt
-löstes för; övriga endpoints (`bring-forward`, `days-off`, `rebalance-assignments`, m.fl.) löser
-fortfarande sitt eget "idag" via serverns UTC-klocka. Ett helhetsgrepp - antingen alla
-datumkänsliga endpoints tar samma klient-överstyrning, eller klienten byts till att alltid räkna i
-UTC - är utanför denna uppgifts scope och inte gjort här.
+**Uppföljning (samma dag): klient/server-"idag"-skillnaden löst för medlemsinitierade
+endpoints.** Klienten löser "idag" via `TimeProvider.GetLocalNow()` (`MinDag.razor`/`Vecka.razor`),
+medan servern löser sitt eget via `TimeProvider.GetUtcNow()` - i en tidszon med positiv UTC-offset
+stämmer de två inte överens under fönstret mellan lokal midnatt och UTC-midnatt (t.ex. svensk
+sommartid, UTC+2: cirka kl. 00.00–02.00 lokal tid). Upptäckt under denna revisions egen
+E2E-körning (flera, till synes orelaterade, redan existerande tester föll samtidigt, alla med
+samma "fel dag"-signatur). `POST .../occurrences/{id}/bring-forward` och `PUT
+.../members/{memberId}/days-off/{date}` tar nu båda en valfri `{ today }`-kropp, `GET
+.../time-credit` en valfri `today`-frågeparameter - samma mönster `POST .../complete` redan hade,
+nu även faktiskt inkopplat vid klientens eget anropsställe (det var byggt men aldrig skickat).
+`rebalance-assignments`/`activity/daily-summary` är medvetet oförändrade - hushållsomfattande
+åtgärder där serverns egna, för alla medlemmar konsekventa "idag" redan är rätt val, inte en
+brist att fixa.
 
 ---
 
