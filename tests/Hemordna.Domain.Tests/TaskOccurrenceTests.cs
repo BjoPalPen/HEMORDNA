@@ -225,6 +225,58 @@ public class TaskOccurrenceTests
     }
 
     [Fact]
+    public void Reanchoring_moves_both_the_scheduled_and_original_date()
+    {
+        var occurrence = CreateOccurrence();
+        var monday = Friday.AddDays(3);
+
+        occurrence.ReanchorTo(monday);
+
+        Assert.Equal(monday, occurrence.ScheduledDate);
+        Assert.Equal(monday, occurrence.OriginalScheduledDate);
+        Assert.Equal(TaskOccurrenceStatus.Planned, occurrence.Status);
+        Assert.True(occurrence.IsOutstanding);
+    }
+
+    [Fact]
+    public void Reanchoring_an_overdue_occurrence_clears_the_overdue_flag()
+    {
+        var occurrence = CreateOccurrence(date: Friday.AddDays(-2));
+
+        occurrence.ReanchorTo(Friday);
+
+        Assert.False(occurrence.IsOverdueOn(Friday));
+    }
+
+    [Fact]
+    public void A_non_deferrable_occurrence_cannot_be_reanchored()
+    {
+        var occurrence = CreateOccurrence(canBeDeferred: false);
+
+        Assert.Throws<DomainException>(() => occurrence.ReanchorTo(Friday.AddDays(1)));
+        Assert.Equal(Friday, occurrence.ScheduledDate);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void An_occurrence_can_only_be_reanchored_forwards(int dayOffset)
+    {
+        var occurrence = CreateOccurrence();
+
+        Assert.Throws<DomainException>(() => occurrence.ReanchorTo(Friday.AddDays(dayOffset)));
+    }
+
+    [Fact]
+    public void A_completed_occurrence_cannot_be_reanchored()
+    {
+        var occurrence = CreateOccurrence();
+        occurrence.Complete(Guid.NewGuid(), CompletedAt);
+
+        Assert.Throws<DomainException>(() => occurrence.ReanchorTo(Friday.AddDays(1)));
+    }
+
+    [Fact]
     public void Bringing_a_tomorrow_task_forward_moves_the_date_but_keeps_the_original()
     {
         var tomorrow = Friday.AddDays(1);

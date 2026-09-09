@@ -2437,6 +2437,22 @@ respektive `A_members_time_credit_never_leaks_to_another_member`.
 2. Att hämta dagens och morgondagens plan SAMTIDIGT (`Task.WhenAll`) i `MinDag.razor` racade
    `EnsureOccurrencesGenerated`s egna "hämta-igen"-logik - båda anropen kunde läsa "ingen
    förekomst ännu" för idag samtidigt och skapade varsin, vilket dubblerade dagens uppgift.
+
+**Uppföljning, riktigt produktionsfel hittat 2026-09-09.** Ett hushåll hade 12 förekomster som
+visade "Sedan tidigare" trots att deras `ScheduledDate` redan låg på ett kommande datum -
+`RebalanceSchedule.RescheduleBacklogAsync` (un-clustring av en gammal, klumpad backlog, se
+"Beslut" ovan om varför den funktionen finns) återanvände `TaskOccurrence.DeferTo`, som med
+flit BARA flyttar `ScheduledDate` och medvetet lämnar `OriginalScheduledDate` kvar (exakt rätt
+för en medlem som själv väljer att skjuta upp en redan försenad uppgift - se
+"Kvarlämnat stannar" ovan). För ett system-initierat omschema är det fel beteende: uppgiften
+ska läsa som nyplanerad på sin nya dag, inte permanent "sedan tidigare". Fixat genom en ny,
+egen domänmetod `TaskOccurrence.ReanchorTo(DateOnly)` som flyttar BÅDA datumen, och bytte
+`RescheduleBacklogAsync` till den istället för `DeferTo` - `DeferTo` självt orört, dess egna
+test (`Deferring_does_not_hide_that_an_occurrence_is_overdue`) gäller fortfarande. De 12
+felaktiga raderna i produktion patchades direkt i databasen (samma effekt som `ReanchorTo`
+skulle gett) eftersom bakgrundsjobbet redan hade körts; själva grundfelet fanns bara i koden,
+inte i data i övrigt. Se `TaskOccurrenceTests.Reanchoring_moves_both_the_scheduled_and_original_date`
+och `RebalanceScheduleTests.An_already_generated_outstanding_occurrence_due_today_stops_reading_as_overdue`.
    Fångat av ett befintligt, orelaterat E2E-test (`TaskFrequencyTests`), inte av ett nytt. Fixat
    genom att hämta dem i sekvens istället.
 
