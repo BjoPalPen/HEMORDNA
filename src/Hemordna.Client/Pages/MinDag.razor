@@ -6,6 +6,7 @@
 @inject NavigationManager Navigation
 @inject TimeProvider TimeProvider
 @inject HouseholdRealtimeClient Realtime
+@inject IJSRuntime JS
 
 <PageTitle>Idag – Hemordna</PageTitle>
 
@@ -32,7 +33,7 @@ else
     var completedCount = (_day?.Completed.Count ?? 0) + _remotelyCompletedIds.Count;
     var totalCount = _day is null ? 0 : _day.Items.Count + _day.Completed.Count;
     var encouragement = _motivation == "Calm" && _day is not null
-        ? EncouragementFor(_day.Items.Count, _day.Completed.Count, totalCount)
+        ? EncouragementFor(_day.Items.Count, _day.Completed.Count, totalCount, _startedOccurrenceId is not null)
         : null;
 
     @if (hasDayCounts)
@@ -126,6 +127,10 @@ else
                                 @onclick="() => CompleteAsync(focusTask.OccurrenceId)">
                             Bocka av
                         </button>
+                        <button type="button" class="btn btn-secondary btn-block" disabled="@(_busyOccurrence == focusTask.OccurrenceId)"
+                                @onclick="() => ToggleStartAsync(focusTask.OccurrenceId)">
+                            @(_startedOccurrenceId == focusTask.OccurrenceId ? "Avbryt start" : "Jag börjar nu")
+                        </button>
                         @if (focusTask.CanBeDeferred)
                         {
                             <button type="button" class="btn btn-secondary btn-block" disabled="@(_busyOccurrence == focusTask.OccurrenceId)"
@@ -162,7 +167,8 @@ else
                     <ul class="task-list" aria-label="Sedan tidigare">
                         @{
                             var overdueIsCapped = !_showAllOverdue && OverdueItems.Count > OverdueCapThreshold;
-                            var visibleOverdue = overdueIsCapped ? OverdueItems.Take(OverdueVisibleCount) : OverdueItems;
+                            var orderedOverdue = WithStartedFirst(OverdueItems);
+                            var visibleOverdue = overdueIsCapped ? orderedOverdue.Take(OverdueVisibleCount) : orderedOverdue;
                         }
                         @foreach (var row in visibleOverdue)
                         {
@@ -176,7 +182,8 @@ else
                                               IsBusy="_busyOccurrence == row.Item.OccurrenceId"
                                               IsExpanded="_expandedOccurrence == row.Item.OccurrenceId"
                                               IsStartHere="row.Item.OccurrenceId == StartHereOccurrenceId"
-                                              OnComplete="CompleteAsync" OnToggleExpand="ToggleExpand" OnDefer="DeferAsync" />
+                                              IsStarted="row.Item.OccurrenceId == _startedOccurrenceId"
+                                              OnComplete="CompleteAsync" OnToggleExpand="ToggleExpand" OnDefer="DeferAsync" OnToggleStart="ToggleStartAsync" />
                             }
                         }
                         @if (overdueIsCapped)
@@ -208,7 +215,7 @@ else
                     {
                         @GroupHeading(RoomHeadingName(group), OutstandingCount(group.Items))
                         <ul class="task-list" aria-label="@RoomHeadingName(group)">
-                            @foreach (var row in group.Items)
+                            @foreach (var row in WithStartedFirst(group.Items))
                             {
                                 @if (row.IsRemotelyCompleted)
                                 {
@@ -220,7 +227,8 @@ else
                                                   IsBusy="_busyOccurrence == row.Item.OccurrenceId"
                                                   IsExpanded="_expandedOccurrence == row.Item.OccurrenceId"
                                                   IsStartHere="row.Item.OccurrenceId == StartHereOccurrenceId"
-                                                  OnComplete="CompleteAsync" OnToggleExpand="ToggleExpand" OnDefer="DeferAsync" />
+                                                  IsStarted="row.Item.OccurrenceId == _startedOccurrenceId"
+                                                  OnComplete="CompleteAsync" OnToggleExpand="ToggleExpand" OnDefer="DeferAsync" OnToggleStart="ToggleStartAsync" />
                                 }
                             }
                         </ul>
@@ -443,6 +451,11 @@ else
     private bool _undoBusy;
     private CancellationTokenSource? _undoCts;
 
+    // "Jag börjar nu" (Sju enkla lösningar, del 2) - per-device, per-day, one at a time
+    // (Support/StartedTask.cs). Reloaded from storage in LoadDayAsync rather than kept purely in
+    // memory, so a fresh visit (or a day that has rolled over) always reflects it truthfully.
+    private Guid? _startedOccurrenceId;
+
     // "Beslut: Ångra och stabil lista" §B2 - a remote change never redraws the list out from
     // under an interaction already in progress. See HandleRemoteChangeAsync/
     // ReconcileRemoteChangeAsync for how these are used together.
@@ -586,11 +599,56 @@ else
 
     /// <summary>"Börja här" (list view only): a quiet pointer at the planner's own first task,
     /// for someone who does not know where to start - not shown when there is only one task
-    /// anyway (nothing to choose between) or in focus mode (the card itself already IS that
-    /// pointer). Reuses FocusOrder rather than re-deriving "first in the planner's order" a
-    /// second time.</summary>
+    /// anyway (nothing to choose between), in focus mode (the card itself already IS that
+    /// pointer), or while a task is already started (see ToggleStartAsync - a second "start
+    /// here" pointer next to an actual "Pågår" row would be a contradiction). Reuses FocusOrder
+    /// rather than re-deriving "first in the planner's order" a second time.</summary>
     private Guid? StartHereOccurrenceId
-        => !IsFocusMode && _day is { Items.Count: > 1 } ? FocusOrder.FirstOrDefault()?.OccurrenceId : null;
+        => !IsFocusMode && _startedOccurrenceId is null && _day is { Items.Count: > 1 }
+            ? FocusOrder.FirstOrDefault()?.OccurrenceId
+            : null;
+
+    /// <summary>"Jag börjar nu" (Sju enkla lösningar, del 2) - a plain per-device toggle, no
+    /// server call and nothing to fail: starting or un-starting is instant, one occurrence at a
+    /// time (setting a new one silently replaces whatever was started before).</summary>
+    private async Task ToggleStartAsync(Guid occurrenceId)
+    {
+        if (_startedOccurrenceId == occurrenceId)
+        {
+            await StartedTask.ClearAsync(JS);
+            _startedOccurrenceId = null;
+        }
+        else
+        {
+            await StartedTask.SetAsync(JS, Today, occurrenceId);
+            _startedOccurrenceId = occurrenceId;
+        }
+    }
+
+    /// <summary>Display-only reordering (never touches _day, FocusOrder or the server): the
+    /// started row, if it is part of this particular group, moves to the front of it - "raden
+    /// flyttas överst i sitt rum" applied uniformly to "Sedan tidigare" and every room group,
+    /// each its own "rum" for this purpose.</summary>
+    private List<TaskRow> WithStartedFirst(IEnumerable<TaskRow> rows)
+    {
+        var list = rows.ToList();
+
+        if (_startedOccurrenceId is not { } startedId)
+        {
+            return list;
+        }
+
+        var index = list.FindIndex(row => row.Item.OccurrenceId == startedId);
+        if (index <= 0)
+        {
+            return list;
+        }
+
+        var started = list[index];
+        list.RemoveAt(index);
+        list.Insert(0, started);
+        return list;
+    }
 
     /// <summary>"Lugn" (Installningar.razor) - one of these five, chosen by state alone, never
     /// randomly: the same day-counts state always reads the same phrase, so it never seems to
@@ -614,8 +672,12 @@ else
     /// for that exact state, and a phrase said twice on the same screen is worse than said once
     /// (docs/DESIGN.md §5). Every other branch returns a phrase - callers only need to check for
     /// <c>null</c>, never compare against a specific string to decide whether to render it.
+    /// <paramref name="hasStarted"/> (Sju enkla lösningar, del 2 - "Jag börjar nu") reads the
+    /// same "Vill du fortsätta där du slutade?" as already completing something does, since both
+    /// describe the same situation - work already under way - and does so ahead of the "En sak i
+    /// taget räcker."/default branches, exactly where <c>completed > 0</c> already sat.
     /// </summary>
-    private static string? EncouragementFor(int outstanding, int completed, int total)
+    private static string? EncouragementFor(int outstanding, int completed, int total, bool hasStarted)
     {
         if (outstanding == 0 && completed > 0)
         {
@@ -627,7 +689,7 @@ else
             return EncouragementPhrases[1];
         }
 
-        if (completed > 0)
+        if (completed > 0 || hasStarted)
         {
             return EncouragementPhrases[2];
         }
@@ -997,6 +1059,7 @@ else
         _day = await Api.GetDailyPlanAsync(householdId, memberId, Today);
         _tomorrow = await Api.GetDailyPlanAsync(householdId, memberId, Today.AddDays(1));
         _focusOffset = 0;
+        _startedOccurrenceId = await StartedTask.GetAsync(JS, Today);
 
         // A full reload supersedes any patched-in state from ReconcileRemoteChangeAsync - it is
         // about to be rebuilt from scratch against the same server truth that state was tracking.
@@ -1063,6 +1126,11 @@ else
             // (see CompleteTaskOccurrence), and the two can disagree around midnight.
             if (await Api.CompleteOccurrenceAsync(householdId, occurrenceId, Today))
             {
+                if (_startedOccurrenceId == occurrenceId)
+                {
+                    await StartedTask.ClearAsync(JS);
+                }
+
                 ShowUndo(occurrenceId, name ?? "uppgiften");
                 await LoadDayAsync();
             }
@@ -1150,6 +1218,11 @@ else
         {
             if (await Api.DeferOccurrenceAsync(householdId, occurrenceId, Today.AddDays(1)))
             {
+                if (_startedOccurrenceId == occurrenceId)
+                {
+                    await StartedTask.ClearAsync(JS);
+                }
+
                 _expandedOccurrence = null;
                 await LoadDayAsync();
             }

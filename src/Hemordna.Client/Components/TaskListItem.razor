@@ -15,6 +15,10 @@
 
     <span class="task-name">
         @Item.Name
+        @if (IsStarted)
+        {
+            <span class="chip chip-primary">Pågår</span>
+        }
         @if (ShowAreaChip && Item.AreaName is { } area)
         {
             <span class="chip">@area</span>
@@ -61,6 +65,12 @@
         {
             <p class="muted small">@Item.Description</p>
         }
+
+        <button type="button" class="btn btn-secondary"
+                disabled="@IsBusy"
+                @onclick="() => OnToggleStart.InvokeAsync(Item.OccurrenceId)">
+            @(IsStarted ? "Avbryt start" : "Jag börjar nu")
+        </button>
 
         @if (Item.CanBeDeferred)
         {
@@ -127,6 +137,12 @@
     [Parameter]
     public bool IsStartHere { get; set; }
 
+    /// <summary>Whether this row is the one thing MinDag.razor's own StartedTask marker names -
+    /// "Jag börjar nu" (below) toggles it, this component only reflects it (the "Pågår" chip)
+    /// and reads it to decide the button's own label.</summary>
+    [Parameter]
+    public bool IsStarted { get; set; }
+
     [Parameter, EditorRequired]
     public EventCallback<Guid> OnComplete { get; set; }
 
@@ -135,6 +151,9 @@
 
     [Parameter, EditorRequired]
     public EventCallback<Guid> OnDefer { get; set; }
+
+    [Parameter, EditorRequired]
+    public EventCallback<Guid> OnToggleStart { get; set; }
 
     private ElementReference _rootRef;
     private IJSObjectReference? _module;

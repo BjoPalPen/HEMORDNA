@@ -206,11 +206,21 @@ ingenting (annars skulle det stjäla klicket). Under `prefers-reduced-motion`: i
 ingen bekräftelseflash, ingen haptik – bara den vanliga klick-hanteringen, oavsett om den kom
 från bocken eller svepet.
 
+**Jag börjar nu** (denna revision): en knapp i den utfällda raden (och i fokuskortet, mellan
+"Bocka av" och "Skjut upp") markerar en enda uppgift som pågående - `<span class="chip
+chip-primary">Pågår</span>` bredvid namnet, raden flyttas överst i sin grupp (klientsidan, bara
+visning), och "Börja här" (nedan) döljs så länge något pågår. Enhetslokalt och per dag
+(`Support/StartedTask.cs`, `hemordna.started` i `localStorage`) - ingen server vet om det, ingen
+tid räknas, ingen timer. Rensas när uppgiften bockas av eller skjuts upp, eller tyst av sig
+självt när dagen byter (en gammal markering för gårdagens datum ignoreras). "Lugn" läser en
+pågående uppgift som "Vill du fortsätta där du slutade?" - samma fras som att redan ha bockat av
+något ger.
+
 **Börja här** (denna revision): planerarens egen första uppgift (samma ordning fokusläget redan
 använder - "Sedan tidigare" först, annars första raden i första rummet) får en tyst
 `chip-today`-chip, "Börja här", bredvid namnet - bara i listläge, bara när fler än en uppgift
-väntar (annars är det redan uppenbart var man börjar). Chipparnas ordning under namnet: rum,
-tid, "Börja här".
+väntar (annars är det redan uppenbart var man börjar) och bara så länge ingen uppgift redan är
+igångsatt (se "Jag börjar nu" ovan). Chipparnas ordning under namnet: rum, tid, "Börja här".
 
 **Steg i beskrivningen** (denna revision): en beskrivning skriven en rad per steg (t.ex. "Ta
 fram hinken", ny rad, "Fyll med varmt vatten") renders som en numrerad lista i stället för ett

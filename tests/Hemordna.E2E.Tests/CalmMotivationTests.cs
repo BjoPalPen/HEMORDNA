@@ -108,6 +108,21 @@ public class CalmMotivationTests
         await Assertions.Expect(page.Locator(".day-encouragement")).ToHaveTextAsync("Här är dina uppgifter för idag.");
     }
 
+    /// <summary>"Jag börjar nu" (Sju enkla lösningar, del 2): starting a task reads the same as
+    /// having already completed one - without it, this exact state (0 done, 2 outstanding) would
+    /// show the DEFAULT phrase (see Nothing_done_and_four_or_fewer_outstanding_shows_the_default_phrase
+    /// above), not this one.</summary>
+    [Fact]
+    public async Task Nothing_done_but_a_task_is_started_shows_the_continue_where_you_left_off_phrase()
+    {
+        var page = await ArrangeCalmDayAsync("Gustav", total: 2, completed: 0);
+
+        await page.Locator(".task-expand").First.ClickAsync();
+        await page.GetByRole(AriaRole.Button, new() { Name = "Jag börjar nu" }).ClickAsync();
+
+        await Assertions.Expect(page.Locator(".day-encouragement")).ToHaveTextAsync("Vill du fortsätta där du slutade?");
+    }
+
     [Fact]
     public async Task None_shows_no_phrase_at_all()
     {
