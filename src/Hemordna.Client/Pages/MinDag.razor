@@ -69,23 +69,27 @@ else
     {
         <div class="energy" role="group" aria-label="Hur är orken idag?">
             <span class="energy-label">Hur är orken idag?</span>
-            @if (_energyChoice is null || _energyExpanded)
-            {
-                @foreach (var level in EnergyLevel.All)
+            <div class="energy-options">
+                @if (_energyChoice is null || _energyExpanded)
                 {
-                    <button type="button" class="chip-action @(_energyChoice == level.Label ? "chip-primary" : null)"
-                            disabled="@_energyBusy"
-                            @onclick="() => SetEnergyAsync(level)">
-                        @level.Label
+                    @foreach (var level in EnergyLevel.All)
+                    {
+                        <button type="button" class="chip-action @(_energyChoice == level.Label ? "chip-primary" : null)"
+                                disabled="@_energyBusy"
+                                @onclick="() => SetEnergyAsync(level)">
+                            <Icon Name="@EnergyIconFor(level.Label)" Size="18" />
+                            @level.Label
+                        </button>
+                    }
+                }
+                else
+                {
+                    <button type="button" class="chip-action chip-primary" @onclick="() => _energyExpanded = true">
+                        <Icon Name="@EnergyIconFor(_energyChoice)" Size="18" />
+                        @_energyChoice
                     </button>
                 }
-            }
-            else
-            {
-                <button type="button" class="chip-action chip-primary" @onclick="() => _energyExpanded = true">
-                    @_energyChoice
-                </button>
-            }
+            </div>
         </div>
         @if (_energyMessage is not null)
         {
@@ -840,6 +844,17 @@ else
     /// <summary>"Hur är orken idag?" never shows for a day the member has no normal time on -
     /// there is nothing to scale a fraction of.</summary>
     private bool ShowEnergyPrompt => NormalMinutesToday is > 0;
+
+    /// <summary>Fixed UI chrome, not a presentation choice - shown regardless of ShowIcons
+    /// (unlike a task's own illustration, this is the same three-button row's own icon
+    /// regardless of which presentation mode a member has picked, the same way the nav tabs'
+    /// icons are never conditional on it either).</summary>
+    private static string EnergyIconFor(string label) => label switch
+    {
+        "Lite" => "battery-low",
+        "Lagom" => "battery-medium",
+        _ => "battery-full",
+    };
 
     /// <summary>Always sets AVAILABLE minutes for today only (SetAvailabilityAsync) - never the
     /// weekly budget itself (SetWeeklyBudgetAsync is not called anywhere in this method or

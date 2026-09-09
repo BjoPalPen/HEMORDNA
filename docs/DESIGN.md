@@ -198,6 +198,14 @@ valda chipen, ett nytt tryck öppnar de tre igen. Enhetslokalt (`Support/EnergyC
 bara VILKEN etikett som valdes, så chipen läser rätt tillbaka efter en omladdning - servern ser
 bara minuterna, aldrig ordet "orken" eller vilken nivå som valdes.
 
+Varje chip har en egen batterisymbol (`Icon.razor`: `battery-low`/`battery-medium`/`battery-full`,
+en respektive två respektive tre fyllda staplar i samma konturstil som appens övriga ikoner) -
+fast gränssnitt, alltid synligt oavsett presentationsläge, precis som navigeringsflikarnas egna
+ikoner - inte en uppgiftsillustration som bara "Bild + text" slår på. Etiketten står ovanför
+chipparna snarare än på samma rad som dem, så de tre alltid får hela radens bredd och håller ihop
+- annars kunde "Mycket" bli ensam kvar på en egen rad, särskilt i Stor text (§10:s "Stor text får
+inte bryta layouten" är ovillkorligt).
+
 Uppgifter
 grupperas per rum (`RoomGroups`, oförändrad sorteringslogik) med rumsnamnet i versaler och
 antal kvar till höger; en förfallen uppgift hamnar alltid först i en egen "Sedan tidigare"-grupp,

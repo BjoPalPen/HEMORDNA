@@ -114,6 +114,15 @@
     text-decoration-color: var(--sot-soft);
 }
 
+/* The room chip sits on its own line under the name (.task-name is flex-column) - a line-through
+   set on the ancestor paints straight through descendant inline content by default, including a
+   filled pill, which reads as a "cancelled" stamp rather than a quietly dimmed fact. The name
+   itself keeps the strikethrough; the chip only keeps the dimming from .task-list-done .task's
+   own opacity. */
+.task-done-remote .task-name .chip {
+    text-decoration: none;
+}
+
 .day-date {
     margin: 0 0 var(--space-1);
     color: var(--sot-soft);
@@ -263,6 +272,11 @@
     text-decoration-color: var(--sot-soft);
 }
 
+/* See .task-done-remote .task-name .chip above for why - same fix, same reason. */
+.task-list-done .task-name .chip {
+    text-decoration: none;
+}
+
 .task-check-done {
     display: inline-flex;
     align-items: center;
@@ -292,12 +306,13 @@
     margin: var(--space-4) 0;
 }
 
-/* "Hur är orken idag?" (Sju enkla lösningar, del 1) - same row shape as .chips, its own class
-   only because the label sits inline with the chips rather than above a whole group of fields. */
+/* "Hur är orken idag?" (Sju enkla lösningar, del 1) - label above the chips, not inline with
+   them: three chips with their own icon are wide enough, at 390px and especially in Stor text,
+   that a plain flex-wrap left "Mycket" stranded alone on its own row rather than wrapping as a
+   clean group. Label-above-buttons frees the whole row width for .energy-options below. */
 .energy {
     display: flex;
-    flex-wrap: wrap;
-    align-items: center;
+    flex-direction: column;
     gap: var(--space-2);
     margin: 0 0 var(--space-4);
 }
@@ -305,6 +320,25 @@
 .energy-label {
     font-size: calc(var(--font-size-base) * .87);
     color: var(--sot-soft);
+}
+
+/* Same "N buttons always share one row, shrink and wrap their OWN text instead of one button
+   jumping to a new row" technique as .level-picker (docs/ARCHITECTURE.md §10, Stor text is
+   unconditional) - flex-wrap: nowrap plus flex: 1 1 0 on each chip, rather than the default
+   flex-wrap: wrap every other .chips row uses, which is fine there because those rows are not a
+   fixed, always-three-together set. */
+.energy-options {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: var(--space-2);
+}
+
+/* Only the energy row's own chips get an icon (see MinDag.razor's EnergyIconFor) - scoped here
+   rather than adding a gap to .chip-action generally, which has no icon anywhere else. */
+.energy-options .chip-action {
+    flex: 1 1 0;
+    min-width: 0;
+    gap: var(--space-1);
 }
 
 /* A calm, deliberately empty page - "Ledigt idag" or "Dagens uppgifter är klara" - never a

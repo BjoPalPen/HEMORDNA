@@ -171,4 +171,51 @@ public class EnergyTests
         // nothing to scale a fraction of, so the question never shows.
         await Assertions.Expect(page.GetByRole(AriaRole.Group, new() { Name = "Hur är orken idag?" })).Not.ToBeVisibleAsync();
     }
+
+    /// <summary>Regression test: adding an icon to each chip (Support/EnergyLevel.cs +
+    /// Icon.razor's battery-low/medium/full) widened all three enough that at 390px "Mycket"
+    /// wrapped alone onto its own row - orphaned rather than grouped. Same "N buttons always
+    /// share one row, shrink and wrap their own text instead" fix as .level-picker
+    /// (docs/ARCHITECTURE.md §10, Stor text is unconditional) - checked in both modes here since
+    /// that is exactly where the extra width bites hardest.</summary>
+    [Theory]
+    [InlineData("Text (standard) - kompakt lista")]
+    [InlineData("Stor text - större och tydligare")]
+    public async Task All_three_energy_chips_stay_on_one_row_at_390px(string presentationLabel)
+    {
+        var page = await _app.NewPageAsync();
+        await page.SetViewportSizeAsync(390, 844);
+        await SignUpHelper.SignUpAsync(page, "Otto");
+
+        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
+        http.DefaultRequestHeaders.Authorization = new("Bearer", token);
+
+        var me = await (await http.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
+        var householdId = me.GetProperty("householdId").GetGuid();
+        var memberId = me.GetProperty("memberId").GetGuid();
+
+        await GiveFullWeekAsync(http, householdId, memberId, 60);
+
+        if (presentationLabel.StartsWith("Stor text", StringComparison.Ordinal))
+        {
+            await page.GotoAsync("/installningar");
+            await page.GetByLabel(presentationLabel).CheckAsync();
+            await Assertions.Expect(page.GetByText("Sparat")).ToBeVisibleAsync(new() { Timeout = 5_000 });
+        }
+
+        await page.GotoAsync("/");
+        var energy = page.GetByRole(AriaRole.Group, new() { Name = "Hur är orken idag?" });
+        await energy.WaitForAsync();
+
+        var lite = await energy.GetByRole(AriaRole.Button, new() { Name = "Lite", Exact = true }).BoundingBoxAsync();
+        var lagom = await energy.GetByRole(AriaRole.Button, new() { Name = "Lagom", Exact = true }).BoundingBoxAsync();
+        var mycket = await energy.GetByRole(AriaRole.Button, new() { Name = "Mycket", Exact = true }).BoundingBoxAsync();
+
+        Assert.NotNull(lite);
+        Assert.NotNull(lagom);
+        Assert.NotNull(mycket);
+        Assert.Equal(lite!.Y, lagom!.Y);
+        Assert.Equal(lagom.Y, mycket!.Y);
+    }
 }
