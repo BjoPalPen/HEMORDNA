@@ -4,7 +4,8 @@
 
 @code {
     /// <summary>One of: sun, grid, calendar, people, chevron-right, plus, check, more,
-    /// battery-low, battery-medium, battery-full.</summary>
+    /// battery-low, battery-medium, battery-full, play, speaker, speaker-off, arrow-right,
+    /// skip.</summary>
     [Parameter, EditorRequired]
     public string Name { get; set; } = string.Empty;
 
@@ -27,6 +28,14 @@
         "battery-low" => BatteryOutline + Bar(1),
         "battery-medium" => BatteryOutline + Bar(1) + Bar(2),
         "battery-full" => BatteryOutline + Bar(1) + Bar(2) + Bar(3),
+        // Fokuskortet (Uppdrag: fokuskortet - hierarki, ikoner och en dubblerad rubrik) - a
+        // filled triangle reads more clearly as "play" at 20px than a thin stroke outline would,
+        // same reasoning "more"/the battery bars above already filled rather than stroked.
+        "play" => """<path d="M7 4.5v15l13-7.5z" fill="currentColor" stroke="none" stroke-linejoin="round"/>""",
+        "speaker" => """<path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M17 9a4 4 0 0 1 0 6M19.5 6.5a8 8 0 0 1 0 11"/>""",
+        "speaker-off" => """<path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16 9l6 6M22 9l-6 6"/>""",
+        "arrow-right" => """<path d="M4 12h16M13 6l7 6-7 6"/>""",
+        "skip" => """<path d="M5 5v14l10-7z" fill="currentColor" stroke="none" stroke-linejoin="round"/><rect x="17" y="5" width="2.4" height="14" rx="1" fill="currentColor" stroke="none"/>""",
         _ => string.Empty,
     });
 

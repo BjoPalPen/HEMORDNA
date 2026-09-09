@@ -371,6 +371,38 @@ html[data-calm] * {
     width: 100%;
 }
 
+/* A button carrying an Icon.razor svg (fokuskortet, "Uppdrag: fokuskortet") - .btn is already
+   display:inline-flex/align-items:center/justify-content:center (confirmed by grepping every
+   existing class="btn" across the client before adding this), so this only needs to size the
+   icon itself and give it breathing room before the label text. Never the icon's only carrier
+   of meaning - DESIGN.md §10 - always paired with a visible label except .btn-icon below, which
+   carries its own aria-label instead. */
+.btn .icon {
+    width: 20px;
+    height: 20px;
+    margin-right: 8px;
+    flex-shrink: 0;
+}
+
+/* Icon-only button ("Läs upp"/"Tyst" in the focus card) - 44x44 (DESIGN.md §10), round, no
+   visible label of its own so the caller must set aria-label. */
+.btn-icon {
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: none;
+    border-radius: var(--pill);
+    background: var(--surface-2);
+}
+
+.btn-icon:hover:not(:disabled) {
+    background: var(--aska-soft);
+}
+
+.btn-icon .icon {
+    margin-right: 0;
+}
+
 .field {
     display: block;
     margin-bottom: var(--space-4);

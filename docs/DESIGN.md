@@ -102,7 +102,15 @@ byggt för det snarare än bara en större siffra.
 ## 4a. Ikoner och komponenter
 
 Inline-SVG (stroke 1.9, round caps) via `Components/Icon.razor` – inga Unicode-tecken som
-ikoner. Namngivna ikoner: `sun`, `grid`, `calendar`, `people`, `chevron-right`, `plus`, `check`.
+ikoner. Namngivna ikoner: `sun`, `grid`, `calendar`, `people`, `chevron-right`, `plus`, `check`,
+`more`, `battery-low`, `battery-medium`, `battery-full`, `play`, `speaker`, `speaker-off`,
+`arrow-right`, `skip`.
+
+**`.btn .icon`** (`app.css`): en ikon i en vanlig knapp är alltid 20×20px med `margin-right: 8px`
+före etiketten - aldrig ikonens enda bärare av mening (§10), alltid parad med synlig text.
+**`.btn-icon`** är undantaget: en 44×44, rund, ikon-utan-text-knapp (`surface-2`-bakgrund) för de
+sällsynta fall en handling verkligen bara är en ikon - "Läs upp"/"Tyst" i fokuskortet (nedan) är
+det enda stället i appen som denna revision använder den, med sin egen `aria-label`.
 
 `Components/BottomSheet.razor`: ark från botten på mobil (scrim, drag-handtag, stängs med Esc,
 scrim-tryck eller "Stäng", fokus flyttas in vid öppning och tillbaka vid stängning), centrerad
