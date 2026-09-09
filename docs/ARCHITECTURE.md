@@ -2343,6 +2343,91 @@ permanent test
 
 ---
 
+### Beslut: Kvarlämnat, Imorgon på Idag, ledig dag och tid i förväg — `IMPLEMENTED`
+
+Fem löften styr denna revision, i samma anda som "Beslut: Ångra och stabil lista" ovan var styrd
+av sina egna: (1) det någon annan lämnar kvar hamnar aldrig hos mig, (2) jag ser min morgondag på
+Idag, (3) jag kan jobba i förväg och ta ledigt, (4) det jag gör i förväg märks och jag kan se hur,
+(5) inget en person gör syns hos någon annan (samma Del C/G-invariant som redan gäller).
+
+**Kvarlämnat stannar.** En förekomst vars `OriginalScheduledDate < today` är aldrig flyttbar via
+"Balansera om vem som gör vad" (`RebalanceTaskAssignments`), oavsett hur skev kapacitetsfördelningen
+är. Ägarbyte hos en redan försenad uppgift skulle bara flytta problemet, inte lösa det.
+
+**Ledig dag är en hård uteslutning; tid i förväg är bara en förskjutning.** De två låter lika på
+ytan ("håll tillbaka nya uppgifter från den här personen") men är arkitektoniskt olika saker:
+
+- `MemberDayOff` filtreras bort i `RotationPicker.EligibleMembers` innan någon kvotberäkning görs
+  - en medlem med ledig dag kan aldrig väljas, oavsett hur mycket kredit någon annan har.
+- `MemberTimeCredit`s saldo (`MemberTimeCredit.BalanceOf`, golv 0, tak vid egen
+  `WeeklyTimeBudget.TotalWeeklyMinutes`) läggs bara till en redan valbar medlems belastade minuter
+  i `RotationPicker.PickNext` - det kan aldrig göra en utesluten medlem valbar, bara förskjuta
+  ordningen mellan dem som redan är det.
+
+**`BringForwardTo` rör bara `ScheduledDate`, aldrig `OriginalScheduledDate`.** Det är precis det
+som gör att en förtaget uppgift aldrig blir "kvarlämnat" eller läser som försenad - `IsOverdueOn`
+jämför uteslutande mot `OriginalScheduledDate`. Samma fält gör `IsBroughtForwardOn` (och därmed
+`TaskListItem`s "I förväg"-chip) möjligt utan någon extra flagga.
+
+**`MemberTimeCredit` är en ledger, aldrig ett muterbart saldofält** - samma
+snapshot-inte-härlett-tillstånd-resonemang som `TaskAssignment` redan använder för
+rotationskvoten. `Earned`/`Consumed` är två fabriker på samma tabell (`Minutes` positivt
+respektive negativt); `BalanceOf` är en ren summa, golvad vid 0 (PRODUCT.md §8 förbjuder att någon
+någonsin visas som "skyldig" tid) och takad vid medlemmens egen veckobudget (så en lång osparad
+period inte läses som ett mål att jaga). Detta är medvetet BARA ett tal och en mening i UI - se
+`GetMemberTimeCredit`/`MemberTimeCredit`s egna domänkommentarer - ingen historik, inget diagram,
+ingen streak (CLAUDE.md §12).
+
+**`DailyPlanner` gör ett enda undantag från sin egen budgetregel**: en uppgift som redan blivit
+itagen i förväg (`TaskOccurrence.IsBroughtForwardOn`) hamnar alltid i `Items`, även när den trycker
+dagen över budgeten - valet att göra den idag skedde redan när den togs i förväg, budgeten kan inte
+ångra det i efterhand. `DailyPlan.RemainingMinutes` kan därför bli negativt; det är en ärlig bild
+av att dagen tagit på sig mer än budgeten, inte ett fel att skydda mot.
+
+**Del C/G-invariant, samma tabell som gäller sedan tidigare**: en ledig dag är neutral
+planeringsinformation - synlig för hela hushållet på Veckas och Hushålls delade prickmatris
+(`dot-off`, samma sätt `dot-done`/`dot-planned` redan är synliga). Tid i förväg är raka motsatsen -
+`GetMemberTimeCredit`s endpoint har medvetet inget `memberId`-ruttparameter att fråga om någon
+annans med; den svarar alltid bara den anropande medlemmens egen balans. Verifierat i
+`MixedHouseholdTests.A_members_day_off_shows_to_the_rest_of_the_household_as_a_neutral_dot`
+respektive `A_members_time_credit_never_leaks_to_another_member`.
+
+**Två riktiga fel hittades och fixades under klientverifiering, inga i det ursprungliga scopet:**
+
+1. `SetMemberDayOff`s `BringAllForward`-läge kastade en `DomainException` när `date` (dagen som
+   markeras ledig) var densamma som `today` OCH minst en av medlemmens egna förekomster redan låg
+   just den dagen - att "föra fram" något till den dag det redan ligger på är exakt vad
+   `TaskOccurrence.BringForwardTo`s eget invariant-skydd stoppar. Upptäckt när "Ta ledigt idag"
+   (F4) kopplades ihop med "Ta med till idag". Fixat genom att hoppa över (inte flytta) varje
+   förekomst vars `ScheduledDate` redan är `today` i `BringAllForward`-loopen - se
+   `SetMemberDayOffTests.BringAllForward_on_today_itself_is_a_safe_no_op_rather_than_throwing`.
+2. Att hämta dagens och morgondagens plan SAMTIDIGT (`Task.WhenAll`) i `MinDag.razor` racade
+   `EnsureOccurrencesGenerated`s egna "hämta-igen"-logik - båda anropen kunde läsa "ingen
+   förekomst ännu" för idag samtidigt och skapade varsin, vilket dubblerade dagens uppgift.
+   Fångat av ett befintligt, orelaterat E2E-test (`TaskFrequencyTests`), inte av ett nytt. Fixat
+   genom att hämta dem i sekvens istället.
+
+**Nya endpoints** (`Hemordna.Api.Endpoints.HouseholdEndpoints`): `PUT`/`DELETE`
+`.../members/{memberId}/days-off/{date}`, `GET .../days-off`, `POST
+.../occurrences/{id}/bring-forward`, `POST .../occurrences/{id}/undo-bring-forward`, `GET
+.../time-credit` (self-only). `POST .../complete` tar nu en valfri kropp `{ today }` - klientens
+egna lokala datum, inte bara serverns UTC-datum (se nästa stycke). `POST
+.../tasks/{taskId}/occurrences` tar `addedAsExtra`.
+
+**Känd, ej åtgärdad brist**: klienten löser "idag" via `TimeProvider.GetLocalNow()`
+(`MinDag.razor`/`Vecka.razor`), medan flertalet redan existerande endpoints löser sitt eget "idag"
+via `TimeProvider.GetUtcNow()` på servern. I en tidszon med positiv UTC-offset stämmer de två inte
+överens under fönstret mellan lokal midnatt och UTC-midnatt (t.ex. svensk sommartid, UTC+2: cirka
+kl. 00.00–02.00 lokal tid). Upptäckt under denna revisions egen E2E-körning (flera, till synes
+orelaterade, redan existerande tester föll samtidigt, alla med samma "fel dag"-signatur). `POST
+.../complete`s nya valfria `{ today }`-kropp (denna revision) är den enda platsen detta faktiskt
+löstes för; övriga endpoints (`bring-forward`, `days-off`, `rebalance-assignments`, m.fl.) löser
+fortfarande sitt eget "idag" via serverns UTC-klocka. Ett helhetsgrepp - antingen alla
+datumkänsliga endpoints tar samma klient-överstyrning, eller klienten byts till att alltid räkna i
+UTC - är utanför denna uppgifts scope och inte gjort här.
+
+---
+
 ## 11. Beslut som ännu inte är fattade — `OPEN`
 
 | Fråga | Varför den väntar |

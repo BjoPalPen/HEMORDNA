@@ -76,8 +76,14 @@ Vyn ska tillåta att:
 - markera en uppgift som klar
 - skjuta upp en uppgift
 - ange att man har mindre tid idag
+- se en glimt av morgondagen, och föra fram en enskild uppgift därifrån till idag
+- ta ledigt en dag, så inget nytt landar på den
 
 Hela hushållets backlogg ska finnas – men på en egen plats, inte som startskärm.
+
+En uppgift som blir liggande försenad stannar hos den som redan har den. Att jämna ut arbetet
+mellan hushållets medlemmar får aldrig innebära att ett redan försenat ansvar byter ägare - det
+skulle bara flytta problemet, inte lösa det.
 
 ---
 
@@ -100,6 +106,11 @@ den som avgör vad som faktiskt hamnar på dagen.
 
 En användare ska dessutom kunna säga *mindre tid idag* eller *ingen tid idag* utan att den
 normala veckobudgeten förstörs. Undantaget gäller en dag; normen ligger kvar.
+
+Att göra något i förväg - en uppgift som egentligen inte var ens tur än - ska märkas, inte
+försvinna spårlöst i statistiken. Den som gjort mer än sin tur får färre nya uppgifter tills det
+jämnar ut sig, synligt som en enda siffra ("tid i förväg") bara för dem själva - aldrig en
+belastning för någon annan, aldrig ett mål att jaga, aldrig negativ.
 
 ---
 
