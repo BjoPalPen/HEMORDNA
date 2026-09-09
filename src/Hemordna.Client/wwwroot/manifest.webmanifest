@@ -22,5 +22,27 @@
       "sizes": "512x512",
       "purpose": "any"
     }
+  ],
+  "shortcuts": [
+    {
+      "name": "Idag",
+      "url": "./",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Rum",
+      "url": "./rum",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
   ]
 }

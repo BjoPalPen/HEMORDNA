@@ -47,6 +47,24 @@ public class PwaTests
     }
 
     [Fact]
+    public async Task The_manifest_lists_shortcuts_to_idag_and_rum()
+    {
+        using var http = new HttpClient { BaseAddress = new Uri(_app.ClientUrl) };
+
+        var manifest = JsonDocument
+            .Parse(await http.GetStringAsync("manifest.webmanifest"))
+            .RootElement;
+
+        var shortcuts = manifest.GetProperty("shortcuts").EnumerateArray().ToList();
+        Assert.Equal(2, shortcuts.Count);
+
+        Assert.Contains(shortcuts, s => s.GetProperty("name").GetString() == "Idag"
+            && s.GetProperty("url").GetString() == "./");
+        Assert.Contains(shortcuts, s => s.GetProperty("name").GetString() == "Rum"
+            && s.GetProperty("url").GetString() == "./rum");
+    }
+
+    [Fact]
     public async Task The_icons_the_manifest_names_actually_exist()
     {
         using var http = new HttpClient { BaseAddress = new Uri(_app.ClientUrl) };
