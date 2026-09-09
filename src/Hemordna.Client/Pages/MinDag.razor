@@ -241,6 +241,81 @@ else
             }
         }
 
+        @if (_isPrinting)
+        {
+            <!-- "Skriv ut" (denna revision): a plain, print-only rendering of the whole day,
+                 gated on _isPrinting (see its own remarks) rather than a CSS-only hide - built
+                 independently of IsFocusMode so a focus-mode print still gets the full agenda
+                 rather than just the one card the screen itself shows (docs/DESIGN.md §6). Plain
+                 <li>s rather than TaskListItem: nothing here is interactive (no swipe, no expand,
+                 no buttons), so the real component's own JS/event wiring would be unused weight.
+                 A <p>, not an <h1>, for the greeting - SignUpHelper.SignUpAsync (and other tests)
+                 locate the page's own greeting via "the one and only <h1> containing this name",
+                 and this block existing in the DOM at all outside of _isPrinting would already
+                 have broken that invariant once, before the _isPrinting gate was added. -->
+            <div class="print-only">
+                <p class="print-day-title">@GreetingWord, @Session.Me!.DisplayName!</p>
+                <p>@DateLabel</p>
+
+                @if (_day.IsDayOff)
+                {
+                    <p>Du är ledig idag. Inget nytt läggs på dig.</p>
+                }
+                else if (_day.Items.Count == 0 && _day.Completed.Count == 0)
+                {
+                    <p>Ledigt idag.</p>
+                }
+                else
+                {
+                    @if (OverdueItems.Count > 0)
+                    {
+                        <div class="print-room">
+                            <p class="print-room-heading">Sedan tidigare</p>
+                            <ul>
+                                @foreach (var row in OverdueItems)
+                                {
+                                    @PrintTaskRow(row.Item)
+                                }
+                            </ul>
+                        </div>
+                    }
+
+                    @foreach (var floorGroup in FloorGroups)
+                    {
+                        @if (floorGroup.Floor is { } floor)
+                        {
+                            <p class="print-floor-heading">@floor</p>
+                        }
+                        @foreach (var group in floorGroup.Rooms)
+                        {
+                            <div class="print-room">
+                                <p class="print-room-heading">@RoomHeadingName(group)</p>
+                                <ul>
+                                    @foreach (var row in group.Items)
+                                    {
+                                        @PrintTaskRow(row.Item)
+                                    }
+                                </ul>
+                            </div>
+                        }
+                    }
+
+                    @if (_day.Completed.Count > 0)
+                    {
+                        <div class="print-room">
+                            <p class="print-room-heading">Klart idag</p>
+                            <ul>
+                                @foreach (var done in _day.Completed)
+                                {
+                                    <li class="print-task print-task-done">@done.Name</li>
+                                }
+                            </ul>
+                        </div>
+                    }
+                }
+            </div>
+        }
+
         <div class="chips">
             <button type="button" class="chip-action @(_day.Unplanned.Count == 0 ? "chip-action-disabled" : null)"
                     aria-disabled="@(_day.Unplanned.Count == 0 ? "true" : "false")"
@@ -285,6 +360,8 @@ else
                 }
             </ul>
         }
+
+        <button type="button" class="btn btn-link" @onclick="PrintAsync">Skriv ut</button>
 
         @if (_tomorrow is not null)
         {
@@ -597,6 +674,35 @@ else
 
     private void ShowNextFocusTask() => _focusOffset++;
 
+    /// <summary>"Skriv ut" - the browser's own print dialog; app.css's own @@media print rules do
+    /// the actual layout switch (nav/chips/etc. hidden, empty squares instead of check buttons -
+    /// see docs/DESIGN.md).</summary>
+    private async Task PrintAsync()
+    {
+        await using var module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/print.js");
+        await module.InvokeVoidAsync("printPage");
+    }
+
+    /// <summary>True only while the page is actually rendering under print media
+    /// (window.matchMedia('print'), see js/print.js) - the print-only block below must not exist
+    /// in the DOM at all outside of printing, not just be display:none. It repeats task names and
+    /// room headings the live list already shows, and Playwright's text-based locators (used
+    /// throughout this test suite, starting with SignUpHelper's own "the one and only &lt;h1&gt;
+    /// with this name") match hidden elements exactly as readily as visible ones - a CSS-only
+    /// hide would have silently turned "the only element with this text" false on every test that
+    /// visits Idag, not just print-specific ones. Found and fixed via the test suite itself, not
+    /// reasoned out in advance.</summary>
+    private bool _isPrinting;
+    private DotNetObjectReference<MinDag>? _printMediaSelfRef;
+    private IJSObjectReference? _printMediaHandle;
+
+    [JSInvokable]
+    public async Task OnPrintMediaChanged(bool isPrinting)
+    {
+        _isPrinting = isPrinting;
+        await InvokeAsync(StateHasChanged);
+    }
+
     /// <summary>"Börja här" (list view only): a quiet pointer at the planner's own first task,
     /// for someone who does not know where to start - not shown when there is only one task
     /// anyway (nothing to choose between), in focus mode (the card itself already IS that
@@ -715,6 +821,25 @@ else
     /// stays exactly where the outstanding row was, dimmed with a filled check like "Klart
     /// idag"'s own rows, but not a TaskListItem: it is no longer interactive (no swipe, no
     /// expand, nothing left to defer), same as any other completed row.</summary>
+    /// <summary>One row in the print-only view (see the "Skriv ut" block above) - name plus
+    /// steps/description if there is one, no chips or metadata a printed page has no use for.</summary>
+    private static RenderFragment PrintTaskRow(PlannedTaskResponse item) => @<li class="print-task">
+        @item.Name
+        @if (TaskSteps.Parse(item.Description) is { } steps)
+        {
+            <ol class="task-steps">
+                @foreach (var step in steps)
+                {
+                    <li>@step</li>
+                }
+            </ol>
+        }
+        else if (!string.IsNullOrWhiteSpace(item.Description))
+        {
+            <p>@item.Description</p>
+        }
+    </li>;
+
     private static RenderFragment RemotelyCompletedRow(PlannedTaskResponse item) => @<li class="task task-done-remote">
         <span class="task-check task-check-done" aria-hidden="true">
             <Icon Name="check" Size="18" />
@@ -845,6 +970,18 @@ else
             Realtime.OccurrencesChanged += OnOccurrencesChanged;
             await Realtime.ConnectAsync(householdId);
         }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        _printMediaSelfRef = DotNetObjectReference.Create(this);
+        var module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/print.js");
+        _printMediaHandle = await module.InvokeAsync<IJSObjectReference>("watchPrintMedia", _printMediaSelfRef);
     }
 
     /// <summary>Someone else in the household changed something. Unlike every other page, Idag
@@ -1033,6 +1170,26 @@ else
         _remoteRetryCts?.Dispose();
         _unplannedNoticeCts?.Cancel();
         _unplannedNoticeCts?.Dispose();
+
+        _printMediaSelfRef?.Dispose();
+        if (_printMediaHandle is not null)
+        {
+            _ = DisposePrintMediaHandleAsync(_printMediaHandle);
+        }
+    }
+
+    /// <summary>Dispose() itself must stay synchronous (IDisposable, not IAsyncDisposable - this
+    /// page already implements the former and every other cleanup above is a plain CTS dispose),
+    /// so the JS side of this one is fire-and-forget rather than awaited.</summary>
+    private static async Task DisposePrintMediaHandleAsync(IJSObjectReference handle)
+    {
+        try
+        {
+            await handle.InvokeVoidAsync("dispose");
+        }
+        catch (JSDisconnectedException)
+        {
+        }
     }
 
     /// <summary>Called after creating a household, when membership has changed.</summary>

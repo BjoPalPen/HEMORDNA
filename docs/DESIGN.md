@@ -222,6 +222,13 @@ använder - "Sedan tidigare" först, annars första raden i första rummet) får
 väntar (annars är det redan uppenbart var man börjar) och bara så länge ingen uppgift redan är
 igångsatt (se "Jag börjar nu" ovan). Chipparnas ordning under namnet: rum, tid, "Börja här".
 
+**Skriv ut** (denna revision): en "Skriv ut"-länk under "Klart idag" (eller under chip-raden om
+inget ännu är klart) öppnar webbläsarens vanliga utskriftsdialog. Sidan har en egen,
+alltid uppbyggd (men på skärmen alltid dold) utskriftsvy - så en utskrift i fokusläge ändå visar
+hela dagens lista, inte bara det enda kort skärmen själv visar där. Svartvitt, tom kvadrat i
+stället för bock-knappen, namn och eventuella steg under, rumsrubriker håller ihop över en
+sidbrytning.
+
 **Steg i beskrivningen** (denna revision): en beskrivning skriven en rad per steg (t.ex. "Ta
 fram hinken", ny rad, "Fyll med varmt vatten") renders som en numrerad lista i stället för ett
 enda textstycke, i den utfällda raden och i fokuskortet (`Support/TaskSteps.cs`). En
