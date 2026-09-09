@@ -25,7 +25,11 @@
             {
                 <button type="button" class="btn btn-secondary" disabled="@_roleBusy"
                         @onclick="() => SetCustomMinutesAsync(level.Minutes)">
-                    @level.Label
+                    <span>@level.Label</span>
+                    @if (level.Minutes > 0)
+                    {
+                        <span class="muted small">@TimeLevel.MinutesLabel(level.Minutes)</span>
+                    }
                 </button>
             }
         </div>
@@ -45,7 +49,7 @@
 
     @if (Member.PausedUntil is { } pausedUntil)
     {
-        <div class="notice" role="status">Pausad t.o.m. @pausedUntil.ToString("d MMMM", SwedishCulture).</div>
+        <div class="notice" role="status">Pausad till och med @pausedUntil.ToString("d MMMM", SwedishCulture).</div>
     }
 
     @if (_pauseMessage is { } pauseMessage)

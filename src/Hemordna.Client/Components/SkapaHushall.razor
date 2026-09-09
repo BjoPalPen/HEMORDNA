@@ -35,7 +35,7 @@
         <EditForm Model="_joinForm" OnValidSubmit="JoinAsync">
             <label class="field">
                 <span>Inbjudningskod</span>
-                <InputText @bind-Value="_joinForm.InviteCode" placeholder="T.ex. AB3D9F2K" />
+                <InputText @bind-Value="_joinForm.InviteCode" placeholder="Till exempel AB3D9F2K" />
             </label>
 
             @if (_message is { } joinMessage)

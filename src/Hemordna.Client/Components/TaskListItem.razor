@@ -21,7 +21,7 @@
         }
         @if (ShowTimeLevel && Item.EstimatedMinutes > 0)
         {
-            <span class="chip chip-time">@TimeLevel.LabelFor(Item.EstimatedMinutes)</span>
+            <span class="chip chip-time">@TimeLevel.MinutesLabel(Item.EstimatedMinutes)</span>
         }
         @if (IsBroughtForward)
         {
@@ -96,9 +96,13 @@
     [Parameter]
     public bool ShowAreaChip { get; set; } = true;
 
-    /// <summary>"Tid som nivåord" (docs/ARCHITECTURE.md "Beslut: Ångra och stabil lista" §B5) -
-    /// a member's own choice (MemberPreference.ShowTimeLevel), never minutes as a number on
-    /// Idag: "Lite tid"/"Lagom tid"/"Lång tid" only, via TimeLevel.LabelFor.</summary>
+    /// <summary>
+    /// A member's own choice (MemberPreference.ShowTimeLevel) - off by default, so someone who
+    /// never turned it on sees no time at all on Idag (docs/DESIGN.md §6a). When on, the exact
+    /// saved minutes (TimeLevel.MinutesLabel, e.g. "5 min") rather than the level word it was
+    /// chosen from - level words are for CHOOSING among four options, not for reading back a
+    /// number (docs/ARCHITECTURE.md "Beslut: Ångra och stabil lista" §B5, "Uppföljning").
+    /// </summary>
     [Parameter]
     public bool ShowTimeLevel { get; set; }
 

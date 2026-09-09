@@ -42,8 +42,7 @@ public class TaskIconsTests
 
         await page.GotoAsync("/installningar");
         await page.GetByLabel("Bild + text - med bilder för tydlighet").CheckAsync();
-        await page.GetByRole(AriaRole.Button, new() { Name = "Spara" }).ClickAsync();
-        await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Spara" })).ToBeEnabledAsync();
+        await Assertions.Expect(page.GetByText("Sparat")).ToBeVisibleAsync(new() { Timeout = 5_000 });
 
         await page.GotoAsync("/");
 

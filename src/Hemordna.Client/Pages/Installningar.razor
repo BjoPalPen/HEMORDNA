@@ -1,4 +1,5 @@
 @page "/installningar"
+@implements IDisposable
 @using Hemordna.Client.Support
 @inject HemordnaApiClient Api
 @inject HemordnaSession Session
@@ -54,7 +55,7 @@ else
                 <label class="field field-check">
                     <input type="radio" name="presentation" value="@option.Value"
                            checked="@(_presentation == option.Value)"
-                           @onchange="() => _presentation = option.Value" />
+                           @onchange="() => SetPresentationAsync(option.Value)" />
                     <span>@option.Label</span>
                 </label>
             }
@@ -62,10 +63,10 @@ else
             <ul class="list" aria-label="Fler val">
                 <li class="list-item">
                     <label class="field-check">
-                        <input type="checkbox" checked="@_showTimeLevel"
-                               @onchange="@(e => _showTimeLevel = (bool)e.Value!)" />
+                        <input type="checkbox" checked="@_showTimeLevel" @onchange="SetShowTimeLevelAsync" />
                         <span>Visa ungefär hur lång tid en uppgift tar</span>
                     </label>
+                    <p class="muted small">Tiderna är uppskattningar.</p>
                 </li>
                 <li class="list-item">
                     <label class="field-check">
@@ -83,19 +84,22 @@ else
                 <label class="field field-check">
                     <input type="radio" name="motivation" value="@option.Value"
                            checked="@(_motivation == option.Value)"
-                           @onchange="() => _motivation = option.Value" />
+                           @onchange="() => SetMotivationAsync(option.Value)" />
                     <span>@option.Label</span>
                 </label>
             }
 
-            @if (_message is { } message)
+            @if (_saveMessage is { } message)
             {
-                <div class="notice notice-problem" role="alert">@message</div>
+                <div class="notice notice-problem" role="alert">
+                    @message
+                    <button type="button" class="btn btn-link" @onclick="SaveAsync">Försök igen</button>
+                </div>
             }
-
-            <button type="button" class="btn btn-primary" disabled="@_busy" @onclick="SaveAsync">
-                @(_busy ? "Sparar..." : "Spara")
-            </button>
+            else if (_savedNoticeVisible)
+            {
+                <p class="notice settings-saved" role="status">Sparat</p>
+            }
         </div>
     }
 
@@ -223,10 +227,9 @@ else
 
     /// <summary>"Beslut: Ångra och stabil lista" §B11 - one press sets everything A2/B3/B5/B8
     /// already built, but reads as an ordinary app choice: no name here says who a preset is
-    /// for, only what it does. A press only fills in the radios/toggles below (nothing saved
-    /// until "Spara") EXCEPT CalmScreen, which - like the rest of "Lugnare skärm" - always
-    /// applies immediately, preset or not (it has no "unsaved" state to begin with; see
-    /// ToggleCalmScreenAsync).</summary>
+    /// for, only what it does. A press fills in the radios/toggles below AND saves them, same as
+    /// setting one by hand (see ApplyPresetAsync) - there is no "unsaved" state to be in any
+    /// more, for a preset or for a single field (see SaveAsync's own remarks).</summary>
     private sealed record Preset(string Label, string Presentation, string Motivation, bool ShowTimeLevel, bool CalmScreen);
 
     private static readonly Preset[] Presets =
@@ -261,8 +264,17 @@ else
     private string? _presentation;
     private string? _motivation;
     private bool _showTimeLevel;
-    private string? _message;
-    private bool _busy;
+
+    // The last values the server actually confirmed - what a failed save reverts the fields
+    // to, so a rejected change never leaves the UI showing something that only looks saved.
+    private string? _savedPresentation;
+    private string? _savedMotivation;
+    private bool _savedShowTimeLevel;
+
+    private bool _saving;
+    private string? _saveMessage;
+    private bool _savedNoticeVisible;
+    private CancellationTokenSource? _savedNoticeCts;
 
     private string _theme = "system";
     private bool _calmScreen;
@@ -319,6 +331,28 @@ else
         _presentation = preference?.Presentation ?? "Text";
         _motivation = preference?.Motivation ?? "None";
         _showTimeLevel = preference?.ShowTimeLevel ?? false;
+
+        _savedPresentation = _presentation;
+        _savedMotivation = _motivation;
+        _savedShowTimeLevel = _showTimeLevel;
+    }
+
+    private Task SetPresentationAsync(string value)
+    {
+        _presentation = value;
+        return SaveAsync();
+    }
+
+    private Task SetMotivationAsync(string value)
+    {
+        _motivation = value;
+        return SaveAsync();
+    }
+
+    private Task SetShowTimeLevelAsync(ChangeEventArgs e)
+    {
+        _showTimeLevel = (bool)e.Value!;
+        return SaveAsync();
     }
 
     private async Task SetThemeAsync(string choice)
@@ -334,6 +368,7 @@ else
         _showTimeLevel = preset.ShowTimeLevel;
         _calmScreen = preset.CalmScreen;
         await CalmScreen.SetAsync(JS, preset.CalmScreen);
+        await SaveAsync();
     }
 
     private async Task ToggleCalmScreenAsync(ChangeEventArgs e)
@@ -342,6 +377,13 @@ else
         await CalmScreen.SetAsync(JS, _calmScreen);
     }
 
+    /// <summary>
+    /// Saves presentation/motivation/showTimeLevel the moment any of them changes - no "Spara"
+    /// button, one rule for the whole card (see docs/DESIGN.md, "Inställningar – Min visning").
+    /// A save already in flight is never joined by a second one: a change that arrives mid-save
+    /// just returns here (the in-flight call's own loop below picks it up), so at most one PUT
+    /// is ever outstanding at a time, and the last value written always wins.
+    /// </summary>
     private async Task SaveAsync()
     {
         if (Session.Me is not { HouseholdId: { } householdId, MemberId: { } memberId }
@@ -350,30 +392,95 @@ else
             return;
         }
 
-        _busy = true;
-        _message = null;
+        if (_saving)
+        {
+            return;
+        }
+
+        _saving = true;
+        _saveMessage = null;
 
         try
         {
-            if (!await Api.SetPreferenceAsync(householdId, memberId, _presentation, _motivation, _showTimeLevel))
+            while (true)
             {
-                _message = "Det gick inte att spara. Försök igen.";
-            }
-            else
-            {
+                var (presentation, motivation, showTimeLevel) = (_presentation, _motivation, _showTimeLevel);
+
+                if (!await Api.SetPreferenceAsync(householdId, memberId, presentation, motivation, showTimeLevel))
+                {
+                    RevertToLastSaved();
+                    _saveMessage = "Kunde inte spara. Försök igen.";
+                    return;
+                }
+
+                _savedPresentation = presentation;
+                _savedMotivation = motivation;
+                _savedShowTimeLevel = showTimeLevel;
+
                 // Applies immediately in this tab, rather than only after the next reload -
                 // MainLayout only re-checks the preference on sign-in, not on every save here.
-                await TextSize.ApplyAsync(JS, PresentationModes.IsLargeText(_presentation));
+                await TextSize.ApplyAsync(JS, PresentationModes.IsLargeText(presentation));
+
+                // Nothing changed while this save was in flight - done. Otherwise loop again
+                // with whatever the fields hold now, rather than starting a second concurrent
+                // save for it.
+                if (presentation == _presentation && motivation == _motivation && showTimeLevel == _showTimeLevel)
+                {
+                    break;
+                }
             }
+
+            ShowSavedNotice();
         }
         catch (HttpRequestException)
         {
-            _message = "Vi når inte servern just nu. Försök igen om en stund.";
+            RevertToLastSaved();
+            _saveMessage = "Vi når inte servern just nu. Försök igen om en stund.";
         }
         finally
         {
-            _busy = false;
+            _saving = false;
         }
+    }
+
+    private void RevertToLastSaved()
+    {
+        _presentation = _savedPresentation;
+        _motivation = _savedMotivation;
+        _showTimeLevel = _savedShowTimeLevel;
+    }
+
+    /// <summary>"Sparat" for 2s after a successful save - same CancellationTokenSource-based
+    /// auto-dismiss timer MinDag.razor's own remote-note and undo-bar already use.</summary>
+    private void ShowSavedNotice()
+    {
+        _savedNoticeCts?.Cancel();
+        _savedNoticeCts?.Dispose();
+        _savedNoticeCts = new CancellationTokenSource();
+        _savedNoticeVisible = true;
+
+        _ = HideSavedNoticeAfterDelayAsync(_savedNoticeCts.Token);
+    }
+
+    private async Task HideSavedNoticeAfterDelayAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken);
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+
+        _savedNoticeVisible = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        _savedNoticeCts?.Cancel();
+        _savedNoticeCts?.Dispose();
     }
 
     private async Task ChangePasswordAsync()

@@ -31,6 +31,9 @@ else
     // of Completed.
     var completedCount = (_day?.Completed.Count ?? 0) + _remotelyCompletedIds.Count;
     var totalCount = _day is null ? 0 : _day.Items.Count + _day.Completed.Count;
+    var encouragement = _motivation == "Calm" && _day is not null
+        ? EncouragementFor(_day.Items.Count, _day.Completed.Count, totalCount)
+        : null;
 
     @if (hasDayCounts)
     {
@@ -51,9 +54,9 @@ else
         @if (hasDayCounts)
         {
             <p class="muted small day-counts">@completedCount av @totalCount klara</p>
-            @if (_motivation == "Calm" && _day is not null)
+            @if (encouragement is not null)
             {
-                <p class="day-encouragement">@EncouragementFor(_day.Items.Count, _day.Completed.Count, totalCount)</p>
+                <p class="day-encouragement">@encouragement</p>
             }
             <div class="progress" role="presentation">
                 <i style="width:@(totalCount == 0 ? 0 : completedCount * 100 / totalCount)%"></i>
@@ -98,7 +101,7 @@ else
                     }
                     @if (_showTimeLevel && focusTask.EstimatedMinutes > 0)
                     {
-                        <span class="chip chip-time">@TimeLevel.LabelFor(focusTask.EstimatedMinutes)</span>
+                        <span class="chip chip-time">@TimeLevel.MinutesLabel(focusTask.EstimatedMinutes)</span>
                     }
                     @if (focusTask.IsOverdue)
                     {
@@ -569,35 +572,52 @@ else
 
     private void ShowNextFocusTask() => _focusOffset++;
 
-    /// <summary>"Lugn" (Installningar.razor) - one of these four, chosen by state alone, never
+    /// <summary>"Lugn" (Installningar.razor) - one of these five, chosen by state alone, never
     /// randomly: the same day-counts state always reads the same phrase, so it never seems to
     /// change for no reason on a later visit. See docs/DESIGN.md §5 for the "Tillåtet" list
-    /// these are drawn from - no idioms, no comparisons between members, no guilt.</summary>
+    /// these are drawn from - no idioms, no comparisons between members, no guilt.
+    /// EncouragementPhrases[0] is never actually rendered by EncouragementFor (see its own
+    /// remarks) - kept in the array anyway so the five phrases and the five branches below stay
+    /// visibly paired, one for one.</summary>
     private static readonly string[] EncouragementPhrases =
     [
+        "Dagens uppgifter är klara.",
         "Det viktigaste är gjort.",
+        "Vill du fortsätta där du slutade?",
         "En sak i taget räcker.",
         "Här är dina uppgifter för idag."
     ];
 
-    private static string EncouragementFor(int outstanding, int completed, int total)
+    /// <summary>
+    /// <c>null</c> when everything is done (outstanding == 0 &amp;&amp; completed > 0) - .calm-
+    /// state's own heading already says "Dagens uppgifter är klara." (EncouragementPhrases[0])
+    /// for that exact state, and a phrase said twice on the same screen is worse than said once
+    /// (docs/DESIGN.md §5). Every other branch returns a phrase - callers only need to check for
+    /// <c>null</c>, never compare against a specific string to decide whether to render it.
+    /// </summary>
+    private static string? EncouragementFor(int outstanding, int completed, int total)
     {
         if (outstanding == 0 && completed > 0)
         {
-            return EncouragementPhrases[0];
+            return null;
         }
 
         if (completed * 2 >= total && outstanding > 0)
         {
-            return EncouragementPhrases[0];
+            return EncouragementPhrases[1];
+        }
+
+        if (completed > 0)
+        {
+            return EncouragementPhrases[2];
         }
 
         if (outstanding > 4)
         {
-            return EncouragementPhrases[1];
+            return EncouragementPhrases[3];
         }
 
-        return EncouragementPhrases[2];
+        return EncouragementPhrases[4];
     }
 
     private static string IconSrc(string taskName, string? areaName) => $"icons/tasks/{TaskIcons.For(taskName, areaName)}.svg";
@@ -650,7 +670,7 @@ else
     private RenderFragment NewExtraTaskForm => @<EditForm Model="_extraForm" OnValidSubmit="AddExtraTaskAsync">
         <label class="field">
             <span>Namn</span>
-            <InputText @bind-Value="_extraForm.Name" placeholder="T.ex. Rensa garderoben" />
+            <InputText @bind-Value="_extraForm.Name" placeholder="Till exempel Rensa garderoben" />
         </label>
 
         <div class="field">
@@ -661,7 +681,11 @@ else
                     <button type="button"
                             class="@(_extraForm.EstimatedMinutes == level.Minutes ? "btn btn-primary" : "btn btn-secondary")"
                             @onclick="() => _extraForm.EstimatedMinutes = level.Minutes">
-                        @level.Label
+                        <span>@level.Label</span>
+                        @if (level.Minutes > 0)
+                        {
+                            <span class="muted small">@TimeLevel.MinutesLabel(level.Minutes)</span>
+                        }
                     </button>
                 }
             </div>

@@ -90,13 +90,12 @@ public class MixedHouseholdTests
         var aOccurrenceId = await ScheduleTaskForTodayAsync(aHttp, householdId, aMemberId, "Diska");
         await ScheduleTaskForTodayAsync(bHttp, householdId, bMemberId, "Dammsuga");
 
-        // 1. A picks the "Steg för steg" preset and saves; B touches nothing.
+        // 1. A picks the "Steg för steg" preset - saves itself, no separate "Spara" step any
+        // more (see docs/DESIGN.md, "Inställningar – Min visning"). B touches nothing.
         await aPage.GotoAsync("/installningar");
         await aPage.GetByRole(AriaRole.Heading, new() { Name = "Min visning" }).WaitForAsync();
         await aPage.GetByRole(AriaRole.Button, new() { Name = "Steg för steg" }).ClickAsync();
-        var aSaveButton = aPage.GetByRole(AriaRole.Button, new() { Name = "Spara" });
-        await aSaveButton.ClickAsync();
-        await Assertions.Expect(aSaveButton).ToBeEnabledAsync();
+        await Assertions.Expect(aPage.GetByText("Sparat")).ToBeVisibleAsync(new() { Timeout = 5_000 });
 
         // "Steg för steg" applies calm screen to A's OWN device immediately, same as any other
         // per-device toggle (§B11) - turn it back off on A's device now, so step 5 below tests

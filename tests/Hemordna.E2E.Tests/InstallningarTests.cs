@@ -9,8 +9,14 @@ public class InstallningarTests
 
     public InstallningarTests(HemordnaAppFixture app) => _app = app;
 
+    /// <summary>
+    /// "Inställningar sparas när de ändras. Ingen Spara-knapp, ingen blandning av direkt och
+    /// uppskjutet." (docs/DESIGN.md, "Inställningar – Min visning") - a change is on the server
+    /// before the member does anything else, confirmed by "Sparat" and by surviving a reload
+    /// with no separate save step in between.
+    /// </summary>
     [Fact]
-    public async Task Changing_the_presentation_and_motivation_persists_across_a_reload()
+    public async Task Changing_the_presentation_saves_immediately_with_no_save_button()
     {
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Ingrid");
@@ -18,13 +24,14 @@ public class InstallningarTests
         await page.GotoAsync("/installningar");
         await page.GetByRole(AriaRole.Heading, new() { Name = "Min visning" }).WaitForAsync();
 
-        await page.GetByLabel("Stor text - större och tydligare").CheckAsync();
-        await page.GetByLabel("Lugn - en vänlig kommentar då och då").CheckAsync();
-        await page.GetByRole(AriaRole.Button, new() { Name = "Spara" }).ClickAsync();
+        await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Spara", Exact = true }))
+            .Not.ToBeVisibleAsync();
 
-        // Wait for the save to actually finish (the button reads "Sparar..." while in flight)
-        // before reloading, or the reload can race the still-in-flight PUT.
-        await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Spara" })).ToBeEnabledAsync();
+        await page.GetByLabel("Stor text - större och tydligare").CheckAsync();
+        await Assertions.Expect(page.GetByText("Sparat")).ToBeVisibleAsync(new() { Timeout = 5_000 });
+
+        await page.GetByLabel("Lugn - en vänlig kommentar då och då").CheckAsync();
+        await Assertions.Expect(page.GetByText("Sparat")).ToBeVisibleAsync(new() { Timeout = 5_000 });
 
         await page.ReloadAsync();
         await page.GetByRole(AriaRole.Heading, new() { Name = "Min visning" }).WaitForAsync();
@@ -36,9 +43,10 @@ public class InstallningarTests
     /// <summary>"Beslut: Ångra och stabil lista" §B11 - a preset chip is a shortcut into the
     /// same radios/toggles a member could set by hand, never a separate mode of its own: pick
     /// one, and every one of the four underlying choices reads back exactly as if set one at a
-    /// time.</summary>
+    /// time. Now also true of SAVING - a preset writes to the server in the same press, not
+    /// just to the fields on screen.</summary>
     [Fact]
-    public async Task Steg_for_steg_sets_all_four_choices_and_kompakt_resets_them()
+    public async Task Steg_for_steg_sets_all_four_choices_saves_directly_and_kompakt_resets_them()
     {
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Freja");
@@ -56,14 +64,45 @@ public class InstallningarTests
         // The chip itself reflects the match, not just the fields it filled in.
         await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Steg för steg" }))
             .ToHaveClassAsync(new System.Text.RegularExpressions.Regex("chip-primary"));
+        await Assertions.Expect(page.GetByText("Sparat")).ToBeVisibleAsync(new() { Timeout = 5_000 });
+
+        // Reload proves the preset's own save actually reached the server, not just the fields.
+        await page.ReloadAsync();
+        await page.GetByRole(AriaRole.Heading, new() { Name = "Min visning" }).WaitForAsync();
+        await Assertions.Expect(page.GetByLabel("En uppgift åt gången - fokusläge")).ToBeCheckedAsync();
+        await Assertions.Expect(page.GetByLabel("Visa ungefär hur lång tid en uppgift tar")).ToBeCheckedAsync();
 
         await page.GetByRole(AriaRole.Button, new() { Name = "Kompakt" }).ClickAsync();
+        await Assertions.Expect(page.GetByText("Sparat")).ToBeVisibleAsync(new() { Timeout = 5_000 });
 
         await Assertions.Expect(page.GetByLabel("Text (standard) - kompakt lista")).ToBeCheckedAsync();
         await Assertions.Expect(page.GetByLabel("Ingen - bara fakta")).ToBeCheckedAsync();
         await Assertions.Expect(page.GetByLabel("Visa ungefär hur lång tid en uppgift tar")).Not.ToBeCheckedAsync();
         await Assertions.Expect(page.GetByLabel("Lugnare skärm – inga rörelser eller genomskinliga effekter"))
             .Not.ToBeCheckedAsync();
+    }
+
+    /// <summary>A rejected save never leaves the UI showing a choice that only looks saved - the
+    /// field goes back to whatever the server actually still has, with a visible, actionable
+    /// error rather than a silent failure.</summary>
+    [Fact]
+    public async Task A_failed_save_shows_an_error_and_reverts_the_field()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Greta");
+
+        await page.GotoAsync("/installningar");
+        await page.GetByRole(AriaRole.Heading, new() { Name = "Min visning" }).WaitForAsync();
+
+        await page.RouteAsync("**/api/households/*/members/*/preferences", async route =>
+            await route.FulfillAsync(new() { Status = 500, Body = "" }));
+
+        await page.GetByLabel("Stor text - större och tydligare").CheckAsync();
+
+        await Assertions.Expect(page.GetByText("Kunde inte spara. Försök igen.")).ToBeVisibleAsync(new() { Timeout = 5_000 });
+        await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Försök igen" })).ToBeVisibleAsync();
+        await Assertions.Expect(page.GetByLabel("Text (standard) - kompakt lista")).ToBeCheckedAsync();
+        await Assertions.Expect(page.GetByLabel("Stor text - större och tydligare")).Not.ToBeCheckedAsync();
     }
 
     [Fact]

@@ -20,7 +20,20 @@ public static class TimeLevel
 
     /// <summary>The closest level's label for a task that DOES take some time - "0 minuter, no
     /// chip at all" is the caller's own gate (Item.EstimatedMinutes > 0), so this only ever
-    /// chooses among "Lite tid"/"Lagom tid"/"Lång tid", never "Ingen tid".</summary>
+    /// chooses among "Lite tid"/"Lagom tid"/"Lång tid", never "Ingen tid". Still used for the
+    /// level-picker buttons themselves (choosing IS what the level words are for - see
+    /// <see cref="MinutesLabel"/>'s own remarks) - never for a row that just shows a saved time.</summary>
     public static string LabelFor(int minutes)
         => All.Where(level => level.Minutes > 0).MinBy(level => Math.Abs(level.Minutes - minutes)).Label;
+
+    /// <summary>
+    /// The exact stored minute count, formatted for display - "5 min", never rounded to the
+    /// nearest level and never a level word. Level words are for CHOOSING among four options;
+    /// once a value is picked and shown back (a task row's own chip, the focus card), the real
+    /// number is what was actually saved - "Lite tid" for both a 5- and a 12-minute task reads
+    /// as vague information, even though it is a fine choice to pick between. Returns an empty
+    /// string for 0, so a caller can omit the row entirely rather than render "0 min" - see
+    /// docs/DESIGN.md §6a.
+    /// </summary>
+    public static string MinutesLabel(int minutes) => minutes > 0 ? $"{minutes} min" : string.Empty;
 }

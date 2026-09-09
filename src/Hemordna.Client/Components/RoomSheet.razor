@@ -169,7 +169,7 @@
     <EditForm Model="_addForm" OnValidSubmit="AddTaskAsync">
         <label class="field">
             <span>Namn</span>
-            <InputText @bind-Value="_addForm.Name" placeholder="T.ex. Dammsug" />
+            <InputText @bind-Value="_addForm.Name" placeholder="Till exempel Dammsug" />
         </label>
 
         <div class="field">
@@ -180,7 +180,11 @@
                     <button type="button"
                             class="@(_addForm.EstimatedMinutes == level.Minutes ? "btn btn-primary" : "btn btn-secondary")"
                             @onclick="() => _addForm.EstimatedMinutes = level.Minutes">
-                        @level.Label
+                        <span>@level.Label</span>
+                        @if (level.Minutes > 0)
+                        {
+                            <span class="muted small">@TimeLevel.MinutesLabel(level.Minutes)</span>
+                        }
                     </button>
                 }
             </div>
