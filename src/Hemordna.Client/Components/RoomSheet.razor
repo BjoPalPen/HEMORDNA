@@ -336,6 +336,15 @@
             _showMenu = false;
             _message = null;
         }
+
+        // TaskOptionsSheet's own OnChanged reloads AllTasks after every save, but _openTask is a
+        // snapshot taken when the row was tapped - without re-pointing it at the fresh copy, a
+        // save would go through fine while TaskOptionsSheet kept showing the pre-edit value in
+        // its own summary rows, reading as if the edit had silently reverted.
+        if (_openTask is { } openTask)
+        {
+            _openTask = AllTasks.FirstOrDefault(t => t.Id == openTask.Id) ?? _openTask;
+        }
     }
 
     private async Task OnIsOpenChanged(bool isOpen)
