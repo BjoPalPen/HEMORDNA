@@ -2554,6 +2554,33 @@ Samtidigt syntes "N av M klara" två gånger på Idag i fokusläget utan att sid
   `DEBUG_FocusCard`-test: ikonknappen täcker aldrig pictogrammet, flyktraden radbryter aldrig i
   Stor text, inga regressioner i mörkt/lugnt läge.
 
+*Den dubblerade rubriken - rotorsak och fix.* `.day-header-collapsed` (docs/ARCHITECTURE.md
+"Ny form 2026" §3) styrs uteslutande av `:root[data-scrolled]`, satt av en rAF-strypt
+scroll-lyssnare (`scroll-state.js`) som jämför `window.scrollY` mot en 24px-tröskel. Tre möjliga
+orsaker undersöktes i tur och ordning: (a) `scroll-margin`/initial padding i fokuskortet som
+skulle ge en falskt hög `scrollY` - grep bekräftade ingen sådan regel finns; (c) CSS-regeln
+saknar sin `:root[data-scrolled]`-guard i fokusläget - den finns, oförändrad, samma regel gäller
+för båda lägena. Kvar: **(b) attributet nollställs aldrig vid en Blazor SPA-navigering.** Ett
+rutt-byte (t.ex. `/installningar` → `/`) laddar aldrig om sidan - webbläsaren gör därför ALDRIG
+sin egna "ny sida" scroll-reset, och en kvarlämnad `scrollY` från VILKEN sida medlemmen än kom
+ifrån (även bara några få pixlar - nog för att passera 24px-tröskeln utan att synas som "scrollat"
+för ögat) följer med rakt in i den nya, kortare fokuskorts-sidan. `MainLayout.razor` injicerade
+redan `NavigationManager` men använde den aldrig till något - troligen exakt den krok som
+saknades.
+
+Fixat: `Support/ScrollState.cs` behåller nu JS-modulreferensen från `AttachAsync` och exponerar
+`ResetAsync()`; `scroll-state.js` fick en `reset()`-export som gör BÅDA delarna atomiskt -
+`window.scrollTo(0, 0)` OCH tar bort `data-scrolled` direkt - snarare än att bara dölja
+symptomet (ta bort attributet utan att röra den kvarlämnade, osynligt felaktiga `scrollY`, vilket
+hade lämnat sidan i ett läge som ser rätt ut just nu men fortfarande bär fel siffra). `MainLayout`
+prenumererar på `Navigation.LocationChanged` (`OnInitializedAsync`, avprenumererar i `Dispose`)
+och anropar `ResetAsync()` på varje byte - null-skyddad, eftersom en tidig omdirigering (t.ex.
+`Redirect.razor` innan `OnAfterRenderAsync(firstRender)` hunnit köra) kan trigga navigering innan
+modulen är attacherad. Ny test `MinDagTests.Navigating_away_and_back_never_leaves_a_stale_
+collapsed_header` (fokusläge: `.day-header-collapsed` osynlig vid `scrollY 0`, synlig efter
+scroll 200px, osynlig igen efter scroll tillbaka till 0; ett Idag → Rum → Idag-byte lämnar inget
+kvarvarande attribut).
+
 | Fråga | Varför den väntar |
 |---|---|
 | Offline-strategi bortom read-only cache | Utanför MVP; får inte låsas in i förväg |

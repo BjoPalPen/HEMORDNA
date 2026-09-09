@@ -1,5 +1,6 @@
 @inherits LayoutComponentBase
 @using Hemordna.Client.Support
+@using Microsoft.AspNetCore.Components.Routing
 @inject HemordnaSession Session
 @inject HemordnaApiClient Api
 @inject NavigationManager Navigation
@@ -24,10 +25,19 @@
     protected override async Task OnInitializedAsync()
     {
         Session.Changed += OnSessionChanged;
+        Navigation.LocationChanged += OnLocationChanged;
 
         await Session.EnsureLoadedAsync();
         await ApplyTextSizeAsync();
     }
+
+    /// <summary>
+    /// A route change never reloads the page, so the browser never runs its own scroll reset -
+    /// without this, a scrolled-down position from wherever the member was before would survive
+    /// straight into the new page (see docs/ARCHITECTURE.md "Uppdrag: fokuskortet" - the
+    /// duplicated-header bug this fixes).
+    /// </summary>
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e) => InvokeAsync(ScrollState.ResetAsync);
 
     /// <summary>
     /// The scroll listener behind NavMenu.razor.css's compact pill and MinDag/Hushall's
@@ -70,5 +80,9 @@
         await TextSize.ApplyAsync(JS, PresentationModes.IsLargeText(preference?.Presentation));
     }
 
-    public void Dispose() => Session.Changed -= OnSessionChanged;
+    public void Dispose()
+    {
+        Session.Changed -= OnSessionChanged;
+        Navigation.LocationChanged -= OnLocationChanged;
+    }
 }
