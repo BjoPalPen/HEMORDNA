@@ -583,6 +583,27 @@ html[data-calm] * {
     color: var(--sot-soft);
 }
 
+/* A description written one step per line (Support/TaskSteps.cs) renders as a numbered list
+   instead of a paragraph - display:flex only for the vertical gap between steps, li's own
+   display:list-item keeps the browser's real numbering (marker) rather than a custom counter. */
+.task-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    padding-left: 1.4em;
+    margin: 0 0 var(--space-2);
+    text-align: left;
+}
+
+.task-steps li {
+    display: list-item;
+}
+
+.task-steps li::marker {
+    font-family: var(--font-display);
+    font-weight: 600;
+}
+
 /* An interactive chip - a secondary action, visually a chip but a real 44px tap target
    (DESIGN.md §10 is unconditional; the concept mockup's own chips are drawn smaller than that
    only because they illustrate proportions, not literal pixel sizes). */
@@ -683,4 +704,95 @@ html[data-calm] * {
 #blazor-error-ui .dismiss {
     cursor: pointer;
     float: right;
+}
+
+/* "Skriv ut" (MinDag.razor) - a dedicated, always-rendered print-only view (MinDag.razor's own
+   "print-only" block builds it independently of IsFocusMode, so a focus-mode print still gets
+   the whole day, not just the one card the screen shows) - hidden on screen, the only thing
+   visible when printing. Simpler to hide the ordinary screen UI by name than to try to make the
+   real, interactive list itself printable (swipe/expand/buttons have no meaning on paper). */
+.print-only {
+    display: none;
+}
+
+@media print {
+    @page {
+        margin: 15mm;
+    }
+
+    body {
+        background: #FFFFFF;
+        color: #000000;
+        font-family: var(--font-body);
+    }
+
+    nav,
+    .app-topfade,
+    .app-botfade,
+    .day-header-collapsed,
+    header.day-header,
+    .energy,
+    .focus-card,
+    .calm-state,
+    ul.task-list,
+    .task-group-heading,
+    .chips,
+    .notice,
+    .remote-note,
+    .undo-bar,
+    .tomorrow-section,
+    button {
+        display: none !important;
+    }
+
+    .print-only {
+        display: block;
+    }
+
+    .print-only h1 {
+        font-size: 20px;
+    }
+
+    .print-only h2 {
+        font-size: 16px;
+        margin-top: 16px;
+    }
+
+    .print-only h3 {
+        font-size: 14px;
+    }
+
+    /* A room's own heading and its tasks never split across a page break, same reasoning as
+       any other "keep this together" print rule. */
+    .print-room {
+        break-inside: avoid;
+        margin-bottom: 12px;
+    }
+
+    .print-task {
+        list-style: none;
+        margin: 0 0 8px;
+        padding-left: 26px;
+        position: relative;
+        font-size: 13px;
+    }
+
+    .print-task::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 1px;
+        width: 18px;
+        height: 18px;
+        border: 1.5px solid #000000;
+    }
+
+    .print-task-done {
+        text-decoration: line-through;
+    }
+
+    .print-task .task-steps {
+        color: #000000;
+        margin-top: 4px;
+    }
 }

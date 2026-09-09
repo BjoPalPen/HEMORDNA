@@ -1,3 +1,5 @@
+using System.Net.Http.Json;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Microsoft.Playwright;
 
@@ -252,6 +254,72 @@ public class SkarmbilderTests
         await page.GetByRole(AriaRole.Button, new() { Name = "Extra uppgift" }).ClickAsync();
         await page.GetByRole(AriaRole.Heading, new() { Name = "Extra uppgift" }).WaitForAsync();
         await ShootAsync(page, "d09-extra-uppgift-sheet");
+    }
+
+    /// <summary>"Sju enkla lösningar" - its own light-weight household (HTTP seeding, not the
+    /// full UI-driven room-template flow above) rather than threading four very differently
+    /// shaped scenarios (orken, ett pågående, fokusläge, utskrift) into the already long main
+    /// walkthrough - the same reasoning Capture_dark_mode_screens above already follows.</summary>
+    [Fact]
+    public async Task Capture_the_seven_enkla_losningar_screens()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Mika");
+
+        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
+        http.DefaultRequestHeaders.Authorization = new("Bearer", token);
+
+        var me = await (await http.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
+        var householdId = me.GetProperty("householdId").GetGuid();
+        var memberId = me.GetProperty("memberId").GetGuid();
+
+        await http.PutAsJsonAsync(
+            $"/api/households/{householdId}/members/{memberId}/weekly-budget",
+            new { monday = 60, tuesday = 60, wednesday = 60, thursday = 60, friday = 60, saturday = 60, sunday = 60 });
+
+        var area = await (await http.PostAsJsonAsync(
+            $"/api/households/{householdId}/areas", new { name = "Kök" }))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        var areaId = area.GetProperty("id").GetGuid();
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        string[] names = ["Diska", "Dammsuga", "Torka golvet"];
+
+        foreach (var name in names)
+        {
+            var task = await (await http.PostAsJsonAsync(
+                $"/api/households/{householdId}/tasks",
+                new { name, estimatedMinutes = 15, areaId, description = "Ta fram hinken\nTorka torrt" }))
+                .Content.ReadFromJsonAsync<JsonElement>();
+            await http.PostAsJsonAsync(
+                $"/api/households/{householdId}/tasks/{task.GetProperty("id").GetGuid()}/occurrences",
+                new { date = today, assignToMemberId = memberId });
+        }
+
+        // "Hur är orken idag?" - the three-way picker, not yet answered.
+        await page.ReloadAsync();
+        await page.GetByRole(AriaRole.Group, new() { Name = "Hur är orken idag?" }).WaitForAsync();
+        await ShootAsync(page, "06f-idag-orken");
+
+        // "Jag börjar nu" - the started row's own "Pågår" chip, moved first in its room.
+        await page.Locator(".task-expand").First.ClickAsync();
+        await page.GetByRole(AriaRole.Button, new() { Name = "Jag börjar nu" }).ClickAsync();
+        await ShootAsync(page, "06g-idag-pagar");
+
+        // Fokusläget: "Läs upp" alongside the rest of .focus-actions.
+        await page.GotoAsync("/installningar");
+        await page.GetByLabel("En uppgift åt gången - fokusläge").CheckAsync();
+        await Assertions.Expect(page.GetByText("Sparat")).ToBeVisibleAsync(new() { Timeout = 5_000 });
+        await page.GotoAsync("/");
+        await page.Locator(".focus-card").WaitForAsync();
+        await ShootAsync(page, "06h-fokus-lasupp");
+
+        // Utskrift - the print-only view, A4-width per the uppdrag's own verification step.
+        await page.SetViewportSizeAsync(794, 1123);
+        await page.EmulateMediaAsync(new() { Media = Media.Print });
+        await page.Locator(".print-only").WaitForAsync();
+        await ShootAsync(page, "06i-utskrift");
     }
 
     /// <summary>Switches "Min visning" to the given presentation mode and saves - see

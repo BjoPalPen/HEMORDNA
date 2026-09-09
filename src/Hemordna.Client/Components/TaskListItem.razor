@@ -15,6 +15,10 @@
 
     <span class="task-name">
         @Item.Name
+        @if (IsStarted)
+        {
+            <span class="chip chip-primary">Pågår</span>
+        }
         @if (ShowAreaChip && Item.AreaName is { } area)
         {
             <span class="chip">@area</span>
@@ -22,6 +26,10 @@
         @if (ShowTimeLevel && Item.EstimatedMinutes > 0)
         {
             <span class="chip chip-time">@TimeLevel.MinutesLabel(Item.EstimatedMinutes)</span>
+        }
+        @if (IsStartHere)
+        {
+            <span class="chip chip-today">Börja här</span>
         }
         @if (IsBroughtForward)
         {
@@ -44,10 +52,25 @@
 @if (IsExpanded)
 {
     <li class="task-details">
-        @if (!string.IsNullOrWhiteSpace(Item.Description))
+        @if (TaskSteps.Parse(Item.Description) is { } steps)
+        {
+            <ol class="task-steps muted small">
+                @foreach (var step in steps)
+                {
+                    <li>@step</li>
+                }
+            </ol>
+        }
+        else if (!string.IsNullOrWhiteSpace(Item.Description))
         {
             <p class="muted small">@Item.Description</p>
         }
+
+        <button type="button" class="btn btn-secondary"
+                disabled="@IsBusy"
+                @onclick="() => OnToggleStart.InvokeAsync(Item.OccurrenceId)">
+            @(IsStarted ? "Avbryt start" : "Jag börjar nu")
+        </button>
 
         @if (Item.CanBeDeferred)
         {
@@ -106,6 +129,20 @@
     [Parameter]
     public bool ShowTimeLevel { get; set; }
 
+    /// <summary>The planner's own first task (MinDag.razor's StartHereOccurrenceId) - a quiet
+    /// pointer for someone who does not know where to start, never a second "next" concept next
+    /// to the focus card's own. List view only, and only while nothing is already under way
+    /// (see Support/StartedTask.cs, wired in from the caller so this component stays unaware of
+    /// where that state lives).</summary>
+    [Parameter]
+    public bool IsStartHere { get; set; }
+
+    /// <summary>Whether this row is the one thing MinDag.razor's own StartedTask marker names -
+    /// "Jag börjar nu" (below) toggles it, this component only reflects it (the "Pågår" chip)
+    /// and reads it to decide the button's own label.</summary>
+    [Parameter]
+    public bool IsStarted { get; set; }
+
     [Parameter, EditorRequired]
     public EventCallback<Guid> OnComplete { get; set; }
 
@@ -114,6 +151,9 @@
 
     [Parameter, EditorRequired]
     public EventCallback<Guid> OnDefer { get; set; }
+
+    [Parameter, EditorRequired]
+    public EventCallback<Guid> OnToggleStart { get; set; }
 
     private ElementReference _rootRef;
     private IJSObjectReference? _module;

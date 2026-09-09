@@ -185,8 +185,20 @@ KLART IDAG                                         3
 ```
 
 Datum som versal etikett, hälsning som rubrik – tidpunkten styr ordet (God morgon/Hej/God
-kväll), aldrig en emoji. Ingen tid visas – varken per uppgift eller som summa, och inget val om
-tid över huvud taget (se §6a) – bara "N av M klara" och en tunn framstegslinje. Uppgifter
+kväll), aldrig en emoji. Ingen tid visas – varken per uppgift eller som summa – bara "N av M
+klara" och en tunn framstegslinje.
+
+**Hur är orken idag?** (denna revision): direkt under rubriken, före listan, tre kvalitativa
+val - "Lite" · "Lagom" · "Mycket" - samma regel som §6a om att aldrig visa en minutsiffra. Ett
+val skalar bara DAGENS tillgängliga tid (`Support/EnergyLevel.cs`), aldrig veckobudgeten
+(PRODUCT.md §5: mindre tid idag rubbar inte normen) - vad valet faktiskt gör syns i listan genom
+vilka uppgifter som får plats, ingen förklarande text vid själva valet. Visas varje dag tills ett
+val gjorts, döljs helt om medlemmen saknar tid alls den veckodagen; efter valet syns bara den
+valda chipen, ett nytt tryck öppnar de tre igen. Enhetslokalt (`Support/EnergyChoice.cs`) minns
+bara VILKEN etikett som valdes, så chipen läser rätt tillbaka efter en omladdning - servern ser
+bara minuterna, aldrig ordet "orken" eller vilken nivå som valdes.
+
+Uppgifter
 grupperas per rum (`RoomGroups`, oförändrad sorteringslogik) med rumsnamnet i versaler och
 antal kvar till höger; en förfallen uppgift hamnar alltid först i en egen "Sedan tidigare"-grupp,
 oavsett rum. Har hushållet fler än en våning klustras rummen ytterligare ett steg
@@ -205,6 +217,36 @@ vanliga knappar för tangentbord och skärmläsare, och ett svep som börjar på
 ingenting (annars skulle det stjäla klicket). Under `prefers-reduced-motion`: ingen dragrörelse,
 ingen bekräftelseflash, ingen haptik – bara den vanliga klick-hanteringen, oavsett om den kom
 från bocken eller svepet.
+
+**Jag börjar nu** (denna revision): en knapp i den utfällda raden (och i fokuskortet, mellan
+"Bocka av" och "Skjut upp") markerar en enda uppgift som pågående - `<span class="chip
+chip-primary">Pågår</span>` bredvid namnet, raden flyttas överst i sin grupp (klientsidan, bara
+visning), och "Börja här" (nedan) döljs så länge något pågår. Enhetslokalt och per dag
+(`Support/StartedTask.cs`, `hemordna.started` i `localStorage`) - ingen server vet om det, ingen
+tid räknas, ingen timer. Rensas när uppgiften bockas av eller skjuts upp, eller tyst av sig
+självt när dagen byter (en gammal markering för gårdagens datum ignoreras). "Lugn" läser en
+pågående uppgift som "Vill du fortsätta där du slutade?" - samma fras som att redan ha bockat av
+något ger.
+
+**Börja här** (denna revision): planerarens egen första uppgift (samma ordning fokusläget redan
+använder - "Sedan tidigare" först, annars första raden i första rummet) får en tyst
+`chip-today`-chip, "Börja här", bredvid namnet - bara i listläge, bara när fler än en uppgift
+väntar (annars är det redan uppenbart var man börjar) och bara så länge ingen uppgift redan är
+igångsatt (se "Jag börjar nu" ovan). Chipparnas ordning under namnet: rum, tid, "Börja här".
+
+**Skriv ut** (denna revision): en "Skriv ut"-länk under "Klart idag" (eller under chip-raden om
+inget ännu är klart) öppnar webbläsarens vanliga utskriftsdialog. Sidan har en egen,
+alltid uppbyggd (men på skärmen alltid dold) utskriftsvy - så en utskrift i fokusläge ändå visar
+hela dagens lista, inte bara det enda kort skärmen själv visar där. Svartvitt, tom kvadrat i
+stället för bock-knappen, namn och eventuella steg under, rumsrubriker håller ihop över en
+sidbrytning.
+
+**Steg i beskrivningen** (denna revision): en beskrivning skriven en rad per steg (t.ex. "Ta
+fram hinken", ny rad, "Fyll med varmt vatten") renders som en numrerad lista i stället för ett
+enda textstycke, i den utfällda raden och i fokuskortet (`Support/TaskSteps.cs`). En
+enradsbeskrivning renderas som idag, ett vanligt stycke. En redan självnumrerad rad ("1. Ta fram
+hinken") får sin egen siffra bortstädad så listan aldrig visar dubbla nummer. Beskrivningsfältet
+i "Extra uppgift" har platshållartexten "En rad per steg om du vill" - ett förslag, inget krav.
 
 De två gamla ▶-utfällningarna ("N till en annan dag", "Lägg till en extra uppgift") är nu chips
 under listan ("Flytta till en annan dag", "Extra uppgift") som öppnar `BottomSheet.razor` –
@@ -546,9 +588,16 @@ Individuell preferens, aldrig en hushållsinställning. Beskrivs alltid av vad e
 | En uppgift åt gången | MVP |
 | En uppgift åt gången med bild + stor text | MVP |
 | Endast bild | Senare |
-| Uppläsning | Senare |
+| Uppläsning | Delvis: fokusläget |
 
 Lägena ska byta *presentation* av samma data – inte vilken data som visas.
+
+**Läs upp** (denna revision, fokusläget): en knapp i `.focus-actions` läser uppgiftens namn, rum
+och - bara om "Visa tid" är på - "Ungefär N minuter", sedan beskrivningen (steg som "Steg 1: …").
+Bara fokusläget: det är den enda vyn där en enda uppgift är hela skärmen. Ingen automatisk
+uppläsning - alltid en persons eget tryck som startar och stoppar. Knappen döljs helt om
+talstöd saknas helt på enheten; finns bara en icke-svensk röst visas knappen ändå, med en tyst
+rad under om att ingen svensk röst hittades.
 
 **Bild + stor text, och samma kombination i fokusläge**: `PresentationMode` bär tre
 saker - bild, stor text, en-i-taget-läge - som fasta, namngivna kombinationer snarare än tre

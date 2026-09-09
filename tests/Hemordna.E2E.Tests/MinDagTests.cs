@@ -1,3 +1,5 @@
+using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.Playwright;
 
 namespace Hemordna.E2E.Tests;
@@ -126,5 +128,66 @@ public class MinDagTests
             label is not null
                 && swedishWeekdays.Any(day => label.StartsWith(day, StringComparison.Ordinal)),
             $"The date read '{label}', which is not a Swedish weekday.");
+    }
+
+    /// <summary>"Börja här" (Sju enkla lösningar, del 3) - a quiet pointer at the planner's own
+    /// first task, list view only, for someone who does not know where to start.</summary>
+    [Fact]
+    public async Task Exactly_one_row_says_borja_har_and_it_moves_to_the_next_task_once_the_first_is_done()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpAsync(page, "Wilma");
+
+        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
+        http.DefaultRequestHeaders.Authorization = new("Bearer", token);
+
+        var me = await (await http.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
+        var householdId = me.GetProperty("householdId").GetGuid();
+        var memberId = me.GetProperty("memberId").GetGuid();
+
+        await http.PutAsJsonAsync(
+            $"/api/households/{householdId}/members/{memberId}/weekly-budget",
+            new { monday = 60, tuesday = 60, wednesday = 60, thursday = 60, friday = 60, saturday = 60, sunday = 60 });
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        string[] names = ["Diska", "Damma", "Dammsuga"];
+
+        foreach (var name in names)
+        {
+            var task = await (await http.PostAsJsonAsync(
+                $"/api/households/{householdId}/tasks", new { name, estimatedMinutes = 5 }))
+                .Content.ReadFromJsonAsync<JsonElement>();
+            await http.PostAsJsonAsync(
+                $"/api/households/{householdId}/tasks/{task.GetProperty("id").GetGuid()}/occurrences",
+                new { date = today, assignToMemberId = memberId });
+        }
+
+        await page.ReloadAsync();
+
+        var startHereChips = page.Locator(".chip-today");
+        await Assertions.Expect(startHereChips).ToHaveCountAsync(1);
+        await Assertions.Expect(startHereChips).ToHaveTextAsync("Börja här");
+
+        var firstRow = page.Locator(".task", new() { Has = startHereChips });
+        var firstCheckButton = firstRow.Locator(".task-check");
+        var firstLabel = await firstCheckButton.GetAttributeAsync("aria-label");
+        var firstName = names.Single(name => firstLabel == $"Markera {name} som klar");
+
+        await firstCheckButton.ClickAsync();
+
+        // Wait for that specific task's own check button to actually leave the outstanding list
+        // (it moves to "Klart idag") rather than just re-checking the chip count, which could
+        // already read 1 from the stale, pre-reload DOM and pass without ever having waited.
+        await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = $"Markera {firstName} som klar" }))
+            .Not.ToBeVisibleAsync();
+
+        // Still more than one outstanding task left, so the chip moves rather than disappears.
+        await Assertions.Expect(startHereChips).ToHaveCountAsync(1);
+        var secondRow = page.Locator(".task", new() { Has = startHereChips });
+        var secondLabel = await secondRow.Locator(".task-check").GetAttributeAsync("aria-label");
+        var secondName = names.Single(name => secondLabel == $"Markera {name} som klar");
+
+        Assert.NotEqual(firstName, secondName);
     }
 }

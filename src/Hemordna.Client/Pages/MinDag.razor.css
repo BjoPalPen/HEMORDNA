@@ -292,6 +292,21 @@
     margin: var(--space-4) 0;
 }
 
+/* "Hur är orken idag?" (Sju enkla lösningar, del 1) - same row shape as .chips, its own class
+   only because the label sits inline with the chips rather than above a whole group of fields. */
+.energy {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    margin: 0 0 var(--space-4);
+}
+
+.energy-label {
+    font-size: calc(var(--font-size-base) * .87);
+    color: var(--sot-soft);
+}
+
 /* A calm, deliberately empty page - "Ledigt idag" or "Dagens uppgifter är klara" - never a
    blue notice box. See docs/PRODUCT.md §8: no guilt, no "nothing to see here" filler tone. */
 .calm-state {

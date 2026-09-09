@@ -150,9 +150,13 @@ public class MinDagDetailTests
 
         await page.ReloadAsync();
 
-        await Assertions.Expect(page.Locator(".task", new() { HasText = "Torka trappsteg" }).Locator(".chip"))
+        // ".chip" alone (not ".chip-today"/".chip-time"/".chip-forward") - the room chip is the
+        // only one of the row's chips with no secondary modifier class, but "Torka trappsteg" is
+        // also the planner's first task and so additionally carries "Börja här" (Sju enkla
+        // lösningar, del 3), which is a ".chip" too.
+        await Assertions.Expect(page.Locator(".task", new() { HasText = "Torka trappsteg" }).Locator("span.chip:not(.chip-today)"))
             .ToHaveTextAsync("Övre plan – Hall");
-        await Assertions.Expect(page.Locator(".task", new() { HasText = "Dammsug hallen" }).Locator(".chip"))
+        await Assertions.Expect(page.Locator(".task", new() { HasText = "Dammsug hallen" }).Locator("span.chip:not(.chip-today)"))
             .ToHaveTextAsync("Entré plan – Hall");
     }
 }
