@@ -89,4 +89,57 @@ public class TaskWorkloadTests
         await Assertions.Expect(taskRow).ToContainTextAsync("30 min");
         await Assertions.Expect(taskRow).Not.ToContainTextAsync("5 min");
     }
+
+    /// <summary>Regression test: RoomSheet's own _openTask was a snapshot taken when the row was
+    /// tapped, never refreshed after TaskOptionsSheet's OnChanged reloaded AllTasks - so a save
+    /// went through fine server-side while the still-open sheet's own summary row kept showing
+    /// the pre-edit value, reading as if the edit had silently reverted. Checked here without
+    /// closing the sheet first, unlike the test above, which is exactly what let this slip
+    /// through.</summary>
+    [Fact]
+    public async Task A_saved_change_shows_immediately_in_the_options_sheet_without_closing_it()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Petra");
+
+        await page.GotoAsync("/rum");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Nytt rum" }).ClickAsync();
+        var newRoomSheet = page.GetByRole(AriaRole.Dialog, new() { Name = "Nytt rum" });
+        await page.GetByText("Lägg till ett tomt rum i stället").ClickAsync();
+        await page.GetByLabel("Rummets namn").FillAsync("Kök");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Lägg till rum" }).ClickAsync();
+        await newRoomSheet.GetByRole(AriaRole.Button, new() { Name = "Stäng" }).ClickAsync();
+
+        await page.GetByRole(AriaRole.Button, new() { Name = "Kök" }).First.ClickAsync();
+        var room = page.GetByRole(AriaRole.Dialog, new() { Name = "Kök" });
+        await room.WaitForAsync();
+
+        await room.GetByRole(AriaRole.Button, new() { Name = "Lägg till uppgift" }).ClickAsync();
+        var addSheet = page.GetByRole(AriaRole.Dialog, new() { Name = "Lägg till uppgift i Kök" });
+        await addSheet.GetByLabel("Namn").FillAsync("Diska");
+        await addSheet.GetByRole(AriaRole.Button, new() { Name = "Lite tid" }).ClickAsync(); // 5 min
+        await addSheet.GetByRole(AriaRole.Button, new() { Name = "Lägg till uppgift" }).ClickAsync();
+
+        var taskRow = room.GetByRole(AriaRole.Button, new() { Name = "Diska" });
+        await taskRow.ClickAsync();
+        var taskSheet = page.GetByRole(AriaRole.Dialog, new() { Name = "Diska" });
+
+        await taskSheet.GetByRole(AriaRole.Button, new() { Name = "Tid" }).ClickAsync();
+        await taskSheet.GetByRole(AriaRole.Button, new() { Name = "Lång tid" }).ClickAsync(); // 30 min
+        await taskSheet.GetByRole(AriaRole.Button, new() { Name = "Spara" }).ClickAsync();
+
+        // Saving returns to the options list straight away, but the picker's own level buttons
+        // (also named "... tid") make "Tid" an ambiguous match for the brief instant both are in
+        // the DOM - wait for the picker to be gone before resolving the row, rather than racing
+        // Assertions.Expect against that transient ambiguity.
+        await Assertions.Expect(taskSheet.Locator(".level-picker")).Not.ToBeVisibleAsync();
+
+        // Still on the options list, sheet never closed - the "Tid" row's own summary must
+        // reflect the save, not the value from before it (regression: RoomSheet's _openTask was
+        // never refreshed after the reload this save triggers, so this used to keep showing the
+        // pre-edit value here even though the save itself had already succeeded).
+        var tidRow = taskSheet.GetByRole(AriaRole.Button, new() { Name = "Tid" });
+        await Assertions.Expect(tidRow).ToContainTextAsync("Lång tid");
+        await Assertions.Expect(tidRow).Not.ToContainTextAsync("Lite tid");
+    }
 }
