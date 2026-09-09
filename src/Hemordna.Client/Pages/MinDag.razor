@@ -131,6 +131,17 @@ else
                                 @onclick="() => ToggleStartAsync(focusTask.OccurrenceId)">
                             @(_startedOccurrenceId == focusTask.OccurrenceId ? "Avbryt start" : "Jag börjar nu")
                         </button>
+                        @if (_speechAvailable)
+                        {
+                            <button type="button" class="btn btn-secondary btn-block"
+                                    @onclick="() => ToggleSpeakAsync(focusTask)">
+                                @(_isSpeaking ? "Tyst" : "Läs upp")
+                            </button>
+                            @if (!_speechHasSwedishVoice)
+                            {
+                                <p class="muted small">Ingen svensk röst hittades på den här enheten.</p>
+                            }
+                        }
                         @if (focusTask.CanBeDeferred)
                         {
                             <button type="button" class="btn btn-secondary btn-block" disabled="@(_busyOccurrence == focusTask.OccurrenceId)"
@@ -703,6 +714,63 @@ else
         await InvokeAsync(StateHasChanged);
     }
 
+    /// <summary>"Läs upp" (fokusläget only - it is the one place a single task is the whole
+    /// screen). No autouppläsning: the button always starts and stops on a person's own press,
+    /// never on its own.</summary>
+    private bool _speechAvailable;
+    private bool _speechHasSwedishVoice;
+    private bool _isSpeaking;
+    private DotNetObjectReference<MinDag>? _speechSelfRef;
+
+    private async Task ToggleSpeakAsync(PlannedTaskResponse task)
+    {
+        if (_isSpeaking)
+        {
+            await Speech.StopAsync(JS);
+            _isSpeaking = false;
+            return;
+        }
+
+        _isSpeaking = true;
+        await Speech.SpeakAsync(JS, _speechSelfRef!, BuildSpeechText(task));
+    }
+
+    [JSInvokable]
+    public async Task OnSpeechEnded()
+    {
+        _isSpeaking = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>What "Läs upp" actually says: name, room, "Ungefär N minuter." (only if the
+    /// member has chosen to see time at all - ShowTimeLevel), then the description - steps read
+    /// as "Steg 1: ...", "Steg 2: ...", an ordinary description read as-is.</summary>
+    private string BuildSpeechText(PlannedTaskResponse task)
+    {
+        var parts = new List<string> { task.Name };
+
+        if (task.AreaName is { } area)
+        {
+            parts.Add(area);
+        }
+
+        if (_showTimeLevel && task.EstimatedMinutes > 0)
+        {
+            parts.Add($"Ungefär {task.EstimatedMinutes} minuter.");
+        }
+
+        if (TaskSteps.Parse(task.Description) is { } steps)
+        {
+            parts.AddRange(steps.Select((step, index) => $"Steg {index + 1}: {step}."));
+        }
+        else if (!string.IsNullOrWhiteSpace(task.Description))
+        {
+            parts.Add(task.Description);
+        }
+
+        return string.Join(" ", parts);
+    }
+
     /// <summary>"Börja här" (list view only): a quiet pointer at the planner's own first task,
     /// for someone who does not know where to start - not shown when there is only one task
     /// anyway (nothing to choose between), in focus mode (the card itself already IS that
@@ -951,6 +1019,11 @@ else
 
         await LoadDayAsync();
 
+        // "Läs upp" (fokusläget) - checked once, not per render: whether the device can speak
+        // at all does not change while the page is open.
+        _speechAvailable = await Speech.IsAvailableAsync(JS);
+        _speechHasSwedishVoice = _speechAvailable && await Speech.HasSwedishVoiceAsync(JS);
+
         if (Session.Me is { HouseholdId: { } householdId, MemberId: { } memberId })
         {
             var preferenceTask = Api.GetPreferenceAsync(householdId, memberId);
@@ -982,6 +1055,12 @@ else
         _printMediaSelfRef = DotNetObjectReference.Create(this);
         var module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/print.js");
         _printMediaHandle = await module.InvokeAsync<IJSObjectReference>("watchPrintMedia", _printMediaSelfRef);
+
+        // "Läs upp" - created once and reused for every speak() call (see ToggleSpeakAsync), not
+        // per press: it must stay alive for as long as an utterance might still be playing when
+        // its own "finished" callback (OnSpeechEnded) fires, which outlives the SpeakAsync call
+        // itself by however long the actual speech takes.
+        _speechSelfRef = DotNetObjectReference.Create(this);
     }
 
     /// <summary>Someone else in the household changed something. Unlike every other page, Idag
@@ -1175,6 +1254,12 @@ else
         if (_printMediaHandle is not null)
         {
             _ = DisposePrintMediaHandleAsync(_printMediaHandle);
+        }
+
+        _speechSelfRef?.Dispose();
+        if (_isSpeaking)
+        {
+            _ = Speech.StopAsync(JS);
         }
     }
 

@@ -576,9 +576,16 @@ Individuell preferens, aldrig en hushållsinställning. Beskrivs alltid av vad e
 | En uppgift åt gången | MVP |
 | En uppgift åt gången med bild + stor text | MVP |
 | Endast bild | Senare |
-| Uppläsning | Senare |
+| Uppläsning | Delvis: fokusläget |
 
 Lägena ska byta *presentation* av samma data – inte vilken data som visas.
+
+**Läs upp** (denna revision, fokusläget): en knapp i `.focus-actions` läser uppgiftens namn, rum
+och - bara om "Visa tid" är på - "Ungefär N minuter", sedan beskrivningen (steg som "Steg 1: …").
+Bara fokusläget: det är den enda vyn där en enda uppgift är hela skärmen. Ingen automatisk
+uppläsning - alltid en persons eget tryck som startar och stoppar. Knappen döljs helt om
+talstöd saknas helt på enheten; finns bara en icke-svensk röst visas knappen ändå, med en tyst
+rad under om att ingen svensk röst hittades.
 
 **Bild + stor text, och samma kombination i fokusläge**: `PresentationMode` bär tre
 saker - bild, stor text, en-i-taget-läge - som fasta, namngivna kombinationer snarare än tre
