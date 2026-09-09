@@ -210,7 +210,9 @@ else
         ("Text", "Text (standard) - kompakt lista"),
         ("ImageAndText", "Bild + text - med bilder för tydlighet"),
         ("LargeText", "Stor text - större och tydligare"),
-        ("OneAtATime", "En uppgift åt gången - fokusläge")
+        ("ImageAndLargeText", "Bild + stor text - bilder och större text tillsammans"),
+        ("OneAtATime", "En uppgift åt gången - fokusläge"),
+        ("OneAtATimeImageAndLargeText", "En uppgift åt gången med bild och stor text - extra tydligt fokusläge")
     ];
 
     private static readonly (string Value, string Label)[] MotivationOptions =
@@ -361,7 +363,7 @@ else
             {
                 // Applies immediately in this tab, rather than only after the next reload -
                 // MainLayout only re-checks the preference on sign-in, not on every save here.
-                await TextSize.ApplyAsync(JS, _presentation == "LargeText");
+                await TextSize.ApplyAsync(JS, PresentationModes.IsLargeText(_presentation));
             }
         }
         catch (HttpRequestException)

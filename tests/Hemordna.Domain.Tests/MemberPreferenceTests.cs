@@ -23,6 +23,18 @@ public class MemberPreferenceTests
         Assert.Equal(PresentationMode.LargeText, preference.Presentation);
     }
 
+    [Theory]
+    [InlineData(PresentationMode.ImageAndLargeText)]
+    [InlineData(PresentationMode.OneAtATimeImageAndLargeText)]
+    public void ChangePresentation_accepts_the_combined_image_and_large_text_modes(PresentationMode mode)
+    {
+        var preference = MemberPreference.CreateDefault(Guid.NewGuid(), Guid.NewGuid());
+
+        preference.ChangePresentation(mode);
+
+        Assert.Equal(mode, preference.Presentation);
+    }
+
     [Fact]
     public void ChangeMotivation_replaces_the_level()
     {
