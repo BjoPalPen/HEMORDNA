@@ -299,11 +299,21 @@
     color: var(--sot-soft);
 }
 
+/* Always exactly three ("Flytta till en annan dag"/"Extra uppgift"/"Ta ledigt idag") - same
+   "never let one item spill alone onto its own row" reasoning as .energy-options, but shrink-to-
+   fit (flex: 0 1 auto) rather than equal thirds: unlike the energy chips' similarly short
+   labels, "Flytta till en annan dag" is meaningfully longer than the other two, and forcing
+   equal width would leave it cramped while the shorter two waste space. */
 .chips {
     display: flex;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     gap: var(--space-2);
     margin: var(--space-4) 0;
+}
+
+.chips .chip-action {
+    flex: 0 1 auto;
+    min-width: 0;
 }
 
 /* "Hur är orken idag?" (Sju enkla lösningar, del 1) - label above the chips, not inline with

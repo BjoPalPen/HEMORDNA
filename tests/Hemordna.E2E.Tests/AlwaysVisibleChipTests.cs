@@ -60,4 +60,40 @@ public class AlwaysVisibleChipTests
         await Assertions.Expect(page.GetByRole(AriaRole.Dialog, new() { Name = "Flytta till en annan dag" })).Not.ToBeVisibleAsync();
         await Assertions.Expect(notice).Not.ToBeVisibleAsync(new() { Timeout = 5_000 });
     }
+
+    /// <summary>Regression test, reported from a real user's own screenshot: at 390px "Ta ledigt
+    /// idag" wrapped alone onto its own row below "Flytta till en annan dag"/"Extra uppgift" -
+    /// the same "never let one item spill alone" fix as .level-picker and .energy-options
+    /// (docs/ARCHITECTURE.md §10, Stor text is unconditional), just shrink-to-fit here rather
+    /// than equal thirds since "Flytta till en annan dag" is meaningfully longer than the other
+    /// two.</summary>
+    [Theory]
+    [InlineData("Text (standard) - kompakt lista")]
+    [InlineData("Stor text - större och tydligare")]
+    public async Task All_three_day_chips_stay_on_one_row_at_390px(string presentationLabel)
+    {
+        var page = await _app.NewPageAsync();
+        await page.SetViewportSizeAsync(390, 844);
+        await SignUpHelper.SignUpAsync(page, "Nils");
+
+        if (presentationLabel.StartsWith("Stor text", StringComparison.Ordinal))
+        {
+            await page.GotoAsync("/installningar");
+            await page.GetByLabel(presentationLabel).CheckAsync();
+            await Assertions.Expect(page.GetByText("Sparat")).ToBeVisibleAsync(new() { Timeout = 5_000 });
+            await page.GotoAsync("/");
+        }
+
+        await page.Locator("h1", new() { HasText = "Nils" }).WaitForAsync();
+
+        var flytta = await page.GetByRole(AriaRole.Button, new() { Name = "Flytta till en annan dag" }).BoundingBoxAsync();
+        var extra = await page.GetByRole(AriaRole.Button, new() { Name = "Extra uppgift" }).BoundingBoxAsync();
+        var ledigt = await page.GetByRole(AriaRole.Button, new() { Name = "Ta ledigt idag" }).BoundingBoxAsync();
+
+        Assert.NotNull(flytta);
+        Assert.NotNull(extra);
+        Assert.NotNull(ledigt);
+        Assert.Equal(flytta!.Y, extra!.Y);
+        Assert.Equal(extra.Y, ledigt!.Y);
+    }
 }
