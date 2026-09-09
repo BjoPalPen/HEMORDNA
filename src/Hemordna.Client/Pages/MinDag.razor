@@ -65,6 +65,34 @@ else
         }
     </header>
 
+    @if (ShowEnergyPrompt)
+    {
+        <div class="energy" role="group" aria-label="Hur är orken idag?">
+            <span class="energy-label">Hur är orken idag?</span>
+            @if (_energyChoice is null || _energyExpanded)
+            {
+                @foreach (var level in EnergyLevel.All)
+                {
+                    <button type="button" class="chip-action @(_energyChoice == level.Label ? "chip-primary" : null)"
+                            disabled="@_energyBusy"
+                            @onclick="() => SetEnergyAsync(level)">
+                        @level.Label
+                    </button>
+                }
+            }
+            else
+            {
+                <button type="button" class="chip-action chip-primary" @onclick="() => _energyExpanded = true">
+                    @_energyChoice
+                </button>
+            }
+        </div>
+        @if (_energyMessage is not null)
+        {
+            <div class="notice notice-problem" role="alert">@_energyMessage</div>
+        }
+    }
+
     @if (_day is { IsDayOff: true })
     {
         <p class="notice" role="status">Du är ledig idag. Inget nytt läggs på dig.</p>
@@ -544,6 +572,16 @@ else
     // memory, so a fresh visit (or a day that has rolled over) always reflects it truthfully.
     private Guid? _startedOccurrenceId;
 
+    // "Hur är orken idag?" (Sju enkla lösningar, del 1) - the label ("Lite"/"Lagom"/"Mycket"),
+    // remembered per-device just so the chip reads back correctly (Support/EnergyChoice.cs); the
+    // server only ever sees the minutes this produces (SetAvailabilityAsync), never the level
+    // itself. _energyExpanded re-opens all three after a choice has already collapsed the row to
+    // just the selected chip - purely local UI state, reset on every fresh load.
+    private string? _energyChoice;
+    private bool _energyExpanded;
+    private bool _energyBusy;
+    private string? _energyMessage;
+
     // "Beslut: Ångra och stabil lista" §B2 - a remote change never redraws the list out from
     // under an interaction already in progress. See HandleRemoteChangeAsync/
     // ReconcileRemoteChangeAsync for how these are used together.
@@ -769,6 +807,82 @@ else
         }
 
         return string.Join(" ", parts);
+    }
+
+    /// <summary>The signed-in member's own normal budget for today's weekday
+    /// (HouseholdMember.WeeklyTimeBudget, unaffected by any earlier "Hur är orken idag?" choice -
+    /// that only ever changes today's AVAILABLE minutes, never this) - null before _household has
+    /// loaded or if the member is somehow missing from its own roster.</summary>
+    private int? NormalMinutesToday
+    {
+        get
+        {
+            if (Session.Me?.MemberId is not { } memberId
+                || _household?.Members.FirstOrDefault(m => m.Id == memberId) is not { } member)
+            {
+                return null;
+            }
+
+            return Today.DayOfWeek switch
+            {
+                DayOfWeek.Monday => member.WeeklyTimeBudgetMinutes.Monday,
+                DayOfWeek.Tuesday => member.WeeklyTimeBudgetMinutes.Tuesday,
+                DayOfWeek.Wednesday => member.WeeklyTimeBudgetMinutes.Wednesday,
+                DayOfWeek.Thursday => member.WeeklyTimeBudgetMinutes.Thursday,
+                DayOfWeek.Friday => member.WeeklyTimeBudgetMinutes.Friday,
+                DayOfWeek.Saturday => member.WeeklyTimeBudgetMinutes.Saturday,
+                DayOfWeek.Sunday => member.WeeklyTimeBudgetMinutes.Sunday,
+                _ => 0
+            };
+        }
+    }
+
+    /// <summary>"Hur är orken idag?" never shows for a day the member has no normal time on -
+    /// there is nothing to scale a fraction of.</summary>
+    private bool ShowEnergyPrompt => NormalMinutesToday is > 0;
+
+    /// <summary>Always sets AVAILABLE minutes for today only (SetAvailabilityAsync) - never the
+    /// weekly budget itself (SetWeeklyBudgetAsync is not called anywhere in this method or
+    /// anything it calls) - PRODUCT.md §5: less time today must never disturb the norm. "Lagom"
+    /// (multiplier 1.0) still goes through this same call, which is what lets it explicitly
+    /// restore the normal value after an earlier "Lite" chosen the same day, rather than needing
+    /// its own special case.</summary>
+    private async Task SetEnergyAsync((string Label, double Multiplier) level)
+    {
+        if (Session.Me is not { HouseholdId: { } householdId, MemberId: { } memberId }
+            || NormalMinutesToday is not { } normalMinutes)
+        {
+            return;
+        }
+
+        _energyBusy = true;
+        _energyMessage = null;
+
+        try
+        {
+            var minutes = EnergyLevel.MinutesFor(normalMinutes, level.Multiplier);
+
+            if (!await Api.SetAvailabilityAsync(householdId, memberId, Today, minutes))
+            {
+                _energyChoice = null;
+                _energyMessage = "Kunde inte spara. Försök igen.";
+                return;
+            }
+
+            await EnergyChoice.SetAsync(JS, Today, level.Label);
+            _energyChoice = level.Label;
+            _energyExpanded = false;
+            await LoadDayAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _energyChoice = null;
+            _energyMessage = "Kunde inte spara. Försök igen.";
+        }
+        finally
+        {
+            _energyBusy = false;
+        }
     }
 
     /// <summary>"Börja här" (list view only): a quiet pointer at the planner's own first task,
@@ -1302,6 +1416,7 @@ else
         _tomorrow = await Api.GetDailyPlanAsync(householdId, memberId, Today.AddDays(1));
         _focusOffset = 0;
         _startedOccurrenceId = await StartedTask.GetAsync(JS, Today);
+        _energyChoice = await EnergyChoice.GetAsync(JS, Today);
 
         // A full reload supersedes any patched-in state from ReconcileRemoteChangeAsync - it is
         // about to be rebuilt from scratch against the same server truth that state was tracking.

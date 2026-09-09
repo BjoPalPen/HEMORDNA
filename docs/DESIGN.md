@@ -185,8 +185,20 @@ KLART IDAG                                         3
 ```
 
 Datum som versal etikett, hälsning som rubrik – tidpunkten styr ordet (God morgon/Hej/God
-kväll), aldrig en emoji. Ingen tid visas – varken per uppgift eller som summa, och inget val om
-tid över huvud taget (se §6a) – bara "N av M klara" och en tunn framstegslinje. Uppgifter
+kväll), aldrig en emoji. Ingen tid visas – varken per uppgift eller som summa – bara "N av M
+klara" och en tunn framstegslinje.
+
+**Hur är orken idag?** (denna revision): direkt under rubriken, före listan, tre kvalitativa
+val - "Lite" · "Lagom" · "Mycket" - samma regel som §6a om att aldrig visa en minutsiffra. Ett
+val skalar bara DAGENS tillgängliga tid (`Support/EnergyLevel.cs`), aldrig veckobudgeten
+(PRODUCT.md §5: mindre tid idag rubbar inte normen) - vad valet faktiskt gör syns i listan genom
+vilka uppgifter som får plats, ingen förklarande text vid själva valet. Visas varje dag tills ett
+val gjorts, döljs helt om medlemmen saknar tid alls den veckodagen; efter valet syns bara den
+valda chipen, ett nytt tryck öppnar de tre igen. Enhetslokalt (`Support/EnergyChoice.cs`) minns
+bara VILKEN etikett som valdes, så chipen läser rätt tillbaka efter en omladdning - servern ser
+bara minuterna, aldrig ordet "orken" eller vilken nivå som valdes.
+
+Uppgifter
 grupperas per rum (`RoomGroups`, oförändrad sorteringslogik) med rumsnamnet i versaler och
 antal kvar till höger; en förfallen uppgift hamnar alltid först i en egen "Sedan tidigare"-grupp,
 oavsett rum. Har hushållet fler än en våning klustras rummen ytterligare ett steg
