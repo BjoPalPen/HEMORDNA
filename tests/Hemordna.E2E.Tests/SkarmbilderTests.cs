@@ -307,13 +307,41 @@ public class SkarmbilderTests
         await page.GetByRole(AriaRole.Button, new() { Name = "Jag börjar nu" }).ClickAsync();
         await ShootAsync(page, "06g-idag-pagar");
 
-        // Fokusläget: "Läs upp" alongside the rest of .focus-actions.
+        // "Avbryt start" - undoes the list-mode step above, so "06h-fokus-vila" below shows a
+        // genuinely at-rest card rather than one already carrying "Pågår" left over from here.
+        await page.GetByRole(AriaRole.Button, new() { Name = "Avbryt start" }).ClickAsync();
+
+        // Fokuskortet ("Uppdrag: fokuskortet" - hierarki, ikoner, ingen dubblerad rubrik): three
+        // states of the same card - at rest, started, and mid-speech - rather than the single
+        // "06h-fokus-lasupp" this replaced.
+        //
+        // Real speechSynthesis is present but silent in headless Chromium (see SpeechTests'
+        // own comment) - overriding speak() to a no-op (never firing onend/onerror) keeps the
+        // "mid-speech" screenshot below from racing a real callback flipping the button back to
+        // "Läs upp" before the screenshot is taken.
+        await page.AddInitScriptAsync(@"
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.speak = () => {};
+            }
+        ");
+
         await page.GotoAsync("/installningar");
         await page.GetByLabel("En uppgift åt gången - fokusläge").CheckAsync();
         await Assertions.Expect(page.GetByText("Sparat")).ToBeVisibleAsync(new() { Timeout = 5_000 });
         await page.GotoAsync("/");
         await page.Locator(".focus-card").WaitForAsync();
-        await ShootAsync(page, "06h-fokus-lasupp");
+        await ShootAsync(page, "06h-fokus-vila");
+
+        await page.GetByRole(AriaRole.Button, new() { Name = "Jag börjar nu" }).ClickAsync();
+        await Assertions.Expect(page.Locator(".focus-card .chip-primary")).ToHaveTextAsync("Pågår");
+        await ShootAsync(page, "06h2-fokus-pagar");
+
+        // A stable selector, not GetByRole(Name: "Läs upp") - that locator's own accessible name
+        // stops matching anything the instant the click flips aria-label to "Tyst".
+        var speakButton = page.Locator(".focus-speak");
+        await speakButton.ClickAsync();
+        await Assertions.Expect(speakButton).ToHaveAttributeAsync("aria-label", "Tyst");
+        await ShootAsync(page, "06h3-fokus-lasupp");
 
         // Utskrift - the print-only view, A4-width per the uppdrag's own verification step.
         await page.SetViewportSizeAsync(794, 1123);

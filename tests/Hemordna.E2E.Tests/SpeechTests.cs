@@ -76,9 +76,11 @@ public class SpeechTests
         Assert.Contains("Diska", spoken[0]);
         Assert.Contains("Kök", spoken[0]);
 
-        // The fake voice fires onend synchronously (see FakeSpeechSynthesisAsync), so the button
-        // is already back to "Läs upp" rather than stuck on "Tyst".
-        await Assertions.Expect(speakButton).ToHaveTextAsync("Läs upp");
+        // Icon-only button (.btn-icon, "Uppdrag: fokuskortet") - no visible label of its own, so
+        // its state lives in aria-label rather than text content. The fake voice fires onend
+        // synchronously (see FakeSpeechSynthesisAsync), so the button is already back to
+        // "Läs upp" rather than stuck on "Tyst".
+        await Assertions.Expect(speakButton).ToHaveAttributeAsync("aria-label", "Läs upp");
     }
 
     [Fact]

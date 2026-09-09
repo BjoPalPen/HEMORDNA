@@ -234,10 +234,12 @@ ingenting (annars skulle det stjäla klicket). Under `prefers-reduced-motion`: i
 ingen bekräftelseflash, ingen haptik – bara den vanliga klick-hanteringen, oavsett om den kom
 från bocken eller svepet.
 
-**Jag börjar nu** (denna revision): en knapp i den utfällda raden (och i fokuskortet, mellan
-"Bocka av" och "Skjut upp") markerar en enda uppgift som pågående - `<span class="chip
-chip-primary">Pågår</span>` bredvid namnet, raden flyttas överst i sin grupp (klientsidan, bara
-visning), och "Börja här" (nedan) döljs så länge något pågår. Enhetslokalt och per dag
+**Jag börjar nu** (denna revision): en knapp i den utfällda raden (och i fokuskortet, som
+"Bocka av"s följeslagare - se "Uppdrag: fokuskortet" i ARCHITECTURE.md) markerar en enda uppgift
+som pågående - `<span class="chip chip-primary">Pågår</span>` bredvid namnet i listan, OVANFÖR
+namnet i fokuskortet (kortet är en centrerad enda kolumn, "bredvid" har ingen plats att betyda
+något där), raden flyttas överst i sin grupp (klientsidan, bara visning), och "Börja här" (nedan)
+döljs så länge något pågår. Enhetslokalt och per dag
 (`Support/StartedTask.cs`, `hemordna.started` i `localStorage`) - ingen server vet om det, ingen
 tid räknas, ingen timer. Rensas när uppgiften bockas av eller skjuts upp, eller tyst av sig
 självt när dagen byter (en gammal markering för gårdagens datum ignoreras). "Lugn" läser en
@@ -291,12 +293,23 @@ uppgifter klara men inget mer väntar: "Dagens uppgifter är klara." i samma sti
 längre – innehållet är alltid en enda kolumn, centrerad under den smala railen (se §8).
 
 **En uppgift åt gången** (§7) ersätter hela listan med ett enda kort: nästa uppgift i samma
-ordning listan redan skulle visat den, med **Bocka av**, **Skjut upp till imorgon** (om
-uppgiften får skjutas upp) och **Visa nästa** (en tredje, länk-stilad knapp, dold när bara en
-uppgift återstår) som roterar till nästa i samma ordning utan att röra servern eller Vecka - en
-titt, inte en handling. Att bocka av eller skjuta upp laddar om dagen, så nästa uppgift dyker
-upp av sig själv – inget separat index att hålla reda på (se "Beslut: Ångra och stabil lista"
-§B4 i ARCHITECTURE.md).
+ordning listan redan skulle visat den. Sedan "Uppdrag: fokuskortet" (se ARCHITECTURE.md) har
+kortet en medveten hierarki i stället för fem lika tunga textknappar på rad:
+
+1. **Bocka av** (`btn-primary btn-block`, ikon `check`) överst - även före start, eftersom de
+   flesta fokusuppgifter är korta nog att bara göras. **Jag börjar nu**/**Avbryt start**
+   (`btn-secondary btn-block`, ikon `play` i båda lägena - texten byter, inte ikonen) direkt
+   under. Bara dessa två fyller `.focus-actions`.
+2. **Läs upp**/**Tyst** har flyttat ut helt - en `.btn-icon` (44×44, rund, egen `aria-label`)
+   uppe till höger i kortet, inte en tredje textknapp bland handlingarna: den är hjälp att ta in
+   uppgiften, ingen handling PÅ den (se "Läs upp" ovan).
+3. **Skjut upp till imorgon** (om uppgiften får skjutas upp) och **Visa nästa** (om fler än en
+   uppgift väntar - en titt, aldrig en handling som rör servern eller Vecka) delar en tyst rad,
+   `.focus-escape`, under de två stora knapparna - mindre text, länk-stilade, en tydligt lägre
+   vikt än "Bocka av". Saknas båda syns ingen rad; saknas en står den kvar ensam, vänsterställd.
+
+Att bocka av eller skjuta upp laddar om dagen, så nästa uppgift dyker upp av sig själv – inget
+separat index att hålla reda på (se "Beslut: Ångra och stabil lista" §B4 i ARCHITECTURE.md).
 
 **Ångra** (§B1): en avbockning ger 8 sekunder att ta tillbaka den - en rad, `role="status"`,
 direkt under headern (eller under fokuskortet i "En uppgift åt gången"): "Klar: {namn}" och en
@@ -611,12 +624,16 @@ Individuell preferens, aldrig en hushållsinställning. Beskrivs alltid av vad e
 
 Lägena ska byta *presentation* av samma data – inte vilken data som visas.
 
-**Läs upp** (denna revision, fokusläget): en knapp i `.focus-actions` läser uppgiftens namn, rum
-och - bara om "Visa tid" är på - "Ungefär N minuter", sedan beskrivningen (steg som "Steg 1: …").
-Bara fokusläget: det är den enda vyn där en enda uppgift är hela skärmen. Ingen automatisk
-uppläsning - alltid en persons eget tryck som startar och stoppar. Knappen döljs helt om
-talstöd saknas helt på enheten; finns bara en icke-svensk röst visas knappen ändå, med en tyst
-rad under om att ingen svensk röst hittades.
+**Läs upp** (fokusläget): läser uppgiftens namn, rum och - bara om "Visa tid" är på - "Ungefär N
+minuter", sedan beskrivningen (steg som "Steg 1: …"). Bara fokusläget: det är den enda vyn där en
+enda uppgift är hela skärmen. Ingen automatisk uppläsning - alltid en persons eget tryck som
+startar och stoppar. Knappen döljs helt om talstöd saknas helt på enheten; finns bara en
+icke-svensk röst visas knappen ändå, med en tyst rad under KORTET (inte inne i det, "Uppdrag:
+fokuskortet") om att ingen svensk röst hittades. Sedan "Uppdrag: fokuskortet" (ARCHITECTURE.md)
+är den `.btn-icon` - en 44×44 rund ikonknapp uppe till höger i kortet (`aria-label` "Läs upp"/
+"Tyst", ikon `speaker`/`speaker-off`) i stället för en femte textknapp bland handlingarna: den
+är hjälp att ta in uppgiften, ingen handling PÅ den, och stod annars mitt bland "Bocka av" och
+de andra som om den vore en femte likvärdig knapp.
 
 **Bild + stor text, och samma kombination i fokusläge**: `PresentationMode` bär tre
 saker - bild, stor text, en-i-taget-läge - som fasta, namngivna kombinationer snarare än tre

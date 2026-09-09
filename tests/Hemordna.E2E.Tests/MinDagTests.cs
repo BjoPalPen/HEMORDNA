@@ -190,4 +190,61 @@ public class MinDagTests
 
         Assert.NotEqual(firstName, secondName);
     }
+
+    /// <summary>"Uppdrag: fokuskortet" - a real, deliberate hierarchy instead of five identical
+    /// text buttons: exactly two full-width primary actions, "Läs upp" moved to its own 44×44
+    /// icon button, "Skjut upp till imorgon"/"Visa nästa" moved down to a quieter escape row.</summary>
+    [Fact]
+    public async Task Fokuskortet_has_two_primary_buttons_a_44px_speak_button_and_an_escape_row()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpAsync(page, "Elin");
+
+        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
+        http.DefaultRequestHeaders.Authorization = new("Bearer", token);
+
+        var me = await (await http.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
+        var householdId = me.GetProperty("householdId").GetGuid();
+        var memberId = me.GetProperty("memberId").GetGuid();
+
+        await http.PutAsJsonAsync(
+            $"/api/households/{householdId}/members/{memberId}/weekly-budget",
+            new { monday = 60, tuesday = 60, wednesday = 60, thursday = 60, friday = 60, saturday = 60, sunday = 60 });
+        await http.PutAsJsonAsync(
+            $"/api/households/{householdId}/members/{memberId}/preferences",
+            new { presentation = "OneAtATime", motivation = "None", showTimeLevel = false });
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        string[] names = ["Diska", "Damma"];
+
+        foreach (var name in names)
+        {
+            var task = await (await http.PostAsJsonAsync(
+                $"/api/households/{householdId}/tasks", new { name, estimatedMinutes = 5 }))
+                .Content.ReadFromJsonAsync<JsonElement>();
+            await http.PostAsJsonAsync(
+                $"/api/households/{householdId}/tasks/{task.GetProperty("id").GetGuid()}/occurrences",
+                new { date = today, assignToMemberId = memberId });
+        }
+
+        await page.ReloadAsync();
+        await page.Locator(".focus-card").WaitForAsync();
+
+        // Only "Bocka av" and "Jag börjar nu" fill .focus-actions now - "Läs upp" and the escape
+        // row's two links are no longer among the five identical stacked buttons the bug report
+        // showed.
+        await Assertions.Expect(page.Locator(".focus-actions .btn-block")).ToHaveCountAsync(2);
+
+        var escape = page.Locator(".focus-escape");
+        await Assertions.Expect(escape.GetByRole(AriaRole.Button, new() { Name = "Skjut upp till imorgon" }))
+            .ToBeVisibleAsync();
+        await Assertions.Expect(escape.GetByRole(AriaRole.Button, new() { Name = "Visa nästa" }))
+            .ToBeVisibleAsync();
+
+        var speakBox = await page.GetByRole(AriaRole.Button, new() { Name = "Läs upp" }).BoundingBoxAsync();
+        Assert.NotNull(speakBox);
+        Assert.InRange(speakBox!.Width, 43, 45);
+        Assert.InRange(speakBox.Height, 43, 45);
+    }
 }

@@ -2515,6 +2515,45 @@ skärmbild:
   presentationslägena), bekräftad att den faktiskt fångar regressionen (körd både med och utan
   fixen).
 
+**Uppdrag: fokuskortet - hierarki, ikoner och en dubblerad rubrik.** Ett användarskärmdump av
+fokusläget visade fem lika breda, lika tunga textknappar staplade (Bocka av / Jag börjar nu /
+Läs upp / Skjut upp till imorgon / Visa nästa) - det enda stället i appen som saknade både
+hierarki och ikoner, och där man var tvungen att läsa varje rad för att veta vad den gjorde.
+Samtidigt syntes "N av M klara" två gånger på Idag i fokusläget utan att sidan var scrollad.
+
+*Ombyggnaden* (`MinDag.razor`/`.razor.css`, ingen Domain/Application/Api-ändring):
+
+- **Bocka av** (`btn-primary btn-block`, ikon `check`) och **Jag börjar nu**/**Avbryt start**
+  (`btn-secondary btn-block`, ikon `play` i båda lägena - texten byter, inte ikonen) är nu de
+  ENDA två i `.focus-actions`. "Bocka av" står överst även före start - de flesta
+  fokusuppgifter är korta nog att bara göras.
+- **Läs upp**/**Tyst** flyttade helt ut till en ny `.focus-speak` - en `.btn-icon` (44×44, rund,
+  egen `aria-label`) uppe till höger i kortet, inte en femte textknapp bland handlingarna: den
+  är hjälp att ta in uppgiften, ingen handling PÅ den. Ny delad CSS i `app.css`: `.btn .icon`
+  (20px, 8px marginal, för en vanlig knapp med ikon) och `.btn-icon` (44×44 ikon-utan-text).
+- **Skjut upp till imorgon** och **Visa nästa** flyttade ner till en ny, tystare `.focus-escape`
+  under de två stora knapparna - länk-stilade, mindre text, `justify-content: space-between` (en
+  ensam överlevande knapp hamnar redan då vid `flex-start` utan extra regel). I Stor text
+  (`:root[data-text-size="large"]`) blir raden `flex-direction: column` i stället, så de två
+  länkarna aldrig krockar eller radbryter mitt i ett ord.
+- **"Pågår"-chippen** (`.chip.chip-primary`) flyttade från bredvid namnet (listläget, oförändrat)
+  till OVANFÖR namnet i kortet - kortet är en centrerad, en kolumn bred yta, "bredvid" hade ingen
+  plats att betyda något där.
+- Fem nya ikoner i `Icon.razor` (`play`, `speaker`, `speaker-off`, `arrow-right`, `skip`) i samma
+  streckstil som de befintliga - `skip` läggs till i vokabulären enligt uppdragets egen spec men
+  används INTE i denna revision (uppdraget avfärdade den uttryckligen för "Avbryt start": samma
+  `play`-ikon, bara texten byter).
+- Ny E2E-test `MinDagTests.Fokuskortet_has_two_primary_buttons_a_44px_speak_button_and_an_escape_row`
+  pinnar hierarkin (exakt två `.focus-actions .btn-block`, båda escape-länkarna finns,
+  ikonknappen är 44×44). `SpeechTests` uppdaterad till att läsa `aria-label` i stället för
+  textinnehåll, eftersom "Läs upp"-knappen inte längre har någon synlig etikett.
+  `SkarmbilderTests`s `06h-fokus-lasupp` ersattes av tre bilder (`06h-fokus-vila`,
+  `06h2-fokus-pagar`, `06h3-fokus-lasupp`) som visar kortets tre huvudlägen var för sig.
+  Manuell granskning (390×844 och 1280×900, ljust/mörkt/`data-calm`, Stor text, med och utan
+  pictogram, utan `CanBeDeferred`, en enda uppgift) via ett tillfälligt, granskat och borttaget
+  `DEBUG_FocusCard`-test: ikonknappen täcker aldrig pictogrammet, flyktraden radbryter aldrig i
+  Stor text, inga regressioner i mörkt/lugnt läge.
+
 | Fråga | Varför den väntar |
 |---|---|
 | Offline-strategi bortom read-only cache | Utanför MVP; får inte låsas in i förväg |
