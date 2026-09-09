@@ -159,6 +159,26 @@ public class SetMemberDayOffTests
     }
 
     [Fact]
+    public async Task BringAllForward_on_today_itself_is_a_safe_no_op_rather_than_throwing()
+    {
+        // Marking TODAY itself off means everything in "mine" is already scheduled for today -
+        // TaskOccurrence.BringForwardTo treats moving something to the date it is already on as
+        // an invariant violation (it throws), so the use case must recognise this ahead of time
+        // rather than let that surface as a failed request for someone who just wanted the day
+        // off with nothing already there to move.
+        var (householdId, anna) = await ArrangeHouseholdAsync();
+        var occurrence = SeedOccurrence(householdId, anna.Id, Today);
+
+        var result = await CreateUseCase().HandleAsync(
+            householdId, anna.Id, Today, Today, DayOffMode.BringAllForward, CancellationToken.None);
+
+        Assert.NotNull(result);
+        Assert.Equal(0, result.BroughtForward);
+        Assert.Equal(Today, occurrence.ScheduledDate);
+        Assert.Equal(0, _notifier.CallCount);
+    }
+
+    [Fact]
     public async Task Nothing_planned_on_that_date_still_succeeds_with_zero_counts()
     {
         var (householdId, anna) = await ArrangeHouseholdAsync();

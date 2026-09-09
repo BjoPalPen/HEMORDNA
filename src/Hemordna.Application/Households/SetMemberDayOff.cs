@@ -82,6 +82,17 @@ public sealed class SetMemberDayOff
         {
             foreach (var occurrence in mine)
             {
+                // Marking TODAY itself off (date == today) means every one of "mine" is already
+                // scheduled for today - there is nothing to bring forward, it is already exactly
+                // where BringForwardTo would put it. TaskOccurrence.BringForwardTo enforces this
+                // as an invariant (it throws rather than accept a no-op move), so this has to be
+                // filtered here rather than left to it - a member taking today off must never see
+                // the whole request fail just because "bring forward" had nothing left to do.
+                if (occurrence.ScheduledDate == today)
+                {
+                    continue;
+                }
+
                 occurrence.BringForwardTo(today);
                 await _occurrences.UpdateAsync(occurrence, cancellationToken);
                 broughtForward++;

@@ -61,6 +61,11 @@ else
         }
     </header>
 
+    @if (_day is { IsDayOff: true })
+    {
+        <p class="notice" role="status">Du är ledig idag. Inget nytt läggs på dig.</p>
+    }
+
     @if (_remoteNote is not null)
     {
         <p class="remote-note" role="status">@_remoteNote</p>
@@ -223,6 +228,9 @@ else
             <button type="button" class="chip-action" @onclick="OpenExtraTaskSheetAsync">
                 Extra uppgift
             </button>
+            <button type="button" class="chip-action" @onclick="() => OpenDayOffSheet(Today)">
+                @(_day.IsDayOff ? "Ledig idag" : "Ta ledigt idag")
+            </button>
         </div>
 
         @if (_unplannedNotice is not null)
@@ -298,8 +306,15 @@ else
                 {
                     <p class="notice notice-problem" role="alert">@_tomorrowNotice</p>
                 }
+
+                <button type="button" class="btn btn-link" @onclick="() => OpenDayOffSheet(Today.AddDays(1))">
+                    @(_tomorrow.IsDayOff ? "Ledig imorgon" : "Ta ledigt imorgon")
+                </button>
             </details>
         }
+
+        <DayOffSheet HouseholdId="HouseholdId" MemberId="MemberId" Date="_dayOffDate" IsCurrentlyOff="DayOffSheetIsCurrentlyOff"
+                     @bind-IsOpen="_showDayOffSheet" OnChanged="LoadDayAsync" />
 
         <BottomSheet Title="Flytta till en annan dag" @bind-IsOpen="_showUnplannedSheet">
             <p class="muted small">
@@ -385,6 +400,12 @@ else
     private Guid? _tomorrowBusyOccurrence;
     private string? _tomorrowNotice;
     private Guid? _busyOccurrence;
+
+    /// <summary>"Jag kan ... ta ledigt" - which date DayOffSheet is currently open for: either
+    /// Today (the chip in .chips) or Today.AddDays(1) (the link inside "Imorgon"). One shared
+    /// sheet instance rather than two, since only one can be open at a time anyway.</summary>
+    private bool _showDayOffSheet;
+    private DateOnly _dayOffDate;
     private Guid? _expandedOccurrence;
     private string? _presentation;
     private string? _motivation;
@@ -745,7 +766,7 @@ else
     }
 
     private bool IsInteractionBusy()
-        => _showUnplannedSheet || _showExtraTaskSheet
+        => _showUnplannedSheet || _showExtraTaskSheet || _showDayOffSheet
             || (_lastInteraction is { } last && TimeProvider.GetUtcNow() - last < TimeSpan.FromSeconds(2));
 
     private async Task RetryRemoteChangeAfterDelayAsync(CancellationToken cancellationToken)
@@ -1168,6 +1189,25 @@ else
 
         _lastInteraction = TimeProvider.GetUtcNow();
         _showUnplannedSheet = true;
+    }
+
+    /// <summary>Guaranteed non-empty by the time DayOffSheet is actually rendered - it only
+    /// appears once _day is not null, which itself requires Session.Me to have carried both.</summary>
+    private Guid HouseholdId => Session.Me?.HouseholdId ?? Guid.Empty;
+
+    private Guid MemberId => Session.Me?.MemberId ?? Guid.Empty;
+
+    /// <summary>Which of _day/_tomorrow's own IsDayOff applies to whichever date DayOffSheet is
+    /// currently open for - it only ever opens for one of those two exact dates (see
+    /// OpenDayOffSheet), never an arbitrary one.</summary>
+    private bool DayOffSheetIsCurrentlyOff
+        => _dayOffDate == Today ? (_day?.IsDayOff ?? false) : (_tomorrow?.IsDayOff ?? false);
+
+    private void OpenDayOffSheet(DateOnly date)
+    {
+        _lastInteraction = TimeProvider.GetUtcNow();
+        _dayOffDate = date;
+        _showDayOffSheet = true;
     }
 
     private void ShowUnplannedNotice()
