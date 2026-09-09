@@ -116,9 +116,13 @@ public class OverdueCapTests
         var overdueList = page.GetByRole(AriaRole.List, new() { Name = "Sedan tidigare" });
         await Assertions.Expect(overdueList).ToBeVisibleAsync();
 
-        var names = await overdueList.Locator(".task-name").AllTextContentsAsync();
+        // .task-name's own text node (the bare name) read directly, rather than its full text
+        // content - AllTextContentsAsync would also pick up any chip rendered inside the same
+        // span (room, time, "Börja här", ...), with no reliable separator to split back out.
+        var names = await overdueList.Locator(".task-name").EvaluateAllAsync<string[]>(
+            "els => els.map(el => el.childNodes[0].textContent.trim())");
         // "Sex" and "ZZOldest" share the oldest date (6 days ago) - name is the documented
         // tiebreaker, so "Sex" (alphabetically first) shows before "ZZOldest".
-        Assert.Equal(["Sex", "ZZOldest", "Fem"], names.Select(n => n.Split('\n')[0].Trim()).ToArray());
+        Assert.Equal(["Sex", "ZZOldest", "Fem"], names);
     }
 }

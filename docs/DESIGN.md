@@ -206,6 +206,12 @@ ingenting (annars skulle det stjäla klicket). Under `prefers-reduced-motion`: i
 ingen bekräftelseflash, ingen haptik – bara den vanliga klick-hanteringen, oavsett om den kom
 från bocken eller svepet.
 
+**Börja här** (denna revision): planerarens egen första uppgift (samma ordning fokusläget redan
+använder - "Sedan tidigare" först, annars första raden i första rummet) får en tyst
+`chip-today`-chip, "Börja här", bredvid namnet - bara i listläge, bara när fler än en uppgift
+väntar (annars är det redan uppenbart var man börjar). Chipparnas ordning under namnet: rum,
+tid, "Börja här".
+
 **Steg i beskrivningen** (denna revision): en beskrivning skriven en rad per steg (t.ex. "Ta
 fram hinken", ny rad, "Fyll med varmt vatten") renders som en numrerad lista i stället för ett
 enda textstycke, i den utfällda raden och i fokuskortet (`Support/TaskSteps.cs`). En

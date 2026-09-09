@@ -75,7 +75,10 @@ public class MinDagFloorGroupingTests
         // The floor prefix never appears in full, and a grouped row does not repeat its own
         // room heading as a chip (see MinDagDetailTests) - "Hall" only ever appears as a room
         // heading, twice (once per floor), never as "Övre plan – Hall" or a per-row chip.
+        // ".chip-today" ("Börja här", Sju enkla lösningar del 3) is excluded here on purpose -
+        // it is unrelated to room chips and expected on the planner's first task whenever more
+        // than one task is outstanding, which is exactly this test's own setup.
         await Assertions.Expect(page.GetByText("Övre plan – Hall")).Not.ToBeVisibleAsync();
-        await Assertions.Expect(page.Locator(".chip")).ToHaveCountAsync(0);
+        await Assertions.Expect(page.Locator("span.chip:not(.chip-today)")).ToHaveCountAsync(0);
     }
 }

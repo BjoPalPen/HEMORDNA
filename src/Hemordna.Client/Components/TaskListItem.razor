@@ -23,6 +23,10 @@
         {
             <span class="chip chip-time">@TimeLevel.MinutesLabel(Item.EstimatedMinutes)</span>
         }
+        @if (IsStartHere)
+        {
+            <span class="chip chip-today">Börja här</span>
+        }
         @if (IsBroughtForward)
         {
             <span class="chip chip-forward">I förväg</span>
@@ -114,6 +118,14 @@
     /// </summary>
     [Parameter]
     public bool ShowTimeLevel { get; set; }
+
+    /// <summary>The planner's own first task (MinDag.razor's StartHereOccurrenceId) - a quiet
+    /// pointer for someone who does not know where to start, never a second "next" concept next
+    /// to the focus card's own. List view only, and only while nothing is already under way
+    /// (see Support/StartedTask.cs, wired in from the caller so this component stays unaware of
+    /// where that state lives).</summary>
+    [Parameter]
+    public bool IsStartHere { get; set; }
 
     [Parameter, EditorRequired]
     public EventCallback<Guid> OnComplete { get; set; }

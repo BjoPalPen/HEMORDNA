@@ -175,6 +175,7 @@ else
                                 <TaskListItem Item="row.Item" Today="Today" ShowIcon="ShowIcons" ShowOverdueNote="false" ShowTimeLevel="_showTimeLevel"
                                               IsBusy="_busyOccurrence == row.Item.OccurrenceId"
                                               IsExpanded="_expandedOccurrence == row.Item.OccurrenceId"
+                                              IsStartHere="row.Item.OccurrenceId == StartHereOccurrenceId"
                                               OnComplete="CompleteAsync" OnToggleExpand="ToggleExpand" OnDefer="DeferAsync" />
                             }
                         }
@@ -218,6 +219,7 @@ else
                                     <TaskListItem Item="row.Item" Today="Today" ShowIcon="ShowIcons" ShowAreaChip="false" ShowTimeLevel="_showTimeLevel"
                                                   IsBusy="_busyOccurrence == row.Item.OccurrenceId"
                                                   IsExpanded="_expandedOccurrence == row.Item.OccurrenceId"
+                                                  IsStartHere="row.Item.OccurrenceId == StartHereOccurrenceId"
                                                   OnComplete="CompleteAsync" OnToggleExpand="ToggleExpand" OnDefer="DeferAsync" />
                                 }
                             }
@@ -581,6 +583,14 @@ else
     }
 
     private void ShowNextFocusTask() => _focusOffset++;
+
+    /// <summary>"Börja här" (list view only): a quiet pointer at the planner's own first task,
+    /// for someone who does not know where to start - not shown when there is only one task
+    /// anyway (nothing to choose between) or in focus mode (the card itself already IS that
+    /// pointer). Reuses FocusOrder rather than re-deriving "first in the planner's order" a
+    /// second time.</summary>
+    private Guid? StartHereOccurrenceId
+        => !IsFocusMode && _day is { Items.Count: > 1 } ? FocusOrder.FirstOrDefault()?.OccurrenceId : null;
 
     /// <summary>"Lugn" (Installningar.razor) - one of these five, chosen by state alone, never
     /// randomly: the same day-counts state always reads the same phrase, so it never seems to
