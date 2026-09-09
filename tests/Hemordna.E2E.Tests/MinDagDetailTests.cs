@@ -159,4 +159,54 @@ public class MinDagDetailTests
         await Assertions.Expect(page.Locator(".task", new() { HasText = "Dammsug hallen" }).Locator("span.chip:not(.chip-today)"))
             .ToHaveTextAsync("Entré plan – Hall");
     }
+
+    /// <summary>A real user's own iPhone (Safari/WebKit) screenshot showed the room chip's pill
+    /// struck straight through - a real, if lighter, browser difference: Chromium (this suite's
+    /// own test browser) never paints an ancestor's line-through into an inline-flex child like
+    /// ".chip" in the first place (confirmed directly: the fix below made no visible difference
+    /// in a Chromium screenshot, with or without it), so this test cannot actually reproduce or
+    /// disprove the original bug - "chip has no line-through" is trivially true here regardless.
+    /// ".chip { text-decoration: none }" is kept anyway as the standard, cross-browser-safe fix
+    /// for exactly this class of bug (verified correct on the real device, not just reasoned
+    /// about) - this test only pins the one fact Chromium actually lets it verify: the row's own
+    /// name keeps its strikethrough.</summary>
+    [Fact]
+    public async Task A_completed_rows_name_is_struck_through()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Torbjörn");
+
+        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
+        http.DefaultRequestHeaders.Authorization = new("Bearer", token);
+
+        var me = await (await http.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
+        var householdId = me.GetProperty("householdId").GetGuid();
+        var memberId = me.GetProperty("memberId").GetGuid();
+
+        var area = await (await http.PostAsJsonAsync(
+            $"/api/households/{householdId}/areas", new { name = "Kök" }))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        var task = await (await http.PostAsJsonAsync(
+            $"/api/households/{householdId}/tasks",
+            new { name = "Diska", estimatedMinutes = 5, areaId = area.GetProperty("id").GetGuid() }))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        var taskId = task.GetProperty("id").GetGuid();
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var occurrence = await (await http.PostAsJsonAsync(
+            $"/api/households/{householdId}/tasks/{taskId}/occurrences",
+            new { date = today, assignToMemberId = memberId }))
+            .Content.ReadFromJsonAsync<JsonElement>();
+
+        await http.PostAsync($"/api/households/{householdId}/occurrences/{occurrence.GetProperty("id").GetGuid()}/complete", null);
+        await page.ReloadAsync();
+
+        var doneRow = page.Locator(".task-list-done .task", new() { HasText = "Diska" });
+        await doneRow.WaitForAsync();
+
+        var nameDecoration = await doneRow.Locator(".task-name").EvaluateAsync<string>(
+            "el => getComputedStyle(el).textDecorationLine");
+        Assert.Contains("line-through", nameDecoration);
+    }
 }

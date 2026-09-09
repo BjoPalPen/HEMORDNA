@@ -2480,6 +2480,31 @@ regeln där för det fullständiga resonemanget, inte upprepat sju gånger här.
 | 6. Läs upp | En knapp i fokuskortet (`Support/Speech.cs`, Web Speech API) läser namn, rum, tid (om "Visa tid" är på) och beskrivning/steg | Inget tillstånd att spara - talsyntesen är enhetens egen, momentana förmåga, inte en preferens | Autouppläsning, uppläsning utanför fokusläget, en egen röst-/hastighetsinställning - alltid `sv-SE` och 0,95, ett fast värde tills något efterfrågar annat |
 | 1. Hur är orken idag? | Tre chips ("Lite"/"Lagom"/"Mycket", `Support/EnergyLevel.cs`, multiplikatorer 0,4/1,0/1,3 på dagens normala budget) anropar `SetAvailabilityAsync` - fanns redan i kontraktet och klienten (se docs/DESIGN.md §6a: den tillfälliga avvikelsen gick redan att sätta via API:t, bara ingen knapp fanns kvar i gränssnittet) - aldrig `SetWeeklyBudgetAsync` | Vilken ETIKETT som valdes är enhetslokal (`Support/EnergyChoice.cs`, `hemordna.energy`) bara så chipen läser rätt tillbaka - servern ser bara de resulterande minuterna, aldrig "orken" eller nivåordet, och absolut inget hushållsgemensamt | Historik över tidigare vald ork, ett fjärde/femte läge, automatisk föreslagen nivå från mönster - bara de tre fasta valen. **Avrundning**: uppdragets egen exempeltext ("60 × 0,4 = 24 min", "60 × 1,3 = 78 min") är avrundad till NÄRMASTE HELA MINUT, inte närmaste 5 som uppdragets prosa också nämner - 24 och 78 är båda redan heltal och ingetdera är en multipel av 5 (närmaste-5 hade gett 25 respektive 80). De konkreta, testbara talen i uppdragets eget exempel vägde tyngre än den lösare formuleringen |
 
+**Uppföljning: batteriikoner på orkenchipparna, och två riktiga buggar hittade av en användare i
+produktion.** `Icon.razor` fick tre nya namn (`battery-low`/`-medium`/`-full`, delad
+batterikontur + 1/2/3 fyllda staplar) - fast UI-krom, alltid synligt oavsett `ShowIcons`, samma
+resonemang som navigeringsflikarnas egna ikoner. Två separata fel upptäcktes från en riktig
+skärmbild:
+
+- **"Klart idag"s rumschip visade en genomstrykning rakt igenom pillen** på en användares iPhone
+  (Safari/WebKit) - `.task-list-done .task-name`s egen `text-decoration: line-through` målas
+  genom en efterföljande `.chip` som standard. Fixat med `text-decoration: none` uttryckligen på
+  chippen, samma etablerade, webbläsaroberoende teknik som redan används för just detta problem
+  i CSS-communityn i stort. **Kan inte verifieras av testsviten**: Chromium (Playwright:s
+  standardwebbläsare här) målar aldrig igenom en `inline-flex`-chip i första hand - bekräftat
+  genom att tillfälligt ta bort fixen och jämföra skärmbilder, ingen synlig skillnad i Chromium
+  varken med eller utan den. Fixen behålls ändå (korrekt och ofarlig oavsett webbläsare), men
+  `MinDagDetailTests` kan bara pinna att radens eget namn har genomstrykningen, inte att chippen
+  saknar den.
+- **De tre orkenchipparna, nu med ikon, fick inte plats på en rad vid 390px** - "Mycket" blev
+  ensam kvar på en egen rad, värre i Stor text. Löst med samma "N knappar delar alltid en rad,
+  krymper och radbryter sin EGEN text i stället för att hoppa till en ny rad"-teknik som
+  `.level-picker` redan använder (`flex-wrap: nowrap` + `flex: 1 1 0` på varje chip,
+  docs/ARCHITECTURE.md §10 - Stor text är ovillkorligt), samt etiketten flyttad till en egen rad
+  ovanför knapparna i stället för inline med dem. Ny test `EnergyTests.All_three_energy_chips_
+  stay_on_one_row_at_390px` (båda presentationslägena) mäter att alla tre chippens `BoundingBox`
+  delar samma Y-position.
+
 | Fråga | Varför den väntar |
 |---|---|
 | Offline-strategi bortom read-only cache | Utanför MVP; får inte låsas in i förväg |
