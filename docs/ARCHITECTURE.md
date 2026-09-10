@@ -2726,6 +2726,24 @@ fyrapersonshushåll (tre medlemmar tillagda via API) får tvätten som "ungefär
 en orelaterad hushållssyssla ("Vattna växter") förblir oförändrad - bekräftat att testet
 faktiskt faller utan fixen.
 
+### Uppföljning: "Övrigt" kunde bli permanent oåtkomligt — `IMPLEMENTED`
+
+Riktig bugg rapporterad av Björn (2026-09-10): "Övrigt"-kortet på Rum fanns inte alls, trots att
+DESIGN.md redan uttryckligen säger "alltid synligt". Rotorsak: `Rum.razor` renderade kortet
+bara när `_selectedFloor is null`, men `Floors`-listan (våningsflikarna) inkluderar `null` bara
+om MINST ETT rum saknar ett våningsprefix - ett hushåll där VARJE rum råkar ha ett prefix (t.ex.
+"Entré plan – Kök") får aldrig något "Annat"-flik att klicka tillbaka till `null` med.
+`_selectedFloor ??= Floors.FirstOrDefault()` låser dessutom fast på den FÖRSTA riktiga våningen
+direkt vid sidladdning - kortet var med andra ord aldrig nåbart alls för ett sådant hushåll, inte
+ens vid första besöket.
+
+Fixat genom att ta bort villkoret helt - "Övrigt" renderas nu oavsett vilken våningsflik som är
+vald, precis som specen redan sa. Inga av `TaskCountFor`/`WeeklyMinutesFor`/`TodayCountFor`/
+`NextDayLabelFor` beror på `_selectedFloor`, så ingen annan ändring behövdes. Ny E2E
+`OmradenTests.Ovrigt_stays_reachable_even_when_every_room_has_a_floor_prefix` (två våningar, inget
+rum utan prefix, en våning vald) - bekräftad att den faller utan fixen, med precis den
+`aria snapshot` som beskriver buggen (bara två flikar, ingen "Övrigt"-knapp alls).
+
 | Fråga | Varför den väntar |
 |---|---|
 | Offline-strategi bortom read-only cache | Utanför MVP; får inte låsas in i förväg |

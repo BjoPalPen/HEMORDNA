@@ -474,4 +474,34 @@ public class OmradenTests
         var afterTasks = await FetchTasksAsync(page);
         Assert.NotEqual(WeekdayOf(afterTasks, "Torka av handfatet"), WeekdayOf(afterTasks, "Byt handdukar"));
     }
+
+    /// <summary>Real bug (2026-09-10): "Övrigt" was only ever rendered while
+    /// <c>_selectedFloor is null</c>, but a household where EVERY room happens to have a floor
+    /// prefix never gets a null-valued "Annat" tab to click back to null with - Rum.razor's own
+    /// Floors getter only includes null when at least one area lacks the prefix. "Övrigt" became
+    /// permanently unreachable the moment a floor tab was selected, contradicting DESIGN.md's own
+    /// "alltid synligt".</summary>
+    [Fact]
+    public async Task Ovrigt_stays_reachable_even_when_every_room_has_a_floor_prefix()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Björn");
+
+        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
+        http.DefaultRequestHeaders.Authorization = new("Bearer", token);
+
+        var me = await (await http.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
+        var householdId = me.GetProperty("householdId").GetGuid();
+
+        // Two floors, every single room floor-prefixed - no room ever falls into "Annat", so
+        // Floors never contains a null entry and the tab bar never offers one to click.
+        await http.PostAsJsonAsync($"/api/households/{householdId}/areas", new { name = "Övre plan – Kök" });
+        await http.PostAsJsonAsync($"/api/households/{householdId}/areas", new { name = "Källar plan – Tvättstuga" });
+
+        await page.GotoAsync("/rum");
+        await page.GetByRole(AriaRole.Tab, new() { Name = "Övre plan" }).ClickAsync();
+
+        await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Övrigt" })).ToBeVisibleAsync();
+    }
 }

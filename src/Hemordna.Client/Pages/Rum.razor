@@ -51,12 +51,9 @@ else
                           OnClick="() => OpenRoom(area.Id, area.Name)" />
             }
 
-            @if (_selectedFloor is null)
-            {
-                <RoomTile Name="Övrigt" TaskCount="@TaskCountFor(null)" WeeklyMinutes="@WeeklyMinutesFor(null)"
-                          TodayCount="@TodayCountFor("Övrigt")" NextDayLabel="@NextDayLabelFor("Övrigt")"
-                          OnClick='() => OpenRoom(null, "Övrigt")' />
-            }
+            <RoomTile Name="Övrigt" TaskCount="@TaskCountFor(null)" WeeklyMinutes="@WeeklyMinutesFor(null)"
+                      TodayCount="@TodayCountFor("Övrigt")" NextDayLabel="@NextDayLabelFor("Övrigt")"
+                      OnClick='() => OpenRoom(null, "Övrigt")' />
 
             <button type="button" class="room-tile room-tile-add" @onclick="() => _showNewRoomSheet = true">
                 <Icon Name="plus" Size="22" />
