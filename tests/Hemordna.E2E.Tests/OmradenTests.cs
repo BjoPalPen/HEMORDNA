@@ -341,6 +341,69 @@ public class OmradenTests
         await Assertions.Expect(room.GetByRole(AriaRole.Button, new() { Name = "Handla mat" })).Not.ToBeVisibleAsync();
     }
 
+    /// <summary>"En fundering" (2026-09-10) - laundry is work per LOAD, so a household's real
+    /// frequency depends on how many people generate loads, not a single fixed default - see
+    /// RoomTemplateTask.FrequencyFor and docs/ARCHITECTURE.md "Beslut: Mallfrekvens skalad efter
+    /// hushållsstorlek".</summary>
+    [Fact]
+    public async Task A_scaling_chores_frequency_matches_the_templates_own_default_for_a_single_member_household()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Karin");
+
+        await page.GotoAsync("/rum");
+        await OpenRoomAsync(page, "Övrigt");
+        var room = Sheet(page, "Övrigt");
+
+        await room.GetByText("Lägg till vanliga hushållssysslor").ClickAsync();
+        await room.GetByLabel("Tvätta och lägga in tvätt").CheckAsync();
+        await room.GetByRole(AriaRole.Button, new() { Name = "Lägg till valda" }).ClickAsync();
+
+        var row = room.GetByRole(AriaRole.Button, new() { Name = "Tvätta och lägga in tvätt" });
+        await Assertions.Expect(row).ToContainTextAsync("varje vecka");
+    }
+
+    [Fact]
+    public async Task A_scaling_chore_speeds_up_for_a_larger_household_while_an_unrelated_chore_does_not()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Lasse");
+
+        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
+        http.DefaultRequestHeaders.Authorization = new("Bearer", token);
+
+        var me = await (await http.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
+        var householdId = me.GetProperty("householdId").GetGuid();
+
+        // Three more members, for four active in total - the household's own creator already
+        // counts as the first.
+        foreach (var name in new[] { "Ines", "Oskar", "Vera" })
+        {
+            await http.PostAsJsonAsync($"/api/households/{householdId}/members", new { displayName = name });
+        }
+
+        // A fresh load, not an in-app navigation - RoomSheet's Members parameter comes from
+        // Rum.razor's own household fetch on init, which must see all four before the sheet
+        // opens.
+        await page.GotoAsync("/rum");
+        await OpenRoomAsync(page, "Övrigt");
+        var room = Sheet(page, "Övrigt");
+
+        await room.GetByText("Lägg till vanliga hushållssysslor").ClickAsync();
+        await room.GetByLabel("Tvätta och lägga in tvätt").CheckAsync();
+        await room.GetByLabel("Vattna växter").CheckAsync();
+        await room.GetByRole(AriaRole.Button, new() { Name = "Lägg till valda" }).ClickAsync();
+
+        var laundryRow = room.GetByRole(AriaRole.Button, new() { Name = "Tvätta och lägga in tvätt" });
+        await Assertions.Expect(laundryRow).ToContainTextAsync("ungefär var 2:e dag");
+
+        // Watering plants has nothing to do with how many people live there - its own template
+        // default is untouched.
+        var plantsRow = room.GetByRole(AriaRole.Button, new() { Name = "Vattna växter" });
+        await Assertions.Expect(plantsRow).ToContainTextAsync("varje vecka");
+    }
+
     [Fact]
     public async Task A_rooms_weekly_tasks_share_a_weekday_but_a_second_room_lands_on_a_different_one()
     {

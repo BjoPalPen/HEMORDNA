@@ -5,9 +5,10 @@ namespace Hemordna.Client.Support;
 /// <summary>
 /// How often a template task repeats. "AsNeeded" has no calendar slot - it becomes due a fixed
 /// number of days after it was last completed instead, see TaskDefinition.StaleAfterDays.
-/// "TwiceWeekly" has no single weekly slot either - a week's recurrence only carries one
-/// weekday (see RecurrenceRule.Weekly) - so it is approximated as a task that comes due every
-/// few days rather than on the same two weekdays every week; see ToScheduling.
+/// "TwiceWeekly"/"EveryOtherDay" have no single weekly slot either - a week's recurrence only
+/// carries one weekday (see RecurrenceRule.Weekly) - so both are approximated as a task that
+/// comes due every few days rather than on the same fixed weekdays every week; see
+/// ToScheduling.
 /// </summary>
 public enum TaskFrequency
 {
@@ -15,16 +16,20 @@ public enum TaskFrequency
     TwiceWeekly,
     Weekly,
     Monthly,
-    AsNeeded
+    AsNeeded,
+    EveryOtherDay
 }
 
 /// <summary>
 /// One item a room template generates. The minutes travel to the API but are never shown - see
 /// TimeLevel. <paramref name="AdultsOnly"/> keeps the task's rotation away from children (e.g.
-/// washing windows) - see TaskDefinition.RequiresAdult.
+/// washing windows) - see TaskDefinition.RequiresAdult. <paramref name="ScalesWithHouseholdSize"/>
+/// marks a task whose real-world frequency depends on how many people generate the work (e.g.
+/// laundry loads) rather than how dirty a fixed room gets - see FrequencyFor.
 /// </summary>
 public sealed record RoomTemplateTask(
-    string Name, int EstimatedMinutes, TaskFrequency Frequency, bool AdultsOnly = false)
+    string Name, int EstimatedMinutes, TaskFrequency Frequency, bool AdultsOnly = false,
+    bool ScalesWithHouseholdSize = false)
 {
     /// <summary>Default "as needed" interval - not shown, and not user-configurable, anywhere it is used.</summary>
     public const int AsNeededDefaultDays = 21;
@@ -37,6 +42,30 @@ public sealed record RoomTemplateTask(
     private const int TwiceWeeklyIntervalDays = 3;
 
     /// <summary>
+    /// A task per-omgång (e.g. one laundry load) roughly needs personer/1.5 rounds a week -
+    /// rounded to whichever calendar cadence is already expressible, rather than a new
+    /// recurrence type (PRODUCT.md §9: the recurrence engine is not overdesigned ahead of a
+    /// real need). 1 member keeps the template's own default (Weekly); 2-3 doubles it
+    /// (TwiceWeekly, i.e. every 3 days); 4+ doubles it again (EveryOtherDay). Never returns a
+    /// LOWER frequency than the task's own default - a household that started small and only
+    /// grows never sees laundry become rarer than what they already set up.
+    /// </summary>
+    public TaskFrequency FrequencyFor(int activeMembers)
+    {
+        if (!ScalesWithHouseholdSize)
+        {
+            return Frequency;
+        }
+
+        return activeMembers switch
+        {
+            <= 1 => Frequency,
+            <= 3 => TaskFrequency.TwiceWeekly,
+            _ => TaskFrequency.EveryOtherDay
+        };
+    }
+
+    /// <summary>
     /// The recurrence and/or stale-after-days pair to send when creating this task.
     /// <paramref name="spreadIndex"/> is this task's position within a batch of tasks created
     /// together (a whole room, or several rooms in one floor) - without it, every weekly task
@@ -44,17 +73,22 @@ public sealed record RoomTemplateTask(
     /// to the same day-of-month, so a household ends up with one overloaded day and several
     /// empty ones instead of a spread week. Each increase in <paramref name="spreadIndex"/>
     /// moves the anchor to a different weekday (Weekly) or day-of-month/cycle-phase
-    /// (Monthly/TwiceWeekly); Daily and AsNeeded have no anchor to spread.
+    /// (Monthly/TwiceWeekly/EveryOtherDay); Daily and AsNeeded have no anchor to spread.
+    /// <paramref name="activeMembers"/> only matters for a task with
+    /// <see cref="ScalesWithHouseholdSize"/> set - see <see cref="FrequencyFor"/>.
     /// </summary>
-    public (RecurrenceRuleContract? Recurrence, int? StaleAfterDays) ToScheduling(DateOnly today, int spreadIndex = 0)
+    public (RecurrenceRuleContract? Recurrence, int? StaleAfterDays) ToScheduling(
+        DateOnly today, int spreadIndex = 0, int activeMembers = 1)
     {
         var shiftedAnchor = today.AddDays(spreadIndex);
 
-        return Frequency switch
+        return FrequencyFor(activeMembers) switch
         {
             TaskFrequency.Daily => (new RecurrenceRuleContract("Daily", 1, today, null, null), null),
             TaskFrequency.TwiceWeekly
                 => (new RecurrenceRuleContract("Daily", TwiceWeeklyIntervalDays, shiftedAnchor, null, null), null),
+            TaskFrequency.EveryOtherDay
+                => (new RecurrenceRuleContract("Daily", 2, shiftedAnchor, null, null), null),
             TaskFrequency.Weekly
                 => (new RecurrenceRuleContract("Weekly", 1, today, shiftedAnchor.DayOfWeek.ToString(), null), null),
             TaskFrequency.Monthly => (new RecurrenceRuleContract("Monthly", 1, shiftedAnchor, null, null), null),
