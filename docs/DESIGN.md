@@ -588,6 +588,26 @@ disclosuren "Lägg till vanliga hushållssysslor" - samma mall-tänk som `RoomTe
 **inget är förvalt**, eftersom vilka som är relevanta varierar mycket mer mellan hushåll än
 vilka uppgifter ett givet rum har.
 
+**Tvätten skalas efter hushållets storlek** (denna revision): tid per tvättomgång är konstant
+(20 min) - det som faktiskt skiljer ett litet hushåll från ett stort är hur OFTA en omgång
+behövs, inte hur länge den tar. `RoomTemplateTask.ScalesWithHouseholdSize` (bara satt på
+"Tvätta och lägga in tvätt") + `FrequencyFor(int activeMembers)` väljer frekvens efter antal
+aktiva medlemmar, avrundat till en kalendercykel som redan går att uttrycka - ingen ny
+recurrence-typ (PRODUCT.md §9):
+
+| Aktiva medlemmar | Frekvens |
+|---|---|
+| 1 | Veckovis (mallens eget standardvärde, oförändrat) |
+| 2-3 | Två gånger i veckan |
+| 4+ | Varannan dag |
+
+En uppgift som inte har flaggan (allt annat i biblioteket, och alla rumsmallar) beter sig precis
+som förut. En rad `muted small` under kryssrutelistan ("Tvätten anpassas efter att ni är N i
+hushållet.") talar om det, bara när minst en av de erbjudna uppgifterna faktiskt skalar. Se
+docs/ARCHITECTURE.md "Beslut: Mallfrekvens skalad efter hushållsstorlek" för mätningen av vad
+detta faktiskt betyder i minuter, och de två öppna frågorna (matlagning, hushåll som växer
+efteråt) som medvetet INTE besvaras här.
+
 **Rum och medlemmar kan tas bort**, liksom enskilda uppgifter. Ett rum kan ha skapats fel,
 eller en medlem kan ha flyttat. Knapparna heter "Ta bort" och avaktiverar
 (`Area`/`HouseholdMember`/`TaskDefinition.Deactivate`) snarare än raderar - historiken

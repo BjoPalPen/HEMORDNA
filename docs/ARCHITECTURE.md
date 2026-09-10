@@ -2651,9 +2651,61 @@ collapsed_header` (fokusläge: `.day-header-collapsed` osynlig vid `scrollY 0`, 
 scroll 200px, osynlig igen efter scroll tillbaka till 0; ett Idag → Rum → Idag-byte lämnar inget
 kvarvarande attribut).
 
+### Beslut: Mallfrekvens skalad efter hushållsstorlek — `IMPLEMENTED`
+
+En riktig brist: `GeneralTaskTemplates`/`RoomTemplates` gav varje malluppgift en fast frekvens
+oavsett hushållsstorlek - "Tvätta och lägga in tvätt" var 20 min, veckovis, lika för en ensam
+person som för sex. Redan vid tre personer är det synligt fel: tvätt är arbete PER OMGÅNG, och
+antalet omgångar följer antalet personer, inte rummet.
+
+**Tid är konstant, bara frekvensen skalar.** `RoomTemplateTask.ScalesWithHouseholdSize` (bool,
+default false, bara satt på tvätten) + en ren funktion `FrequencyFor(int activeMembers)`:
+1 medlem behåller mallens eget standardvärde (Veckovis), 2-3 fördubblar den (`TwiceWeekly`,
+redan byggd som `Daily` intervall 3), 4+ fördubblar den igen (ny `TaskFrequency.EveryOtherDay`,
+`Daily` intervall 2 - samma mönster, ingen ny recurrence-typ på servern, PRODUCT.md §9 är
+ovillkorligt). Aldrig en LÄGRE frekvens än mallens egen - ett hushåll som växer ser aldrig
+tvätten bli mer sällan än vad de redan satt upp. `RoomSheet.razor`s `AddSuggestedTasksAsync`
+skickar redan laddade `Members.Count` (aktiva medlemmar, från `Rum.razor`) till
+`ToScheduling`; en `muted small`-rad under kryssrutelistan nämner det, bara när minst en
+erbjuden uppgift faktiskt skalar.
+
+**Mätning** (`TaskWorkload.WeeklyMinutes`, se `Support/TaskWorkload.cs`), underlag för
+budgetfrågan nedan - inga slutsatser dras här:
+
+| Aktiva medlemmar | Frekvens | Tvätt min/vecka | Hushållets veckokapacitet (rollmallar) | Andel |
+|---|---|---|---|---|
+| 1 (1 vuxen heltid) | Veckovis | 20,0 | 245 | 8,2 % |
+| 2 (2 vuxna heltid) | Två ggr/vecka | 46,7 | 490 | 9,5 % |
+| 4 (2 vuxna + 2 barn) | Varannan dag | 70,0 | 760 | 9,2 % |
+
+Andelen tvätt tar av hushållets kapacitet är förvånansvärt konstant (~8-10 %) tvärs över
+storlekarna - ett gott tecken att skalningsformeln (personer/1,5 omgångar/vecka) är rimligt
+kalibrerad, snarare än ett argument för att ändra rollbudgeterna. (Notering: uppdragets egen
+exempelsiffra för "2 vuxna + 2 barn" var 750 - den var räknad fel; 760 är den korrekta summan
+av `HouseholdRolePresets.BudgetFor`.)
+
+**Två frågor medvetet INTE besvarade här:**
+
+1. **Matlagning** - ett riktigt användningsfall (ensamhushåll med NPF-diagnos, en daglig
+   påminnelse om att laga mat tillsammans med "Handla mat"), men en egen fråga: en daglig
+   30-45 min-uppgift skulle ensam äta upp det mesta av en rollbudget på 35-65 min/dag och
+   tränga ut städsysslor i `DailyPlanner`. Kräver ett beslut om rollbudgeterna räcker eller
+   måste omvärderas FÖRST, innan uppgiften läggs till - inte tvärtom.
+2. **Ett hushåll som ändrar storlek efteråt** - `TaskDefinition` snapshottar frekvensen vid
+   skapandet; ingen omräkning byggs här. Om ett riktigt hushåll behöver det är vägen en
+   explicit, idempotent `Refresh…`-use case à la `RefreshRolePresetBudgets` (rör aldrig en
+   handredigerad uppgift) - inte något som körs automatiskt.
+
+Nya E2E-tester i `OmradenTests`: ett ensamhushåll behåller mallens standardfrekvens; ett
+fyrapersonshushåll (tre medlemmar tillagda via API) får tvätten som "ungefär var 2:e dag" medan
+en orelaterad hushållssyssla ("Vattna växter") förblir oförändrad - bekräftat att testet
+faktiskt faller utan fixen.
+
 | Fråga | Varför den väntar |
 |---|---|
 | Offline-strategi bortom read-only cache | Utanför MVP; får inte låsas in i förväg |
+| Matlagning som egen uppgiftstyp | Riktigt behov (NPF, ensamhushåll), men kräver ett rollbudget-beslut FÖRST - se "Beslut: Mallfrekvens..." ovan |
+| Omräkning av mallfrekvens när hushållet ändrar storlek efteråt | Inget riktigt hushåll har stött på det ännu - byggs som en explicit `Refresh…`-use case den dagen det händer |
 
 Tidigare på denna lista, nu lösta: vem som genererar `TaskOccurrence` och hur roterande ansvar
 räknas ut - se §3 och §5.

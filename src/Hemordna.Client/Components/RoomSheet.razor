@@ -183,6 +183,11 @@
                         </label>
                     }
 
+                    @if (GeneralTaskTemplates.All.Any(task => task.ScalesWithHouseholdSize))
+                    {
+                        <p class="muted small">@HouseholdSizeScalingNote()</p>
+                    }
+
                     <button type="button" class="btn btn-primary" disabled="@_suggestionsBusy" @onclick="AddSuggestedTasksAsync">
                         @(_suggestionsBusy ? "Lägger till..." : "Lägg till valda")
                     </button>
@@ -338,6 +343,12 @@
 
     private string? MemberNameFor(Guid? memberId)
         => memberId is { } id ? Members.FirstOrDefault(m => m.Id == id)?.DisplayName ?? "okänd" : null;
+
+    /// <summary>Explains why a suggestion's own frequency (e.g. "Tvätta och lägga in tvätt")
+    /// may differ from its listed default - see RoomTemplateTask.FrequencyFor.</summary>
+    private string HouseholdSizeScalingNote() => Members.Count == 1
+        ? "Tvätten anpassas efter att du är ensam i hushållet."
+        : $"Tvätten anpassas efter att ni är {Members.Count} i hushållet.";
 
     private static string RecurrenceLabel(TaskDefinitionResponse task) => task switch
     {
@@ -629,7 +640,7 @@
         {
             foreach (var (task, index) in selected.Select((task, index) => (task, index)))
             {
-                var (recurrence, staleAfterDays) = task.ToScheduling(Today, index);
+                var (recurrence, staleAfterDays) = task.ToScheduling(Today, index, Members.Count);
 
                 await Api.CreateTaskAsync(HouseholdId, new CreateTaskRequest(
                     task.Name,
