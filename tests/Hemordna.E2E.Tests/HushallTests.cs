@@ -89,6 +89,53 @@ public class HushallTests
             .ToHaveClassAsync(new System.Text.RegularExpressions.Regex("btn-primary"));
     }
 
+    /// <summary>"Kan familjen själv korrigera budget ex per dag eller mer tid på veckoslut?"
+    /// (2026-09-10) - the API already took a full weekday-by-weekday budget (used throughout
+    /// the E2E suite's own household seeding), but the UI only ever offered one flat number for
+    /// all seven days at once. See docs/ARCHITECTURE.md "Beslut: Anpassa tid per veckodag".</summary>
+    [Fact]
+    public async Task Setting_a_per_weekday_budget_gives_more_time_on_weekends_and_survives_a_reload()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Nils");
+
+        await page.GotoAsync("/hushall");
+        var sheet = await HushallHelper.OpenMemberSheetAsync(page, "Nils");
+
+        await sheet.GetByText("Anpassa tid per veckodag").ClickAsync();
+        await sheet.GetByLabel("Måndag").FillAsync("20");
+        await sheet.GetByLabel("Tisdag").FillAsync("20");
+        await sheet.GetByLabel("Onsdag").FillAsync("20");
+        await sheet.GetByLabel("Torsdag").FillAsync("20");
+        await sheet.GetByLabel("Fredag").FillAsync("20");
+        await sheet.GetByLabel("Lördag").FillAsync("90");
+        await sheet.GetByLabel("Söndag").FillAsync("90");
+        await sheet.GetByRole(AriaRole.Button, new() { Name = "Spara" }).ClickAsync();
+
+        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
+        http.DefaultRequestHeaders.Authorization = new("Bearer", token);
+        var me = await (await http.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
+        var household = await (await http.GetAsync($"/api/households/{me.GetProperty("householdId").GetGuid()}"))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        var budget = household.GetProperty("members").EnumerateArray()
+            .Single(m => m.GetProperty("displayName").GetString() == "Nils")
+            .GetProperty("weeklyTimeBudgetMinutes");
+
+        Assert.Equal(20, budget.GetProperty("monday").GetInt32());
+        Assert.Equal(20, budget.GetProperty("friday").GetInt32());
+        Assert.Equal(90, budget.GetProperty("saturday").GetInt32());
+        Assert.Equal(90, budget.GetProperty("sunday").GetInt32());
+
+        // Reflected back, not just accepted - reopen after a reload and confirm the same values
+        // pre-fill the form rather than reverting to whatever they were before.
+        await page.ReloadAsync();
+        sheet = await HushallHelper.OpenMemberSheetAsync(page, "Nils");
+        await sheet.GetByText("Anpassa tid per veckodag").ClickAsync();
+        await Assertions.Expect(sheet.GetByLabel("Lördag")).ToHaveValueAsync("90");
+        await Assertions.Expect(sheet.GetByLabel("Måndag")).ToHaveValueAsync("20");
+    }
+
     [Fact]
     public async Task Removing_a_member_takes_them_off_the_avatar_row()
     {

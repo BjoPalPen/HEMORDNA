@@ -35,6 +35,55 @@
         </div>
     </details>
 
+    <details class="more-options">
+        <summary>Anpassa tid per veckodag</summary>
+        <p class="muted small">
+            Sätt ett eget antal minuter för varje dag - till exempel mer tid på helgen, eller en
+            ledig dag i veckan. Skriver över både rollval och "Anpassad tid" ovan.
+        </p>
+
+        @if (_weekdayForm is { } weekdayForm)
+        {
+            <label class="field">
+                <span>Måndag</span>
+                <input type="number" min="0" max="600" @bind="weekdayForm.Monday" />
+            </label>
+            <label class="field">
+                <span>Tisdag</span>
+                <input type="number" min="0" max="600" @bind="weekdayForm.Tuesday" />
+            </label>
+            <label class="field">
+                <span>Onsdag</span>
+                <input type="number" min="0" max="600" @bind="weekdayForm.Wednesday" />
+            </label>
+            <label class="field">
+                <span>Torsdag</span>
+                <input type="number" min="0" max="600" @bind="weekdayForm.Thursday" />
+            </label>
+            <label class="field">
+                <span>Fredag</span>
+                <input type="number" min="0" max="600" @bind="weekdayForm.Friday" />
+            </label>
+            <label class="field">
+                <span>Lördag</span>
+                <input type="number" min="0" max="600" @bind="weekdayForm.Saturday" />
+            </label>
+            <label class="field">
+                <span>Söndag</span>
+                <input type="number" min="0" max="600" @bind="weekdayForm.Sunday" />
+            </label>
+        }
+
+        @if (_weekdayMessage is { } weekdayMessage)
+        {
+            <div class="notice notice-problem" role="alert">@weekdayMessage</div>
+        }
+
+        <button type="button" class="btn btn-secondary btn-block" disabled="@_weekdayBusy" @onclick="SaveWeekdayBudgetAsync">
+            @(_weekdayBusy ? "Sparar..." : "Spara")
+        </button>
+    </details>
+
     @if (_roleMessage is { } roleMessage)
     {
         <div class="notice notice-problem" role="alert">@roleMessage</div>
@@ -99,6 +148,23 @@
     private bool _roleBusy;
     private string? _roleMessage;
 
+    /// <summary>A plain, mutable holder for the seven number inputs - WeeklyTimeBudgetContract
+    /// itself is an immutable record, and each weekday needs its own two-way binding target.</summary>
+    private sealed class WeekdayMinutesForm
+    {
+        public int Monday { get; set; }
+        public int Tuesday { get; set; }
+        public int Wednesday { get; set; }
+        public int Thursday { get; set; }
+        public int Friday { get; set; }
+        public int Saturday { get; set; }
+        public int Sunday { get; set; }
+    }
+
+    private WeekdayMinutesForm? _weekdayForm;
+    private bool _weekdayBusy;
+    private string? _weekdayMessage;
+
     private DateOnly? _pauseUntilInput;
     private bool _pauseBusy;
     private string? _pauseMessage;
@@ -115,12 +181,23 @@
         if (!IsOpen)
         {
             _roleMessage = null;
+            _weekdayMessage = null;
             _pauseMessage = null;
             _removeMessage = null;
             return;
         }
 
         _pauseUntilInput ??= Member.PausedUntil ?? Today.AddDays(7);
+        _weekdayForm ??= new WeekdayMinutesForm
+        {
+            Monday = Member.WeeklyTimeBudgetMinutes.Monday,
+            Tuesday = Member.WeeklyTimeBudgetMinutes.Tuesday,
+            Wednesday = Member.WeeklyTimeBudgetMinutes.Wednesday,
+            Thursday = Member.WeeklyTimeBudgetMinutes.Thursday,
+            Friday = Member.WeeklyTimeBudgetMinutes.Friday,
+            Saturday = Member.WeeklyTimeBudgetMinutes.Saturday,
+            Sunday = Member.WeeklyTimeBudgetMinutes.Sunday
+        };
     }
 
     private async Task OnIsOpenChanged(bool isOpen)
@@ -130,6 +207,7 @@
         if (!isOpen)
         {
             _pauseUntilInput = null;
+            _weekdayForm = null;
         }
 
         await IsOpenChanged.InvokeAsync(isOpen);
@@ -193,6 +271,45 @@
         finally
         {
             _roleBusy = false;
+        }
+    }
+
+    private async Task SaveWeekdayBudgetAsync()
+    {
+        if (_weekdayForm is not { } form)
+        {
+            return;
+        }
+
+
+        _weekdayBusy = true;
+        _weekdayMessage = null;
+
+        try
+        {
+            // Negative values are only reachable by typing past the field's own min="0" -
+            // clamped here rather than sent on and left to fail the round trip on a mistake
+            // that is trivial to just correct.
+            var budget = new WeeklyTimeBudgetContract(
+                Math.Max(0, form.Monday), Math.Max(0, form.Tuesday), Math.Max(0, form.Wednesday),
+                Math.Max(0, form.Thursday), Math.Max(0, form.Friday), Math.Max(0, form.Saturday),
+                Math.Max(0, form.Sunday));
+
+            if (!await Api.SetWeeklyBudgetAsync(HouseholdId, Member.Id, budget))
+            {
+                _weekdayMessage = "Det gick inte att spara. Försök igen.";
+                return;
+            }
+
+            await OnChanged.InvokeAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _weekdayMessage = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _weekdayBusy = false;
         }
     }
 

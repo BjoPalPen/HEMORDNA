@@ -2651,6 +2651,31 @@ collapsed_header` (fokusläge: `.day-header-collapsed` osynlig vid `scrollY 0`, 
 scroll 200px, osynlig igen efter scroll tillbaka till 0; ett Idag → Rum → Idag-byte lämnar inget
 kvarvarande attribut).
 
+### Beslut: Anpassa tid per veckodag — `IMPLEMENTED`
+
+Fråga från Björn (2026-09-10): "Kan familjen själv korrigera budget ex per dag eller mer tid på
+veckoslut?" Svaret var redan ja på servern - `WeeklyTimeBudget` är och har alltid varit
+indexerad per veckodag, och `PUT .../members/{id}/weekly-budget` tar redan
+`{monday, tuesday, ..., sunday}` var för sig (samma kontrakt hela E2E-sviten redan seedar
+hushåll med). Det som saknades var bara ett klientformulär - `MemberSheet.razor`s enda
+existerande väg in, "Anpassad tid i stället", skriver samma minuttal på alla sju dagar
+(`SetCustomMinutesAsync`), och kan strukturellt inte uttrycka "mer på helgen".
+
+**Ingen ny domän- eller API-yta.** En andra disclosure, "Anpassa tid per veckodag", med sju
+fria minutfält (`<input type="number">`), förifyllda från `Member.WeeklyTimeBudgetMinutes` när
+arket öppnas (`WeekdayMinutesForm`, en enkel muterbar hållare - `WeeklyTimeBudgetContract`
+själv är en immutable record och kan inte vara bindningsmål för sju separata fält). Samma
+`Api.SetWeeklyBudgetAsync` som rollval och "Anpassad tid" redan använder - alla tre är samma
+underliggande `WeeklyTimeBudget`, bara tre vägar att sätta den, och den senaste vinner.
+Negativa värden (nåbara bara genom att skriva förbi fältets eget `min="0"`) klipps till 0
+klientsidan innan de skickas, i stället för att skickas och misslyckas mot domänens egen
+`Guard.AgainstNegative`.
+
+Ny E2E `HushallTests.Setting_a_per_weekday_budget_gives_more_time_on_weekends_and_survives_a_
+reload`: sätter 20 min vardagar, 90 min helg, läser tillbaka via API, och bekräftar att en
+omladdning + återöppning av arket visar exakt samma värden (inte bara accepterat, faktiskt
+sparat) - bekräftad att den faller utan fixen.
+
 | Fråga | Varför den väntar |
 |---|---|
 | Offline-strategi bortom read-only cache | Utanför MVP; får inte låsas in i förväg |
