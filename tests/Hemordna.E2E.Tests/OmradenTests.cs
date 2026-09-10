@@ -372,6 +372,30 @@ public class OmradenTests
         await Assertions.Expect(row).ToContainTextAsync("· 5 min");
     }
 
+    /// <summary>"Det räcker inte med dessa gränser... vi kanske måste åka långt för att handla"
+    /// (2026-09-10) - a real errand can take hours, not just the old top bucket's 30 minutes -
+    /// see Support.TimeLevel and docs/ARCHITECTURE.md "Beslut: Fler tidsnivåer, upp till flera
+    /// timmar". A shared scale (TimeLevel.All) - this only exercises it through the suggestions
+    /// list, but the same two levels are available everywhere time is chosen.</summary>
+    [Fact]
+    public async Task A_long_errand_can_be_given_several_hours()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Otto");
+
+        await page.GotoAsync("/rum");
+        await OpenRoomAsync(page, "Övrigt");
+        var room = Sheet(page, "Övrigt");
+
+        await room.GetByText("Lägg till vanliga hushållssysslor").ClickAsync();
+        await room.GetByLabel("Handla mat").CheckAsync();
+        await room.GetByRole(AriaRole.Button, new() { Name = "Flera timmar" }).ClickAsync();
+        await room.GetByRole(AriaRole.Button, new() { Name = "Lägg till valda" }).ClickAsync();
+
+        var row = room.GetByRole(AriaRole.Button, new() { Name = "Handla mat" });
+        await Assertions.Expect(row).ToContainTextAsync("· 120 min");
+    }
+
     /// <summary>"En fundering" (2026-09-10) - laundry is work per LOAD, so a household's real
     /// frequency depends on how many people generate loads, not a single fixed default - see
     /// RoomTemplateTask.FrequencyFor and docs/ARCHITECTURE.md "Beslut: Mallfrekvens skalad efter

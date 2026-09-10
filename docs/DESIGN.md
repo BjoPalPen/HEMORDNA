@@ -474,7 +474,7 @@ Pausa ett rum". Vid återupptagning börjar rummets uppgifter om helt vanligt, i
 
 Att trycka på en uppgift öppnar `Components/TaskOptionsSheet.razor`:
 Upprepning/Vem gör det/Tid/Rum som varsin rad som drillar ner till ett eget litet formulär inuti
-samma ark ("Tid" med samma kvalitativa knappar - Ingen/Lite/Lagom/Lång tid, se §6a - som
+samma ark ("Tid" med samma kvalitativa knappar - `TimeLevel.All`, se §6a - som
 "Lägg till uppgift" redan använder), en "Kräver vuxen"-växel, och "Ta bort uppgiften" i rönn-ink längst
 ner. "+ Nytt rum" öppnar ett ark med rumsmalls-väljaren (namnge våning, rumstyp, antal - se §6b) och en
 disclosure "Lägg till ett tomt rum i stället" för grupperingar som inte är ett rum (t.ex.
@@ -495,14 +495,17 @@ ARCHITECTURE.md för hur de räknas ut).
 
 Domänen räknar fortfarande i minuter (uppskattad tid, veckobudget, `availableMinutes` från
 API:t) – det är vad `RecurrenceRule`, `DailyPlanner` och rotationslogiken behöver för att
-räkna ut vad som får plats en given dag. Klienten mappar minuter till fyra kvalitativa lägen
-(`Hemordna.Client.Support.TimeLevel`: Ingen tid/Lite tid/Lagom tid/Lång tid → 0/5/15/30 min -
-"Ingen tid" är ett giltigt, sparbart val, inte bara ett tomt förval).
+räkna ut vad som får plats en given dag. Klienten mappar minuter till sex kvalitativa lägen
+(`Hemordna.Client.Support.TimeLevel`: Ingen tid/Lite tid/Lagom tid/Lång tid/En timme/Flera
+timmar → 0/5/15/30/60/120 min - "Ingen tid" är ett giltigt, sparbart val, inte bara ett tomt
+förval; de två högsta lades till senare, se ARCHITECTURE.md "Beslut: Fler tidsnivåer, upp till
+flera timmar" - ett ärende (t.ex. "Handla mat" med en lång bilresa) kan ta timmar, inte bara
+upp till 30 minuter).
 
 **Nivåorden används när man VÄLJER; minuter visas där tid VISAS, efter eget val.**
-Nivåorden är bra som val (fyra alternativ att jämföra) men vaga som information - "Lite tid"
-säger inte om det är 5 eller 12 minuter, och en 45-minutersuppgift läses som "Lång tid" precis
-som en 30-minuters. En rad som visar en redan sparad tid (`TaskListItem`s `.chip-time`,
+Nivåorden är bra som val (några alternativ att jämföra) men vaga som information - "Lite tid"
+säger inte om det är 5 eller 12 minuter, och en 50-minutersuppgift läses som "En timme" precis
+som en 60-minuters. En rad som visar en redan sparad tid (`TaskListItem`s `.chip-time`,
 fokuskortets egen chip) står därför alltid som minuter rakt av - "5 min" - via
 `TimeLevel.MinutesLabel`, aldrig avrundat till närmaste nivå och aldrig `TimeLevel.LabelFor`s
 nivåord. `ShowTimeLevel` styr fortfarande OM tiden visas alls (av som standard - se nedan);

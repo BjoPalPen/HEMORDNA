@@ -2783,6 +2783,37 @@ Ny E2E `OmradenTests.Overriding_a_common_chores_time_before_adding_it_uses_the_c
 "Lång tid" (30 min) är förvald för "Handla mat" (närmast 45 min), byter till "Lite tid" (5 min),
 lägger till, och läser tillbaka att raden visar "5 min", inte mallens 45.
 
+### Beslut: Fler tidsnivåer, upp till flera timmar — `IMPLEMENTED`
+
+Björn, direkt efter tidsöverstyrningen ovan: "Det räcker inte med dessa gränser, vissa saker
+kan ju ta några timmar, ex handla mat vi kanske måste åka långt för att handla." Rätt
+iakttagelse - `TimeLevel.All` toppade vid 30 min ("Lång tid") sedan appen byggdes, ett tak som
+gällde ÖVERALLT tid väljs (veckobudget, manuellt tillagda uppgifter, nu även
+hushållssysslo-overriden ovan), inte bara den nya listan. Ett ärende som kräver en bilresa är
+inte ovanligt, och 30 minuter räcker inte i närheten.
+
+**Två nya nivåer, inte en**: "En timme" (60 min) och "Flera timmar" (120 min) - jämnare steg
+(30→60→120) i stället för ett stort hopp direkt från 30 till en enda toppnivå. Ren tilläggning
+till `TimeLevel.All`; ingen annan kod ändrad - `.level-picker`s egen CSS (`app.css`) var redan
+byggd för "hur många det än är" (`flex: 1 1 0` + `flex-wrap: nowrap`, samma teknik som redan
+håller ihop `.energy-options`/`.chips` på en rad, se "Sju enkla lösningar" ovan) - sex knappar i
+stället för fyra krävde ingen layoutändring, bara verifierat med skärmbilder (390px, Stor text,
+både hushållssysslo-listan och medlemmens egen veckobudget-picker) att raden fortfarande håller
+ihop och krymper text i stället för att radbryta.
+
+Eftersom `TimeLevel` är en delad skala gäller de två nya nivåerna automatiskt överallt -
+`MemberSheet.razor`s "Anpassad tid i stället", `RoomSheet.razor`s manuella
+"Lägg till uppgift"-formulär och hushållssysslo-overriden, `TaskOptionsSheet.razor` - utan att
+någon av dem behövde egen kod. `TimeLevelTests.A_task_between_levels_shows_its_own_exact_
+minutes_not_a_rounded_level`s egna 45-minutersexempel ("mellan två nivåer") gäller fortfarande
+oförändrat - 45 ligger nu mellan "Lång tid" (30) och "En timme" (60) i stället för att bara
+ligga "förbi" 30, samma poäng (exakta sparade minuter visas alltid, aldrig avrundat till
+närmaste nivå).
+
+Ny E2E `OmradenTests.A_long_errand_can_be_given_several_hours`: väljer "Flera timmar" för
+"Handla mat", lägger till, läser tillbaka 120 min - bekräftad att den faller (väntar ut en
+30-sekunders timeout på en knapp som inte längre finns) utan de två nya nivåerna.
+
 | Fråga | Varför den väntar |
 |---|---|
 | Offline-strategi bortom read-only cache | Utanför MVP; får inte låsas in i förväg |

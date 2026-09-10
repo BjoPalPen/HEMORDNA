@@ -60,9 +60,10 @@ public class TimeLevelTests
         await Assertions.Expect(page.GetByText("ca 5 min")).Not.ToBeVisibleAsync();
     }
 
-    /// <summary>A task whose own minutes fall between two levels (45 sits past "Lång tid"s own
-    /// 30) still shows exactly what was saved, not the nearest level's number - MinutesLabel
-    /// never rounds, unlike LabelFor's own "closest level" logic used for the picker buttons.</summary>
+    /// <summary>A task whose own minutes fall between two levels (45 sits between "Lång tid"s
+    /// 30 and "En timme"s 60) still shows exactly what was saved, not the nearest level's
+    /// number - MinutesLabel never rounds, unlike LabelFor's own "closest level" logic used for
+    /// the picker buttons.</summary>
     [Fact]
     public async Task A_task_between_levels_shows_its_own_exact_minutes_not_a_rounded_level()
     {
