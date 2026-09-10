@@ -199,6 +199,60 @@ tills den lyfts, utan något extra tillstånd att hantera.
 body (`{ until: date? }`) - `null` återupptar omedelbart. `Hushall.razor` har både en
 hushållsomfattande pausruta och en per-medlem-knapp i medlemslistan.
 
+### Beslut: Pausa ett rum — `IMPLEMENTED`
+
+Ett rum (`Area`) kan pausas precis som ett hushåll eller en medlem - samma `PausedUntil`
+(nullable `DateOnly`), `Pause`/`Resume`/`IsPausedOn` på `Area` själv, samma
+`{ until: date? }`-kontrakt (`PUT .../areas/{areaId}/pause`). Motivet är en renovering eller
+ett rum som av någon annan anledning inte går att använda en period.
+
+**Skillnaden mot hushålls-/medlemspaus är avgörande.** De äldre pauserna är rent läsande -
+`EnsureOccurrencesGenerated.IsSkippedForPause` slår bara upp om dagens datum ligger inom en
+paus, och rör aldrig något som redan finns; en redan schemalagd förekomst ligger kvar precis
+som förut. Det är rätt där, eftersom en pausad PERSON alltid har någon annan (eller väntan)
+att falla tillbaka på - arbetet försvinner inte för att en av flera möjliga utförare är borta.
+Ett pausat RUM har ingen sådan reserv: är badrummet under renovering kan ingen "täcka upp" och
+skrubba duschen ändå. `PauseArea` (`Hemordna.Application.Households`) gör därför två saker vid
+en paus, inte en:
+
+1. Sätter `area.PausedUntil` - läst av `EnsureOccurrencesGenerated.IsSkippedForPause`
+   precis som hushålls-/medlemspausen, men UTAN rotationens "någon annan får den" - ett pausat
+   rums uppgift skippas helt, oavsett `HasRotatingResponsibility`, eftersom hela rummet är
+   otillgängligt, inte bara en tänkbar utförare av dess uppgifter.
+2. Hämtar rummets aktiva uppgifter (`ITaskDefinitionRepository.ListActiveByAreaAsync`) och
+   `.Skip()`ar varje redan utestående förekomst av dem vars `ScheduledDate` faller inom
+   pausfönstret (`<= until`) - en förekomst redan flyttad till EFTER pausen (t.ex. ett eget
+   uppskjutet datum) rörs inte, den ligger inte "under" pausen. `Skip()`, inte radering - samma
+   "inte behövd den här gången" som alla andra skippade förekomster, historiken pekar
+   fortfarande på en riktig förekomst.
+
+**Ingen eftersläpning vid återupptagning kommer gratis.** `Resume()` (`until: null`) rör inga
+förekomster alls - varken de redan skippade eller framtida. Samma `GenerateOnScheduleAsync`-
+stegning som redan garanterar detta för hushålls-/medlemspaus (loopens räknare stegar förbi
+pausade datum utan att generera, se ovan) gäller automatiskt här också, eftersom pausen bara
+är ännu en kontroll i samma `IsSkippedForPause` - inget separat "börja om"-steg behövdes.
+
+**Klienten**: `RoomSheet.razor`s "Rummets meny" fick en "Pausa rummet"/"Rummet är pausat"-rad,
+till en ny `RoomView.Pause`-vy - samma `<input type="date">` + status-notice + "Återuppta
+nu"-mönster som `MemberSheet.razor` redan använder, återanvänt rakt av. `RoomTile.razor` visar
+en tyst, neutral "Pausat"-chip (aldrig saffran - förbehållet "idag" - och aldrig en
+varningsfärg, PRODUCT.md §8) i stället för "N idag"/"Nästa: veckodag" när rummet är pausat.
+`AreaResponse` fick ett nytt `PausedUntil`-fält (både `Hemordna.Api.Contracts` och
+`Hemordna.Client.Contracts`).
+
+Ny migration `AddPausedUntilToArea` (en nullad kolumn, icke-destruktiv). Nya tester:
+`HouseholdTests` (Area-varianterna av de befintliga `HouseholdMember`-paustesterna),
+`PauseAreaTests` (skippar inom fönstret, rör inte efter fönstret eller andra rum, resume rör
+inget), `EnsureOccurrencesGeneratedTests.A_paused_rooms_task_generates_nothing_...`/
+`...rotating_task_is_skipped_entirely_not_just_reassigned` (rotationsskillnaden ovan, verifierat
+att den faktiskt fångar regressionen), samt `RoomPauseTests` (E2E: en riktig, redan schemalagd
+uppgift försvinner från Idag i samma stund rummet pausas; en paus/återupptagning överlever en
+omladdning). Ett riktigt E2E-testfel hittades och fixades under arbetet: en tidig version av
+`Not.ToBeVisibleAsync()`-kontrollen kunde passera ändå, utan fixen, eftersom kontrollen kördes
+innan Blazor-appen ens hunnit rendera klart - "inte renderad än" uppfyller "inte synlig" precis
+lika bra som "korrekt dold" gör. Fixat genom att vänta in `h1`-rubriken (ett säkert "appen är
+klar"-tecken) innan frånvaron kontrolleras.
+
 ### Beslut: `TaskDefinition.StaleAfterDays` för "vid behov" — `IMPLEMENTED`
 
 Ett fjärde schemaläggningssätt utöver `RecurrenceRule`, för uppgifter utan en naturlig

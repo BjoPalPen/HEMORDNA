@@ -361,6 +361,58 @@ public class EnsureOccurrencesGeneratedTests
     }
 
     [Fact]
+    public async Task A_paused_rooms_task_generates_nothing_and_catches_up_nothing_after_resuming()
+    {
+        var household = await new CreateHousehold(_households, new FixedTimeProvider(Now))
+            .HandleAsync("Familjen", Guid.NewGuid(), "Anna", CancellationToken.None);
+        var area = household.AddArea("Badrum");
+        area.Pause(Monday.AddDays(2));
+        await _households.UpdateAsync(household, CancellationToken.None);
+
+        var definition = TaskDefinition.Create(household.Id, "Skrubba dusch", 20, Now);
+        definition.SetRecurrence(RecurrenceRule.Daily(Monday));
+        definition.AssignToArea(area.Id);
+        _definitions.Seed(definition);
+
+        // The room is paused Mon-Tue; the household opens the app again on Wednesday, once the
+        // pause has already lifted.
+        await CreateUseCase().HandleAsync(household.Id, Monday.AddDays(2), CancellationToken.None);
+        Assert.Equal(0, _occurrences.AddCallCount);
+
+        await CreateUseCase().HandleAsync(household.Id, Monday.AddDays(3), CancellationToken.None);
+
+        // Only Wednesday - Monday and Tuesday were skipped for good, not queued up as a backlog.
+        Assert.Equal(1, _occurrences.AddCallCount);
+        var lastDate = await _occurrences.FindMostRecentOriginalDateAsync(household.Id, definition.Id, CancellationToken.None);
+        Assert.Equal(Monday.AddDays(3), lastDate);
+    }
+
+    [Fact]
+    public async Task A_paused_rooms_rotating_task_is_skipped_entirely_not_just_reassigned()
+    {
+        // Unlike a single paused member, whose rotating task simply goes to someone else (see
+        // A_paused_member_is_skipped_by_rotation_but_the_task_still_goes_to_someone_else below),
+        // nobody can stand in for a room nobody can use - the task must not be generated for
+        // ANY member while its own room is paused.
+        var household = await new CreateHousehold(_households, new FixedTimeProvider(Now))
+            .HandleAsync("Familjen", Guid.NewGuid(), "Anna", CancellationToken.None);
+        household.AddMember("Bjorn", WeeklyTimeBudget.Empty, Now.AddMinutes(1));
+        var area = household.AddArea("Badrum");
+        area.Pause(Monday.AddDays(2));
+        await _households.UpdateAsync(household, CancellationToken.None);
+
+        var definition = TaskDefinition.Create(household.Id, "Skrubba dusch", 20, Now);
+        definition.SetRecurrence(RecurrenceRule.Daily(Monday));
+        definition.SetRotatingResponsibility(true);
+        definition.AssignToArea(area.Id);
+        _definitions.Seed(definition);
+
+        await CreateUseCase().HandleAsync(household.Id, Monday, CancellationToken.None);
+
+        Assert.Equal(0, _occurrences.AddCallCount);
+    }
+
+    [Fact]
     public async Task A_paused_member_is_skipped_by_rotation_but_the_task_still_goes_to_someone_else()
     {
         var household = await new CreateHousehold(_households, new FixedTimeProvider(Now))

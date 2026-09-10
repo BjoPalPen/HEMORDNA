@@ -63,6 +63,10 @@ internal static class HouseholdEndpoints
             .Produces(StatusCodes.Status404NotFound)
             .ProducesValidationProblem();
 
+        scoped.MapPut("/areas/{areaId:guid}/pause", PauseAreaAsync)
+            .Produces<AreaResponse>()
+            .Produces(StatusCodes.Status404NotFound);
+
         scoped.MapDelete("/members/{memberId:guid}", DeactivateMemberAsync)
             .Produces<HouseholdMemberResponse>()
             .Produces(StatusCodes.Status404NotFound);
@@ -683,6 +687,18 @@ internal static class HouseholdEndpoints
         return member is null ? Results.NotFound() : Results.Ok(ToResponse(member));
     }
 
+    private static async Task<IResult> PauseAreaAsync(
+        Guid householdId,
+        Guid areaId,
+        PauseRequest request,
+        PauseArea pauseArea,
+        CancellationToken cancellationToken)
+    {
+        var area = await pauseArea.HandleAsync(householdId, areaId, request.Until, cancellationToken);
+
+        return area is null ? Results.NotFound() : Results.Ok(ToResponse(area));
+    }
+
     private static async Task<IResult> GetPreferenceAsync(
         Guid householdId,
         Guid memberId,
@@ -977,7 +993,7 @@ internal static class HouseholdEndpoints
             member.Role,
             member.PausedUntil);
 
-    private static AreaResponse ToResponse(Area area) => new(area.Id, area.Name, area.IsActive);
+    private static AreaResponse ToResponse(Area area) => new(area.Id, area.Name, area.IsActive, area.PausedUntil);
 
     private static TaskDefinitionResponse ToResponse(TaskDefinition definition)
         => new(

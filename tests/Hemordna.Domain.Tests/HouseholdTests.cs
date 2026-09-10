@@ -68,6 +68,44 @@ public class HouseholdTests
     }
 
     [Fact]
+    public void A_new_area_is_not_paused()
+    {
+        var household = Household.Create("Familjen", CreatedAt);
+        var area = household.AddArea("Badrum");
+
+        Assert.Null(area.PausedUntil);
+        Assert.False(area.IsPausedOn(DateOnly.FromDateTime(CreatedAt.Date)));
+    }
+
+    [Fact]
+    public void Area_pause_is_paused_through_and_including_the_given_date()
+    {
+        var household = Household.Create("Familjen", CreatedAt);
+        var area = household.AddArea("Badrum");
+        var until = new DateOnly(2026, 3, 10);
+
+        area.Pause(until);
+
+        Assert.True(area.IsPausedOn(until));
+        Assert.True(area.IsPausedOn(until.AddDays(-1)));
+        Assert.False(area.IsPausedOn(until.AddDays(1)));
+    }
+
+    [Fact]
+    public void Area_resume_lifts_a_pause_immediately()
+    {
+        var household = Household.Create("Familjen", CreatedAt);
+        var area = household.AddArea("Badrum");
+        var until = new DateOnly(2026, 3, 10);
+        area.Pause(until);
+
+        area.Resume();
+
+        Assert.Null(area.PausedUntil);
+        Assert.False(area.IsPausedOn(until));
+    }
+
+    [Fact]
     public void A_household_can_hold_a_single_member()
     {
         var household = Household.Create("Ensam", CreatedAt);

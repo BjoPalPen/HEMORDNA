@@ -203,14 +203,25 @@ public sealed class EnsureOccurrencesGenerated
 
     /// <summary>
     /// True when nothing should be generated for <paramref name="definition"/> on
-    /// <paramref name="date"/> because either the whole household is paused, or the task is a
-    /// fixed (non-rotating) one owned by a member who is individually paused. A rotating task's
-    /// paused members are instead simply excluded from <see cref="RotationPicker"/>'s candidates
-    /// for that date - the task still needs doing, just not by them.
+    /// <paramref name="date"/> because the whole household is paused, the definition's own
+    /// room is paused, or the task is a fixed (non-rotating) one owned by a member who is
+    /// individually paused. A rotating task's paused members are instead simply excluded from
+    /// <see cref="RotationPicker"/>'s candidates for that date - the task still needs doing,
+    /// just not by them. A paused room is different: unlike a single paused person, nobody
+    /// else can stand in for a room that is being renovated, so its own tasks are skipped
+    /// outright regardless of rotation - see <c>PauseArea</c>, in this namespace's own
+    /// sibling <c>Households</c> namespace.
     /// </summary>
     private static bool IsSkippedForPause(Household household, TaskDefinition definition, DateOnly date)
     {
         if (household.IsPausedOn(date))
+        {
+            return true;
+        }
+
+        if (definition.AreaId is { } areaId
+            && household.Areas.FirstOrDefault(area => area.Id == areaId) is { } area
+            && area.IsPausedOn(date))
         {
             return true;
         }

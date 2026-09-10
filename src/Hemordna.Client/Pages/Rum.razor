@@ -47,6 +47,7 @@ else
             {
                 <RoomTile Name="@area.Name" TaskCount="@TaskCountFor(area.Id)" WeeklyMinutes="@WeeklyMinutesFor(area.Id)"
                           TodayCount="@TodayCountFor(area.Name)" NextDayLabel="@NextDayLabelFor(area.Name)"
+                          PausedUntil="@area.PausedUntil"
                           OnClick="() => OpenRoom(area.Id, area.Name)" />
             }
 

@@ -2,7 +2,11 @@
 <button type="button" class="room-tile" @onclick="OnClick">
     <span class="room-tile-name">@Name</span>
     <span class="room-tile-meta muted small">@TaskCount uppgifter · @WeeklyMinutes min/v</span>
-    @if (TodayCount > 0)
+    @if (PausedUntil is not null)
+    {
+        <span class="chip room-tile-badge">Pausat</span>
+    }
+    else if (TodayCount > 0)
     {
         <span class="chip chip-today room-tile-badge">@TodayCount idag</span>
     }
@@ -30,6 +34,16 @@
     /// <summary>Swedish weekday name, lowercase - shown only when <see cref="TodayCount"/> is 0.</summary>
     [Parameter]
     public string? NextDayLabel { get; set; }
+
+    /// <summary>
+    /// Set when this room is paused (e.g. a renovation) - a quiet, neutral chip, never the
+    /// saffron "today" accent (DESIGN.md §2: saffron is reserved for "idag") and never a
+    /// warning color (PRODUCT.md §8) - a pause is a plain fact, not a problem. Takes over the
+    /// tile's own status slot ahead of <see cref="TodayCount"/>/<see cref="NextDayLabel"/>,
+    /// since neither is meaningful while nothing is being generated for this room.
+    /// </summary>
+    [Parameter]
+    public DateOnly? PausedUntil { get; set; }
 
     [Parameter, EditorRequired]
     public EventCallback OnClick { get; set; }

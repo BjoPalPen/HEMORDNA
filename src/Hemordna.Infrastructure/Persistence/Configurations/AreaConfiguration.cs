@@ -23,6 +23,9 @@ internal sealed class AreaConfiguration : IEntityTypeConfiguration<Area>
 
         builder.Property(area => area.IsActive).IsRequired();
 
+        // Nullable - see Area.PausedUntil for what null means.
+        builder.Property(area => area.PausedUntil);
+
         builder.HasIndex(area => area.HouseholdId);
     }
 }
