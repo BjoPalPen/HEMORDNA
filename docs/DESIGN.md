@@ -400,9 +400,19 @@ Rum, i ett eget ark.
 
 En avatarrad överst - en knapp per aktiv medlem (initial, namn, rolletikett), samt en sista
 "Bjud in"-knapp med ett plus-ikon i stället för en initial. Att trycka på en medlem öppnar
-`Components/MemberSheet.razor`: rollval (se §6b), en disclosure "Anpassad tid i stället",
-paus för just den medlemmen, och "Ta bort medlem" i rönn-ink längst ner. Ingen siffra
+`Components/MemberSheet.razor`: rollval (se §6b), en disclosure "Anpassad tid i stället" (en
+enda nivå för alla sju dagar), en andra disclosure "Anpassa tid per veckodag" (denna revision,
+se nedan), paus för just den medlemmen, och "Ta bort medlem" i rönn-ink längst ner. Ingen siffra
 (använd/budget) visas någonstans i raden - bara namn och rolletikett.
+
+**Anpassa tid per veckodag** (denna revision): sju fria minutfält, ett per veckodag, förifyllda
+med medlemmens sparade budget - för hushåll där en flat nivå inte räcker till, t.ex. mer tid på
+helgen eller en ledig dag mitt i veckan. Skriver över både rollval och "Anpassad tid" ovan, och
+tvärtom - alla tre är samma `WeeklyTimeBudget`, bara tre olika sätt att sätta den.
+Backend-kontraktet tog redan en fullständig vecka (`WeeklyTimeBudgetContract`, en `PUT`) - det
+här är enbart ett klientformulär ovanpå, ingen server- eller domänändring. Minuter visas rakt
+av här, inte som nivåord (§6a): det är samma undantag redan gjort för `TimeLevel`s egna
+knappar - siffror är rätt när man VÄLJER, bara Idags dagliga vy döljer dem.
 
 Vidare, i tur och ordning: hushållets veckogrid (samma prickmatris som nu även toppar Vecka),
 ett tyst "Idag i hushållet"-kort (en ring, samma mönster som "Senaste händelser" nedan -
