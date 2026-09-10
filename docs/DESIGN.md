@@ -444,13 +444,25 @@ rum som byts namn för hand så prefixet försvinner hamnar i "Annat". Under: `R
 två kolumner (en under 360px) - namn, "N uppgifter · M min/v", och en saffran-soft "N idag"
 om den inloggade medlemmen har något där idag, annars "Nästa: veckodag" i gustav-ink (kapat
 vid 7 dagars sökning, delad över alla brickor i ett svep - se `LoadTodayAndNextAsync`). Ett
-"Övrigt"-rum utan riktigt `Area` samlar rumslösa uppgifter, alltid synligt. Sist en streckad
-"+ Nytt rum"-bricka.
+pausat rum visar i stället en tyst, neutral "Pausat"-bricka - aldrig saffran (förbehållet
+"idag", §2) och aldrig en varningsfärg (PRODUCT.md §8), en paus är ett sakligt faktum, inte ett
+problem. Ett "Övrigt"-rum utan riktigt `Area` samlar rumslösa uppgifter, alltid synligt. Sist
+en streckad "+ Nytt rum"-bricka.
 
 Att trycka på en bricka öppnar `Components/RoomSheet.razor`: rummets uppgifter som en enkel
 lista (namn, upprepning, minuter, "roterar"/medlemsnamn, "endast vuxna"), en "Rummets meny"
-(⋯) med "Ändra frekvens för hela rummet"/"Byt namn"/"Ta bort rum", och en "+ Lägg till
-uppgift"-rad. Att trycka på en uppgift öppnar `Components/TaskOptionsSheet.razor`:
+(⋯) med "Ändra frekvens för hela rummet"/"Byt namn"/"Pausa rummet"/"Ta bort rum", och en
+"+ Lägg till uppgift"-rad.
+
+**Pausa rummet** (denna revision): för en renovering eller ett rum som inte går att använda en
+period - samma `Pausa till och med`-datumval som hushålls-/medlemspaus (`PauseArea`), men med
+en avgörande skillnad: en paus på ett rum tömmer det direkt, inte bara för nya uppgifter
+framöver. Ingen kan täcka upp för ett rum ingen kan använda, till skillnad från en pausad
+person vars uppgift bara går till någon annan eller väntar - se docs/ARCHITECTURE.md "Beslut:
+Pausa ett rum". Vid återupptagning börjar rummets uppgifter om helt vanligt, ingen eftersläpning
+- samma mönster som redan gäller för hushålls-/medlemspaus.
+
+Att trycka på en uppgift öppnar `Components/TaskOptionsSheet.razor`:
 Upprepning/Vem gör det/Tid/Rum som varsin rad som drillar ner till ett eget litet formulär inuti
 samma ark ("Tid" med samma kvalitativa knappar - Ingen/Lite/Lagom/Lång tid, se §6a - som
 "Lägg till uppgift" redan använder), en "Kräver vuxen"-växel, och "Ta bort uppgiften" i rönn-ink längst

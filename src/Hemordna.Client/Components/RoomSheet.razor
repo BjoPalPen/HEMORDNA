@@ -22,6 +22,40 @@
             <button type="button" class="btn btn-link" @onclick="() => _roomView = RoomView.Tasks">Avbryt</button>
             break;
 
+        case RoomView.Pause:
+            <p class="muted small">
+                Inga nya uppgifter skapas för @Label medan rummet är pausat - bra vid renovering
+                eller när rummet inte går att använda. Uppgifter som redan låg på någons dag för
+                rummet försvinner också så länge pausen gäller; inget hopar sig när den lyfts.
+            </p>
+
+            @if (CurrentArea?.PausedUntil is { } areaPausedUntil)
+            {
+                <div class="notice" role="status">Rummet är pausat till och med @areaPausedUntil.ToString("d MMMM", SwedishCulture).</div>
+            }
+
+            <label class="field">
+                <span>Pausa till och med</span>
+                <input type="date" @bind="_pauseUntilInput" />
+            </label>
+
+            @if (_message is { } pauseMessage)
+            {
+                <div class="notice notice-problem" role="alert">@pauseMessage</div>
+            }
+
+            <button type="button" class="btn btn-primary btn-block" disabled="@_busy" @onclick="SavePauseAsync">
+                @(_busy ? "Sparar..." : "Pausa rummet")
+            </button>
+            @if (CurrentArea?.PausedUntil is not null)
+            {
+                <button type="button" class="btn btn-secondary btn-block" disabled="@_busy" @onclick="ResumePauseAsync">
+                    Återuppta nu
+                </button>
+            }
+            <button type="button" class="btn btn-link" @onclick="() => _roomView = RoomView.Tasks">Till uppgifterna</button>
+            break;
+
         case RoomView.BulkFrequency:
             <p class="muted small">
                 Sätter samma upprepning på alla @VisibleTasks.Count uppgifter i @Label på en gång.
@@ -77,6 +111,11 @@
                             <li class="list-item list-item-flush">
                                 <button type="button" class="task-options-row" @onclick="() => { _renameName = Label; _roomView = RoomView.Rename; _showMenu = false; }">
                                     Byt namn
+                                </button>
+                            </li>
+                            <li class="list-item list-item-flush">
+                                <button type="button" class="task-options-row" @onclick="() => { _pauseUntilInput = CurrentArea?.PausedUntil ?? Today.AddDays(7); _roomView = RoomView.Pause; _showMenu = false; }">
+                                    @(CurrentArea?.PausedUntil is not null ? "Rummet är pausat" : "Pausa rummet")
                                 </button>
                             </li>
                             <li class="list-item list-item-flush">
@@ -226,7 +265,7 @@
 </BottomSheet>
 
 @code {
-    private enum RoomView { Tasks, Rename, BulkFrequency }
+    private enum RoomView { Tasks, Rename, BulkFrequency, Pause }
 
     [Parameter, EditorRequired]
     public Guid HouseholdId { get; set; }
@@ -262,8 +301,13 @@
     private string _renameName = string.Empty;
     private string _bulkRecurrence = string.Empty;
     private int _bulkInterval = 1;
+    private DateOnly? _pauseUntilInput;
     private string? _message;
     private bool _busy;
+
+    private static readonly System.Globalization.CultureInfo SwedishCulture = new("sv-SE");
+
+    private AreaResponse? CurrentArea => AreaId is { } id ? Areas.FirstOrDefault(a => a.Id == id) : null;
 
     private TaskDefinitionResponse? _openTask;
     private bool _showTaskOptions;
@@ -378,6 +422,62 @@
             }
 
             _roomView = RoomView.Tasks;
+            await OnChanged.InvokeAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _message = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task SavePauseAsync()
+    {
+        if (AreaId is not { } areaId || _pauseUntilInput is not { } until)
+        {
+            _message = "Ange ett slutdatum för pausen.";
+            return;
+        }
+
+        _busy = true;
+        _message = null;
+
+        try
+        {
+            if (!await Api.PauseAreaAsync(HouseholdId, areaId, until))
+            {
+                _message = "Det gick inte att spara. Försök igen.";
+                return;
+            }
+
+            await OnChanged.InvokeAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _message = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ResumePauseAsync()
+    {
+        if (AreaId is not { } areaId)
+        {
+            return;
+        }
+
+        _busy = true;
+        _message = null;
+
+        try
+        {
+            await Api.PauseAreaAsync(HouseholdId, areaId, until: null);
             await OnChanged.InvokeAsync();
         }
         catch (HttpRequestException)

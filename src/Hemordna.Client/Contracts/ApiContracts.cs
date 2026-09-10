@@ -79,7 +79,7 @@ public sealed record HouseholdMemberResponse(
 /// <summary>Pauses through and including <c>Until</c>, or resumes immediately when it is <c>null</c>.</summary>
 public sealed record PauseRequest(DateOnly? Until);
 
-public sealed record AreaResponse(Guid Id, string Name, bool IsActive);
+public sealed record AreaResponse(Guid Id, string Name, bool IsActive, DateOnly? PausedUntil);
 
 /// <summary>Minutes per weekday. Mirrors the API's contract - see it for the domain mapping.</summary>
 public sealed record WeeklyTimeBudgetContract(

@@ -40,6 +40,7 @@ builder.Services.AddScoped<GetHousehold>();
 builder.Services.AddScoped<AddHouseholdMember>();
 builder.Services.AddScoped<AddArea>();
 builder.Services.AddScoped<DeactivateArea>();
+builder.Services.AddScoped<PauseArea>();
 builder.Services.AddScoped<DeactivateHouseholdMember>();
 builder.Services.AddScoped<SetMemberAvailability>();
 builder.Services.AddScoped<SetMemberWeeklyBudget>();

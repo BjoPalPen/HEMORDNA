@@ -25,6 +25,14 @@ public sealed class Area
 
     public bool IsActive { get; private set; }
 
+    /// <summary>
+    /// The last day this room's own schedule is paused, inclusive - e.g. a renovation.
+    /// <c>null</c> means not paused. Unlike a household or member pause, which only ever
+    /// affects what gets generated next, pausing a room also clears whatever is already
+    /// outstanding for it - see <c>PauseArea</c>, in <c>Hemordna.Application</c>.
+    /// </summary>
+    public DateOnly? PausedUntil { get; private set; }
+
     internal static Area Create(Guid householdId, string name)
     {
         Guard.AgainstEmpty(householdId, nameof(householdId));
@@ -37,4 +45,11 @@ public sealed class Area
     public void Deactivate() => IsActive = false;
 
     public void Reactivate() => IsActive = true;
+
+    /// <summary>Pauses this room's schedule through and including <paramref name="until"/>.</summary>
+    public void Pause(DateOnly until) => PausedUntil = until;
+
+    public void Resume() => PausedUntil = null;
+
+    public bool IsPausedOn(DateOnly date) => PausedUntil is { } until && date <= until;
 }
