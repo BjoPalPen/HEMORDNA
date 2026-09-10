@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.Playwright;
 
 namespace Hemordna.E2E.Tests;
@@ -339,6 +340,36 @@ public class OmradenTests
 
         // Only the checked chore was created - the rest of the list is still just suggestions.
         await Assertions.Expect(room.GetByRole(AriaRole.Button, new() { Name = "Handla mat" })).Not.ToBeVisibleAsync();
+    }
+
+    /// <summary>"Här vill man kunna sätta tid som override" (2026-09-10) - a common chore's
+    /// listed minutes are only a starting point, and a real household can need very different
+    /// time for the same chore than another - see RoomSheet.razor's EnsureSuggestedMinutes.</summary>
+    [Fact]
+    public async Task Overriding_a_common_chores_time_before_adding_it_uses_the_chosen_minutes()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Maja");
+
+        await page.GotoAsync("/rum");
+        await OpenRoomAsync(page, "Övrigt");
+        var room = Sheet(page, "Övrigt");
+
+        await room.GetByText("Lägg till vanliga hushållssysslor").ClickAsync();
+        await room.GetByLabel("Handla mat").CheckAsync();
+
+        // The template's own default (45 min) is not itself a selectable level - the closest
+        // one (Lång tid, 30 min) is pre-highlighted rather than nothing at all.
+        await Assertions.Expect(room.GetByRole(AriaRole.Button, new() { Name = "Lång tid" }))
+            .ToHaveClassAsync(new Regex("btn-primary"));
+
+        await room.GetByRole(AriaRole.Button, new() { Name = "Lite tid" }).ClickAsync();
+        await room.GetByRole(AriaRole.Button, new() { Name = "Lägg till valda" }).ClickAsync();
+
+        // The chosen 5 min, not the template's original 45 - "· 5 min", not a bare "5 min",
+        // since "45 min" (the template's own default) itself contains "5 min" as a substring.
+        var row = room.GetByRole(AriaRole.Button, new() { Name = "Handla mat" });
+        await Assertions.Expect(row).ToContainTextAsync("· 5 min");
     }
 
     /// <summary>"En fundering" (2026-09-10) - laundry is work per LOAD, so a household's real

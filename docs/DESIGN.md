@@ -598,6 +598,15 @@ disclosuren "Lägg till vanliga hushållssysslor" - samma mall-tänk som `RoomTe
 **inget är förvalt**, eftersom vilka som är relevanta varierar mycket mer mellan hushåll än
 vilka uppgifter ett givet rum har.
 
+**Tiden går att ändra innan man lägger till** (denna revision): en kryssad hushållssysslas tid
+är bara ett startvärde, inte ett facit - "Handla mat" kan rimligen ta 20 minuter i ett hushåll
+och en timme i ett annat. Kryssar man i en syssla dyker samma `level-picker` (Ingen/Lite/Lagom/
+Lång tid) som det manuella "Lägg till uppgift"-formuläret redan använder upp direkt under raden,
+förvald till den nivå som ligger närmast mallens eget värde (`TimeLevel.ClosestMinutes`) - att
+byta nivå påverkar bara den enskilda sysslan, inte de andra kryssade. Gäller bara den här
+listan, inte `RoomTemplates`s egen checklista i "Nytt rum" - samma lucka finns där också, men är
+ett medvetet separat beslut om och när det byggs (se docs/ARCHITECTURE.md).
+
 **Tvätten skalas efter hushållets storlek** (denna revision): tid per tvättomgång är konstant
 (20 min) - det som faktiskt skiljer ett litet hushåll från ett stort är hur OFTA en omgång
 behövs, inte hur länge den tar. `RoomTemplateTask.ScalesWithHouseholdSize` (bara satt på
