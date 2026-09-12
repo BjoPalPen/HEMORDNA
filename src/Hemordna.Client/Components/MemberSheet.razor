@@ -109,29 +109,32 @@
         <hr class="member-sheet-divider" />
     }
 
-    <label class="field">
-        <span>Pausa till och med</span>
-        <input type="date" @bind="_pauseUntilInput" />
-    </label>
-
-    @if (Member.PausedUntil is { } pausedUntil)
+    @if (CanPauseThisMember)
     {
-        <div class="notice" role="status">Pausad till och med @pausedUntil.ToString("d MMMM", SwedishCulture).</div>
-    }
+        <label class="field">
+            <span>Pausa till och med</span>
+            <input type="date" @bind="_pauseUntilInput" />
+        </label>
 
-    @if (_pauseMessage is { } pauseMessage)
-    {
-        <div class="notice notice-problem" role="alert">@pauseMessage</div>
-    }
+        @if (Member.PausedUntil is { } pausedUntil)
+        {
+            <div class="notice" role="status">Pausad till och med @pausedUntil.ToString("d MMMM", SwedishCulture).</div>
+        }
 
-    <button type="button" class="btn btn-secondary btn-block" disabled="@_pauseBusy" @onclick="SavePauseAsync">
-        @(_pauseBusy ? "Sparar..." : "Pausa")
-    </button>
-    @if (Member.PausedUntil is not null)
-    {
-        <button type="button" class="btn btn-secondary btn-block" disabled="@_pauseBusy" @onclick="ResumeAsync">
-            Återuppta nu
+        @if (_pauseMessage is { } pauseMessage)
+        {
+            <div class="notice notice-problem" role="alert">@pauseMessage</div>
+        }
+
+        <button type="button" class="btn btn-secondary btn-block" disabled="@_pauseBusy" @onclick="SavePauseAsync">
+            @(_pauseBusy ? "Sparar..." : "Pausa")
         </button>
+        @if (Member.PausedUntil is not null)
+        {
+            <button type="button" class="btn btn-secondary btn-block" disabled="@_pauseBusy" @onclick="ResumeAsync">
+                Återuppta nu
+            </button>
+        }
     }
 
     @if (Session.CanManageHousehold)
@@ -197,6 +200,11 @@
     private string? _canManageMessage;
 
     private static readonly System.Globalization.CultureInfo SwedishCulture = new("sv-SE");
+
+    /// <summary>Your own, always - anyone else's only with the flag. Mirrors the server's own
+    /// MemberSelfOrManageFilter, so the UI never offers a button the API would answer 403 to.</summary>
+    private bool CanPauseThisMember
+        => Member.Id == Session.Me?.MemberId || Session.CanManageHousehold;
 
     private DateOnly Today => DateOnly.FromDateTime(TimeProvider.GetLocalNow().DateTime);
 

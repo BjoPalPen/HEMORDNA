@@ -445,10 +445,12 @@ Samma "döljs, nekas inte"-princip gäller varje yta kryssrutan i sin tur spärr
 utan förmågan ser inte "Nytt rum" på Rum, inte "Bjud in"/"Pausa hushållet"/"Balansera om
 vem som gör vad"/"Rensa hushållets data" på Hushållsöversikten, och inga
 konfigurationsrader i `TaskOptionsSheet`. Ingen gråmarkerad knapp, inget hänglås, ingen
-text som förklarar vad de inte får - appen ställer bara inte frågan. Medlemmens egen
-paus-kontroll i `MemberSheet` är det enda undantaget som stannar synligt oavsett: den
-hör till en tidigare, smalare regel (bara jag ändrar mina egna personliga inställningar,
-se ARCHITECTURE.md) och rör aldrig hushållskonfiguration.
+text som förklarar vad de inte får - appen ställer bara inte frågan. Paus-kontrollen i
+`MemberSheet` följer samma princip men en egen regel: den syns alltid i ditt eget ark
+("jag reser bort" är något var och en säger om sig själv), och i någon annans bara om du
+har kryssrutan. Att pausa någon påverkar vad hushållets schema ger dem, så den är varken
+lika privat som visningsvalen eller lika gemensam som rum och uppgifter - se
+ARCHITECTURE.md "Beslut: Vem får ändra vad" för de tre reglerna och varför de skiljs åt.
 
 "Bjud in" (`BottomSheet`) slår ihop två funktioner bakom en enda ingång: hushållets
 inbjudningskod (åtta tecken, versaler, inga förväxlingsbara siffror/bokstäver) med en "Dela

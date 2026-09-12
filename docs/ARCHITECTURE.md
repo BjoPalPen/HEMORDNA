@@ -2896,10 +2896,23 @@ lösningar, byggda i den ordningen:
 var anroparens eget - klienten skickade alltid rätt id, men servern krävde det inte. Nytt
 `MemberSelfAccessFilter` kräver att `memberId` är anroparens eget, ELLER tillhör en
 medlem i samma hushåll vars `UserId` är `null` (kan aldrig logga in för att sätta det
-själv - någon annan måste kunna göra det åt dem). `PUT .../pause` lämnades medvetet
-orört: `MemberSheet.razor` låter redan idag vem som helst pausa vem som helst i
-hushållet (en partner som glömt pausa sin egen rad inför resa) - att låsa den hade brutit
-befintlig funktionalitet, inte fixat en bugg.
+själv - någon annan måste kunna göra det åt dem).
+
+**`PUT .../pause` fick en egen, tredje regel.** Den låg först kvar helt öppen, eftersom
+`MemberSheet.razor` redan lät vem som helst pausa vem som helst (en partner som markerar
+någon pausad inför en resa) och en strikt självspärr hade brutit det. Resultatet blev
+inkonsekvent: att pausa någon påverkar vad hushållets schemagenerering ger dem, alltså mer
+än de inställningar vi just låst. Björns beslut: **mig själv, eller den som har flaggan.**
+Nytt `MemberSelfOrManageFilter` - eget medlems-id alltid, någon annans bara med
+`CanManageHousehold`. En kontolös medlem täcks av den andra grenen i stället för av ett eget
+undantag: den som sköter hushållet kan pausa barnet som inte kan logga in. Klienten speglar
+regeln exakt (`MemberSheet.CanPauseThisMember`), så UI:t aldrig erbjuder en knapp API:t
+skulle svara 403 på.
+
+Tre filter, tre olika frågor, medvetet åtskilda: `MemberSelfAccessFilter` ("bara jag, eller
+någon utan konto") för det privata, `MemberSelfOrManageFilter` ("jag eller den som sköter
+hushållet") för pausen, `HouseholdManageFilter` ("bara den som sköter hushållet") för
+hushållets form.
 
 **Steg 2 - en flagga, inte en roll.** `HouseholdMember.CanManageHousehold` (bool). Det
 handlade beslutet på rad ~2862 ("Ingen ägarroll att spärra bakom") står kvar - det gäller

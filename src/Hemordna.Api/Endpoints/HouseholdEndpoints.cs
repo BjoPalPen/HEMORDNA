@@ -155,8 +155,12 @@ internal static class HouseholdEndpoints
             .Produces<HouseholdResponse>()
             .Produces(StatusCodes.Status404NotFound);
 
+        // Not on `selfOnly` and not on `manage`: pausing has its own rule - your own always,
+        // anyone else's only with the flag. See MemberSelfOrManageFilter's own remarks.
         scoped.MapPut("/members/{memberId:guid}/pause", PauseHouseholdMemberAsync)
+            .AddEndpointFilter<MemberSelfOrManageFilter>()
             .Produces<HouseholdMemberResponse>()
+            .Produces(StatusCodes.Status403Forbidden)
             .Produces(StatusCodes.Status404NotFound);
 
         selfOnly.MapGet("/preferences", GetPreferenceAsync)

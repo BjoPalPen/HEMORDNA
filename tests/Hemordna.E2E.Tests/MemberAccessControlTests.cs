@@ -45,9 +45,10 @@ public class MemberAccessControlTests
     }
 
     /// <summary>Two account-holding members of the same household: Anna (creator, so she also
-    /// starts with CanManageHousehold - irrelevant to this test file, only Steg 1 is exercised
-    /// here) and Björn (joined via code).</summary>
-    private async Task<(HttpClient AnnaHttp, Guid HouseholdId, Guid AnnaMemberId, Guid BjornMemberId)>
+    /// starts with CanManageHousehold) and Björn (joined via code, so he does not). Most tests
+    /// here only exercise Steg 1, where the flag is irrelevant - the pause tests at the bottom
+    /// are the exception and rely on exactly that difference between them.</summary>
+    private async Task<(HttpClient AnnaHttp, HttpClient BjornHttp, Guid HouseholdId, Guid AnnaMemberId, Guid BjornMemberId)>
         ArrangeTwoAccountHoldersAsync()
     {
         var annaPage = await _app.NewPageAsync();
@@ -67,13 +68,13 @@ public class MemberAccessControlTests
         var (householdId, annaMemberId) = await MeAsync(annaHttp);
         var (_, bjornMemberId) = await MeAsync(bjornHttp);
 
-        return (annaHttp, householdId, annaMemberId, bjornMemberId);
+        return (annaHttp, bjornHttp, householdId, annaMemberId, bjornMemberId);
     }
 
     [Fact]
     public async Task A_member_cannot_read_another_account_holding_members_preferences()
     {
-        var (annaHttp, householdId, _, bjornMemberId) = await ArrangeTwoAccountHoldersAsync();
+        var (annaHttp, _, householdId, _, bjornMemberId) = await ArrangeTwoAccountHoldersAsync();
 
         var response = await annaHttp.GetAsync(
             $"/api/households/{householdId}/members/{bjornMemberId}/preferences");
@@ -84,7 +85,7 @@ public class MemberAccessControlTests
     [Fact]
     public async Task A_member_cannot_change_another_account_holding_members_preferences()
     {
-        var (annaHttp, householdId, _, bjornMemberId) = await ArrangeTwoAccountHoldersAsync();
+        var (annaHttp, _, householdId, _, bjornMemberId) = await ArrangeTwoAccountHoldersAsync();
 
         var response = await annaHttp.PutAsJsonAsync(
             $"/api/households/{householdId}/members/{bjornMemberId}/preferences",
@@ -96,7 +97,7 @@ public class MemberAccessControlTests
     [Fact]
     public async Task A_member_cannot_change_another_account_holding_members_availability()
     {
-        var (annaHttp, householdId, _, bjornMemberId) = await ArrangeTwoAccountHoldersAsync();
+        var (annaHttp, _, householdId, _, bjornMemberId) = await ArrangeTwoAccountHoldersAsync();
         var today = new DateOnly(2026, 4, 13);
 
         var response = await annaHttp.PutAsJsonAsync(
@@ -109,7 +110,7 @@ public class MemberAccessControlTests
     [Fact]
     public async Task A_member_can_always_change_their_own_preferences()
     {
-        var (annaHttp, householdId, annaMemberId, _) = await ArrangeTwoAccountHoldersAsync();
+        var (annaHttp, _, householdId, annaMemberId, _) = await ArrangeTwoAccountHoldersAsync();
 
         var response = await annaHttp.PutAsJsonAsync(
             $"/api/households/{householdId}/members/{annaMemberId}/preferences",
@@ -143,14 +144,41 @@ public class MemberAccessControlTests
         Assert.True(response.IsSuccessStatusCode);
     }
 
+    // Pausing has its own rule, in between the two the rest of this file uses: your own always,
+    // anyone else's only with CanManageHousehold - see MemberSelfOrManageFilter and
+    // docs/ARCHITECTURE.md "Beslut: Vem får ändra vad".
+
     [Fact]
-    public async Task A_member_can_still_pause_another_account_holding_members_schedule()
+    public async Task Anyone_can_pause_their_own_schedule_without_the_flag()
     {
-        // Deliberately NOT restricted to self-or-account-less, unlike the other personal
-        // routes in this file: MemberSheet.razor already lets any member pause any other
-        // member's own row (e.g. a partner travelling, marked paused on their behalf) - see
-        // docs/ARCHITECTURE.md "Beslut: Vem får ändra vad" for why this one stayed as-is.
-        var (annaHttp, householdId, _, bjornMemberId) = await ArrangeTwoAccountHoldersAsync();
+        var (_, bjornHttp, householdId, _, bjornMemberId) = await ArrangeTwoAccountHoldersAsync();
+
+        var response = await bjornHttp.PutAsJsonAsync(
+            $"/api/households/{householdId}/members/{bjornMemberId}/pause",
+            new { until = new DateOnly(2026, 5, 1) });
+
+        Assert.True(response.IsSuccessStatusCode);
+    }
+
+    [Fact]
+    public async Task Without_the_flag_a_member_cannot_pause_someone_elses_schedule()
+    {
+        // Björn joined via code, so he does not manage the household.
+        var (_, bjornHttp, householdId, annaMemberId, _) = await ArrangeTwoAccountHoldersAsync();
+
+        var response = await bjornHttp.PutAsJsonAsync(
+            $"/api/households/{householdId}/members/{annaMemberId}/pause",
+            new { until = new DateOnly(2026, 5, 1) });
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task With_the_flag_a_member_can_pause_someone_elses_schedule()
+    {
+        // Anna created the household, so she manages it - marking someone paused before a trip
+        // is exactly what this branch is for.
+        var (annaHttp, _, householdId, _, bjornMemberId) = await ArrangeTwoAccountHoldersAsync();
 
         var response = await annaHttp.PutAsJsonAsync(
             $"/api/households/{householdId}/members/{bjornMemberId}/pause",
