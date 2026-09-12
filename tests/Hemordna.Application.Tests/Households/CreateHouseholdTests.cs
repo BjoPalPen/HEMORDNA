@@ -41,6 +41,17 @@ public class CreateHouseholdTests
     }
 
     [Fact]
+    public async Task The_creator_can_manage_the_household()
+    {
+        // Someone has to be able to from the start, and the creator is the only member that
+        // exists yet - see docs/ARCHITECTURE.md "Beslut: Vem får ändra vad".
+        var household = await CreateAsync();
+
+        var member = Assert.Single(household.Members);
+        Assert.True(member.CanManageHousehold);
+    }
+
+    [Fact]
     public async Task The_first_member_starts_with_no_time_allocated()
     {
         var household = await CreateAsync();

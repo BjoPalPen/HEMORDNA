@@ -129,4 +129,57 @@ public sealed class Household
     /// history left to protect once everything is gone at once.
     /// </summary>
     public void ClearAreas() => _areas.Clear();
+
+    /// <summary>
+    /// Grants or removes a member's ability to manage the household - see
+    /// docs/ARCHITECTURE.md "Beslut: Vem får ändra vad". Blocked when it would leave the
+    /// household with no active member who can manage it at all: a user belongs to exactly one
+    /// household forever and there is no support channel, so a household stuck with nobody able
+    /// to change it would be permanently unusable, not just inconvenient.
+    /// </summary>
+    /// <exception cref="DomainException">
+    /// No such member, or this would remove the last active manager.
+    /// </exception>
+    public HouseholdMember SetMemberCanManageHousehold(Guid memberId, bool canManage)
+    {
+        var member = _members.FirstOrDefault(m => m.Id == memberId)
+            ?? throw new DomainException($"No member '{memberId}' in this household.");
+
+        if (!canManage && member.IsActive && member.CanManageHousehold && IsOnlyActiveManager(member))
+        {
+            throw new DomainException(
+                "Hushållet måste alltid ha minst en medlem som kan ändra rum, uppgifter och medlemmar.");
+        }
+
+        member.SetCanManageHousehold(canManage);
+        return member;
+    }
+
+    /// <summary>
+    /// Deactivates a member. Blocked when this member is the household's last active manager -
+    /// the same invariant as <see cref="SetMemberCanManageHousehold"/>, just reached by removing
+    /// the person instead of the flag.
+    /// </summary>
+    /// <exception cref="DomainException">
+    /// No such member, or this would deactivate the last active manager.
+    /// </exception>
+    public HouseholdMember DeactivateMember(Guid memberId)
+    {
+        var member = _members.FirstOrDefault(m => m.Id == memberId)
+            ?? throw new DomainException($"No member '{memberId}' in this household.");
+
+        if (member.CanManageHousehold && IsOnlyActiveManager(member))
+        {
+            throw new DomainException(
+                "Hushållet måste alltid ha minst en medlem som kan ändra rum, uppgifter och medlemmar.");
+        }
+
+        member.Deactivate();
+        return member;
+    }
+
+    /// <summary>Whether <paramref name="member"/> is the only active member currently able to manage the household.</summary>
+    private bool IsOnlyActiveManager(HouseholdMember member)
+        => _members.Count(m => m.IsActive && m.CanManageHousehold) == 1
+            && member.IsActive && member.CanManageHousehold;
 }

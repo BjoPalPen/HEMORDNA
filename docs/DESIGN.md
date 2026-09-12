@@ -432,6 +432,26 @@ Detta är den enda vyn som visar hela hushållet, och den är aldrig startskärm
 också platsen för roll-/tidsinställningar som inte alla medlemmar behöver se eller röra vid,
 till skillnad från Min dag som alla öppnar varje dag.
 
+**Kan ändra hushållet** (denna revision, se docs/ARCHITECTURE.md "Beslut: Vem får ändra
+vad"): samma princip förlängd ett steg till. `MemberSheet` får en kryssruta, "Kan ändra
+rum, uppgifter och medlemmar", men bara den som själv har förmågan ser den - och bara för
+en medlem som har ett eget konto (kryssrutan är meningslös för någon som aldrig kan logga
+in och röra den). Den visas inuti medlemmens eget ark, där rollvalet redan bor, aldrig som
+en bricka bredvid någons namn i avatarraden (`PRODUCT.md §8` tillåter inga jämförelser
+mellan medlemmar där alla ser dem). Namnet beskriver vad kryssrutan GÖR, aldrig vem den är
+till för (`PRODUCT.md §7`) - den heter aldrig "administratör".
+
+Samma "döljs, nekas inte"-princip gäller varje yta kryssrutan i sin tur spärrar: en medlem
+utan förmågan ser inte "Nytt rum" på Rum, inte "Bjud in"/"Pausa hushållet"/"Balansera om
+vem som gör vad"/"Rensa hushållets data" på Hushållsöversikten, och inga
+konfigurationsrader i `TaskOptionsSheet`. Ingen gråmarkerad knapp, inget hänglås, ingen
+text som förklarar vad de inte får - appen ställer bara inte frågan. Paus-kontrollen i
+`MemberSheet` följer samma princip men en egen regel: den syns alltid i ditt eget ark
+("jag reser bort" är något var och en säger om sig själv), och i någon annans bara om du
+har kryssrutan. Att pausa någon påverkar vad hushållets schema ger dem, så den är varken
+lika privat som visningsvalen eller lika gemensam som rum och uppgifter - se
+ARCHITECTURE.md "Beslut: Vem får ändra vad" för de tre reglerna och varför de skiljs åt.
+
 "Bjud in" (`BottomSheet`) slår ihop två funktioner bakom en enda ingång: hushållets
 inbjudningskod (åtta tecken, versaler, inga förväxlingsbara siffror/bokstäver) med en "Dela
 koden"-knapp (plattformens delningsruta där den finns, annars kopiering till urklipp) och en

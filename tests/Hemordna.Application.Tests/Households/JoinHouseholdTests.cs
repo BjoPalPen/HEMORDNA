@@ -35,6 +35,21 @@ public class JoinHouseholdTests
     }
 
     [Fact]
+    public async Task The_joining_member_cannot_manage_the_household()
+    {
+        // Whoever set the household up keeps managing it and can hand the ability onward - see
+        // docs/ARCHITECTURE.md "Beslut: Vem får ändra vad". Joining by code is not itself a vote
+        // of trust.
+        var seeded = await SeedHouseholdAsync();
+
+        var household = await CreateUseCase().HandleAsync(
+            seeded.InviteCode, JoiningUserId, "Björn", CancellationToken.None);
+
+        var member = Assert.Single(household!.Members);
+        Assert.False(member.CanManageHousehold);
+    }
+
+    [Fact]
     public async Task The_new_member_starts_with_no_time_allocated()
     {
         var seeded = await SeedHouseholdAsync();

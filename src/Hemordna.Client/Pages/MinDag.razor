@@ -1844,14 +1844,19 @@ else
 
     /// <summary>
     /// A one-off task the person wants to do today, on top of what is already planned - not
-    /// tied to a room and never repeats, so it needs no recurrence: create the definition
-    /// (see Components/RoomSheet.razor's "Ingen - schemaläggs för hand" for the same shape) and schedule
-    /// its one and only occurrence for today in the same step, rather than making someone visit
-    /// Områden and then find a separate way to put a date on it.
+    /// tied to a room and never repeats, so it needs no recurrence: create the definition and
+    /// schedule its one and only occurrence for today in the same step, rather than making
+    /// someone visit Områden and then find a separate way to put a date on it.
     /// </summary>
+    /// <remarks>
+    /// Goes through the dedicated <c>tasks/extra</c> endpoint, not <c>CreateTaskAsync</c>
+    /// (<c>POST /tasks</c>) - that one is household configuration and requires "kan ändra rum,
+    /// uppgifter och medlemmar" (see docs/ARCHITECTURE.md "Beslut: Vem får ändra vad"), while
+    /// adding an extra task to one's own day is daily work every member can do.
+    /// </remarks>
     private async Task AddExtraTaskAsync()
     {
-        if (Session.Me is not { HouseholdId: { } householdId, MemberId: { } memberId }
+        if (Session.Me is not { HouseholdId: { } householdId }
             || string.IsNullOrWhiteSpace(_extraForm.Name))
         {
             return;
@@ -1866,25 +1871,20 @@ else
 
             var description = string.IsNullOrWhiteSpace(_extraForm.Description) ? null : _extraForm.Description.Trim();
 
-            var task = await Api.CreateTaskAsync(householdId, new CreateTaskRequest(
-                Name: _extraForm.Name,
-                EstimatedMinutes: _extraForm.EstimatedMinutes,
-                Description: description,
-                AreaId: areaId,
-                Priority: "Normal",
-                DefaultResponsibleMemberId: memberId,
-                PreferredWeekday: null,
-                CanBeDeferred: true,
-                HasRotatingResponsibility: false,
-                RequiresMultiplePeople: false,
-                Recurrence: null));
+            var occurrence = await Api.CreateExtraTaskAsync(
+                householdId, _extraForm.Name, _extraForm.EstimatedMinutes, description, areaId, Today);
 
-            if (task is null
-                || !await ScheduleForTodayAsync(householdId, memberId, task.Id, _extraForm.EstimatedMinutes))
+            if (occurrence is null)
             {
                 _extraTaskMessage = "Det gick inte att lägga till uppgiften. Försök igen.";
                 return;
             }
+
+            // Same widening as picking an existing task (see ScheduleForTodayAsync) - the
+            // planner never invents time it was not told about, so this is what makes the extra
+            // task actually land on today's list.
+            await Api.SetAvailabilityAsync(
+                householdId, MemberId, Today, (_day?.AvailableMinutes ?? 0) + _extraForm.EstimatedMinutes);
 
             _extraForm.Name = string.Empty;
             _extraForm.EstimatedMinutes = 0;

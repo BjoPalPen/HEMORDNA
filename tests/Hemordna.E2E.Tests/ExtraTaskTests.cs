@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Playwright;
@@ -10,6 +11,100 @@ public class ExtraTaskTests
     private readonly HemordnaAppFixture _app;
 
     public ExtraTaskTests(HemordnaAppFixture app) => _app = app;
+
+    private static async Task<HttpClient> AuthorizedHttpAsync(IPage page, string apiUrl)
+    {
+        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        var http = new HttpClient { BaseAddress = new Uri(apiUrl) };
+        http.DefaultRequestHeaders.Authorization = new("Bearer", token);
+        return http;
+    }
+
+    private static async Task<JsonElement> MeAsync(HttpClient http)
+        => await (await http.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
+
+    [Fact]
+    public async Task Putting_an_existing_task_on_the_calendar_cannot_assign_it_to_another_account_holder()
+    {
+        // POST /tasks/{id}/occurrences stays open to every member (see
+        // docs/ARCHITECTURE.md "Beslut: Vem får ändra vad"), but only ever onto themselves -
+        // same "the caller acts as themselves" pattern as /complete and /reopen. An
+        // account-less member is the one exception - see the sibling test below.
+        var ownerPage = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(ownerPage, "Rasmus-" + Guid.NewGuid().ToString("N")[..6]);
+        var ownerHttp = await AuthorizedHttpAsync(ownerPage, _app.ApiUrl);
+        var ownerMe = await MeAsync(ownerHttp);
+        var householdId = ownerMe.GetProperty("householdId").GetGuid();
+        var ownerMemberId = ownerMe.GetProperty("memberId").GetGuid();
+
+        await ownerPage.GotoAsync("/hushall");
+        await ownerPage.GetByRole(AriaRole.Button, new() { Name = "Bjud in" }).ClickAsync();
+        var dialog = ownerPage.GetByRole(AriaRole.Dialog, new() { Name = "Bjud in" });
+        var code = dialog.GetByLabel("Inbjudningskod");
+        await code.WaitForAsync();
+        var inviteCode = await code.InnerTextAsync();
+        await dialog.GetByRole(AriaRole.Button, new() { Name = "Stäng" }).ClickAsync();
+
+        var otherPage = await _app.NewPageAsync();
+        var otherName = "Sigrid-" + Guid.NewGuid().ToString("N")[..6];
+        await SignUpHelper.RegisterAsync(otherPage, otherName);
+        await otherPage.GetByText("Har du en inbjudningskod?").ClickAsync();
+        await otherPage.GetByLabel("Inbjudningskod").FillAsync(inviteCode);
+        await otherPage.GetByRole(AriaRole.Button, new() { Name = "Gå med i hushållet" }).ClickAsync();
+        await otherPage.Locator("h1", new() { HasText = otherName }).WaitForAsync(new() { Timeout = 15_000 });
+        var otherHttp = await AuthorizedHttpAsync(otherPage, _app.ApiUrl);
+        var otherMemberId = (await MeAsync(otherHttp)).GetProperty("memberId").GetGuid();
+
+        var task = await (await ownerHttp.PostAsJsonAsync(
+            $"/api/households/{householdId}/tasks", new { name = "Dammsug", estimatedMinutes = 10 }))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        var taskId = task.GetProperty("id").GetGuid();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        var assignedToOther = await ownerHttp.PostAsJsonAsync(
+            $"/api/households/{householdId}/tasks/{taskId}/occurrences",
+            new { date = today, assignToMemberId = otherMemberId });
+        Assert.Equal(HttpStatusCode.Forbidden, assignedToOther.StatusCode);
+
+        var assignedToSelf = await ownerHttp.PostAsJsonAsync(
+            $"/api/households/{householdId}/tasks/{taskId}/occurrences",
+            new { date = today, assignToMemberId = ownerMemberId });
+        Assert.True(assignedToSelf.IsSuccessStatusCode);
+    }
+
+    [Fact]
+    public async Task Putting_an_existing_task_on_the_calendar_can_still_assign_it_to_an_account_less_member()
+    {
+        // The one exception to "only onto yourself" - an account-less member can never sign in
+        // to schedule their own work, so someone else in the household must still be able to do
+        // it for them. Same exception MemberSelfAccessFilter already makes for personal routes -
+        // see docs/ARCHITECTURE.md "Beslut: Vem får ändra vad".
+        var ownerPage = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(ownerPage, "Tove-" + Guid.NewGuid().ToString("N")[..6]);
+        var ownerHttp = await AuthorizedHttpAsync(ownerPage, _app.ApiUrl);
+        var householdId = (await MeAsync(ownerHttp)).GetProperty("householdId").GetGuid();
+
+        await ownerPage.GotoAsync("/hushall");
+        await HushallHelper.AddMemberWithoutAccountAsync(ownerPage, "Ulla", "Vuxen, jobbar heltid");
+
+        var household = await (await ownerHttp.GetAsync($"/api/households/{householdId}"))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        var ullaId = household.GetProperty("members").EnumerateArray()
+            .Single(m => m.GetProperty("displayName").GetString() == "Ulla")
+            .GetProperty("id").GetGuid();
+
+        var task = await (await ownerHttp.PostAsJsonAsync(
+            $"/api/households/{householdId}/tasks", new { name = "Ullas uppgift", estimatedMinutes = 10 }))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        var taskId = task.GetProperty("id").GetGuid();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        var assignedToUlla = await ownerHttp.PostAsJsonAsync(
+            $"/api/households/{householdId}/tasks/{taskId}/occurrences",
+            new { date = today, assignToMemberId = ullaId });
+
+        Assert.True(assignedToUlla.IsSuccessStatusCode);
+    }
 
     [Fact]
     public async Task Adding_an_extra_task_puts_it_on_todays_list_immediately()
@@ -148,6 +243,39 @@ public class ExtraTaskTests
         var taskCountAfter = (await (await http.GetAsync($"/api/households/{householdId}/tasks"))
             .Content.ReadFromJsonAsync<JsonElement>()).GetArrayLength();
         Assert.Equal(taskCountBefore, taskCountAfter);
+    }
+
+    [Fact]
+    public async Task Extra_uppgift_still_works_for_a_member_who_cannot_manage_the_household()
+    {
+        // "Extra uppgift" is daily work, not household configuration - see docs/ARCHITECTURE.md
+        // "Beslut: Vem får ändra vad". A joiner starts without CanManageHousehold and must still
+        // be able to add one to their own day, end to end through the UI.
+        var ownerPage = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(ownerPage, "Petra-" + Guid.NewGuid().ToString("N")[..6]);
+        await ownerPage.GotoAsync("/hushall");
+        await ownerPage.GetByRole(AriaRole.Button, new() { Name = "Bjud in" }).ClickAsync();
+        var dialog = ownerPage.GetByRole(AriaRole.Dialog, new() { Name = "Bjud in" });
+        var code = dialog.GetByLabel("Inbjudningskod");
+        await code.WaitForAsync();
+        var inviteCode = await code.InnerTextAsync();
+        await dialog.GetByRole(AriaRole.Button, new() { Name = "Stäng" }).ClickAsync();
+
+        var joinerPage = await _app.NewPageAsync();
+        var joinerName = "Quentin-" + Guid.NewGuid().ToString("N")[..6];
+        await SignUpHelper.RegisterAsync(joinerPage, joinerName);
+        await joinerPage.GetByText("Har du en inbjudningskod?").ClickAsync();
+        await joinerPage.GetByLabel("Inbjudningskod").FillAsync(inviteCode);
+        await joinerPage.GetByRole(AriaRole.Button, new() { Name = "Gå med i hushållet" }).ClickAsync();
+        await joinerPage.Locator("h1", new() { HasText = joinerName }).WaitForAsync(new() { Timeout = 15_000 });
+
+        await joinerPage.GetByRole(AriaRole.Button, new() { Name = "Extra uppgift" }).ClickAsync();
+        await joinerPage.GetByLabel("Namn").FillAsync("Diska för hand");
+        await joinerPage.GetByRole(AriaRole.Button, new() { Name = "Lagom tid" }).ClickAsync();
+        await joinerPage.GetByRole(AriaRole.Button, new() { Name = "Lägg till för i dag" }).ClickAsync();
+
+        var completeButton = joinerPage.GetByRole(AriaRole.Button, new() { Name = "Markera Diska för hand som klar" });
+        await Assertions.Expect(completeButton).ToBeVisibleAsync();
     }
 
     [Fact]

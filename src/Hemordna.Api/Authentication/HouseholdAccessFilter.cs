@@ -12,7 +12,12 @@ namespace Hemordna.Api.Authentication;
 /// someone's membership takes effect immediately instead of when their token expires.
 /// <para>
 /// A caller asking for a household they do not belong to gets 404, not 403: telling them the
-/// household exists would leak that fact to someone with no right to know it.
+/// household exists would leak that fact to someone with no right to know it - they are a
+/// stranger to this household. Contrast <see cref="MemberSelfAccessFilter"/> and
+/// <see cref="HouseholdManageFilter"/>, both of which run only after this filter has already
+/// confirmed the caller belongs here: for them, a 404 would hide nothing (the caller already
+/// knows the household and the member they asked about exist) while making "does not exist" and
+/// "not allowed" indistinguishable to the client, so they answer 403 instead.
 /// </para>
 /// </remarks>
 internal sealed class HouseholdAccessFilter : IEndpointFilter

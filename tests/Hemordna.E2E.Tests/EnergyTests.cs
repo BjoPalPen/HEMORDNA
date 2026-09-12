@@ -144,8 +144,11 @@ public class EnergyTests
         var bMe = await (await bHttp.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
         var bMemberId = bMe.GetProperty("memberId").GetGuid();
 
+        // Weekly budget is household configuration (see docs/ARCHITECTURE.md "Beslut: Vem
+        // får ändra vad") - Wilhelm, the household's creator and so its manager, sets it for
+        // both himself and Signe; a joiner like Signe cannot set even her own.
         await GiveFullWeekAsync(aHttp, householdId, aMemberId, 60);
-        await GiveFullWeekAsync(bHttp, householdId, bMemberId, 60);
+        await GiveFullWeekAsync(aHttp, householdId, bMemberId, 60);
 
         await aPage.GotoAsync("/");
         var aEnergy = aPage.GetByRole(AriaRole.Group, new() { Name = "Hur är orken idag?" });

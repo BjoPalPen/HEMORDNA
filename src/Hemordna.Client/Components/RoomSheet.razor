@@ -1,5 +1,6 @@
 @using Hemordna.Client.Support
 @inject HemordnaApiClient Api
+@inject HemordnaSession Session
 @inject TimeProvider TimeProvider
 
 <BottomSheet Title="@Label" IsOpen="IsOpen" IsOpenChanged="OnIsOpenChanged">
@@ -92,7 +93,7 @@
             break;
 
         default:
-            @if (AreaId is { } realAreaId)
+            @if (Session.CanManageHousehold && AreaId is { } realAreaId)
             {
                 <div class="room-sheet-menu">
                     <button type="button" class="chip-action" @onclick="() => _showMenu = !_showMenu">
@@ -169,7 +170,7 @@
                 </ul>
             }
 
-            @if (AreaId is null)
+            @if (Session.CanManageHousehold && AreaId is null)
             {
                 <details class="more-options">
                     <summary>Lägg till vanliga hushållssysslor</summary>
@@ -216,10 +217,13 @@
                 </details>
             }
 
-            <button type="button" class="chip-action room-sheet-add" @onclick="() => _showAddTaskSheet = true">
-                <Icon Name="plus" Size="18" />
-                Lägg till uppgift
-            </button>
+            @if (Session.CanManageHousehold)
+            {
+                <button type="button" class="chip-action room-sheet-add" @onclick="() => _showAddTaskSheet = true">
+                    <Icon Name="plus" Size="18" />
+                    Lägg till uppgift
+                </button>
+            }
             break;
     }
 </BottomSheet>
@@ -231,7 +235,9 @@
                        OnChanged="OnChanged" />
 }
 
-<BottomSheet Title="@($"Lägg till uppgift i {Label}")" @bind-IsOpen="_showAddTaskSheet">
+@if (Session.CanManageHousehold)
+{
+    <BottomSheet Title="@($"Lägg till uppgift i {Label}")" @bind-IsOpen="_showAddTaskSheet">
     <EditForm Model="_addForm" OnValidSubmit="AddTaskAsync">
         <label class="field">
             <span>Namn</span>
@@ -289,7 +295,8 @@
             @(_addBusy ? "Lägger till..." : "Lägg till uppgift")
         </button>
     </EditForm>
-</BottomSheet>
+    </BottomSheet>
+}
 
 @code {
     private enum RoomView { Tasks, Rename, BulkFrequency, Pause }

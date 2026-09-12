@@ -18,4 +18,5 @@ public sealed record MeResponse(
     string Email,
     string DisplayName,
     Guid? HouseholdId,
-    Guid? MemberId);
+    Guid? MemberId,
+    bool CanManageHousehold);

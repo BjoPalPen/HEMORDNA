@@ -55,10 +55,13 @@ else
                       TodayCount="@TodayCountFor("Övrigt")" NextDayLabel="@NextDayLabelFor("Övrigt")"
                       OnClick='() => OpenRoom(null, "Övrigt")' />
 
-            <button type="button" class="room-tile room-tile-add" @onclick="() => _showNewRoomSheet = true">
-                <Icon Name="plus" Size="22" />
-                Nytt rum
-            </button>
+            @if (Session.CanManageHousehold)
+            {
+                <button type="button" class="room-tile room-tile-add" @onclick="() => _showNewRoomSheet = true">
+                    <Icon Name="plus" Size="22" />
+                    Nytt rum
+                </button>
+            }
         </div>
 
         <details class="more-options">
@@ -96,7 +99,9 @@ else
                OnChanged="LoadAsync" />
 }
 
-<BottomSheet Title="Nytt rum" @bind-IsOpen="_showNewRoomSheet">
+@if (Session.CanManageHousehold)
+{
+    <BottomSheet Title="Nytt rum" @bind-IsOpen="_showNewRoomSheet">
     <p class="muted small">
         Namnge våningen (valfritt) och lägg till de rumstyper som finns där - varje rum får en
         färdig checklista. Ange fler än ett för att skapa flera likadana rum på en gång, till
@@ -199,7 +204,8 @@ else
             </button>
         </EditForm>
     </details>
-</BottomSheet>
+    </BottomSheet>
+}
 
 @code {
     private sealed class Form

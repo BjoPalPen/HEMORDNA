@@ -303,6 +303,33 @@ public sealed class HemordnaApiClient
             : null;
     }
 
+    /// <summary>
+    /// "Extra uppgift" on Min dag - creates the task and schedules it on the caller themselves,
+    /// today, in one call. Open to every member, unlike <see cref="CreateTaskAsync"/> - see
+    /// docs/ARCHITECTURE.md "Beslut: Vem får ändra vad". <paramref name="today"/> is this
+    /// device's own local date - see <see cref="CompleteOccurrenceAsync"/>'s own remarks for why.
+    /// </summary>
+    public async Task<TaskOccurrenceResponse?> CreateExtraTaskAsync(
+        Guid householdId,
+        string name,
+        int estimatedMinutes,
+        string? description,
+        Guid? areaId,
+        DateOnly? today = null,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Post, $"api/households/{householdId}/tasks/extra", cancellationToken);
+        request.Content = JsonContent.Create(
+            new CreateExtraTaskRequest(name, estimatedMinutes, description, areaId, today));
+
+        var response = await _http.SendAsync(request, cancellationToken);
+
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<TaskOccurrenceResponse>(cancellationToken)
+            : null;
+    }
+
     /// <summary>Deactivates the task rather than deleting it - see TaskDefinition for why.</summary>
     public async Task<bool> DeactivateTaskAsync(
         Guid householdId,
@@ -596,6 +623,23 @@ public sealed class HemordnaApiClient
     {
         var request = await AuthorizedAsync(
             HttpMethod.Delete, $"api/households/{householdId}/areas/{areaId}", cancellationToken);
+
+        var response = await _http.SendAsync(request, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
+    /// <summary>Grants or removes a member's ability to manage the household - see docs/ARCHITECTURE.md
+    /// "Beslut: Vem får ändra vad". Only the caller's own household, and only when the caller
+    /// already has this ability themselves - enforced server-side, see HouseholdManageFilter.</summary>
+    public async Task<bool> SetMemberCanManageHouseholdAsync(
+        Guid householdId,
+        Guid memberId,
+        bool canManage,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Put, $"api/households/{householdId}/members/{memberId}/can-manage", cancellationToken);
+        request.Content = JsonContent.Create(new SetCanManageHouseholdRequest(canManage));
 
         var response = await _http.SendAsync(request, cancellationToken);
         return response.IsSuccessStatusCode;

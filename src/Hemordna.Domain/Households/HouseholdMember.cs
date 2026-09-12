@@ -60,6 +60,15 @@ public sealed class HouseholdMember
     /// </summary>
     public DateOnly? PausedUntil { get; private set; }
 
+    /// <summary>
+    /// Whether this member can change rooms, tasks and other members - see
+    /// docs/ARCHITECTURE.md "Beslut: Vem får ändra vad". Deliberately not a role: every active
+    /// member either has this or does not, nothing in between. A member with no account
+    /// (<see cref="UserId"/> is <c>null</c>) can never have it - see
+    /// <see cref="SetCanManageHousehold"/>.
+    /// </summary>
+    public bool CanManageHousehold { get; private set; }
+
     internal static HouseholdMember Create(
         Guid householdId,
         string displayName,
@@ -119,6 +128,24 @@ public sealed class HouseholdMember
     public void Deactivate() => IsActive = false;
 
     public void Reactivate() => IsActive = true;
+
+    /// <summary>
+    /// Grants or removes this member's ability to manage the household - see
+    /// <see cref="CanManageHousehold"/>. Granting it to a member with no account is meaningless
+    /// (they could never sign in to use it), so that is rejected rather than silently ignored.
+    /// The "never leave the household with zero" invariant is enforced one level up, by
+    /// <see cref="Household"/> - a single member cannot see its own siblings to check that.
+    /// </summary>
+    public void SetCanManageHousehold(bool canManage)
+    {
+        if (canManage && UserId is null)
+        {
+            throw new DomainException(
+                $"'{DisplayName}' has no account and cannot manage the household.");
+        }
+
+        CanManageHousehold = canManage;
+    }
 
     /// <summary>Pauses this member's own schedule through and including <paramref name="until"/>.</summary>
     public void Pause(DateOnly until) => PausedUntil = until;

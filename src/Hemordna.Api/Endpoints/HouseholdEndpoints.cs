@@ -41,64 +41,75 @@ internal static class HouseholdEndpoints
         var scoped = households.MapGroup("/{householdId:guid}")
             .AddEndpointFilter<HouseholdAccessFilter>();
 
+        // Household configuration - rooms, tasks, members, invite code, pause, reset. Daily
+        // work (completing, deferring, bringing forward, and every GET) stays on `scoped`
+        // directly - see docs/ARCHITECTURE.md "Beslut: Vem får ändra vad".
+        var manage = scoped.MapGroup("")
+            .AddEndpointFilter<HouseholdManageFilter>();
+
+        // A personal, per-member route: only the caller's own memberId, or an account-less
+        // member's - see MemberSelfAccessFilter's own remarks.
+        var selfOnly = scoped.MapGroup("/members/{memberId:guid}")
+            .AddEndpointFilter<MemberSelfAccessFilter>();
+
         scoped.MapGet("/", GetAsync)
             .WithName("GetHousehold")
             .Produces<HouseholdResponse>()
             .Produces(StatusCodes.Status404NotFound);
 
-        scoped.MapPost("/members", AddMemberAsync)
+        manage.MapPost("/members", AddMemberAsync)
             .Produces<HouseholdMemberResponse>(StatusCodes.Status201Created)
             .ProducesValidationProblem();
 
-        scoped.MapPost("/areas", AddAreaAsync)
+        manage.MapPost("/areas", AddAreaAsync)
             .Produces<AreaResponse>(StatusCodes.Status201Created)
             .ProducesValidationProblem();
 
-        scoped.MapDelete("/areas/{areaId:guid}", DeactivateAreaAsync)
+        manage.MapDelete("/areas/{areaId:guid}", DeactivateAreaAsync)
             .Produces<AreaResponse>()
             .Produces(StatusCodes.Status404NotFound);
 
-        scoped.MapPut("/areas/{areaId:guid}/name", RenameAreaAsync)
+        manage.MapPut("/areas/{areaId:guid}/name", RenameAreaAsync)
             .Produces<AreaResponse>()
             .Produces(StatusCodes.Status404NotFound)
             .ProducesValidationProblem();
 
-        scoped.MapPut("/areas/{areaId:guid}/pause", PauseAreaAsync)
+        manage.MapPut("/areas/{areaId:guid}/pause", PauseAreaAsync)
             .Produces<AreaResponse>()
             .Produces(StatusCodes.Status404NotFound);
 
-        scoped.MapDelete("/members/{memberId:guid}", DeactivateMemberAsync)
+        manage.MapDelete("/members/{memberId:guid}", DeactivateMemberAsync)
             .Produces<HouseholdMemberResponse>()
             .Produces(StatusCodes.Status404NotFound);
 
         scoped.MapGet("/tasks", ListTasksAsync)
             .Produces<IReadOnlyList<TaskDefinitionResponse>>();
 
-        scoped.MapPost("/tasks", CreateTaskAsync)
+        manage.MapPost("/tasks", CreateTaskAsync)
             .Produces<TaskDefinitionResponse>(StatusCodes.Status201Created)
             .ProducesValidationProblem();
 
-        scoped.MapDelete("/tasks/{taskId:guid}", DeactivateTaskAsync)
+        manage.MapDelete("/tasks/{taskId:guid}", DeactivateTaskAsync)
             .Produces<TaskDefinitionResponse>()
             .Produces(StatusCodes.Status404NotFound);
 
-        scoped.MapPut("/tasks/{taskId:guid}/frequency", UpdateTaskFrequencyAsync)
+        manage.MapPut("/tasks/{taskId:guid}/frequency", UpdateTaskFrequencyAsync)
             .Produces<TaskDefinitionResponse>()
             .Produces(StatusCodes.Status404NotFound);
 
-        scoped.MapPut("/tasks/{taskId:guid}/assignment", UpdateTaskAssignmentAsync)
+        manage.MapPut("/tasks/{taskId:guid}/assignment", UpdateTaskAssignmentAsync)
             .Produces<TaskDefinitionResponse>()
             .Produces(StatusCodes.Status404NotFound);
 
-        scoped.MapPut("/tasks/{taskId:guid}/area", MoveTaskAreaAsync)
+        manage.MapPut("/tasks/{taskId:guid}/area", MoveTaskAreaAsync)
             .Produces<TaskDefinitionResponse>()
             .Produces(StatusCodes.Status404NotFound);
 
-        scoped.MapPut("/tasks/{taskId:guid}/requires-adult", SetTaskRequiresAdultAsync)
+        manage.MapPut("/tasks/{taskId:guid}/requires-adult", SetTaskRequiresAdultAsync)
             .Produces<TaskDefinitionResponse>()
             .Produces(StatusCodes.Status404NotFound);
 
-        scoped.MapPut("/tasks/{taskId:guid}/estimated-minutes", ChangeTaskEstimatedMinutesAsync)
+        manage.MapPut("/tasks/{taskId:guid}/estimated-minutes", ChangeTaskEstimatedMinutesAsync)
             .Produces<TaskDefinitionResponse>()
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status404NotFound);
@@ -106,11 +117,11 @@ internal static class HouseholdEndpoints
         scoped.MapPost("/tasks/rebalance-schedule", RebalanceScheduleAsync)
             .Produces<RebalanceScheduleResponse>();
 
-        scoped.MapPost("/tasks/rebalance-assignments", RebalanceAssignmentsAsync)
+        manage.MapPost("/tasks/rebalance-assignments", RebalanceAssignmentsAsync)
             .Produces<RebalanceAssignmentsResponse>()
             .Produces(StatusCodes.Status404NotFound);
 
-        scoped.MapPost("/members/refresh-role-budgets", RefreshRoleBudgetsAsync)
+        manage.MapPost("/members/refresh-role-budgets", RefreshRoleBudgetsAsync)
             .Produces<RefreshRoleBudgetsResponse>()
             .Produces(StatusCodes.Status404NotFound);
 
@@ -118,41 +129,45 @@ internal static class HouseholdEndpoints
             .Produces<TaskOccurrenceResponse>(StatusCodes.Status201Created)
             .Produces(StatusCodes.Status404NotFound);
 
-        scoped.MapPut("/members/{memberId:guid}/availability", SetAvailabilityAsync)
+        selfOnly.MapPut("/availability", SetAvailabilityAsync)
             .Produces<AvailabilityResponse>()
             .Produces(StatusCodes.Status404NotFound)
             .ProducesValidationProblem();
 
-        scoped.MapPut("/members/{memberId:guid}/weekly-budget", SetWeeklyBudgetAsync)
+        manage.MapPut("/members/{memberId:guid}/weekly-budget", SetWeeklyBudgetAsync)
             .Produces<HouseholdMemberResponse>()
             .Produces(StatusCodes.Status404NotFound)
             .ProducesValidationProblem();
 
-        scoped.MapPut("/members/{memberId:guid}/role", SetMemberRoleAsync)
+        manage.MapPut("/members/{memberId:guid}/role", SetMemberRoleAsync)
             .Produces<HouseholdMemberResponse>()
             .Produces(StatusCodes.Status404NotFound);
 
-        scoped.MapPost("/invite-code/regenerate", RegenerateInviteCodeAsync)
+        manage.MapPost("/invite-code/regenerate", RegenerateInviteCodeAsync)
             .Produces<HouseholdResponse>()
             .Produces(StatusCodes.Status404NotFound);
 
-        scoped.MapPost("/reset", ResetHouseholdAsync)
+        manage.MapPost("/reset", ResetHouseholdAsync)
             .Produces<HouseholdResponse>()
             .Produces(StatusCodes.Status404NotFound);
 
-        scoped.MapPut("/pause", PauseHouseholdAsync)
+        manage.MapPut("/pause", PauseHouseholdAsync)
             .Produces<HouseholdResponse>()
             .Produces(StatusCodes.Status404NotFound);
 
+        // Not on `selfOnly` and not on `manage`: pausing has its own rule - your own always,
+        // anyone else's only with the flag. See MemberSelfOrManageFilter's own remarks.
         scoped.MapPut("/members/{memberId:guid}/pause", PauseHouseholdMemberAsync)
+            .AddEndpointFilter<MemberSelfOrManageFilter>()
             .Produces<HouseholdMemberResponse>()
+            .Produces(StatusCodes.Status403Forbidden)
             .Produces(StatusCodes.Status404NotFound);
 
-        scoped.MapGet("/members/{memberId:guid}/preferences", GetPreferenceAsync)
+        selfOnly.MapGet("/preferences", GetPreferenceAsync)
             .Produces<PreferenceResponse>()
             .Produces(StatusCodes.Status404NotFound);
 
-        scoped.MapPut("/members/{memberId:guid}/preferences", SetPreferenceAsync)
+        selfOnly.MapPut("/preferences", SetPreferenceAsync)
             .Produces<PreferenceResponse>()
             .Produces(StatusCodes.Status404NotFound);
 
@@ -194,12 +209,12 @@ internal static class HouseholdEndpoints
             .Produces(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status409Conflict);
 
-        scoped.MapPut("/members/{memberId:guid}/days-off/{date}", SetDayOffAsync)
+        selfOnly.MapPut("/days-off/{date}", SetDayOffAsync)
             .Produces<DayOffResponse>()
             .Produces(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status409Conflict);
 
-        scoped.MapDelete("/members/{memberId:guid}/days-off/{date}", ClearDayOffAsync)
+        selfOnly.MapDelete("/days-off/{date}", ClearDayOffAsync)
             .Produces(StatusCodes.Status204NoContent)
             .Produces(StatusCodes.Status404NotFound);
 
@@ -209,6 +224,20 @@ internal static class HouseholdEndpoints
         scoped.MapGet("/time-credit", GetTimeCreditAsync)
             .Produces<TimeCreditResponse>()
             .Produces(StatusCodes.Status404NotFound);
+
+        manage.MapPut("/members/{memberId:guid}/can-manage", SetCanManageHouseholdAsync)
+            .Produces<HouseholdMemberResponse>()
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status409Conflict);
+
+        // "Extra uppgift" on Min dag - outside `manage` on purpose. POST /tasks itself is
+        // household configuration (see `manage.MapPost("/tasks", ...)` above), but adding a
+        // one-off task to one's own day is daily work every member can do - see
+        // docs/ARCHITECTURE.md "Beslut: Vem får ändra vad".
+        scoped.MapPost("/tasks/extra", CreateExtraTaskAsync)
+            .Produces<TaskOccurrenceResponse>(StatusCodes.Status201Created)
+            .Produces(StatusCodes.Status404NotFound)
+            .ProducesValidationProblem();
 
         return app;
     }
@@ -581,8 +610,10 @@ internal static class HouseholdEndpoints
     private static async Task<IResult> ScheduleOccurrenceAsync(
         Guid householdId,
         Guid taskId,
+        HttpContext httpContext,
         ScheduleOccurrenceRequest request,
         ScheduleTaskOccurrence schedule,
+        IHouseholdRepository households,
         CancellationToken cancellationToken)
     {
         if (request.Date is null)
@@ -591,6 +622,26 @@ internal static class HouseholdEndpoints
             {
                 [nameof(request.Date)] = ["Ett datum måste anges."]
             });
+        }
+
+        // Putting an existing task on the calendar stays open to every member - see
+        // docs/ARCHITECTURE.md "Beslut: Vem får ändra vad" - but only ever onto themselves, or
+        // onto an account-less member who can never do it themselves - the same exception
+        // MemberSelfAccessFilter already makes for personal routes. Naming another
+        // ACCOUNT-HOLDING member is what stays forbidden. Leaving AssignToMemberId unset still
+        // lets a rotating task's own rotation pick whoever is next - that is the household's own
+        // mechanism deciding, not the caller naming another person.
+        var membership = httpContext.GetMembership();
+
+        if (request.AssignToMemberId is { } requestedMemberId && requestedMemberId != membership.MemberId)
+        {
+            var household = await households.FindByIdAsync(householdId, cancellationToken);
+            var target = household?.Members.FirstOrDefault(member => member.Id == requestedMemberId);
+
+            if (target is null || target.UserId is not null)
+            {
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            }
         }
 
         var occurrence = await schedule.HandleAsync(
@@ -970,6 +1021,61 @@ internal static class HouseholdEndpoints
             .ToList());
     }
 
+    private static async Task<IResult> SetCanManageHouseholdAsync(
+        Guid householdId,
+        Guid memberId,
+        SetCanManageHouseholdRequest request,
+        SetMemberCanManageHousehold setCanManageHousehold,
+        CancellationToken cancellationToken)
+    {
+        var member = await setCanManageHousehold.HandleAsync(
+            householdId, memberId, request.CanManageHousehold, cancellationToken);
+
+        return member is null ? Results.NotFound() : Results.Ok(ToResponse(member));
+    }
+
+    private static async Task<IResult> CreateExtraTaskAsync(
+        Guid householdId,
+        HttpContext httpContext,
+        CreateExtraTaskRequest request,
+        CreateExtraTask createExtraTask,
+        TimeProvider timeProvider,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name))
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                [nameof(request.Name)] = ["En uppgift måste ha ett namn."]
+            });
+        }
+
+        if (request.EstimatedMinutes < 0)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                [nameof(request.EstimatedMinutes)] = ["Uppskattad tid kan inte vara negativ."]
+            });
+        }
+
+        // Always the caller's own day - see CreateExtraTask's own remarks. The client's own
+        // "today" when it sends one - see CompleteOccurrenceAsync's own remarks on why this can
+        // differ from the server's around midnight. Falls back to the server's own date otherwise.
+        var membership = httpContext.GetMembership();
+        var today = request.Today ?? DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+
+        var occurrence = await createExtraTask.HandleAsync(
+            householdId,
+            membership.MemberId,
+            new NewExtraTask(request.Name, request.EstimatedMinutes, request.Description, request.AreaId),
+            today,
+            cancellationToken);
+
+        return occurrence is null
+            ? Results.NotFound()
+            : Results.Created($"/api/households/{householdId}/tasks/extra", ToResponse(occurrence));
+    }
+
     private static async Task<IResult> GetPlanAsync(
         Guid householdId,
         Guid memberId,
@@ -1005,7 +1111,9 @@ internal static class HouseholdEndpoints
             member.IsActive,
             WeeklyTimeBudgetContract.From(member.WeeklyTimeBudget),
             member.Role,
-            member.PausedUntil);
+            member.PausedUntil,
+            member.CanManageHousehold,
+            HasAccount: member.UserId is not null);
 
     private static AreaResponse ToResponse(Area area) => new(area.Id, area.Name, area.IsActive, area.PausedUntil);
 

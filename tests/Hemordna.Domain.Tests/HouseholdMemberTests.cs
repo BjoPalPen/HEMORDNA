@@ -1,3 +1,4 @@
+using Hemordna.Domain.Common;
 using Hemordna.Domain.Households;
 
 namespace Hemordna.Domain.Tests;
@@ -43,5 +44,45 @@ public class HouseholdMemberTests
 
         Assert.Null(member.PausedUntil);
         Assert.False(member.IsPausedOn(until));
+    }
+
+    [Fact]
+    public void A_new_member_cannot_manage_the_household()
+    {
+        Assert.False(CreateMember().CanManageHousehold);
+    }
+
+    [Fact]
+    public void SetCanManageHousehold_grants_it_to_a_member_with_an_account()
+    {
+        var member = CreateMember();
+        member.LinkToUser(Guid.NewGuid());
+
+        member.SetCanManageHousehold(true);
+
+        Assert.True(member.CanManageHousehold);
+    }
+
+    [Fact]
+    public void SetCanManageHousehold_rejects_granting_it_to_a_member_with_no_account()
+    {
+        // An account-less member (a child, a partner who has not signed up yet) can never sign
+        // in to use this - granting it would be meaningless, not just unused.
+        var member = CreateMember();
+
+        Assert.Throws<DomainException>(() => member.SetCanManageHousehold(true));
+        Assert.False(member.CanManageHousehold);
+    }
+
+    [Fact]
+    public void SetCanManageHousehold_can_always_remove_it()
+    {
+        var member = CreateMember();
+        member.LinkToUser(Guid.NewGuid());
+        member.SetCanManageHousehold(true);
+
+        member.SetCanManageHousehold(false);
+
+        Assert.False(member.CanManageHousehold);
     }
 }

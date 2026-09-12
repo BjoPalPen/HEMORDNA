@@ -15,6 +15,6 @@ internal sealed class HouseholdMembershipQuery : IHouseholdMembershipQuery
         => await _dbContext.HouseholdMembers
             .AsNoTracking()
             .Where(member => member.UserId == userId && member.IsActive)
-            .Select(member => new HouseholdMembership(member.HouseholdId, member.Id))
+            .Select(member => new HouseholdMembership(member.HouseholdId, member.Id, member.CanManageHousehold))
             .FirstOrDefaultAsync(cancellationToken);
 }
