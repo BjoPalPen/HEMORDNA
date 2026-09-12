@@ -124,6 +124,11 @@ public sealed record SetMemberRoleRequest(string? Role);
 /// "Beslut: Vem får ändra vad".</summary>
 public sealed record SetCanManageHouseholdRequest(bool CanManageHousehold);
 
+/// <summary>"Extra uppgift" on Min dag. <c>Today</c> lets the client name its own local date -
+/// see CompleteOccurrenceAsync's own remarks for why.</summary>
+public sealed record CreateExtraTaskRequest(
+    string Name, int EstimatedMinutes, string? Description, Guid? AreaId, DateOnly? Today = null);
+
 public sealed record CreateTaskRequest(
     string Name,
     int EstimatedMinutes,
@@ -155,6 +160,19 @@ public sealed record TaskDefinitionResponse(
     bool IsActive,
     RecurrenceRuleContract? Recurrence,
     int? StaleAfterDays);
+
+/// <summary>A scheduled instance of a task - only used today for the "Extra uppgift" response,
+/// since every other occurrence-returning call the client already made did not need the body.</summary>
+public sealed record TaskOccurrenceResponse(
+    Guid Id,
+    Guid TaskDefinitionId,
+    DateOnly ScheduledDate,
+    DateOnly OriginalScheduledDate,
+    int EstimatedMinutes,
+    string Priority,
+    bool CanBeDeferred,
+    Guid? AssignedMemberId,
+    string Status);
 
 public sealed record RebalanceScheduleResponse(int ChangedTaskCount);
 

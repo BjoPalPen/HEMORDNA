@@ -37,6 +37,14 @@ public sealed record HouseholdMemberResponse(
 /// "Beslut: Vem får ändra vad".</summary>
 public sealed record SetCanManageHouseholdRequest(bool CanManageHousehold);
 
+/// <summary>"Extra uppgift" on Min dag - see <c>CreateExtraTask</c>. Deliberately a small subset
+/// of <c>CreateTaskRequest</c>: no recurrence, no rotation, no assignment choice - always the
+/// caller themselves, today. <c>Today</c> lets the client name its own local date - see
+/// <c>CompleteOccurrenceRequest</c> for why; the server's own date is used when it is
+/// <c>null</c>.</summary>
+public sealed record CreateExtraTaskRequest(
+    string? Name, int EstimatedMinutes, string? Description = null, Guid? AreaId = null, DateOnly? Today = null);
+
 /// <summary>Pauses through and including <c>Until</c>, or resumes immediately when it is <c>null</c>.</summary>
 public sealed record PauseRequest(DateOnly? Until);
 

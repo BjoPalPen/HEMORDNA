@@ -61,6 +61,7 @@ builder.Services.AddScoped<RebalanceSchedule>();
 builder.Services.AddScoped<RebalanceTaskAssignments>();
 builder.Services.AddScoped<RefreshRolePresetBudgets>();
 builder.Services.AddScoped<ScheduleTaskOccurrence>();
+builder.Services.AddScoped<CreateExtraTask>();
 builder.Services.AddScoped<CompleteTaskOccurrence>();
 builder.Services.AddScoped<ReopenTaskOccurrence>();
 builder.Services.AddScoped<DeferTaskOccurrence>();

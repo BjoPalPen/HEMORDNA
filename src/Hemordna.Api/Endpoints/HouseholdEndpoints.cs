@@ -226,6 +226,15 @@ internal static class HouseholdEndpoints
             .Produces(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status409Conflict);
 
+        // "Extra uppgift" on Min dag - outside `manage` on purpose. POST /tasks itself is
+        // household configuration (see `manage.MapPost("/tasks", ...)` above), but adding a
+        // one-off task to one's own day is daily work every member can do - see
+        // docs/ARCHITECTURE.md "Beslut: Vem får ändra vad".
+        scoped.MapPost("/tasks/extra", CreateExtraTaskAsync)
+            .Produces<TaskOccurrenceResponse>(StatusCodes.Status201Created)
+            .Produces(StatusCodes.Status404NotFound)
+            .ProducesValidationProblem();
+
         return app;
     }
 
@@ -597,6 +606,7 @@ internal static class HouseholdEndpoints
     private static async Task<IResult> ScheduleOccurrenceAsync(
         Guid householdId,
         Guid taskId,
+        HttpContext httpContext,
         ScheduleOccurrenceRequest request,
         ScheduleTaskOccurrence schedule,
         CancellationToken cancellationToken)
@@ -607,6 +617,19 @@ internal static class HouseholdEndpoints
             {
                 [nameof(request.Date)] = ["Ett datum måste anges."]
             });
+        }
+
+        // Putting an existing task on the calendar stays open to every member - see
+        // docs/ARCHITECTURE.md "Beslut: Vem får ändra vad" - but only ever assigned to
+        // themselves, never named onto someone else, the same "the caller acts as themselves"
+        // pattern CompleteOccurrenceAsync already uses. Leaving AssignToMemberId unset still
+        // lets a rotating task's own rotation pick whoever is next - that is the household's own
+        // mechanism deciding, not the caller naming another person.
+        var membership = httpContext.GetMembership();
+
+        if (request.AssignToMemberId is { } requestedMemberId && requestedMemberId != membership.MemberId)
+        {
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
         }
 
         var occurrence = await schedule.HandleAsync(
@@ -997,6 +1020,48 @@ internal static class HouseholdEndpoints
             householdId, memberId, request.CanManageHousehold, cancellationToken);
 
         return member is null ? Results.NotFound() : Results.Ok(ToResponse(member));
+    }
+
+    private static async Task<IResult> CreateExtraTaskAsync(
+        Guid householdId,
+        HttpContext httpContext,
+        CreateExtraTaskRequest request,
+        CreateExtraTask createExtraTask,
+        TimeProvider timeProvider,
+        CancellationToken cancellationToken)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name))
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                [nameof(request.Name)] = ["En uppgift måste ha ett namn."]
+            });
+        }
+
+        if (request.EstimatedMinutes < 0)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                [nameof(request.EstimatedMinutes)] = ["Uppskattad tid kan inte vara negativ."]
+            });
+        }
+
+        // Always the caller's own day - see CreateExtraTask's own remarks. The client's own
+        // "today" when it sends one - see CompleteOccurrenceAsync's own remarks on why this can
+        // differ from the server's around midnight. Falls back to the server's own date otherwise.
+        var membership = httpContext.GetMembership();
+        var today = request.Today ?? DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+
+        var occurrence = await createExtraTask.HandleAsync(
+            householdId,
+            membership.MemberId,
+            new NewExtraTask(request.Name, request.EstimatedMinutes, request.Description, request.AreaId),
+            today,
+            cancellationToken);
+
+        return occurrence is null
+            ? Results.NotFound()
+            : Results.Created($"/api/households/{householdId}/tasks/extra", ToResponse(occurrence));
     }
 
     private static async Task<IResult> GetPlanAsync(
