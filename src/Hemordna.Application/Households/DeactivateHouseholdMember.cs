@@ -13,19 +13,24 @@ public sealed class DeactivateHouseholdMember
 
     public DeactivateHouseholdMember(IHouseholdRepository households) => _households = households;
 
-    /// <summary>Deactivates the member, or returns <c>null</c> when the household has no such member.</summary>
+    /// <summary>
+    /// Deactivates the member, or returns <c>null</c> when the household has no such member.
+    /// </summary>
+    /// <exception cref="Domain.Common.DomainException">
+    /// This member is the household's last active one who can manage it - see
+    /// <see cref="Household.DeactivateMember"/>.
+    /// </exception>
     public async Task<HouseholdMember?> HandleAsync(
         Guid householdId, Guid memberId, CancellationToken cancellationToken)
     {
         var household = await _households.FindByIdAsync(householdId, cancellationToken);
-        var member = household?.Members.FirstOrDefault(m => m.Id == memberId);
 
-        if (household is null || member is null)
+        if (household is null || household.Members.All(m => m.Id != memberId))
         {
             return null;
         }
 
-        member.Deactivate();
+        var member = household.DeactivateMember(memberId);
         await _households.UpdateAsync(household, cancellationToken);
 
         return member;

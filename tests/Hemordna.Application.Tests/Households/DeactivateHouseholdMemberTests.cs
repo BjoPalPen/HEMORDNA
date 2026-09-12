@@ -11,7 +11,9 @@ public class DeactivateHouseholdMemberTests
 
     private DeactivateHouseholdMember CreateUseCase() => new(_households);
 
-    private async Task<(Guid HouseholdId, HouseholdMember Member)> ArrangeHouseholdAsync()
+    /// <summary>A household with just its creator - who, since CreateHousehold, is also its
+    /// first (and here, only) manager. See docs/ARCHITECTURE.md "Beslut: Vem får ändra vad".</summary>
+    private async Task<(Guid HouseholdId, HouseholdMember Creator)> ArrangeHouseholdAsync()
     {
         var household = await new CreateHousehold(_households, new FixedTimeProvider(Now))
             .HandleAsync("Familjen", Guid.NewGuid(), "Anna", CancellationToken.None);
@@ -20,15 +22,19 @@ public class DeactivateHouseholdMemberTests
     }
 
     [Fact]
-    public async Task Deactivates_the_member()
+    public async Task Deactivates_a_member_who_is_not_the_households_last_manager()
     {
-        var (householdId, member) = await ArrangeHouseholdAsync();
+        var (householdId, creator) = await ArrangeHouseholdAsync();
+        var household = await _households.FindByIdAsync(householdId, CancellationToken.None);
+        var other = household!.AddMember("Björn", WeeklyTimeBudget.Empty, Now);
+        await _households.UpdateAsync(household, CancellationToken.None);
 
-        var deactivated = await CreateUseCase().HandleAsync(householdId, member.Id, CancellationToken.None);
+        var deactivated = await CreateUseCase().HandleAsync(householdId, other.Id, CancellationToken.None);
 
         Assert.NotNull(deactivated);
         Assert.False(deactivated.IsActive);
-        Assert.False(member.IsActive);
+        Assert.False(other.IsActive);
+        Assert.True(creator.IsActive);
     }
 
     [Fact]
@@ -47,5 +53,19 @@ public class DeactivateHouseholdMemberTests
         var deactivated = await CreateUseCase().HandleAsync(Guid.NewGuid(), Guid.NewGuid(), CancellationToken.None);
 
         Assert.Null(deactivated);
+    }
+
+    [Fact]
+    public async Task Cannot_deactivate_the_households_last_active_manager()
+    {
+        // The creator is the household's only member and its only manager - deactivating them
+        // would leave the household permanently unable to manage itself (no support channel,
+        // one household per user forever - see docs/ARCHITECTURE.md "Beslut: Vem får ändra vad").
+        var (householdId, creator) = await ArrangeHouseholdAsync();
+
+        await Assert.ThrowsAsync<Domain.Common.DomainException>(
+            () => CreateUseCase().HandleAsync(householdId, creator.Id, CancellationToken.None));
+
+        Assert.True(creator.IsActive);
     }
 }

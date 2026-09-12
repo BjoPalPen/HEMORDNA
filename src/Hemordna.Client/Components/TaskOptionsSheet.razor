@@ -1,5 +1,6 @@
 @using Hemordna.Client.Support
 @inject HemordnaApiClient Api
+@inject HemordnaSession Session
 
 <BottomSheet Title="@Task.Name" IsOpen="IsOpen" IsOpenChanged="OnIsOpenChanged" Detent="SheetDetent.Half">
     @switch (_view)
@@ -112,52 +113,55 @@
             break;
 
         default:
-            <ul class="list" aria-label="Alternativ för uppgiften">
-                <li class="list-item list-item-flush">
-                    <button type="button" class="task-options-row" @onclick="() => _view = View.Frequency">
-                        <span>Upprepning</span>
-                        <span class="task-options-value muted small">@RecurrenceSummary</span>
-                        <Icon Name="chevron-right" Size="18" />
-                    </button>
-                </li>
-                <li class="list-item list-item-flush">
-                    <button type="button" class="task-options-row" @onclick="() => _view = View.Assignment">
-                        <span>Vem gör det</span>
-                        <span class="task-options-value muted small">@AssignmentSummary</span>
-                        <Icon Name="chevron-right" Size="18" />
-                    </button>
-                </li>
-                <li class="list-item list-item-flush">
-                    <button type="button" class="task-options-row" @onclick="() => _view = View.Time">
-                        <span>Tid</span>
-                        <span class="task-options-value muted small">@TimeSummary</span>
-                        <Icon Name="chevron-right" Size="18" />
-                    </button>
-                </li>
-                <li class="list-item list-item-flush">
-                    <button type="button" class="task-options-row" @onclick="() => _view = View.Room">
-                        <span>Rum</span>
-                        <span class="task-options-value muted small">@RoomSummary</span>
-                        <Icon Name="chevron-right" Size="18" />
-                    </button>
-                </li>
-                <li class="list-item">
-                    <span class="list-name">Kräver vuxen</span>
-                    <label class="field-check">
-                        <input type="checkbox" checked="@Task.RequiresAdult" @onchange="ToggleRequiresAdultAsync" />
-                        <span>Bara vuxna tilldelas den här</span>
-                    </label>
-                </li>
-            </ul>
-
-            @if (_message is { } deleteMessage)
+            @if (Session.CanManageHousehold)
             {
-                <div class="notice notice-problem" role="alert">@deleteMessage</div>
-            }
+                <ul class="list" aria-label="Alternativ för uppgiften">
+                    <li class="list-item list-item-flush">
+                        <button type="button" class="task-options-row" @onclick="() => _view = View.Frequency">
+                            <span>Upprepning</span>
+                            <span class="task-options-value muted small">@RecurrenceSummary</span>
+                            <Icon Name="chevron-right" Size="18" />
+                        </button>
+                    </li>
+                    <li class="list-item list-item-flush">
+                        <button type="button" class="task-options-row" @onclick="() => _view = View.Assignment">
+                            <span>Vem gör det</span>
+                            <span class="task-options-value muted small">@AssignmentSummary</span>
+                            <Icon Name="chevron-right" Size="18" />
+                        </button>
+                    </li>
+                    <li class="list-item list-item-flush">
+                        <button type="button" class="task-options-row" @onclick="() => _view = View.Time">
+                            <span>Tid</span>
+                            <span class="task-options-value muted small">@TimeSummary</span>
+                            <Icon Name="chevron-right" Size="18" />
+                        </button>
+                    </li>
+                    <li class="list-item list-item-flush">
+                        <button type="button" class="task-options-row" @onclick="() => _view = View.Room">
+                            <span>Rum</span>
+                            <span class="task-options-value muted small">@RoomSummary</span>
+                            <Icon Name="chevron-right" Size="18" />
+                        </button>
+                    </li>
+                    <li class="list-item">
+                        <span class="list-name">Kräver vuxen</span>
+                        <label class="field-check">
+                            <input type="checkbox" checked="@Task.RequiresAdult" @onchange="ToggleRequiresAdultAsync" />
+                            <span>Bara vuxna tilldelas den här</span>
+                        </label>
+                    </li>
+                </ul>
 
-            <button type="button" class="btn btn-danger btn-block" disabled="@_busy" @onclick="DeleteAsync">
-                Ta bort uppgiften
-            </button>
+                @if (_message is { } deleteMessage)
+                {
+                    <div class="notice notice-problem" role="alert">@deleteMessage</div>
+                }
+
+                <button type="button" class="btn btn-danger btn-block" disabled="@_busy" @onclick="DeleteAsync">
+                    Ta bort uppgiften
+                </button>
+            }
             break;
     }
 </BottomSheet>

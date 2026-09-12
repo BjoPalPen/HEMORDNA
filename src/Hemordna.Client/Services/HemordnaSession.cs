@@ -22,6 +22,13 @@ public sealed class HemordnaSession
     /// <summary>True when signed in but no household has been created yet.</summary>
     public bool NeedsHousehold => Me is { HouseholdId: null };
 
+    /// <summary>
+    /// Whether the signed-in member can change rooms, tasks and other members - see
+    /// docs/ARCHITECTURE.md "Beslut: Vem får ändra vad". Controls that nobody may use when this
+    /// is false are hidden outright, never shown disabled - see docs/DESIGN.md.
+    /// </summary>
+    public bool CanManageHousehold => Me is { CanManageHousehold: true };
+
     public event Action? Changed;
 
     private Task? _loading;

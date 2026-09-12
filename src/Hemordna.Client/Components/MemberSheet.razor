@@ -1,95 +1,113 @@
 @using Hemordna.Client.Support
 @inject HemordnaApiClient Api
+@inject HemordnaSession Session
 @inject TimeProvider TimeProvider
 
 <BottomSheet Title="@Member.DisplayName" IsOpen="IsOpen" IsOpenChanged="OnIsOpenChanged" Detent="SheetDetent.Half">
-    <div class="field">
-        <span>Vilken roll har personen i hushållet?</span>
-        <div class="level-picker">
-            @foreach (var preset in HouseholdRolePresets.All)
-            {
-                <button type="button"
-                        class="@(Member.Role == preset.Role.ToString() ? "btn btn-primary" : "btn btn-secondary")"
-                        disabled="@_roleBusy"
-                        @onclick="() => SetRoleAsync(preset.Role)">
-                    @preset.Label
-                </button>
-            }
-        </div>
-    </div>
-
-    <details class="more-options">
-        <summary>Anpassad tid i stället</summary>
-        <div class="level-picker">
-            @foreach (var level in TimeLevel.All)
-            {
-                <button type="button" class="btn btn-secondary" disabled="@_roleBusy"
-                        @onclick="() => SetCustomMinutesAsync(level.Minutes)">
-                    <span>@level.Label</span>
-                    @if (level.Minutes > 0)
-                    {
-                        <span class="muted small">@TimeLevel.MinutesLabel(level.Minutes)</span>
-                    }
-                </button>
-            }
-        </div>
-    </details>
-
-    <details class="more-options">
-        <summary>Anpassa tid per veckodag</summary>
-        <p class="muted small">
-            Sätt ett eget antal minuter för varje dag - till exempel mer tid på helgen, eller en
-            ledig dag i veckan. Skriver över både rollval och "Anpassad tid" ovan.
-        </p>
-
-        @if (_weekdayForm is { } weekdayForm)
-        {
-            <label class="field">
-                <span>Måndag</span>
-                <input type="number" min="0" max="600" @bind="weekdayForm.Monday" />
-            </label>
-            <label class="field">
-                <span>Tisdag</span>
-                <input type="number" min="0" max="600" @bind="weekdayForm.Tuesday" />
-            </label>
-            <label class="field">
-                <span>Onsdag</span>
-                <input type="number" min="0" max="600" @bind="weekdayForm.Wednesday" />
-            </label>
-            <label class="field">
-                <span>Torsdag</span>
-                <input type="number" min="0" max="600" @bind="weekdayForm.Thursday" />
-            </label>
-            <label class="field">
-                <span>Fredag</span>
-                <input type="number" min="0" max="600" @bind="weekdayForm.Friday" />
-            </label>
-            <label class="field">
-                <span>Lördag</span>
-                <input type="number" min="0" max="600" @bind="weekdayForm.Saturday" />
-            </label>
-            <label class="field">
-                <span>Söndag</span>
-                <input type="number" min="0" max="600" @bind="weekdayForm.Sunday" />
-            </label>
-        }
-
-        @if (_weekdayMessage is { } weekdayMessage)
-        {
-            <div class="notice notice-problem" role="alert">@weekdayMessage</div>
-        }
-
-        <button type="button" class="btn btn-secondary btn-block" disabled="@_weekdayBusy" @onclick="SaveWeekdayBudgetAsync">
-            @(_weekdayBusy ? "Sparar..." : "Spara")
-        </button>
-    </details>
-
-    @if (_roleMessage is { } roleMessage)
+    @if (Session.CanManageHousehold)
     {
-        <div class="notice notice-problem" role="alert">@roleMessage</div>
-    }
+        <div class="field">
+            <span>Vilken roll har personen i hushållet?</span>
+            <div class="level-picker">
+                @foreach (var preset in HouseholdRolePresets.All)
+                {
+                    <button type="button"
+                            class="@(Member.Role == preset.Role.ToString() ? "btn btn-primary" : "btn btn-secondary")"
+                            disabled="@_roleBusy"
+                            @onclick="() => SetRoleAsync(preset.Role)">
+                        @preset.Label
+                    </button>
+                }
+            </div>
+        </div>
 
-    <hr class="member-sheet-divider" />
+        <details class="more-options">
+            <summary>Anpassad tid i stället</summary>
+            <div class="level-picker">
+                @foreach (var level in TimeLevel.All)
+                {
+                    <button type="button" class="btn btn-secondary" disabled="@_roleBusy"
+                            @onclick="() => SetCustomMinutesAsync(level.Minutes)">
+                        <span>@level.Label</span>
+                        @if (level.Minutes > 0)
+                        {
+                            <span class="muted small">@TimeLevel.MinutesLabel(level.Minutes)</span>
+                        }
+                    </button>
+                }
+            </div>
+        </details>
+
+        <details class="more-options">
+            <summary>Anpassa tid per veckodag</summary>
+            <p class="muted small">
+                Sätt ett eget antal minuter för varje dag - till exempel mer tid på helgen, eller en
+                ledig dag i veckan. Skriver över både rollval och "Anpassad tid" ovan.
+            </p>
+
+            @if (_weekdayForm is { } weekdayForm)
+            {
+                <label class="field">
+                    <span>Måndag</span>
+                    <input type="number" min="0" max="600" @bind="weekdayForm.Monday" />
+                </label>
+                <label class="field">
+                    <span>Tisdag</span>
+                    <input type="number" min="0" max="600" @bind="weekdayForm.Tuesday" />
+                </label>
+                <label class="field">
+                    <span>Onsdag</span>
+                    <input type="number" min="0" max="600" @bind="weekdayForm.Wednesday" />
+                </label>
+                <label class="field">
+                    <span>Torsdag</span>
+                    <input type="number" min="0" max="600" @bind="weekdayForm.Thursday" />
+                </label>
+                <label class="field">
+                    <span>Fredag</span>
+                    <input type="number" min="0" max="600" @bind="weekdayForm.Friday" />
+                </label>
+                <label class="field">
+                    <span>Lördag</span>
+                    <input type="number" min="0" max="600" @bind="weekdayForm.Saturday" />
+                </label>
+                <label class="field">
+                    <span>Söndag</span>
+                    <input type="number" min="0" max="600" @bind="weekdayForm.Sunday" />
+                </label>
+            }
+
+            @if (_weekdayMessage is { } weekdayMessage)
+            {
+                <div class="notice notice-problem" role="alert">@weekdayMessage</div>
+            }
+
+            <button type="button" class="btn btn-secondary btn-block" disabled="@_weekdayBusy" @onclick="SaveWeekdayBudgetAsync">
+                @(_weekdayBusy ? "Sparar..." : "Spara")
+            </button>
+        </details>
+
+        @if (_roleMessage is { } roleMessage)
+        {
+            <div class="notice notice-problem" role="alert">@roleMessage</div>
+        }
+
+        @if (Member.HasAccount)
+        {
+            <label class="field-check">
+                <input type="checkbox" checked="@Member.CanManageHousehold" disabled="@_canManageBusy"
+                       @onchange="ToggleCanManageHouseholdAsync" />
+                <span>Kan ändra rum, uppgifter och medlemmar</span>
+            </label>
+
+            @if (_canManageMessage is { } canManageMessage)
+            {
+                <div class="notice notice-problem" role="alert">@canManageMessage</div>
+            }
+        }
+
+        <hr class="member-sheet-divider" />
+    }
 
     <label class="field">
         <span>Pausa till och med</span>
@@ -116,16 +134,19 @@
         </button>
     }
 
-    <hr class="member-sheet-divider" />
-
-    @if (_removeMessage is { } removeMessage)
+    @if (Session.CanManageHousehold)
     {
-        <div class="notice notice-problem" role="alert">@removeMessage</div>
-    }
+        <hr class="member-sheet-divider" />
 
-    <button type="button" class="btn btn-danger btn-block" disabled="@_removeBusy" @onclick="RemoveAsync">
-        Ta bort medlem
-    </button>
+        @if (_removeMessage is { } removeMessage)
+        {
+            <div class="notice notice-problem" role="alert">@removeMessage</div>
+        }
+
+        <button type="button" class="btn btn-danger btn-block" disabled="@_removeBusy" @onclick="RemoveAsync">
+            Ta bort medlem
+        </button>
+    }
 </BottomSheet>
 
 @code {
@@ -172,6 +193,9 @@
     private bool _removeBusy;
     private string? _removeMessage;
 
+    private bool _canManageBusy;
+    private string? _canManageMessage;
+
     private static readonly System.Globalization.CultureInfo SwedishCulture = new("sv-SE");
 
     private DateOnly Today => DateOnly.FromDateTime(TimeProvider.GetLocalNow().DateTime);
@@ -184,6 +208,7 @@
             _weekdayMessage = null;
             _pauseMessage = null;
             _removeMessage = null;
+            _canManageMessage = null;
             return;
         }
 
@@ -378,6 +403,35 @@
         finally
         {
             _removeBusy = false;
+        }
+    }
+
+    private async Task ToggleCanManageHouseholdAsync(ChangeEventArgs e)
+    {
+        var canManage = (bool)e.Value!;
+        _canManageBusy = true;
+        _canManageMessage = null;
+
+        try
+        {
+            if (!await Api.SetMemberCanManageHouseholdAsync(HouseholdId, Member.Id, canManage))
+            {
+                // Most likely the "never leave the household with zero" invariant - see
+                // docs/ARCHITECTURE.md "Beslut: Vem får ändra vad" - rejecting taking the
+                // ability away from the last member who has it.
+                _canManageMessage = "Det gick inte att spara. Hushållet måste ha minst en medlem som kan ändra det.";
+                return;
+            }
+
+            await OnChanged.InvokeAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _canManageMessage = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _canManageBusy = false;
         }
     }
 }

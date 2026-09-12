@@ -601,6 +601,23 @@ public sealed class HemordnaApiClient
         return response.IsSuccessStatusCode;
     }
 
+    /// <summary>Grants or removes a member's ability to manage the household - see docs/ARCHITECTURE.md
+    /// "Beslut: Vem får ändra vad". Only the caller's own household, and only when the caller
+    /// already has this ability themselves - enforced server-side, see HouseholdManageFilter.</summary>
+    public async Task<bool> SetMemberCanManageHouseholdAsync(
+        Guid householdId,
+        Guid memberId,
+        bool canManage,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Put, $"api/households/{householdId}/members/{memberId}/can-manage", cancellationToken);
+        request.Content = JsonContent.Create(new SetCanManageHouseholdRequest(canManage));
+
+        var response = await _http.SendAsync(request, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
     /// <summary>Deactivates the member rather than deleting them - see HouseholdMember for why.</summary>
     public async Task<bool> DeactivateMemberAsync(
         Guid householdId,

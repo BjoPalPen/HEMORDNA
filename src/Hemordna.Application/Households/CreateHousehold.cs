@@ -35,6 +35,11 @@ public sealed class CreateHousehold
         var member = household.AddMember(displayName, WeeklyTimeBudget.Empty, createdAt);
         member.LinkToUser(userId);
 
+        // The household's creator can manage it from the start - someone has to be able to,
+        // and they are the only member that exists yet. Must come after LinkToUser: granting it
+        // to an account-less member is rejected - see HouseholdMember.SetCanManageHousehold.
+        member.SetCanManageHousehold(true);
+
         await _households.AddAsync(household, cancellationToken);
 
         return household;

@@ -40,6 +40,10 @@ public sealed class JoinHousehold
         var member = household.AddMember(displayName, WeeklyTimeBudget.Empty, _timeProvider.GetUtcNow());
         member.LinkToUser(userId);
 
+        // Deliberately does NOT grant CanManageHousehold - see docs/ARCHITECTURE.md "Beslut:
+        // Vem får ändra vad". Whoever set the household up keeps managing it and can hand the
+        // ability onward with a single tap; joining by code is not itself a vote of trust.
+
         await _households.UpdateAsync(household, cancellationToken);
 
         return household;

@@ -254,6 +254,7 @@ internal static class AuthEndpoints
             user.Email ?? string.Empty,
             user.DisplayName,
             membership?.HouseholdId,
-            membership?.MemberId));
+            membership?.MemberId,
+            membership?.CanManageHousehold ?? false));
     }
 }

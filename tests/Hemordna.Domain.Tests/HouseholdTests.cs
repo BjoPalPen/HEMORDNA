@@ -198,6 +198,106 @@ public class HouseholdTests
         Assert.Null(household.PausedUntil);
         Assert.False(household.IsPausedOn(until));
     }
+
+    [Fact]
+    public void SetMemberCanManageHousehold_grants_it_to_a_member_with_an_account()
+    {
+        var household = Household.Create("Familjen", CreatedAt);
+        var member = household.AddMember("Anna", WeeklyTimeBudget.Empty, CreatedAt);
+        member.LinkToUser(Guid.NewGuid());
+
+        household.SetMemberCanManageHousehold(member.Id, true);
+
+        Assert.True(member.CanManageHousehold);
+    }
+
+    [Fact]
+    public void SetMemberCanManageHousehold_rejects_an_unknown_member()
+    {
+        var household = Household.Create("Familjen", CreatedAt);
+
+        Assert.Throws<DomainException>(() => household.SetMemberCanManageHousehold(Guid.NewGuid(), true));
+    }
+
+    [Fact]
+    public void SetMemberCanManageHousehold_cannot_remove_it_from_the_last_active_manager()
+    {
+        var household = Household.Create("Familjen", CreatedAt);
+        var member = household.AddMember("Anna", WeeklyTimeBudget.Empty, CreatedAt);
+        member.LinkToUser(Guid.NewGuid());
+        household.SetMemberCanManageHousehold(member.Id, true);
+
+        Assert.Throws<DomainException>(() => household.SetMemberCanManageHousehold(member.Id, false));
+        Assert.True(member.CanManageHousehold);
+    }
+
+    [Fact]
+    public void SetMemberCanManageHousehold_can_remove_it_when_another_active_member_also_has_it()
+    {
+        var household = Household.Create("Familjen", CreatedAt);
+        var first = household.AddMember("Anna", WeeklyTimeBudget.Empty, CreatedAt);
+        first.LinkToUser(Guid.NewGuid());
+        var second = household.AddMember("Björn", WeeklyTimeBudget.Empty, CreatedAt);
+        second.LinkToUser(Guid.NewGuid());
+        household.SetMemberCanManageHousehold(first.Id, true);
+        household.SetMemberCanManageHousehold(second.Id, true);
+
+        household.SetMemberCanManageHousehold(first.Id, false);
+
+        Assert.False(first.CanManageHousehold);
+        Assert.True(second.CanManageHousehold);
+    }
+
+    [Fact]
+    public void DeactivateMember_cannot_deactivate_the_last_active_manager()
+    {
+        var household = Household.Create("Familjen", CreatedAt);
+        var member = household.AddMember("Anna", WeeklyTimeBudget.Empty, CreatedAt);
+        member.LinkToUser(Guid.NewGuid());
+        household.SetMemberCanManageHousehold(member.Id, true);
+
+        Assert.Throws<DomainException>(() => household.DeactivateMember(member.Id));
+        Assert.True(member.IsActive);
+    }
+
+    [Fact]
+    public void DeactivateMember_can_deactivate_a_manager_when_another_active_member_also_manages()
+    {
+        var household = Household.Create("Familjen", CreatedAt);
+        var first = household.AddMember("Anna", WeeklyTimeBudget.Empty, CreatedAt);
+        first.LinkToUser(Guid.NewGuid());
+        var second = household.AddMember("Björn", WeeklyTimeBudget.Empty, CreatedAt);
+        second.LinkToUser(Guid.NewGuid());
+        household.SetMemberCanManageHousehold(first.Id, true);
+        household.SetMemberCanManageHousehold(second.Id, true);
+
+        household.DeactivateMember(first.Id);
+
+        Assert.False(first.IsActive);
+        Assert.True(second.IsActive);
+    }
+
+    [Fact]
+    public void DeactivateMember_can_always_deactivate_a_member_who_does_not_manage_the_household()
+    {
+        var household = Household.Create("Familjen", CreatedAt);
+        var manager = household.AddMember("Anna", WeeklyTimeBudget.Empty, CreatedAt);
+        manager.LinkToUser(Guid.NewGuid());
+        household.SetMemberCanManageHousehold(manager.Id, true);
+        var other = household.AddMember("Björn", WeeklyTimeBudget.Empty, CreatedAt);
+
+        household.DeactivateMember(other.Id);
+
+        Assert.False(other.IsActive);
+    }
+
+    [Fact]
+    public void DeactivateMember_rejects_an_unknown_member()
+    {
+        var household = Household.Create("Familjen", CreatedAt);
+
+        Assert.Throws<DomainException>(() => household.DeactivateMember(Guid.NewGuid()));
+    }
 }
 
 public class HouseholdMemberUserLinkTests

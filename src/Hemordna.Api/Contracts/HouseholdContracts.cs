@@ -18,13 +18,24 @@ public sealed record HouseholdResponse(
     IReadOnlyList<HouseholdMemberResponse> Members,
     IReadOnlyList<AreaResponse> Areas);
 
+/// <param name="HasAccount">
+/// Derived from <c>UserId is not null</c> - the raw id is never exposed. The client needs this
+/// to know whether offering the "can manage" checkbox for a member even makes sense - see
+/// docs/ARCHITECTURE.md "Beslut: Vem får ändra vad".
+/// </param>
 public sealed record HouseholdMemberResponse(
     Guid Id,
     string DisplayName,
     bool IsActive,
     WeeklyTimeBudgetContract WeeklyTimeBudgetMinutes,
     HouseholdRole? Role,
-    DateOnly? PausedUntil);
+    DateOnly? PausedUntil,
+    bool CanManageHousehold,
+    bool HasAccount);
+
+/// <summary>Grants or removes a member's ability to manage the household - see docs/ARCHITECTURE.md
+/// "Beslut: Vem får ändra vad".</summary>
+public sealed record SetCanManageHouseholdRequest(bool CanManageHousehold);
 
 /// <summary>Pauses through and including <c>Until</c>, or resumes immediately when it is <c>null</c>.</summary>
 public sealed record PauseRequest(DateOnly? Until);

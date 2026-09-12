@@ -46,6 +46,7 @@ builder.Services.AddScoped<DeactivateHouseholdMember>();
 builder.Services.AddScoped<SetMemberAvailability>();
 builder.Services.AddScoped<SetMemberWeeklyBudget>();
 builder.Services.AddScoped<SetMemberRole>();
+builder.Services.AddScoped<SetMemberCanManageHousehold>();
 builder.Services.AddScoped<SetMemberPreference>();
 builder.Services.AddScoped<GetMemberPreference>();
 builder.Services.AddScoped<CreateTaskDefinition>();

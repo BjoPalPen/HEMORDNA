@@ -13,7 +13,8 @@ public sealed record MeResponse(
     string Email,
     string DisplayName,
     Guid? HouseholdId,
-    Guid? MemberId);
+    Guid? MemberId,
+    bool CanManageHousehold);
 
 public sealed record DailyPlanResponse(
     Guid MemberId,
@@ -74,7 +75,9 @@ public sealed record HouseholdMemberResponse(
     bool IsActive,
     WeeklyTimeBudgetContract WeeklyTimeBudgetMinutes,
     string? Role,
-    DateOnly? PausedUntil);
+    DateOnly? PausedUntil,
+    bool CanManageHousehold,
+    bool HasAccount);
 
 /// <summary>Pauses through and including <c>Until</c>, or resumes immediately when it is <c>null</c>.</summary>
 public sealed record PauseRequest(DateOnly? Until);
@@ -116,6 +119,10 @@ public sealed record AddMemberRequest(
     string DisplayName, WeeklyTimeBudgetContract? WeeklyTimeBudgetMinutes, string? Role = null);
 
 public sealed record SetMemberRoleRequest(string? Role);
+
+/// <summary>Grants or removes a member's ability to manage the household - see docs/ARCHITECTURE.md
+/// "Beslut: Vem får ändra vad".</summary>
+public sealed record SetCanManageHouseholdRequest(bool CanManageHousehold);
 
 public sealed record CreateTaskRequest(
     string Name,
