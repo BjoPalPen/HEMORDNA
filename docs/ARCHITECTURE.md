@@ -2744,9 +2744,80 @@ vald, precis som specen redan sa. Inga av `TaskCountFor`/`WeeklyMinutesFor`/`Tod
 rum utan prefix, en våning vald) - bekräftad att den faller utan fixen, med precis den
 `aria snapshot` som beskriver buggen (bara två flikar, ingen "Övrigt"-knapp alls).
 
+### Beslut: Tidsöverstyrning för vanliga hushållssysslor — `IMPLEMENTED`
+
+Björn, direkt efter att ha sett skärmdumpen av "Lägg till vanliga hushållssysslor": "Här vill
+man kunna sätta tid som override på alla uppgifter, det är ju olika i varje hushåll." Rätt
+iakttagelse - `GeneralTaskTemplates`s minuter (t.ex. "Handla mat" 45 min) är en gissning, och
+den enda vägen att ändra den tidigare var att lägga till uppgiften och sedan öppna den igen för
+redigering, ett extra steg för något som varierar mycket mer än mallens övriga val (frekvens,
+rum) redan gör.
+
+**Scope, uttryckligen avgränsat**: bara den här listan (`RoomSheet.razor`s
+"Lägg till vanliga hushållssysslor"), inte `RoomTemplates`s egen checklista i "Nytt rum"-guiden
+(`Rum.razor`) - samma lucka finns strukturellt där också, men Björn valde att avgränsa till den
+demonstrerade friktionen snarare än att bygga båda på en gång (se `[[feedback_usecase_before_
+feature]]`).
+
+**Återanvänder `TimeLevel`s befintliga `level-picker` rakt av** - samma fyra knappar
+(Ingen/Lite/Lagom/Lång tid) som det manuella "Lägg till uppgift"-formuläret redan har, i stället
+för att uppfinna ett nytt sätt att välja tid. En kryssad syssla visar sin egen picker direkt
+under raden (inte alla åtta på en gång, bara för att undvika att en olängd lista blir väldigt
+lång när inget är kryssat), förvald till `TimeLevel.ClosestMinutes(task.EstimatedMinutes)` - en
+ny `Dictionary<string, int>` (`_suggestedMinutes`, nyckel = uppgiftens namn) håller varje
+sysslas egen override, tom tills en ruta faktiskt kryssas (`EnsureSuggestedMinutes`, kopplad via
+`@bind:after` på kryssrutan) - skriver aldrig över ett redan gjort val om rutan kryssas ur och i
+igen under samma session. `AddSuggestedTasksAsync` läser overriden
+(`_suggestedMinutes.GetValueOrDefault(task.Name, task.EstimatedMinutes)`) i stället för mallens
+eget `EstimatedMinutes`, och nollställer overriden igen efter ett lyckat tillägg.
+
+**Ett riktigt testfel hittades och fixades under arbetet**: det första försöket till
+regressionstest påstod att en rad med 5 min "innehöll" texten `"5 min"` - men mallens
+OFÖRÄNDRADE standardvärde för "Handla mat" är 45 min, och strängen `"45 min"` innehåller själv
+`"5 min"` som delsträng (siffran 5 i "45" följt av " min"). Testet passerade därför även UTAN
+fixen - ett falskt positivt upptäckt genom att stänga av fixen och köra om, precis det
+`hemordna-review` §8 kräver. Fixat genom att kräva `"· 5 min"` (med skiljetecknet) i stället,
+vilket "· 45 min" inte innehåller.
+
+Ny E2E `OmradenTests.Overriding_a_common_chores_time_before_adding_it_uses_the_chosen_minutes`:
+"Lång tid" (30 min) är förvald för "Handla mat" (närmast 45 min), byter till "Lite tid" (5 min),
+lägger till, och läser tillbaka att raden visar "5 min", inte mallens 45.
+
+### Beslut: Fler tidsnivåer, upp till flera timmar — `IMPLEMENTED`
+
+Björn, direkt efter tidsöverstyrningen ovan: "Det räcker inte med dessa gränser, vissa saker
+kan ju ta några timmar, ex handla mat vi kanske måste åka långt för att handla." Rätt
+iakttagelse - `TimeLevel.All` toppade vid 30 min ("Lång tid") sedan appen byggdes, ett tak som
+gällde ÖVERALLT tid väljs (veckobudget, manuellt tillagda uppgifter, nu även
+hushållssysslo-overriden ovan), inte bara den nya listan. Ett ärende som kräver en bilresa är
+inte ovanligt, och 30 minuter räcker inte i närheten.
+
+**Två nya nivåer, inte en**: "En timme" (60 min) och "Flera timmar" (120 min) - jämnare steg
+(30→60→120) i stället för ett stort hopp direkt från 30 till en enda toppnivå. Ren tilläggning
+till `TimeLevel.All`; ingen annan kod ändrad - `.level-picker`s egen CSS (`app.css`) var redan
+byggd för "hur många det än är" (`flex: 1 1 0` + `flex-wrap: nowrap`, samma teknik som redan
+håller ihop `.energy-options`/`.chips` på en rad, se "Sju enkla lösningar" ovan) - sex knappar i
+stället för fyra krävde ingen layoutändring, bara verifierat med skärmbilder (390px, Stor text,
+både hushållssysslo-listan och medlemmens egen veckobudget-picker) att raden fortfarande håller
+ihop och krymper text i stället för att radbryta.
+
+Eftersom `TimeLevel` är en delad skala gäller de två nya nivåerna automatiskt överallt -
+`MemberSheet.razor`s "Anpassad tid i stället", `RoomSheet.razor`s manuella
+"Lägg till uppgift"-formulär och hushållssysslo-overriden, `TaskOptionsSheet.razor` - utan att
+någon av dem behövde egen kod. `TimeLevelTests.A_task_between_levels_shows_its_own_exact_
+minutes_not_a_rounded_level`s egna 45-minutersexempel ("mellan två nivåer") gäller fortfarande
+oförändrat - 45 ligger nu mellan "Lång tid" (30) och "En timme" (60) i stället för att bara
+ligga "förbi" 30, samma poäng (exakta sparade minuter visas alltid, aldrig avrundat till
+närmaste nivå).
+
+Ny E2E `OmradenTests.A_long_errand_can_be_given_several_hours`: väljer "Flera timmar" för
+"Handla mat", lägger till, läser tillbaka 120 min - bekräftad att den faller (väntar ut en
+30-sekunders timeout på en knapp som inte längre finns) utan de två nya nivåerna.
+
 | Fråga | Varför den väntar |
 |---|---|
 | Offline-strategi bortom read-only cache | Utanför MVP; får inte låsas in i förväg |
+| Tidsöverstyrning för RoomTemplates egen checklista ("Nytt rum") | Samma lucka, men medvetet avgränsad bort - se "Beslut: Tidsöverstyrning..." ovan |
 | Matlagning som egen uppgiftstyp | Riktigt behov (NPF, ensamhushåll), men kräver ett rollbudget-beslut FÖRST - se "Beslut: Mallfrekvens..." ovan |
 | Omräkning av mallfrekvens när hushållet ändrar storlek efteråt | Inget riktigt hushåll har stött på det ännu - byggs som en explicit `Refresh…`-use case den dagen det händer |
 

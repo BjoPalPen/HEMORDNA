@@ -173,14 +173,36 @@
             {
                 <details class="more-options">
                     <summary>Lägg till vanliga hushållssysslor</summary>
-                    <p class="muted small">Kryssa i det som stämmer för ert hushåll - inget är förvalt.</p>
+                    <p class="muted small">
+                        Kryssa i det som stämmer för ert hushåll - inget är förvalt. Tiden är bara
+                        ett förslag - ändra den innan ni lägger till, den varierar mycket mellan hushåll.
+                    </p>
 
                     @foreach (var suggestion in GeneralTaskTemplates.All)
                     {
                         <label class="field-check">
-                            <input type="checkbox" @bind="_suggestedSelected[suggestion.Name]" />
+                            <input type="checkbox" @bind="_suggestedSelected[suggestion.Name]"
+                                   @bind:after="() => EnsureSuggestedMinutes(suggestion)" />
                             <span>@suggestion.Name</span>
                         </label>
+
+                        @if (_suggestedSelected.GetValueOrDefault(suggestion.Name))
+                        {
+                            <div class="level-picker">
+                                @foreach (var level in TimeLevel.All)
+                                {
+                                    <button type="button"
+                                            class="@(_suggestedMinutes.GetValueOrDefault(suggestion.Name) == level.Minutes ? "btn btn-primary" : "btn btn-secondary")"
+                                            @onclick="() => _suggestedMinutes[suggestion.Name] = level.Minutes">
+                                        <span>@level.Label</span>
+                                        @if (level.Minutes > 0)
+                                        {
+                                            <span class="muted small">@TimeLevel.MinutesLabel(level.Minutes)</span>
+                                        }
+                                    </button>
+                                }
+                            </div>
+                        }
                     }
 
                     @if (GeneralTaskTemplates.All.Any(task => task.ScalesWithHouseholdSize))
@@ -334,7 +356,23 @@
 
     private readonly Dictionary<string, bool> _suggestedSelected =
         GeneralTaskTemplates.All.ToDictionary(task => task.Name, _ => false);
+
+    /// <summary>How much time each checked suggestion actually gets - the template's own
+    /// EstimatedMinutes is only a starting point (see EnsureSuggestedMinutes); a real household
+    /// can need very different time for "Handla mat" than another.</summary>
+    private readonly Dictionary<string, int> _suggestedMinutes = [];
     private bool _suggestionsBusy;
+
+    /// <summary>Seeds a just-checked suggestion's time picker from the template's own default,
+    /// the closest TimeLevel to it - never overwrites a value the person already chose, so
+    /// unchecking and rechecking the same box mid-session keeps their own pick.</summary>
+    private void EnsureSuggestedMinutes(RoomTemplateTask task)
+    {
+        if (_suggestedSelected.GetValueOrDefault(task.Name) && !_suggestedMinutes.ContainsKey(task.Name))
+        {
+            _suggestedMinutes[task.Name] = TimeLevel.ClosestMinutes(task.EstimatedMinutes);
+        }
+    }
 
     private DateOnly Today => DateOnly.FromDateTime(TimeProvider.GetLocalNow().DateTime);
 
@@ -644,7 +682,7 @@
 
                 await Api.CreateTaskAsync(HouseholdId, new CreateTaskRequest(
                     task.Name,
-                    task.EstimatedMinutes,
+                    _suggestedMinutes.GetValueOrDefault(task.Name, task.EstimatedMinutes),
                     Description: null,
                     AreaId: null,
                     Priority: "Normal",
@@ -661,6 +699,7 @@
             foreach (var task in selected)
             {
                 _suggestedSelected[task.Name] = false;
+                _suggestedMinutes.Remove(task.Name);
             }
 
             await OnChanged.InvokeAsync();

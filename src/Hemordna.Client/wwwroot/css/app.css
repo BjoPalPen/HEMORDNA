@@ -452,11 +452,11 @@ html[data-calm] * {
 }
 
 /* Two lines - the level word, and (for every level but "Ingen tid") the exact minutes it
-   means, so choosing among the four is never a guess at what "Lite tid" actually saves as -
+   means, so choosing among them is never a guess at what "Lite tid" actually saves as -
    see docs/DESIGN.md §6a. min-height matches .btn's own 44px (DESIGN.md §10's touch-target
    floor) rather than the narrower one-line height this used before the second line existed.
    flex-basis:0 makes every button share the row equally regardless of how many there are (3
-   role-preset buttons, 4 time-level ones) rather than sizing to its own content; min-width:0
+   role-preset buttons, 6 time-level ones) rather than sizing to its own content; min-width:0
    overrides flex's default "never shrink below the content's natural width", the one line that
    actually makes text wrap instead of overflow once Stor text makes the words wider than the
    row has room for. */
