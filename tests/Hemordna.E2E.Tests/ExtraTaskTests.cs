@@ -24,11 +24,12 @@ public class ExtraTaskTests
         => await (await http.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
 
     [Fact]
-    public async Task Putting_an_existing_task_on_the_calendar_cannot_assign_it_to_someone_else()
+    public async Task Putting_an_existing_task_on_the_calendar_cannot_assign_it_to_another_account_holder()
     {
         // POST /tasks/{id}/occurrences stays open to every member (see
         // docs/ARCHITECTURE.md "Beslut: Vem får ändra vad"), but only ever onto themselves -
-        // same "the caller acts as themselves" pattern as /complete and /reopen.
+        // same "the caller acts as themselves" pattern as /complete and /reopen. An
+        // account-less member is the one exception - see the sibling test below.
         var ownerPage = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(ownerPage, "Rasmus-" + Guid.NewGuid().ToString("N")[..6]);
         var ownerHttp = await AuthorizedHttpAsync(ownerPage, _app.ApiUrl);
@@ -69,6 +70,40 @@ public class ExtraTaskTests
             $"/api/households/{householdId}/tasks/{taskId}/occurrences",
             new { date = today, assignToMemberId = ownerMemberId });
         Assert.True(assignedToSelf.IsSuccessStatusCode);
+    }
+
+    [Fact]
+    public async Task Putting_an_existing_task_on_the_calendar_can_still_assign_it_to_an_account_less_member()
+    {
+        // The one exception to "only onto yourself" - an account-less member can never sign in
+        // to schedule their own work, so someone else in the household must still be able to do
+        // it for them. Same exception MemberSelfAccessFilter already makes for personal routes -
+        // see docs/ARCHITECTURE.md "Beslut: Vem får ändra vad".
+        var ownerPage = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(ownerPage, "Tove-" + Guid.NewGuid().ToString("N")[..6]);
+        var ownerHttp = await AuthorizedHttpAsync(ownerPage, _app.ApiUrl);
+        var householdId = (await MeAsync(ownerHttp)).GetProperty("householdId").GetGuid();
+
+        await ownerPage.GotoAsync("/hushall");
+        await HushallHelper.AddMemberWithoutAccountAsync(ownerPage, "Ulla", "Vuxen, jobbar heltid");
+
+        var household = await (await ownerHttp.GetAsync($"/api/households/{householdId}"))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        var ullaId = household.GetProperty("members").EnumerateArray()
+            .Single(m => m.GetProperty("displayName").GetString() == "Ulla")
+            .GetProperty("id").GetGuid();
+
+        var task = await (await ownerHttp.PostAsJsonAsync(
+            $"/api/households/{householdId}/tasks", new { name = "Ullas uppgift", estimatedMinutes = 10 }))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        var taskId = task.GetProperty("id").GetGuid();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        var assignedToUlla = await ownerHttp.PostAsJsonAsync(
+            $"/api/households/{householdId}/tasks/{taskId}/occurrences",
+            new { date = today, assignToMemberId = ullaId });
+
+        Assert.True(assignedToUlla.IsSuccessStatusCode);
     }
 
     [Fact]

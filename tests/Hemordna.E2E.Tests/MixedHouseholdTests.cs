@@ -44,23 +44,44 @@ public class MixedHouseholdTests
         return http;
     }
 
+    /// <summary>The Hushåll page's shared household data (rooms, members, activity), with the
+    /// two parts that legitimately differ by CanManageHousehold - see the test's own remarks -
+    /// stripped out first: the "Bjud in" avatar tile, and the settings list at the bottom.</summary>
+    private static Task<string> HushallTextExcludingSettingsAsync(IPage page)
+        => page.EvaluateAsync<string>(
+            """
+            () => {
+                const clone = document.querySelector('.app-main').cloneNode(true);
+                const settings = clone.querySelector('ul[aria-label="Hushållsinställningar"]');
+                if (settings) { settings.remove(); }
+                const bjudIn = [...clone.querySelectorAll('.member-avatar-btn')]
+                    .find(b => b.textContent.includes('Bjud in'));
+                if (bjudIn) { bjudIn.remove(); }
+                return clone.textContent;
+            }
+            """);
+
     private static Task GiveFullWeekAsync(HttpClient http, Guid householdId, Guid memberId)
         => http.PutAsJsonAsync(
             $"/api/households/{householdId}/members/{memberId}/weekly-budget",
             new { monday = 60, tuesday = 60, wednesday = 60, thursday = 60, friday = 60, saturday = 60, sunday = 60 });
 
+    /// <summary>
+    /// Schedules a task for today on the caller themselves. Goes through
+    /// <c>tasks/extra</c> rather than the household-configuration <c>POST /tasks</c> (see
+    /// docs/ARCHITECTURE.md "Beslut: Vem får ändra vad"), so this works for every member
+    /// here, not just one who can manage the household - <paramref name="memberId"/> must be
+    /// <paramref name="http"/>'s own caller.
+    /// </summary>
     private static async Task<Guid> ScheduleTaskForTodayAsync(HttpClient http, Guid householdId, Guid memberId, string name)
     {
-        var task = await (await http.PostAsJsonAsync(
-            $"/api/households/{householdId}/tasks", new { name, estimatedMinutes = 5 }))
-            .Content.ReadFromJsonAsync<JsonElement>();
-        var taskId = task.GetProperty("id").GetGuid();
-
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         var occurrence = await (await http.PostAsJsonAsync(
-            $"/api/households/{householdId}/tasks/{taskId}/occurrences",
-            new { date = today, assignToMemberId = memberId }))
+            $"/api/households/{householdId}/tasks/extra",
+            new { name, estimatedMinutes = 5, today }))
             .Content.ReadFromJsonAsync<JsonElement>();
+
+        Assert.Equal(memberId, occurrence.GetProperty("assignedMemberId").GetGuid());
 
         return occurrence.GetProperty("id").GetGuid();
     }
@@ -84,8 +105,11 @@ public class MixedHouseholdTests
         var (householdId, aMemberId) = await MeAsync(aHttp);
         var (_, bMemberId) = await MeAsync(bHttp);
 
+        // Weekly budget is household configuration (see docs/ARCHITECTURE.md "Beslut: Vem
+        // får ändra vad") - Astrid, the household's creator and so its manager, sets it for
+        // both herself and Bosse; a joiner like Bosse cannot set even his own.
         await GiveFullWeekAsync(aHttp, householdId, aMemberId);
-        await GiveFullWeekAsync(bHttp, householdId, bMemberId);
+        await GiveFullWeekAsync(aHttp, householdId, bMemberId);
 
         var aOccurrenceId = await ScheduleTaskForTodayAsync(aHttp, householdId, aMemberId, "Diska");
         await ScheduleTaskForTodayAsync(bHttp, householdId, bMemberId, "Dammsuga");
@@ -137,12 +161,21 @@ public class MixedHouseholdTests
         Assert.DoesNotContain("Diska", bHushallText);
         Assert.DoesNotContain("ångra", bHushallText, StringComparison.OrdinalIgnoreCase);
 
-        // 4. A's and B's Hushåll pages are identical apart from who is signed in - nothing on
-        // this shared surface is personalised by login identity in the first place.
+        // 4. A's and B's Hushåll pages show the same household data apart from who is signed
+        // in - nothing about the ROOMS/MEMBERS/ACTIVITY this surface shows is personalised by
+        // login identity. The settings list at the bottom is the one deliberate exception
+        // (denna revision, se docs/ARCHITECTURE.md "Beslut: Vem får ändra vad"): Astrid
+        // created the household and can manage it, Bosse joined by code and cannot, so only
+        // her page offers "Bjud in" and the other configuration rows - excluded here, and
+        // checked in its own right below.
         await aPage.GotoAsync("/hushall");
         await aPage.GetByRole(AriaRole.Heading, new() { Name = "Familjen Blandad" }).WaitForAsync();
-        var aHushallText = await aPage.Locator(".app-main").InnerTextAsync();
-        Assert.Equal(aHushallText, bHushallText);
+        Assert.Equal(await HushallTextExcludingSettingsAsync(aPage), await HushallTextExcludingSettingsAsync(bPage));
+
+        await Assertions.Expect(aPage.GetByRole(AriaRole.Button, new() { Name = "Bjud in", Exact = true }))
+            .ToBeVisibleAsync();
+        await Assertions.Expect(bPage.GetByRole(AriaRole.Button, new() { Name = "Bjud in", Exact = true }))
+            .Not.ToBeVisibleAsync();
 
         // 5. B turns on "Lugnare skärm" on her own device; A's separate browser context is
         // unaffected.

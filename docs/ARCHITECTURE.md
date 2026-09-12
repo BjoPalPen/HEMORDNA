@@ -2968,10 +2968,15 @@ endpoint `POST /tasks/extra` (utanför `manage`) skapar definitionen och schemal
 förekomsten på anroparen själv i EN operation, serverside - "min egen, idag" blir en
 garanti istället för en klientkonvention som kunde kringgås. `POST
 /tasks/{id}/occurrences` (lägga en BEFINTLIG uppgift på sin dag) förblir öppet för alla,
-men kan numera bara tilldela anroparen själv - samma "anroparen agerar som sig själv"-
-mönster `complete`/`reopen` redan använde; en roterande uppgifts egen `null`-väg ("låt
-rotationen välja") rördes inte, eftersom det är hushållets egen mekanism som bestämmer,
-inte anroparen som namnger någon annan.
+men kan numera bara tilldela anroparen själv ELLER en kontolös medlem - samma undantag
+`MemberSelfAccessFilter` redan gör för personliga routes (en kontolös medlem kan aldrig
+göra det själv), och samma "anroparen agerar som sig själv"-mönster `complete`/`reopen`
+redan använde för allt annat. Upptäckt via `PeekScheduleTests` och `MixedHouseholdTests`,
+två befintliga tester som förberedde data genom att en medlem schemalade en uppgift åt en
+kontolös kollega - en riktig, redan befintlig användning som en strikt "bara jag själv"-regel
+hade brutit. En roterande uppgifts egen `null`-väg ("låt rotationen välja") rördes inte,
+eftersom det är hushållets egen mekanism som bestämmer, inte anroparen som namnger någon
+annan.
 
 **Klienten döljer, nekar inte.** `docs/DESIGN.md` kräver att ingen ska känna sig
 granskad - kontroller man inte får använda visas inte alls, aldrig gråmarkerade eller

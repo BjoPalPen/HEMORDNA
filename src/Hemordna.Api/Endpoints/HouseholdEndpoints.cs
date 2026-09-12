@@ -609,6 +609,7 @@ internal static class HouseholdEndpoints
         HttpContext httpContext,
         ScheduleOccurrenceRequest request,
         ScheduleTaskOccurrence schedule,
+        IHouseholdRepository households,
         CancellationToken cancellationToken)
     {
         if (request.Date is null)
@@ -620,16 +621,23 @@ internal static class HouseholdEndpoints
         }
 
         // Putting an existing task on the calendar stays open to every member - see
-        // docs/ARCHITECTURE.md "Beslut: Vem får ändra vad" - but only ever assigned to
-        // themselves, never named onto someone else, the same "the caller acts as themselves"
-        // pattern CompleteOccurrenceAsync already uses. Leaving AssignToMemberId unset still
+        // docs/ARCHITECTURE.md "Beslut: Vem får ändra vad" - but only ever onto themselves, or
+        // onto an account-less member who can never do it themselves - the same exception
+        // MemberSelfAccessFilter already makes for personal routes. Naming another
+        // ACCOUNT-HOLDING member is what stays forbidden. Leaving AssignToMemberId unset still
         // lets a rotating task's own rotation pick whoever is next - that is the household's own
         // mechanism deciding, not the caller naming another person.
         var membership = httpContext.GetMembership();
 
         if (request.AssignToMemberId is { } requestedMemberId && requestedMemberId != membership.MemberId)
         {
-            return Results.StatusCode(StatusCodes.Status403Forbidden);
+            var household = await households.FindByIdAsync(householdId, cancellationToken);
+            var target = household?.Members.FirstOrDefault(member => member.Id == requestedMemberId);
+
+            if (target is null || target.UserId is not null)
+            {
+                return Results.StatusCode(StatusCodes.Status403Forbidden);
+            }
         }
 
         var occurrence = await schedule.HandleAsync(

@@ -40,6 +40,20 @@ public class LeftoversStayTests
         var householdId = aMe.GetProperty("householdId").GetGuid();
         var aMemberId = aMe.GetProperty("memberId").GetGuid();
 
+        var bToken = await bPage.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        using var bHttp = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
+        bHttp.DefaultRequestHeaders.Authorization = new("Bearer", bToken);
+        var bMemberId = (await (await bHttp.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("memberId").GetGuid();
+
+        // The test's own point is that "who presses the button" does not matter to the
+        // rebalance algorithm - not that a non-manager even can. "Balansera om vem som gör
+        // vad" is household configuration (see docs/ARCHITECTURE.md "Beslut: Vem får ändra
+        // vad"), so Bosse needs the ability before he can press it at all.
+        await aHttp.PutAsJsonAsync(
+            $"/api/households/{householdId}/members/{bMemberId}/can-manage",
+            new { canManageHousehold = true });
+
         // Astrid: a small budget (20 min/day) - the same skew RebalanceTaskAssignmentsTests
         // uses to prove an overdue task would otherwise look like an attractive move: if the
         // "kvarlämnat" exclusion did not hold, this is exactly the setup where the ratio math
