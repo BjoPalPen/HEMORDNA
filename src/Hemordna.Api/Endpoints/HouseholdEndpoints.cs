@@ -41,6 +41,11 @@ internal static class HouseholdEndpoints
         var scoped = households.MapGroup("/{householdId:guid}")
             .AddEndpointFilter<HouseholdAccessFilter>();
 
+        // A personal, per-member route: only the caller's own memberId, or an account-less
+        // member's - see MemberSelfAccessFilter's own remarks.
+        var selfOnly = scoped.MapGroup("/members/{memberId:guid}")
+            .AddEndpointFilter<MemberSelfAccessFilter>();
+
         scoped.MapGet("/", GetAsync)
             .WithName("GetHousehold")
             .Produces<HouseholdResponse>()
@@ -118,7 +123,7 @@ internal static class HouseholdEndpoints
             .Produces<TaskOccurrenceResponse>(StatusCodes.Status201Created)
             .Produces(StatusCodes.Status404NotFound);
 
-        scoped.MapPut("/members/{memberId:guid}/availability", SetAvailabilityAsync)
+        selfOnly.MapPut("/availability", SetAvailabilityAsync)
             .Produces<AvailabilityResponse>()
             .Produces(StatusCodes.Status404NotFound)
             .ProducesValidationProblem();
@@ -148,11 +153,11 @@ internal static class HouseholdEndpoints
             .Produces<HouseholdMemberResponse>()
             .Produces(StatusCodes.Status404NotFound);
 
-        scoped.MapGet("/members/{memberId:guid}/preferences", GetPreferenceAsync)
+        selfOnly.MapGet("/preferences", GetPreferenceAsync)
             .Produces<PreferenceResponse>()
             .Produces(StatusCodes.Status404NotFound);
 
-        scoped.MapPut("/members/{memberId:guid}/preferences", SetPreferenceAsync)
+        selfOnly.MapPut("/preferences", SetPreferenceAsync)
             .Produces<PreferenceResponse>()
             .Produces(StatusCodes.Status404NotFound);
 
@@ -194,12 +199,12 @@ internal static class HouseholdEndpoints
             .Produces(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status409Conflict);
 
-        scoped.MapPut("/members/{memberId:guid}/days-off/{date}", SetDayOffAsync)
+        selfOnly.MapPut("/days-off/{date}", SetDayOffAsync)
             .Produces<DayOffResponse>()
             .Produces(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status409Conflict);
 
-        scoped.MapDelete("/members/{memberId:guid}/days-off/{date}", ClearDayOffAsync)
+        selfOnly.MapDelete("/days-off/{date}", ClearDayOffAsync)
             .Produces(StatusCodes.Status204NoContent)
             .Produces(StatusCodes.Status404NotFound);
 
