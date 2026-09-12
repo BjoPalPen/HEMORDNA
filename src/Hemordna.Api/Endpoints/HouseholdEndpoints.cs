@@ -136,6 +136,10 @@ internal static class HouseholdEndpoints
             .Produces<HouseholdResponse>()
             .Produces(StatusCodes.Status404NotFound);
 
+        scoped.MapPost("/reset", ResetHouseholdAsync)
+            .Produces<HouseholdResponse>()
+            .Produces(StatusCodes.Status404NotFound);
+
         scoped.MapPut("/pause", PauseHouseholdAsync)
             .Produces<HouseholdResponse>()
             .Produces(StatusCodes.Status404NotFound);
@@ -660,6 +664,16 @@ internal static class HouseholdEndpoints
         CancellationToken cancellationToken)
     {
         var household = await regenerateInviteCode.HandleAsync(householdId, cancellationToken);
+
+        return household is null ? Results.NotFound() : Results.Ok(ToResponse(household));
+    }
+
+    private static async Task<IResult> ResetHouseholdAsync(
+        Guid householdId,
+        ResetHousehold resetHousehold,
+        CancellationToken cancellationToken)
+    {
+        var household = await resetHousehold.HandleAsync(householdId, cancellationToken);
 
         return household is null ? Results.NotFound() : Results.Ok(ToResponse(household));
     }

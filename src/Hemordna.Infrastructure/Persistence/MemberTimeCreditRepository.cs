@@ -38,4 +38,19 @@ internal sealed class MemberTimeCreditRepository : IMemberTimeCreditRepository
         _dbContext.MemberTimeCredits.RemoveRange(rows);
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
+
+    public async Task DeleteAllByHouseholdAsync(Guid householdId, CancellationToken cancellationToken)
+    {
+        var rows = await _dbContext.MemberTimeCredits
+            .Where(entry => entry.HouseholdId == householdId)
+            .ToListAsync(cancellationToken);
+
+        if (rows.Count == 0)
+        {
+            return;
+        }
+
+        _dbContext.MemberTimeCredits.RemoveRange(rows);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
 }

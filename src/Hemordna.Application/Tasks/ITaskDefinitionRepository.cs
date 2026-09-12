@@ -27,4 +27,11 @@ public interface ITaskDefinitionRepository
 
     /// <summary>Persists changes made to a task definition loaded through this repository.</summary>
     Task UpdateAsync(TaskDefinition definition, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Hard-deletes every task definition in the household - and with it, by database cascade,
+    /// every occurrence and assignment row that referenced one. Used only by
+    /// <c>ResetHousehold</c>; every other removal in the app is a deactivation, not a delete.
+    /// </summary>
+    Task DeleteAllByHouseholdAsync(Guid householdId, CancellationToken cancellationToken);
 }

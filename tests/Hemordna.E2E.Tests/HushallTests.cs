@@ -184,6 +184,65 @@ public class HushallTests
             .ToContainTextAsync("1 uppgifter");
     }
 
+    /// <summary>"Hur kan jag starta om ett hushåll?" (2026-09-12) - no such feature existed
+    /// before; see docs/ARCHITECTURE.md "Beslut: Rensa ett hushåll". Confirms the whole round
+    /// trip: rooms, tasks and history are gone, members and the household itself survive, and
+    /// the destructive action is gated behind typing the household's own name.</summary>
+    [Fact]
+    public async Task Resetting_the_household_wipes_rooms_tasks_and_history_but_keeps_members()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Otto");
+
+        await page.GotoAsync("/hushall");
+        await HushallHelper.AddMemberWithoutAccountAsync(page, "Agda", "Vuxen, jobbar heltid");
+
+        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
+        http.DefaultRequestHeaders.Authorization = new("Bearer", token);
+        var me = await (await http.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
+        var householdId = me.GetProperty("householdId").GetGuid();
+        var memberId = me.GetProperty("memberId").GetGuid();
+
+        await http.PostAsJsonAsync($"/api/households/{householdId}/areas", new { name = "Kök" });
+        var task = await (await http.PostAsJsonAsync(
+            $"/api/households/{householdId}/tasks", new { name = "Diska", estimatedMinutes = 5 }))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        var occurrence = await (await http.PostAsJsonAsync(
+            $"/api/households/{householdId}/tasks/{task.GetProperty("id").GetGuid()}/occurrences",
+            new { date = DateOnly.FromDateTime(DateTime.UtcNow), assignToMemberId = memberId }))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        await http.PostAsync(
+            $"/api/households/{householdId}/occurrences/{occurrence.GetProperty("id").GetGuid()}/complete", content: null);
+
+        await page.ReloadAsync();
+        await page.GetByRole(AriaRole.Button, new() { Name = "Rensa hushållets data" }).ClickAsync();
+        var sheet = page.GetByRole(AriaRole.Dialog, new() { Name = "Rensa hushållets data" });
+        var confirmButton = sheet.GetByRole(AriaRole.Button, new() { Name = "Rensa hushållets data" });
+
+        // Typing the wrong thing must not enable the destructive button.
+        await sheet.GetByLabel("Skriv \"Familjen Andersson\" för att bekräfta").FillAsync("fel namn");
+        await Assertions.Expect(confirmButton).ToBeDisabledAsync();
+
+        await sheet.GetByLabel("Skriv \"Familjen Andersson\" för att bekräfta").FillAsync("Familjen Andersson");
+        await Assertions.Expect(confirmButton).ToBeEnabledAsync();
+        await confirmButton.ClickAsync();
+
+        // Lands back on the empty-room setup state - the same screen a brand new household sees.
+        await page.Locator("h1", new() { HasText = "Rum" }).WaitForAsync(new() { Timeout = 15_000 });
+        await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Kök" })).Not.ToBeVisibleAsync();
+
+        var household = await (await http.GetAsync($"/api/households/{householdId}"))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(0, household.GetProperty("areas").GetArrayLength());
+        Assert.Equal(2, household.GetProperty("members").EnumerateArray().Count(m => m.GetProperty("isActive").GetBoolean()));
+        Assert.Equal("Familjen Andersson", household.GetProperty("name").GetString());
+
+        var remainingTasks = await (await http.GetAsync($"/api/households/{householdId}/tasks"))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(0, remainingTasks.GetArrayLength());
+    }
+
     [Fact]
     public async Task Completing_todays_only_task_marks_todays_dot_done()
     {

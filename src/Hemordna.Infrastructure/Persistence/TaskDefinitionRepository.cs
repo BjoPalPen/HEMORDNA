@@ -45,4 +45,19 @@ internal sealed class TaskDefinitionRepository : ITaskDefinitionRepository
 
     public Task UpdateAsync(TaskDefinition definition, CancellationToken cancellationToken)
         => _dbContext.SaveChangesAsync(cancellationToken);
+
+    public async Task DeleteAllByHouseholdAsync(Guid householdId, CancellationToken cancellationToken)
+    {
+        var definitions = await _dbContext.TaskDefinitions
+            .Where(definition => definition.HouseholdId == householdId)
+            .ToListAsync(cancellationToken);
+
+        if (definitions.Count == 0)
+        {
+            return;
+        }
+
+        _dbContext.TaskDefinitions.RemoveRange(definitions);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
 }

@@ -29,4 +29,10 @@ internal sealed class InMemoryMemberTimeCreditRepository : IMemberTimeCreditRepo
         _entries.RemoveAll(e => e.OccurrenceId == occurrenceId && reasons.Contains(e.Reason));
         return Task.CompletedTask;
     }
+
+    public Task DeleteAllByHouseholdAsync(Guid householdId, CancellationToken cancellationToken)
+    {
+        _entries.RemoveAll(e => e.HouseholdId == householdId);
+        return Task.CompletedTask;
+    }
 }

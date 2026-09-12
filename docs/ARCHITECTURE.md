@@ -2814,6 +2814,76 @@ Ny E2E `OmradenTests.A_long_errand_can_be_given_several_hours`: väljer "Flera t
 "Handla mat", lägger till, läser tillbaka 120 min - bekräftad att den faller (väntar ut en
 30-sekunders timeout på en knapp som inte längre finns) utan de två nya nivåerna.
 
+### Beslut: Rensa ett hushåll — `IMPLEMENTED`
+
+Björn: "Hur kan jag starta om ett hushåll?" Svaret var nej - det fanns ingen delete-,
+leave- eller reset-endpoint på hushållsnivå alls, bara `DeactivateArea`/
+`DeactivateHouseholdMember`/`DeactivateTaskDefinition`, som alla tre medvetet är
+mjuka borttagningar (ett `IsActive`-fält) så att historik kan fortsätta peka på en
+riktig entitet - se deras egna doc-kommentarer. "Flera hushåll per användare" byggs
+aldrig (se `[[hemordna_single_household_boundary]]`/§4 ovan: ett unikt filtrerat index på
+`UserId`), så "starta om" måste vara att rensa det BEFINTLIGA hushållet, inte radera det
+och skapa ett nytt.
+
+Björns faktiska behov (bekräftat via fråga, inte antaget): "Rensa allt och börja om" -
+radera rum, uppgifter och historik, men behåll medlemmarna och kontona, som att köra
+onboarding-guiden igen på samma hushåll.
+
+**Vad som raderas, och i vilken ordning.** Ny use case `ResetHousehold`
+(`Hemordna.Application.Households`), enda hårda borttagningen i hela appen - allt annat
+är en deaktivering:
+
+1. `ITaskDefinitionRepository.DeleteAllByHouseholdAsync` - hårdraderar varje
+   `TaskDefinition` i hushållet. Databasens egna `ON DELETE CASCADE` (redan konfigurerat i
+   `TaskDefinitionConfiguration`/`TaskOccurrenceConfiguration`/`TaskAssignmentConfiguration`)
+   tar automatiskt bort varje `TaskOccurrence` och `TaskAssignment` som pekade på dem - ingen
+   egen kod behövs för de två sistnämnda.
+2. `IMemberTimeCreditRepository.DeleteAllByHouseholdAsync` - "tid i förväg"-liggaren har
+   INGEN foreign key mot `TaskOccurrence` (bara ett index på `OccurrenceId`, se
+   `MemberTimeCreditRepository.RemoveByOccurrenceAsync`s egna kommentar) - utan detta steg
+   skulle raderade occurrences lämna dinglande liggarrader kvar.
+3. `Household.ClearAreas()` (ny domänmetod) - tömmer `_areas`. Medvetet EFTER steg 1: annars
+   skulle databasens `SetNull` på `TaskDefinition.AreaId → Area` (en area kan tas bort utan
+   att förstöra uppgifter som pekade på den - se samma configuration-klass) hinna köras i
+   onödan för rader som ändå försvinner i nästa steg.
+
+**Vad som INTE raderas**: hushållet själv (`Name`, `InviteCode`, `PausedUntil`), alla
+`HouseholdMember`-rader, och `MemberAvailability`/`MemberDayOff`/`MemberPreference` - de är
+personliga inställningar, inte rum/uppgifter/historik, och låg utanför vad Björn faktiskt
+bad om. En medlems egen närvaro-/ledighetsinställning försvinner inte bara för att
+hushållets rum gör det.
+
+**Ingen explicit "onboarding"-flagga behövdes.** `Rum.razor` har aldrig haft en separat
+första-gångs-guide - den vanliga sidan MED noll rum ÄR redan uppsättningsläget (bara
+"Nytt rum"-plattan syns). Eftersom `Household.Id` förblir samma och ingen medlemskapsrad
+rörs, stannar `HemordnaSession.NeedsHousehold` `false` och klienten landar på exakt den
+sidan, utan ny kod för att "känna igen" ett nyss rensat hushåll.
+
+**Ingen ägarroll att spärra bakom.** `HouseholdRole` (AdultFullTime/ChildOrTeen/Retired)
+styr bara tidsbudget, aldrig behörighet - det finns ingen admin/skapare-distinktion någon
+annanstans i appen (samma `scoped`-filter gäller alla medlemmar lika). Att uppfinna en
+sådan bara för den här knappen hade varit att bygga "för framtiden" - se CLAUDE.md §12.
+Spärren som FINNS: klienten kräver att hushållets namn skrivs in ordagrant
+(`ResetConfirmed`, skiftlägeskänsligt, `Hushall.razor`) innan knappen aktiveras - samma
+typ av "skriv för att bekräfta"-mönster andra appar använder för oåterkalleliga
+operationer, eftersom detta är exakt den typ av "irreversibel datamodell"-ändring
+`implementation-hardening` §5 säger ska dokumenteras snarare än improviseras, inte en
+ägarspärr.
+
+`POST /api/households/{id}/reset` - ny endpoint, följer samma mönster som
+`invite-code/regenerate`/`pause` (inget body, `HouseholdAccessFilter` sköter
+tenant-kontrollen som alla andra `scoped`-routes).
+
+Ny test `ResetHouseholdTests` (Application, sju fall: rensar areas, raderar task
+definitions, raderar time-credit-liggaren, behåller alla medlemmar, behåller namn och
+inbjudningskod, rör inte ett ANNAT hushålls uppgifter, `null` för okänt hushåll) och ny
+E2E `HushallTests.Resetting_the_household_wipes_rooms_tasks_and_history_but_keeps_members`
+(skapar rum+uppgift+avklarad historik, bekräftar att fel text i bekräftelsefältet håller
+knappen inaktiverad, rätt text aktiverar den, och efter klick: hushållet har noll areas,
+båda medlemmarna finns kvar, namnet är oförändrat, inga uppgifter kvar). Båda verifierade
+att de faktiskt faller utan fixen (tillfälligt avstängd, körd om, återställd) - tre av sju
+Application-fall och hela E2E-fallet föll som väntat.
+
 | Fråga | Varför den väntar |
 |---|---|
 | Offline-strategi bortom read-only cache | Utanför MVP; får inte låsas in i förväg |
