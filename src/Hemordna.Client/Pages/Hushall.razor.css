@@ -278,6 +278,10 @@
     font-weight: 600;
 }
 
+.list-row-danger span:first-child {
+    color: var(--ronn-ink);
+}
+
 .invite-code {
     display: inline-block;
     padding: var(--space-3) var(--space-5);

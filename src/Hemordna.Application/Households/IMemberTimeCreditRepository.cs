@@ -28,4 +28,11 @@ public interface IMemberTimeCreditRepository
         Guid occurrenceId,
         IReadOnlyCollection<TimeCreditReason> reasons,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Hard-deletes every ledger row in the household. Used only by <c>ResetHousehold</c>:
+    /// once every occurrence is gone, a row's own <see cref="MemberTimeCredit.OccurrenceId"/>
+    /// would otherwise dangle - there is no foreign key enforcing that reference.
+    /// </summary>
+    Task DeleteAllByHouseholdAsync(Guid householdId, CancellationToken cancellationToken);
 }

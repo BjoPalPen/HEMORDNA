@@ -418,7 +418,15 @@ Vidare, i tur och ordning: hushållets veckogrid (samma prickmatris som nu även
 ett tyst "Idag i hushållet"-kort (en ring, samma mönster som "Senaste händelser" nedan -
 hela hushållets andel klara uppgifter idag, aldrig per medlem, PRODUCT.md §8), "Senaste
 händelser", och sist en lista med "Pausa hushållet"/"Balansera om vem som gör vad"/
-"Inställningar"/"Logga ut" som listrader - de två första öppnar varsitt eget ark.
+"Inställningar"/"Rensa hushållets data"/"Logga ut" som listrader - de tre första öppnar
+varsitt eget ark.
+
+**Rensa hushållets data** (denna revision, se docs/ARCHITECTURE.md "Beslut: Rensa ett
+hushåll"): enda röda/rönn-ink listraden på sidan - allt annat är neutralt. Arket kräver att
+hushållets EGNA namn skrivs in ordagrant innan knappen aktiveras, samma "skriv för att
+bekräfta"-mönster som oåterkalleliga åtgärder brukar kräva. Efter en lyckad rensning landar
+hushållet på Rum, som med noll rum redan ÄR samma tomma uppsättningsläge ett nytt hushåll
+ser - ingen separat "börja om"-skärm byggd för detta.
 
 Detta är den enda vyn som visar hela hushållet, och den är aldrig startskärm - därför är den
 också platsen för roll-/tidsinställningar som inte alla medlemmar behöver se eller röra vid,

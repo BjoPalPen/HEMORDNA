@@ -120,4 +120,13 @@ public sealed class Household
         _areas.Add(area);
         return area;
     }
+
+    /// <summary>
+    /// Removes every area. Unlike <see cref="Area.Deactivate"/> - used for a single room a
+    /// household no longer needs, which deliberately keeps history pointing at a real area -
+    /// this is only ever called by a full household reset, where every task definition (and
+    /// with it every occurrence) is also being discarded in the same operation. There is no
+    /// history left to protect once everything is gone at once.
+    /// </summary>
+    public void ClearAreas() => _areas.Clear();
 }

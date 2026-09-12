@@ -32,4 +32,10 @@ internal sealed class InMemoryTaskDefinitionRepository : ITaskDefinitionReposito
 
     public Task UpdateAsync(TaskDefinition definition, CancellationToken cancellationToken)
         => Task.CompletedTask;
+
+    public Task DeleteAllByHouseholdAsync(Guid householdId, CancellationToken cancellationToken)
+    {
+        _definitions.RemoveAll(d => d.HouseholdId == householdId);
+        return Task.CompletedTask;
+    }
 }

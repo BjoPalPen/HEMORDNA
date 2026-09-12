@@ -188,6 +188,12 @@ else
             </a>
         </li>
         <li class="list-item list-item-flush">
+            <button type="button" class="list-row list-row-danger" @onclick="() => { _resetConfirmName = string.Empty; _resetMessage = null; _showResetSheet = true; }">
+                <span>Rensa hushållets data</span>
+                <Icon Name="chevron-right" Size="18" />
+            </button>
+        </li>
+        <li class="list-item list-item-flush">
             <button type="button" class="list-row" @onclick="SignOutAsync">
                 <span>Logga ut</span>
             </button>
@@ -340,6 +346,29 @@ else
     </button>
 </BottomSheet>
 
+<BottomSheet Title="Rensa hushållets data" @bind-IsOpen="_showResetSheet" Detent="SheetDetent.Half">
+    <p class="notice notice-problem" role="alert">
+        Tar bort alla rum, alla uppgifter och all historik - går inte att ångra. Medlemmarna och
+        deras konton finns kvar, och hushållet landar på samma tomma sida som ett helt nytt
+        hushåll gör.
+    </p>
+
+    <label class="field">
+        <span>Skriv "@_household?.Name" för att bekräfta</span>
+        <input type="text" @bind="_resetConfirmName" @bind:event="oninput" autocomplete="off" />
+    </label>
+
+    @if (_resetMessage is { } resetMessage)
+    {
+        <div class="notice notice-problem" role="alert">@resetMessage</div>
+    }
+
+    <button type="button" class="btn btn-primary btn-block" disabled="@(_resettingHousehold || !ResetConfirmed)"
+            @onclick="ResetHouseholdAsync">
+        @(_resettingHousehold ? "Rensar..." : "Rensa hushållets data")
+    </button>
+</BottomSheet>
+
 @code {
     private sealed class Form
     {
@@ -370,6 +399,15 @@ else
     private DateOnly? _householdPauseUntilInput;
     private string? _householdPauseMessage;
     private bool _householdPauseBusy;
+
+    private bool _showResetSheet;
+    private string _resetConfirmName = string.Empty;
+    private string? _resetMessage;
+    private bool _resettingHousehold;
+
+    private bool ResetConfirmed
+        => _household is not null
+        && string.Equals(_resetConfirmName.Trim(), _household.Name, StringComparison.Ordinal);
 
     private static readonly System.Globalization.CultureInfo SwedishCulture = new("sv-SE");
 
@@ -705,6 +743,38 @@ else
         finally
         {
             _rebalancingAssignments = false;
+        }
+    }
+
+    private async Task ResetHouseholdAsync()
+    {
+        if (Session.Me is not { HouseholdId: { } householdId } || !ResetConfirmed)
+        {
+            return;
+        }
+
+        _resettingHousehold = true;
+        _resetMessage = null;
+
+        try
+        {
+            if (await Api.ResetHouseholdAsync(householdId) is null)
+            {
+                _resetMessage = "Det gick inte att rensa hushållet. Försök igen.";
+                return;
+            }
+
+            _showResetSheet = false;
+            await LoadAsync();
+            Navigation.NavigateTo("rum");
+        }
+        catch (HttpRequestException)
+        {
+            _resetMessage = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _resettingHousehold = false;
         }
     }
 

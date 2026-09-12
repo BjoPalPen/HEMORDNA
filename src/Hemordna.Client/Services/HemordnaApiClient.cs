@@ -262,6 +262,25 @@ public sealed class HemordnaApiClient
             : null;
     }
 
+    /// <summary>
+    /// Wipes every room, task and history row, keeping the household and its members - see
+    /// docs/ARCHITECTURE.md "Beslut: Rensa ett hushåll". Irreversible; the caller is
+    /// responsible for confirming with whoever asked for it before calling this.
+    /// </summary>
+    public async Task<HouseholdResponse?> ResetHouseholdAsync(
+        Guid householdId,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Post, $"api/households/{householdId}/reset", cancellationToken);
+
+        var response = await _http.SendAsync(request, cancellationToken);
+
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<HouseholdResponse>(cancellationToken)
+            : null;
+    }
+
     public async Task<IReadOnlyList<TaskDefinitionResponse>> ListTasksAsync(
         Guid householdId,
         CancellationToken cancellationToken = default)
