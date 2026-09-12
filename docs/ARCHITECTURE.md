@@ -2884,6 +2884,100 @@ båda medlemmarna finns kvar, namnet är oförändrat, inga uppgifter kvar). Bå
 att de faktiskt faller utan fixen (tillfälligt avstängd, körd om, återställd) - tre av sju
 Application-fall och hela E2E-fallet föll som väntat.
 
+### Beslut: Vem får ändra vad — `IMPLEMENTED`
+
+Björn: "Hur kan vi hantera rättigheter inom en familj för att ändra hushåll/rum och
+uppgifter? Alla skall väl inte kunna ändra dessa inställningar, samtidigt som man har
+personliga inställningar av hur min dag skall visas." Två olika problem, två olika
+lösningar, byggda i den ordningen:
+
+**Steg 1 - en bugg, inte en funktion.** Sex personliga endpoints (`preferences`,
+`availability`, `days-off`) tog `memberId` rakt ur routen utan att kontrollera att det
+var anroparens eget - klienten skickade alltid rätt id, men servern krävde det inte. Nytt
+`MemberSelfAccessFilter` kräver att `memberId` är anroparens eget, ELLER tillhör en
+medlem i samma hushåll vars `UserId` är `null` (kan aldrig logga in för att sätta det
+själv - någon annan måste kunna göra det åt dem). `PUT .../pause` lämnades medvetet
+orört: `MemberSheet.razor` låter redan idag vem som helst pausa vem som helst i
+hushållet (en partner som glömt pausa sin egen rad inför resa) - att låsa den hade brutit
+befintlig funktionalitet, inte fixat en bugg.
+
+**Steg 2 - en flagga, inte en roll.** `HouseholdMember.CanManageHousehold` (bool). Det
+handlade beslutet på rad ~2862 ("Ingen ägarroll att spärra bakom") står kvar - det gäller
+fortfarande att det inte finns och inte ska finnas en skapare/ägare-distinktion kodad in
+i modellen. Det som ändrats är smalare än det: INTE "vem äger hushållet", utan "vem kan
+röra konfigurationen". Skillnaden mot det adminsystem `PRODUCT.md §10` utesluter är
+storleken - ett fält, en nivå (ingen hierarki av behörigheter), inget separat
+UI för att administrera roller. Växer detta till fler nivåer, grupper eller en
+skapare-distinktion: stanna och fråga, inte bygg vidare.
+
+**Varför inte `HouseholdRole` (AdultFullTime/ChildOrTeen/Retired)?** Den styr uteslutande
+tidsbudget och `RotationPicker.RequiresAdult` - två beslut om ARBETSFÖRDELNING, inte om
+BEHÖRIGHET. Att överlagra en tredje betydelse på samma fält hade gjort att en förälder
+som bytte sin egen roll till "Pensionär" (för att den tidsbudgeten stämmer bättre för
+dem) riskerade att också tappa förmågan att hantera hushållet - två orelaterade beslut
+som råkar dela en rad kod. Ett eget fält håller dem isär.
+
+**Vem får den från start.** Den som skapar hushållet (`CreateHousehold`, satt EFTER
+`LinkToUser` - ordningen spelar roll, se nedan) får den. Den som går med via
+inbjudningskod (`JoinHousehold`) får den INTE - den meningsfulla standarden: den som satt
+upp hushållet sköter det och kan dela ut flaggan vidare med ett tryck, och att gå med via
+kod är inte i sig ett förtroendebeslut. En kontolös medlem kan aldrig få den -
+`HouseholdMember.SetCanManageHousehold` vägrar sätta `true` när `UserId` är `null`, av
+samma skäl som Steg 1:s undantag - de kan aldrig logga in för att använda den.
+
+**Invarianten: aldrig noll.** En användare tillhör exakt ett hushåll för alltid
+(`[[hemordna_single_household_boundary]]`) och det finns ingen supportkanal - ett
+hushåll utan någon som kan ändra det vore permanent obrukbart, inte bara olägligt. Den
+måste hålla båda vägarna man kan hamna på noll: `Household.SetMemberCanManageHousehold`
+vägrar ta bort flaggan från den siste aktiva managern, och `Household.DeactivateMember`
+vägrar deaktivera den siste aktiva managern. Båda ligger på `Household` (aggregatet),
+inte på `HouseholdMember` ensam - en enskild medlem kan inte se sina syskon för att
+räkna dem. `DeactivateHouseholdMember`-use caset bytte därför från att manipulera
+medlemmen direkt till att gå via den nya `Household.DeactivateMember`.
+
+**Migrationen ger alla BEFINTLIGA kontoinnehavare flaggan.** `AddCanManageHousehold`
+lägger till kolumnen med databasens eget default `false`, men kör sedan
+`UPDATE "HouseholdMembers" SET "CanManageHousehold" = TRUE WHERE "UserId" IS NOT NULL`
+i samma `Up()`. Avsiktligt: ingenting får ändras för något befintligt hushåll den dag
+detta driftsätts - varje medlem med konto kunde redan göra allt detta fält nu spärrar,
+så de fortsätter kunna. Ett hushåll som vill snäva in gör det självt efteråt, med den nya
+kryssrutan. En migration som lämnat `false` som standard hade låst ut verkliga hushåll
+från sin egen app samma dag de fick uppdateringen.
+
+**403, inte 404 - men av ett annat skäl än `HouseholdAccessFilter`s eget.** Det filtret
+svarar 404 på fel hushåll eftersom anroparen är en FRÄMLING för hushållet - att bekräfta
+att det finns vore en läcka. `MemberSelfAccessFilter` och `HouseholdManageFilter` körs
+båda EFTER att `HouseholdAccessFilter` redan bekräftat att anroparen hör till just det
+hushållet. Anroparen är alltså ingen främling - de ser redan hushållets medlemmar, och
+vet redan att det finns konfiguration att ändra. Ett 404 där vore en lögn som gör att
+klienten inte kan skilja "finns inte" från "får inte", utan att vinna någon sekretess
+för det.
+
+**De 20 spärrade endpointsen** (rum, uppgifter, medlemmar, inbjudningskod, paus, reset)
+ligger bakom ett nytt `HouseholdManageFilter` i en `manage`-undergrupp av `scoped`.
+Dagligt arbete (`complete`, `reopen`, `defer`, bring-forward/undo, `rebalance-schedule`)
+och alla `GET` lämnades uttryckligen öppna - se `HouseholdEndpoints.MapHouseholdEndpoints`
+för den fullständiga listan i koden.
+
+**`POST /tasks`-kollisionen.** Samma endpoint användes av två olika saker: "Lägg till
+uppgift" i ett rums ark (hushållskonfiguration, nu bakom `manage`) och "Extra uppgift" på
+Min dag (dagligt arbete, ska vara öppet för alla). Att låsa endpointen utan vidare hade
+tagit bort en daglig funktion för halva hushållet. Lösningen lade gränsen i OMFÅNGET, inte
+i endpointen: en extra uppgift läggs på mig själv, idag. Ny use case `CreateExtraTask` och
+endpoint `POST /tasks/extra` (utanför `manage`) skapar definitionen och schemalägger
+förekomsten på anroparen själv i EN operation, serverside - "min egen, idag" blir en
+garanti istället för en klientkonvention som kunde kringgås. `POST
+/tasks/{id}/occurrences` (lägga en BEFINTLIG uppgift på sin dag) förblir öppet för alla,
+men kan numera bara tilldela anroparen själv - samma "anroparen agerar som sig själv"-
+mönster `complete`/`reopen` redan använde; en roterande uppgifts egen `null`-väg ("låt
+rotationen välja") rördes inte, eftersom det är hushållets egen mekanism som bestämmer,
+inte anroparen som namnger någon annan.
+
+**Klienten döljer, nekar inte.** `docs/DESIGN.md` kräver att ingen ska känna sig
+granskad - kontroller man inte får använda visas inte alls, aldrig gråmarkerade eller
+med en förklarande text om vem de är till för. Se "Hushållsöversikt" i `docs/DESIGN.md`
+för var det landar i UI:t.
+
 | Fråga | Varför den väntar |
 |---|---|
 | Offline-strategi bortom read-only cache | Utanför MVP; får inte låsas in i förväg |
