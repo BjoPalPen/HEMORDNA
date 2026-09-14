@@ -66,6 +66,27 @@ public interface ITaskOccurrenceRepository
         CancellationToken cancellationToken);
 
     /// <summary>
+    /// Who already has work in each room on this date, keyed by area id - what
+    /// <see cref="RotationPicker"/> needs to keep one room's work for one day with one person.
+    /// </summary>
+    /// <remarks>
+    /// Counts <see cref="TaskOccurrenceStatus.Completed"/> as well as
+    /// <see cref="TaskOccurrenceStatus.Planned"/>, and that is the whole point: a household
+    /// member who finished the small WC at 09:34 has still claimed that room for the day, so
+    /// the last floor task must not go to someone else at 14:00. Looking only at what is still
+    /// outstanding would miss exactly the case this exists for.
+    /// <para>
+    /// <see cref="TaskOccurrenceStatus.Skipped"/> is deliberately not counted - "not needed this
+    /// time" is not a claim on the room, and nobody went there.
+    /// </para>
+    /// <para>Tasks with no area of their own ("Övrigt") are absent: there is no room to hold together.</para>
+    /// </remarks>
+    Task<IReadOnlyDictionary<Guid, IReadOnlyCollection<Guid>>> GetMemberIdsByAreaOnDateAsync(
+        Guid householdId,
+        DateOnly date,
+        CancellationToken cancellationToken);
+
+    /// <summary>
     /// Every outstanding (<see cref="TaskOccurrenceStatus.Planned"/>) occurrence across the
     /// whole household, regardless of definition - tracked, so <see cref="RebalanceTaskAssignments"/>
     /// can reassign <see cref="TaskOccurrence.AssignedMemberId"/> on the ones that need it and

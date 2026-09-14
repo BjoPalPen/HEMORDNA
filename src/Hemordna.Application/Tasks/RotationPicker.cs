@@ -83,7 +83,8 @@ internal static class RotationPicker
         IReadOnlyDictionary<Guid, int> assignedMinutesTodayOnDate,
         DateOnly today,
         IReadOnlySet<(Guid MemberId, DateOnly Date)> daysOff,
-        IReadOnlyDictionary<Guid, int> creditMinutes)
+        IReadOnlyDictionary<Guid, int> creditMinutes,
+        IReadOnlyCollection<Guid> membersAlreadyInThisRoom)
     {
         var eligible = EligibleMembers(household, definition, today, daysOff);
 
@@ -99,6 +100,26 @@ internal static class RotationPicker
         // Nobody having room left today is not a reason to leave the task unassigned - it still
         // needs an owner, just picked by ratio alone as before.
         var pool = withRoomToday.Count > 0 ? withRoomToday : eligible;
+
+        // Har någon redan arbete i rummet den här dagen - planerat ELLER avklarat - får de
+        // resten av rummets arbete samma dag. Ett litet wc där en person dammsuger golvet och
+        // en annan torkar samma golv några timmar senare är inte rättvisa, det är dubbelarbete
+        // och två resor till samma rum. Se docs/ARCHITECTURE.md "Beslut: ett rum, en person,
+        // en dag".
+        //
+        // Detta är en INSNÄVNING av poolen, aldrig en utvidgning: den som är ledig, inte får
+        // göra uppgiften eller inte har tid kvar är fortfarande utesluten, eftersom vi bara
+        // väljer bland dem som redan tagit sig igenom filtren ovan. Finns ingen sådan person
+        // kvar faller vi tillbaka på hela poolen och tidsbalansen avgör som förut.
+        if (membersAlreadyInThisRoom.Count > 0)
+        {
+            var alreadyThere = pool.Where(member => membersAlreadyInThisRoom.Contains(member.Id)).ToList();
+
+            if (alreadyThere.Count > 0)
+            {
+                pool = alreadyThere;
+            }
+        }
 
         var pick = Choose(pool, definition, assignedMinutesByMember, creditMinutes);
         var rawPick = Choose(pool, definition, assignedMinutesByMember, credit: null);
