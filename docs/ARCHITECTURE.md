@@ -3039,6 +3039,20 @@ skärmbilderna (drygt 1 MB) laddats ner vid varje installation, för en hjälpsi
 sällan. Cachen finns till för appskalet, och guiden är inte det. `offlineAssetsExclude` fick
 därför `/^hjalp\//`: appen fungerar offline som förut, guiden kräver nät.
 
+**Service workern kapade guiderna, och det nådde produktion.**
+`service-worker.published.js` svarar med appskalet `index.html` på varje
+`event.request.mode === 'navigate'` - alltså även en navigering till `/hjalp/index.html`.
+Blazor startade, routern hittade ingen matchande route och visade "Sidan finns inte", medan
+guiden låg oöppnad på servern. `onFetch` fick därför ett undantag för `/hjalp/`.
+
+Det som gör felet värt att skriva ner är att **tre oberoende kontroller var gröna samtidigt**:
+E2E-sviten kör mot dev-värden, som använder den tomma `service-worker.js` - den publicerade
+finns bara i en publicerad build; `curl` mot produktion går förbi service workern helt och
+fick filen med 200; och guiden renderade felfritt när den öppnades direkt. Felet fanns bara i
+den installerade appen. En grön svit bevisar inte att PWA:n fungerar, och det finns idag inget
+test som täcker den publicerade service workern - se `hemordna-anvandarguide` för vad ett
+CI-steg skulle behöva göra.
+
 **Verifieringen hittade en falsk positiv innan den hittade något annat.** Ett första
 renderingstest räknade bilder med `naturalWidth === 0` och rapporterade 7 trasiga i
 familjeguiden. De var inte trasiga: varje skärmbild är `loading="lazy"`, så allt under

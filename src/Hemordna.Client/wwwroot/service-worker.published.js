@@ -51,7 +51,14 @@ async function onFetch(event) {
 
     // Only navigations and known shell assets are served from cache. Everything else -
     // the API included - goes to the network untouched.
-    const shouldServeIndexHtml = event.request.mode === 'navigate';
+    //
+    // Användarguiderna under /hjalp är riktiga sidor, inte Blazor-routes. Utan undantaget här
+    // får en navigering dit appskalet i stället, varpå routern letar efter en route som inte
+    // finns och visar "Sidan finns inte" - med guiden liggande oöppnad på servern. Det gick inte
+    // att se i E2E (dev-värden kör den tomma service-worker.js) eller med curl (går förbi
+    // service workern helt). Se docs/ARCHITECTURE.md "Beslut: Användarguider under /hjalp".
+    const isGuide = new URL(event.request.url).pathname.startsWith('/hjalp/');
+    const shouldServeIndexHtml = event.request.mode === 'navigate' && !isGuide;
     const request = shouldServeIndexHtml ? 'index.html' : event.request;
     const cache = await caches.open(cacheName);
     const cachedResponse = await cache.match(request);
