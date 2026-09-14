@@ -94,4 +94,33 @@ internal sealed class TaskOccurrenceRepository : ITaskOccurrenceRepository
             .Where(occurrence => occurrence.HouseholdId == householdId
                 && occurrence.Status == TaskOccurrenceStatus.Planned)
             .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyDictionary<Guid, IReadOnlyCollection<Guid>>> GetMemberIdsByAreaOnDateAsync(
+        Guid householdId,
+        DateOnly date,
+        CancellationToken cancellationToken)
+    {
+        // Read-only, and the area lives on the definition, not the occurrence - hence the join.
+        var rows = await _dbContext.TaskOccurrences
+            .AsNoTracking()
+            .Where(occurrence => occurrence.HouseholdId == householdId
+                && occurrence.ScheduledDate == date
+                && occurrence.AssignedMemberId != null
+                && (occurrence.Status == TaskOccurrenceStatus.Planned
+                    || occurrence.Status == TaskOccurrenceStatus.Completed))
+            .Join(
+                _dbContext.TaskDefinitions.AsNoTracking(),
+                occurrence => occurrence.TaskDefinitionId,
+                definition => definition.Id,
+                (occurrence, definition) => new { definition.AreaId, occurrence.AssignedMemberId })
+            .Where(row => row.AreaId != null)
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        return rows
+            .GroupBy(row => row.AreaId!.Value)
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyCollection<Guid>)[.. group.Select(row => row.AssignedMemberId!.Value)]);
+    }
 }

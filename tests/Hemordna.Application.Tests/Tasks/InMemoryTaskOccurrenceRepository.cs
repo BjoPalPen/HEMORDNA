@@ -7,6 +7,13 @@ internal sealed class InMemoryTaskOccurrenceRepository : ITaskOccurrenceReposito
 {
     private readonly List<TaskOccurrence> _occurrences = [];
 
+    /// <summary>Vilket rum varje uppgiftsdefinition hör till. Förekomster bär inte själva någon
+    /// AreaId - i produktion kommer den från en join mot TaskDefinitions - så ett test som vill
+    /// pröva rumsregeln registrerar kopplingen här.</summary>
+    private readonly Dictionary<Guid, Guid> _areaByDefinition = [];
+
+    internal void SeedArea(Guid taskDefinitionId, Guid areaId) => _areaByDefinition[taskDefinitionId] = areaId;
+
     internal int UpdateCallCount { get; private set; }
 
     internal int AddCallCount { get; private set; }
@@ -71,4 +78,23 @@ internal sealed class InMemoryTaskOccurrenceRepository : ITaskOccurrenceReposito
         Guid householdId, CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<TaskOccurrence>>([.. _occurrences.Where(o =>
             o.HouseholdId == householdId && o.Status == TaskOccurrenceStatus.Planned)]);
+
+    public Task<IReadOnlyDictionary<Guid, IReadOnlyCollection<Guid>>> GetMemberIdsByAreaOnDateAsync(
+        Guid householdId,
+        DateOnly date,
+        CancellationToken cancellationToken)
+    {
+        var byArea = _occurrences
+            .Where(o => o.HouseholdId == householdId
+                && o.ScheduledDate == date
+                && o.AssignedMemberId is not null
+                && (o.Status == TaskOccurrenceStatus.Planned || o.Status == TaskOccurrenceStatus.Completed)
+                && _areaByDefinition.ContainsKey(o.TaskDefinitionId))
+            .GroupBy(o => _areaByDefinition[o.TaskDefinitionId])
+            .ToDictionary(
+                group => group.Key,
+                group => (IReadOnlyCollection<Guid>)[.. group.Select(o => o.AssignedMemberId!.Value).Distinct()]);
+
+        return Task.FromResult<IReadOnlyDictionary<Guid, IReadOnlyCollection<Guid>>>(byArea);
+    }
 }

@@ -3127,6 +3127,58 @@ join mot `Areas`; varken `TaskOccurrences` eller `TaskDefinitions` lagrar ett na
 namn på ett rum följer alla befintliga uppgifter med automatiskt. Det Björn såg var
 spökförekomsterna, inte ett namn som fastnat.
 
+### Beslut: ett rum, en person, en dag — `IMPLEMENTED`
+
+Björn, 2026-09-14: *"Varför skall både jag och Helena torka golvet på Liten wc? ... Och det
+samma dag? Jag har ju gjort det redan idag."*
+
+Produktionsdata för den dagen:
+
+| Uppgift | Vem | Status |
+|---|---|---|
+| Torka av handfatet | Björn | ✓ 09:00 |
+| Dammsug golvet | Björn | ✓ 09:08 |
+| Rengör toalettstolen | Björn | ✓ 09:34 |
+| Torka golvet | Helena | Planerad |
+
+Inga dubbletter: **en** definition per uppgift, alla roterande. Björn dammsög golvet, Helena
+skulle torka **samma golv** senare samma dag, i ett litet wc. Fyra av hushållets rum var
+uppdelade mellan två personer den dagen.
+
+**Orsaken:** `RotationPicker` visste ingenting om rum. Den fick hushållet, definitionen,
+tilldelade minuter, lediga dagar och tidskredit - och balanserade tid uppgift för uppgift.
+Att två uppgifter ligger på samma golv var osynligt för den. `DailyPlanner` har visserligen
+en klusterregel (`TaskCluster.KeyFor(AreaName)`), men den styr **urvalsordningen inom en
+persons dag**, inte **vem** som får uppgiften.
+
+**Beslutet:** har någon redan arbete i ett rum en viss dag får de resten av rummets arbete
+samma dag. `RotationPicker.PickNext` tar en ny parameter, `membersAlreadyInThisRoom`, och
+snävar in poolen till dem - aldrig utvidgar. Den som är ledig, inte får göra uppgiften
+(`RequiresAdult`) eller inte har tid kvar den dagen är fortfarande utesluten, eftersom
+insnävningen sker bland dem som redan passerat de filtren. Finns ingen sådan person kvar
+faller den tillbaka på tidsbalansen som förut.
+
+**Avklarat arbete räknas, och det är hela poängen.** Björn hade bockat av sina tre
+WC-uppgifter 09:34. Hade regeln bara tittat på vad som fortfarande är utestående hade rummet
+sett orört ut när Helenas golv tilldelades - alltså precis det fall regeln finns för.
+`GetMemberIdsByAreaOnDateAsync` räknar därför `Planned` OCH `Completed`. `Skipped` räknas
+inte: "behövdes inte den här gången" är inget anspråk på rummet, ingen var där.
+
+Cachen uppdateras in place under batchen, av samma skäl som `assignedMinutesByMember` redan
+gör det: den andra uppgiften i ett rum måste se den första, även när båda skapas i samma svep.
+Regeln gäller även `ScheduleTaskOccurrence` (manuell schemaläggning), inte bara den
+automatiska generatorn.
+
+**Avvägningen, uttryckligen accepterad av Björn:** enskilda dagar blir mindre exakt balanserade
+i tid, eftersom en person kan få ett helt rum. Över veckan jämnar rotationen ut det.
+Motiveringen är hans egen: *"då blir det lättare att göra uppgifterna löpande"* - ett
+halvstädat wc kostar mer än några minuters skevhet, och två resor till samma rum kostar mest
+av allt.
+
+**Kvarstår, medvetet orört:** redan genererade förekomster behåller sin tilldelning. Regeln
+gäller framåt. Att flytta om dagens redan utlagda arbete hade gett någon mer att göra än de
+räknat med, mitt på dagen.
+
 | Fråga | Varför den väntar |
 |---|---|
 | Offline-strategi bortom read-only cache | Utanför MVP; får inte låsas in i förväg |
