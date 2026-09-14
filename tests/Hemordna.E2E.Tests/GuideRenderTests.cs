@@ -112,4 +112,54 @@ public class GuideRenderTests
             documentWidth <= PhoneWidth + 1,
             $"{path} är {documentWidth}px bred på en {PhoneWidth}px-skärm.");
     }
+
+    /// <summary>
+    /// Varje steg i en "så här gör du"-lista måste rymma sitt eget innehåll på en rad-följd,
+    /// vid VANLIG och vid STOR text. En tidigare version gjorde <c>.gor li</c> till en grid,
+    /// och då blev varje <c>span.ui</c> ett eget grid-item i stället för att flyta med i
+    /// meningen: chipet hamnade på egen rad och resten av texten ovanpå det. Det syntes inte i
+    /// en helsidesbild (9912px hög, nedskalad till oläslighet) och inte i sidans egen bredd -
+    /// bara i en riktig telefon. Därför mäts varje steg för sig.
+    /// </summary>
+    [Theory]
+    [InlineData("/hjalp/sv/familjen.html", 100)]
+    [InlineData("/hjalp/sv/familjen.html", 140)]
+    [InlineData("/hjalp/sv/hushallsansvarig.html", 100)]
+    [InlineData("/hjalp/sv/hushallsansvarig.html", 140)]
+    public async Task No_step_overflows_its_own_row(string path, int textPercent)
+    {
+        var page = await _app.NewPageAsync();
+        await page.SetViewportSizeAsync(PhoneWidth, PhoneHeight);
+
+        await page.GotoAsync(path);
+        await page.Locator("section.kapitel").First.WaitForAsync();
+        await page.EvaluateAsync($"() => document.documentElement.style.fontSize = '{textPercent}%'");
+
+        // Ett chip mitt i en mening ska flyta med texten. Blir steget en grid- eller
+        // flex-container blir varje chip i stället ett eget item i gutterkolumnen: klämt till
+        // spårets bredd, med texten spillande ut över raden under. Det var exakt felet, och det
+        // syns varken i sidans bredd eller i elementens egna boxar - chipets box är smal medan
+        // det är bläcket som spiller. Därför mäts bredden på chipet självt.
+        var squeezed = await page.EvaluateAsync<string[]>(
+            @"() => {
+                const broken = [];
+                for (const li of document.querySelectorAll('.gor li')) {
+                    const display = getComputedStyle(li).display;
+                    if (display === 'grid' || display === 'flex') {
+                        broken.push('steget är ' + display + ': ' + li.textContent.trim().slice(0, 40));
+                        continue;
+                    }
+                    for (const chip of li.querySelectorAll('.ui')) {
+                        const width = chip.getBoundingClientRect().width;
+                        if (width < 36) {
+                            broken.push('chipet [' + chip.textContent.trim() + '] är '
+                                + Math.round(width) + 'px brett');
+                        }
+                    }
+                }
+                return broken;
+            }");
+
+        Assert.Empty(squeezed);
+    }
 }

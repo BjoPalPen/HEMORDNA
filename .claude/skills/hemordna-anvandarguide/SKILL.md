@@ -145,6 +145,30 @@ registrerar service workern. Inget annat täcker det.
 
 ---
 
+## Fällan nummer två: grid och chips
+
+`.gor li` (ett "så här gör du"-steg) får **inte** vara `display: grid` eller `flex`.
+
+Ett steg innehåller `<span class="ui">`-chips mitt i meningen. I grid blir varje barnelement
+ett eget grid-item - chipet hamnade i gutterkolumnen, klämt till 26px, medan resten av
+meningen låg i nästa spår. På telefon blev det text ovanpå text. Siffran läggs därför ut
+absolut och steget är vanligt textflöde.
+
+Detta nådde också produktion, och också med grön svit. Lärdomarna:
+
+- **En helsidesbild bevisar ingenting.** Guidens egen helsida är ~9900px hög; nedskalad till
+  granskningsbar storlek går texten inte att läsa, och felet syntes inte. Skärmklipp **ett
+  element i taget** (`locator.ScreenshotAsync`) när layout ska granskas.
+- **Sidans bredd fångar det inte.** `document.body.scrollWidth` var oförändrad - chipets box
+  var smal, det var bläcket inuti som spillde.
+- **Mät det som är fel, inte något närliggande.** Två första försök (`scrollWidth >
+  clientWidth`, och överlapp mellan elementens boxar) passerade med den trasiga CSS:en kvar.
+  Kör alltid testet mot den trasiga versionen innan du litar på det.
+
+`GuideRenderTests.No_step_overflows_its_own_row` vaktar detta nu, vid två textstorlekar.
+
+---
+
 ## Inför CI
 
 Det som går att köra i CI redan idag:

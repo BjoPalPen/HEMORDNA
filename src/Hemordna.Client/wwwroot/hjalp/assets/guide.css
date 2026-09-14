@@ -342,16 +342,23 @@ figcaption b {
     max-width: var(--matt);
 }
 
+/* Siffran ligger absolut, och steget är vanlig textflöde.
+   INTE grid: i grid blir varje barnelement ett eget grid-item, och ett steg innehåller
+   <span class="ui">-chips mitt i meningen. De hamnade då i egna gridceller i stället för att
+   flyta med texten - chipet på egen rad, resten av meningen ovanpå. Se docs/ARCHITECTURE.md
+   "Beslut: Användarguider under /hjalp". */
 .gor li {
     counter-increment: steg;
-    display: grid;
-    grid-template-columns: 26px 1fr;
-    gap: 12px;
-    align-items: start;
+    position: relative;
+    padding-left: 38px;
+    min-height: 26px;
 }
 
 .gor li::before {
     content: counter(steg);
+    position: absolute;
+    left: 0;
+    top: 0;
     font-family: var(--font-display);
     font-size: 0.78rem;
     font-weight: 700;
@@ -444,14 +451,18 @@ tbody tr:last-child td {
     color: var(--sot-mjuk);
 }
 
-/* En knapp eller etikett som den heter i appen */
+/* En knapp eller etikett som den heter i appen.
+   Får radbrytas: en lång etikett ("Eller lägg till en medlem utan eget konto") är bredare än
+   en telefonskärm vid stor text, och nowrap hade då dragit ut sidan i sidled.
+   box-decoration-break håller ihop bakgrund och rundning över radbrytningen. */
 .ui {
     font-size: 0.88em;
     font-weight: 600;
     background: var(--yta-2);
     border-radius: 6px;
     padding: 1px 7px;
-    white-space: nowrap;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
 }
 
 /* Hubbens rollkort */

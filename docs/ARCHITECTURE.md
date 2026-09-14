@@ -3039,6 +3039,19 @@ skärmbilderna (drygt 1 MB) laddats ner vid varje installation, för en hjälpsi
 sällan. Cachen finns till för appskalet, och guiden är inte det. `offlineAssetsExclude` fick
 därför `/^hjalp\//`: appen fungerar offline som förut, guiden kräver nät.
 
+**Ett steg får inte vara en grid.** `.gor li` var `display: grid` med `26px 1fr`. Men ett
+steg innehåller `span.ui`-chips mitt i meningen, och i grid blir varje barnelement ett eget
+grid-item: chipet hamnade i gutterkolumnen klämt till 26px medan resten av meningen låg i
+nästa spår - text ovanpå text på telefon. Siffran läggs nu ut absolut och steget är vanligt
+textflöde. Chipen fick samtidigt lov att radbryta (`box-decoration-break: clone`), eftersom
+en lång etikett annars är bredare än en telefonskärm.
+
+Även detta nådde produktion med grön svit, och av besläktade skäl: guidens helsidesbild är
+~9900px hög, så den nedskalade granskningsbilden var oläslig, och `document.body.scrollWidth`
+var oförändrad eftersom chipets box var smal - det var bläcket inuti som spillde. Två första
+försök till regressionstest passerade dessutom med den trasiga CSS:en kvar. Ett test som inte
+körts mot felet bevisar ingenting.
+
 **Service workern kapade guiderna, och det nådde produktion.**
 `service-worker.published.js` svarar med appskalet `index.html` på varje
 `event.request.mode === 'navigate'` - alltså även en navigering till `/hjalp/index.html`.
