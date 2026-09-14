@@ -19,17 +19,50 @@
 (function () {
     "use strict";
 
-    var guide = window.GUIDE;
-
-    if (!guide || !Array.isArray(guide.sections)) {
-        return;
-    }
-
     function el(tag, className, text) {
         var node = document.createElement(tag);
         if (className) { node.className = className; }
         if (text) { node.textContent = text; }
         return node;
+    }
+
+    /// "Till toppen" hör hemma på varje sida här, även hubben - guiderna är långa och
+    /// innehållsförteckningen ligger överst på mobil, så vägen tillbaka dit är annars en lång
+    /// svepning. Knappen syns först när man passerat den.
+    function addBackToTop() {
+        var button = el("button", "till-toppen");
+        button.type = "button";
+        button.innerHTML = '<span aria-hidden="true">↑</span><span>Till toppen</span>';
+        button.addEventListener("click", function () {
+            window.scrollTo({ top: 0, behavior: "smooth" });
+            var first = document.querySelector("main h1");
+            if (first) { first.setAttribute("tabindex", "-1"); first.focus({ preventScroll: true }); }
+        });
+        document.body.appendChild(button);
+
+        function sync() {
+            button.classList.toggle("syns", window.scrollY > 500);
+        }
+
+        window.addEventListener("scroll", sync, { passive: true });
+        sync();
+    }
+
+    /// Vägen tillbaka till appen. Guiden öppnas i egen flik, och på telefon - särskilt med
+    /// appen installerad - är det inte självklart hur man tar sig tillbaka.
+    function backToAppLink() {
+        var link = el("a", "till-appen");
+        link.href = "/";
+        link.innerHTML = '<span class="pil" aria-hidden="true">←</span><span>Tillbaka till Hemordna</span>';
+        return link;
+    }
+
+    var guide = window.GUIDE;
+
+    if (!guide || !Array.isArray(guide.sections)) {
+        // Hubben bär sitt eget innehåll, men ska ha samma knapp.
+        addBackToTop();
+        return;
     }
 
     document.title = guide.title + " - Hemordna";
@@ -38,6 +71,7 @@
 
     // Sidopanel med innehållsförteckning.
     var aside = el("aside");
+    aside.appendChild(backToAppLink());
     var marke = el("p", "marke");
     var markeLank = el("a", null, "Hemordna");
     markeLank.href = "../index.html";
@@ -93,6 +127,7 @@
 
     layout.appendChild(main);
     document.body.appendChild(layout);
+    addBackToTop();
 
     // En tabell som ändå inte får plats ska rulla i sin egen ruta i stället för att dra ut hela
     // sidan i sidled på en telefon - samma fälla BowlingPlatforms guider redan gått i.

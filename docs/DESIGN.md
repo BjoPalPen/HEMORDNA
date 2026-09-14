@@ -839,6 +839,12 @@ visade i en neutral telefonram. På skärmar under 880px visas en bild i taget, 
 i bredd krymper en 390px-bild så mycket att texten i den inte går att läsa, vilket gör en
 mobilguide meningslös.
 
+Två navigeringshjälpmedel finns på varje sida, lagda av mallen: **Tillbaka till Hemordna**
+överst (guiden öppnas i egen flik, och med appen installerad är vägen tillbaka annars inte
+självklar) och **Till toppen** nere till höger, som visar sig först efter 500px rullning.
+Båda har 44px träffyta enligt §10. "Till toppen" döljs med `visibility`, inte bara `opacity`,
+så den inte ligger kvar i tabbordningen medan den är osynlig.
+
 Tonen följer PRODUCT.md §8: guiden förklarar vad appen gör, aldrig vad användaren borde ha
 gjort. Kapitlet om behörigheter i familjeguiden beskriver varför vissa knappar inte syns –
 den låtsas inte att de inte finns, och skuldbelägger inte den som saknar dem.

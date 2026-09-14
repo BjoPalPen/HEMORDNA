@@ -113,6 +113,50 @@ public class GuideRenderTests
             $"{path} är {documentWidth}px bred på en {PhoneWidth}px-skärm.");
     }
 
+    /// <summary>Varje sida här måste erbjuda vägen tillbaka till appen. Guiden öppnas i egen
+    /// flik, och på telefon - särskilt med appen installerad - är det inte självklart hur man
+    /// tar sig tillbaka.</summary>
+    [Theory]
+    [InlineData("/hjalp/index.html")]
+    [InlineData("/hjalp/sv/familjen.html")]
+    [InlineData("/hjalp/sv/hushallsansvarig.html")]
+    public async Task Every_page_offers_a_way_back_to_the_app(string path)
+    {
+        var page = await _app.NewPageAsync();
+        await page.SetViewportSizeAsync(PhoneWidth, PhoneHeight);
+
+        await page.GotoAsync(path);
+
+        var back = page.Locator("a.till-appen").First;
+        await Assertions.Expect(back).ToBeVisibleAsync();
+        await Assertions.Expect(back).ToHaveAttributeAsync("href", "/");
+    }
+
+    /// <summary>"Till toppen" håller sig undan tills man faktiskt scrollat, och tar en hela
+    /// vägen upp - guiderna är långa och innehållsförteckningen ligger överst på mobil.</summary>
+    [Theory]
+    [InlineData("/hjalp/index.html")]
+    [InlineData("/hjalp/sv/hushallsansvarig.html")]
+    public async Task Back_to_top_appears_only_after_scrolling_and_returns_to_the_top(string path)
+    {
+        var page = await _app.NewPageAsync();
+        await page.SetViewportSizeAsync(PhoneWidth, PhoneHeight);
+
+        await page.GotoAsync(path);
+
+        var button = page.Locator("button.till-toppen");
+        await Assertions.Expect(button).Not.ToBeVisibleAsync();
+
+        await page.EvaluateAsync("() => window.scrollTo(0, 2000)");
+        await Assertions.Expect(button).ToBeVisibleAsync();
+
+        await button.ClickAsync();
+
+        // Rullningen är mjuk, så den behöver några ögonblick på sig.
+        await Assertions.Expect(button).Not.ToBeVisibleAsync(new() { Timeout = 5_000 });
+        Assert.True(await page.EvaluateAsync<int>("() => Math.round(window.scrollY)") < 10);
+    }
+
     /// <summary>
     /// Varje steg i en "så här gör du"-lista måste rymma sitt eget innehåll på en rad-följd,
     /// vid VANLIG och vid STOR text. En tidigare version gjorde <c>.gor li</c> till en grid,

@@ -70,6 +70,11 @@ Tillgängliga klasser: `.gor` (numrerade steg), `.shots` + `.telefon` (skärmbil
 `.notis` / `.notis.tips` / `.notis.obs`, `.ui` (en knapp som den heter i appen), `.ja` / `.nej`
 i tabeller. Tabeller lindas automatiskt av mallen - skriv bara `<table>`.
 
+Mallen lägger själv till två navigeringshjälpmedel på varje sida, inklusive hubben:
+`a.till-appen` ("Tillbaka till Hemordna", pekar på `/`) och `button.till-toppen`
+("Till toppen", syns först efter 500px rullning). Skriv dem aldrig för hand i en guide -
+hubben är undantaget, den bär sin egen tillbaka-länk i markup eftersom den inte har sidopanel.
+
 ### Regler som måste hålla
 
 - **Form följer Hemordna, inte BowlingPlatform.** Strukturen är lånad; färg och typografi

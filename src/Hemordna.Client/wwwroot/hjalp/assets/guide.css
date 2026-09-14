@@ -52,6 +52,8 @@
     --ronn-mjuk: #F6E1DD;
     /* Telefonramen runt varje skärmbild - en neutral ton, aldrig en av accentfärgerna. */
     --skarm: #CFCAC0;
+    /* Texten på "Till toppen". Egen token eftersom --gustav byter ljushet mellan lägena. */
+    --toppen-ink: #FFFFFF;
 
     --font-display: "Familjen Grotesk", "Segoe UI", system-ui, sans-serif;
     --font-body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
@@ -78,6 +80,7 @@
         --ronn-ink: #E79683;
         --ronn-mjuk: #3A2724;
         --skarm: #3A434B;
+        --toppen-ink: #10151A;
     }
 }
 
@@ -99,6 +102,7 @@
     --ronn-ink: #E79683;
     --ronn-mjuk: #3A2724;
     --skarm: #3A434B;
+    --toppen-ink: #10151A;
 }
 
 * {
@@ -144,6 +148,72 @@ aside {
     overflow: auto;
     padding: 36px 20px 40px;
     border-right: 1px solid var(--linje);
+}
+
+/* Vägen tillbaka till appen. Guiden öppnas i egen flik, och på telefon är det inte alltid
+   uppenbart hur man tar sig tillbaka - särskilt inte om appen körs installerad. */
+.till-appen {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 44px;
+    padding: 0 14px 0 10px;
+    margin: 0 0 18px;
+    border: 1px solid var(--kant);
+    border-radius: 999px;
+    background: var(--yta);
+    color: var(--sot);
+    text-decoration: none;
+    font-family: var(--font-display);
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.till-appen:hover {
+    border-color: var(--gustav);
+    color: var(--gustav-stark);
+}
+
+.till-appen .pil {
+    font-size: 1.05em;
+    line-height: 1;
+}
+
+/* "Till toppen" - en riktig knapp, inte ännu en yta. Syns först när man scrollat förbi
+   innehållsförteckningen, som på mobil ligger överst. */
+.till-toppen {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    z-index: 20;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    min-height: 44px;
+    padding: 0 16px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--gustav);
+    color: var(--toppen-ink);
+    font-family: var(--font-display);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 2px 10px rgba(34, 40, 46, .22);
+    /* visibility, inte bara opacity: en knapp med opacity 0 ligger kvar i tabbordningen, så en
+       tangentbordsanvändare hade tabbat till något osynligt. */
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(8px);
+    pointer-events: none;
+    transition: opacity .18s, transform .18s, visibility .18s;
+}
+
+.till-toppen.syns {
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+    pointer-events: auto;
 }
 
 .marke {
@@ -463,6 +533,11 @@ tbody tr:last-child td {
     padding: 1px 7px;
     -webkit-box-decoration-break: clone;
     box-decoration-break: clone;
+}
+
+/* Hubbens egen rubrik under rollkorten */
+.hub-rubrik {
+    margin-top: 44px;
 }
 
 /* Hubbens rollkort */
