@@ -278,4 +278,36 @@ public class HushallTests
         // The only task this member has all week is done, so exactly one dot is filled.
         await Assertions.Expect(row.Locator(".dot-done")).ToHaveCountAsync(1);
     }
+
+    /// <summary>The help link reaches a guide that actually renders. Both halves matter: the
+    /// guides are static files in wwwroot, not Blazor routes, so a link without target="_blank"
+    /// is swallowed by the router - and the guide pages build themselves from window.GUIDE, so a
+    /// 200 alone would not prove the template ran.</summary>
+    [Fact]
+    public async Task The_help_link_opens_a_guide_that_renders()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Ingrid");
+
+        await page.GotoAsync("/hushall");
+
+        var help = page.GetByRole(AriaRole.Link, new() { Name = "Hjälp och guider" });
+        await Assertions.Expect(help).ToBeVisibleAsync();
+        await Assertions.Expect(help).ToHaveAttributeAsync("target", "_blank");
+
+        // Follow it the way the browser would, in a tab of its own.
+        var guide = await page.Context.RunAndWaitForPageAsync(async () => await help.ClickAsync());
+        await guide.WaitForLoadStateAsync();
+
+        await Assertions.Expect(guide.GetByRole(AriaRole.Heading, new() { Name = "Hjälp och guider" }))
+            .ToBeVisibleAsync();
+
+        var familyGuide = guide.GetByRole(AriaRole.Link, new() { Name = "För alla i familjen" });
+        await Assertions.Expect(familyGuide).ToBeVisibleAsync();
+        await familyGuide.ClickAsync();
+
+        // guide.js builds every chapter from window.GUIDE - if it never ran, the heading would
+        // be there (it is in the shell) but the chapters would not.
+        await Assertions.Expect(guide.Locator("section.kapitel")).ToHaveCountAsync(6);
+    }
 }

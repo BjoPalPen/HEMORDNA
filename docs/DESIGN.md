@@ -418,7 +418,7 @@ Vidare, i tur och ordning: hushållets veckogrid (samma prickmatris som nu även
 ett tyst "Idag i hushållet"-kort (en ring, samma mönster som "Senaste händelser" nedan -
 hela hushållets andel klara uppgifter idag, aldrig per medlem, PRODUCT.md §8), "Senaste
 händelser", och sist en lista med "Pausa hushållet"/"Balansera om vem som gör vad"/
-"Inställningar"/"Rensa hushållets data"/"Logga ut" som listrader - de tre första öppnar
+"Inställningar"/"Hjälp och guider"/"Rensa hushållets data"/"Logga ut" som listrader - de tre första öppnar
 varsitt eget ark.
 
 **Rensa hushållets data** (denna revision, se docs/ARCHITECTURE.md "Beslut: Rensa ett
@@ -810,3 +810,35 @@ Ordbild: **Hemordna**, med underraden *Ett enklare hem, en lugnare vardag*.
 - Färg är aldrig ensam bärare av betydelse – status har alltid text eller ikon.
 - Fokusmarkering syns tydligt och tas aldrig bort.
 - Stor text-läget får inte bryta layouten.
+
+---
+
+## 11. Användarguider (`/hjalp`)
+
+Två HTML-guider ligger i `src/Hemordna.Client/wwwroot/hjalp/`: en hubb med rollkort,
+`sv/familjen.html` för alla i familjen och `sv/hushallsansvarig.html` för den som har
+krysset "Kan ändra rum, uppgifter och medlemmar". Uppdelningen följer behörighetsgränsen,
+inte en egen indelning – se ARCHITECTURE.md "Beslut: Användarguider under /hjalp".
+
+Ingången ligger som en listrad, **Hjälp och guider**, under Hushållsöversiktens
+inställningar – synlig för alla, inte bara den som sköter hushållet. Länken bär
+`target="_blank"`, vilket inte är en stilfråga: guiderna är statiska filer i `wwwroot`, inte
+Blazor-routes, så utan det fångar routern klicket och letar efter en sida som inte finns.
+Att guiden öppnas bredvid appen är dessutom rimligt – man tappar inte var man var.
+
+Guiderna är en egen yta med egen stilmall (`assets/guide.css`), men **samma formspråk som
+appen**: tokens ur §2, Familjen Grotesk och Atkinson Hyperlegible ur §4, och appens egna
+självhostade typsnittsfiler – ingen extern font-CDN, av samma skäl som gäller appen. Mörkt
+läge är ritat, inte inverterat.
+
+Strukturen (sidopanel, numrerade kapitel, `.shots`-rutnät, notiser i tre nivåer,
+"så här gör du"-steg) är lånad från BowlingPlatforms guider, på Björns begäran.
+
+**Skärmbilderna är riktiga**, tagna automatiskt av `GuideSkarmbilderTests` på 390 × 844 och
+visade i en neutral telefonram. På skärmar under 880px visas en bild i taget, nära 1:1 – två
+i bredd krymper en 390px-bild så mycket att texten i den inte går att läsa, vilket gör en
+mobilguide meningslös.
+
+Tonen följer PRODUCT.md §8: guiden förklarar vad appen gör, aldrig vad användaren borde ha
+gjort. Kapitlet om behörigheter i familjeguiden beskriver varför vissa knappar inte syns –
+den låtsas inte att de inte finns, och skuldbelägger inte den som saknar dem.
