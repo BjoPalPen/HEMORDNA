@@ -351,6 +351,14 @@ scope för klient-bara arbete (se CLAUDE.md, "Behöver du ett nytt API-fält: st
 rapportera"). "Stor text" och "En uppgift åt gången" var sparbara sedan tidigare men lästes
 aldrig av `MinDag.razor` – se "Beslut: Ny form" i ARCHITECTURE.md för vad som nu är kopplat in.
 
+**Dagen läses i en följd: våning → rum → uppgifter.** Är man på lilla wc:t gör man klart där
+innan man går uppför trappan, så allt som hör till samma rum kommer på rad. Rummens ordning är
+hushållets egen – samma som Rum visar – och ändras inte från dag till dag. En uppgift som är
+sedan tidigare ligger i sitt eget rum, först bland rummets uppgifter, med sin egen notis på
+raden. Den lyfts inte ur sitt rum: en lista som skickar en upp och ner för trappan kostar mer
+än en sen rad som ligger tre rader ner. Är eftersläpningen stor erbjuder appen i stället att
+sprida ut den – den döljer aldrig rader.
+
 ### Uppgiftsdetalj
 
 Bild, namn, områdeschip, återkommande, beskrivning, ansvarig, växlarna *Kan skjutas

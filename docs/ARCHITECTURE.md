@@ -3072,6 +3072,61 @@ familjeguiden. De var inte trasiga: varje skärmbild är `loading="lazy"`, så a
 vikningen är legitimt oladdat när sidan just öppnats. Rätt fråga - "resolverar sökvägen?" -
 ställs genom att hämta varje `src` och kontrollera svarskoden.
 
+### Beslut: hela dagen i rumsordning — `IMPLEMENTED`
+
+Björn, 2026-09-14: *"Det måste vara så att uppgifterna kommer i ordning i förhållande till
+våning och/eller rum, det kan inte vara hattigt ... så skall jag torka av handfatet på liten
+wc och det finns fler uppgifter i samma yta ... så skall de komma på rad, inte att jag skall
+torka av handfatet i badrummet där uppe efter."*
+
+Två saker skapade hattigheten, och bara den ena var uppenbar.
+
+**Den förfallna gruppen sorterade på namn.** "Beslut: Rumsgruppering på Min dag" lyfte ut
+`IsOverdue` i en egen ledande grupp, oavsett rum, sorterad på datum och sedan NAMN. I ett hus
+med samma syssla i flera rum är det värsta tänkbara ordning: "Torka av handfatet" på lilla
+wc:t hamnade bredvid "Torka av handfatet" en trappa upp, medan resten av lilla wc:t låg
+någon annanstans i listan.
+
+**Rummens ordning var "först påträffad".** `GroupBy` bevarar nyckelns första förekomst, så
+ordningen speglade vilket rum `DailyPlanner` råkade ranka först den morgonen. Samma hem kunde
+läsa kök-först en dag och badrum-först nästa.
+
+**Beslutet: hela dagen i EN följd - våning → rum → uppgifter.** Förfallna uppgifter ligger i
+sitt eget rum, inte i en egen grupp, och sorteras först inom rummet. Raden bär sin egen
+"Sedan tidigare"-notis, så ingenting blir osynligt. Rummens ordning följer hushållets egen
+`Household.Areas`-ordning - samma som Rum visar - så Idag och Rum säger samma sak varje dag.
+
+Detta **upphäver medvetet** raden i det tidigare beslutet om att en sen uppgift aldrig får
+hamna längre ner i ett rums lista. Avvägningen är verklig och gjordes av Björn själv: det är
+var man befinner sig fysiskt som avgör vad man gör härnäst, och en lista som skickar en upp
+och ner för trappan kostar mer än en sen rad som ligger tre rader ner. Taket på gruppen (§B6,
+visa tre och "Visa alla") försvinner med den - men erbjudandet *"Låt Hemordna sprida ut dem"*
+finns kvar som en notis när eftersläpningen är stor, eftersom det var det enda i taket som
+faktiskt hjälpte. Att dölja rader bryter rumsordningen lika mycket som en felplacerad rad gör.
+
+`MinDagFloorGroupingTests` blev starkare av bytet: ordningen är nu deterministisk, så testet
+påstår hela följden i stället för sorterade mängder. Nytt E2E-fall kodar Björns eget scenario -
+två rum på olika våningar med identiskt namngivna förfallna uppgifter - och faller utan fixen.
+
+### Beslut: borttagning städar sina utlagda förekomster — `IMPLEMENTED`
+
+Samma rapport, annan orsak. Björn såg "Sovrum 2 och 3" bland dagens uppgifter, rum han redan
+tagit bort. `DeactivateArea` och `DeactivateTaskDefinition` deaktiverade rummet och dess
+uppgiftsdefinitioner, men lät **redan genererade förekomster** ligga kvar som `Planned`. De
+fortsatte dyka upp på Idag, namngivna efter ett rum hushållet tagit bort. I produktion låg 32
+sådana rader och hade gjort det i veckor.
+
+Mönstret fanns redan: `PauseArea` (se "Beslut: Pausa ett rum") skippar utestående förekomster
+när ett rum pausas, just för att slippa exakt det här. Det blev bara aldrig tillämpat på
+borttagning. Nu gör båda use casen det - utan slutdatum, eftersom en borttagning inte har
+något "till och med". Avklarade förekomster rörs aldrig: historiken om vad som FAKTISKT
+gjordes ska stå kvar, en borttagning säger bara att rummet inte finns längre.
+
+**Rumsnamnet var däremot aldrig fel.** `AreaName` slås upp live i `PlanCandidateQuery` via en
+join mot `Areas`; varken `TaskOccurrences` eller `TaskDefinitions` lagrar ett namn. Byter man
+namn på ett rum följer alla befintliga uppgifter med automatiskt. Det Björn såg var
+spökförekomsterna, inte ett namn som fastnat.
+
 | Fråga | Varför den väntar |
 |---|---|
 | Offline-strategi bortom read-only cache | Utanför MVP; får inte låsas in i förväg |

@@ -220,43 +220,19 @@ else
         {
             @if (_day.Items.Count > 0)
             {
-                @if (OverdueItems.Count > 0)
+                @*  Förfallna uppgifter ligger i sina egna rum, inte i en egen grupp högst upp:
+                    det är var man befinner sig fysiskt som avgör vad man gör härnäst, så allt i
+                    samma rum måste komma på rad. Raden bär sin egen "Sedan tidigare"-notis.
+                    Erbjudandet att sprida ut en stor eftersläpning finns kvar - det var det
+                    verkliga värdet i den gamla gruppens tak, inte att gömma raderna. *@
+                @if (OverdueItems.Count > OverdueCapThreshold)
                 {
-                    @GroupHeading("Sedan tidigare", OutstandingCount(OverdueItems))
-                    <ul class="task-list" aria-label="Sedan tidigare">
-                        @{
-                            var overdueIsCapped = !_showAllOverdue && OverdueItems.Count > OverdueCapThreshold;
-                            var orderedOverdue = WithStartedFirst(OverdueItems);
-                            var visibleOverdue = overdueIsCapped ? orderedOverdue.Take(OverdueVisibleCount) : orderedOverdue;
-                        }
-                        @foreach (var row in visibleOverdue)
-                        {
-                            @if (row.IsRemotelyCompleted)
-                            {
-                                @RemotelyCompletedRow(row.Item)
-                            }
-                            else
-                            {
-                                <TaskListItem Item="row.Item" Today="Today" ShowIcon="ShowIcons" ShowOverdueNote="false" ShowTimeLevel="_showTimeLevel"
-                                              IsBusy="_busyOccurrence == row.Item.OccurrenceId"
-                                              IsExpanded="_expandedOccurrence == row.Item.OccurrenceId"
-                                              IsStartHere="row.Item.OccurrenceId == StartHereOccurrenceId"
-                                              IsStarted="row.Item.OccurrenceId == _startedOccurrenceId"
-                                              OnComplete="CompleteAsync" OnToggleExpand="ToggleExpand" OnDefer="DeferAsync" OnToggleStart="ToggleStartAsync" />
-                            }
-                        }
-                        @if (overdueIsCapped)
-                        {
-                            <li class="task task-more">
-                                … och @(OverdueItems.Count - OverdueVisibleCount) till
-                                <button type="button" class="btn btn-link" @onclick="() => _showAllOverdue = true">Visa alla</button>
-                                ·
-                                <button type="button" class="btn btn-link" disabled="@_rebalanceBusy" @onclick="RebalanceOverdueAsync">
-                                    Låt Hemordna sprida ut dem
-                                </button>
-                            </li>
-                        }
-                    </ul>
+                    <div class="notice" role="status">
+                        @OverdueItems.Count uppgifter är sedan tidigare.
+                        <button type="button" class="btn btn-link" disabled="@_rebalanceBusy" @onclick="RebalanceOverdueAsync">
+                            Låt Hemordna sprida ut dem
+                        </button>
+                    </div>
                 }
 
                 @if (_rebalanceStatus is not null)
@@ -326,19 +302,7 @@ else
                 }
                 else
                 {
-                    @if (OverdueItems.Count > 0)
-                    {
-                        <div class="print-room">
-                            <p class="print-room-heading">Sedan tidigare</p>
-                            <ul>
-                                @foreach (var row in OverdueItems)
-                                {
-                                    @PrintTaskRow(row.Item)
-                                }
-                            </ul>
-                        </div>
-                    }
-
+                    @* Utskriften följer samma ordning som skärmen - våning, rum, uppgifter. *@
                     @foreach (var floorGroup in FloorGroups)
                     {
                         @if (floorGroup.Floor is { } floor)
@@ -569,7 +533,6 @@ else
     private string? _motivation;
     private bool _showTimeLevel;
     private int _focusOffset;
-    private bool _showAllOverdue;
     private bool _rebalanceBusy;
     private string? _rebalanceStatus;
     private string? _unplannedNotice;
@@ -578,7 +541,6 @@ else
     // "Beslut: Ångra och stabil lista" §B6 - a long "Sedan tidigare" reads as a wall of failure
     // rather than a plan; past this many, only the first few show until asked to see the rest.
     private const int OverdueCapThreshold = 5;
-    private const int OverdueVisibleCount = 3;
     private bool _showUnplannedSheet;
     private bool _showExtraTaskSheet;
     private (DateOnly Date, int Count)? _nextPlanned;
@@ -646,47 +608,83 @@ else
     private TaskRow ToRow(PlannedTaskResponse item) => new(item, _remotelyCompletedIds.Contains(item.OccurrenceId));
 
     /// <summary>
-    /// Overdue items are pulled into their own leading group regardless of room, so something
-    /// already late is never buried inside a room's list further down - see
-    /// docs/ARCHITECTURE.md "Rumsgruppering på Min dag". Ordered oldest first
-    /// (<see cref="PlannedTaskResponse.OriginalScheduledDate"/>, then name) so that when capped
-    /// (§B6) the first <see cref="OverdueVisibleCount"/> really are the oldest, not just
-    /// whichever the server happened to list first.
+    /// Today's late items. They are NOT a display group of their own any more - each one sits
+    /// in its own room (see <see cref="RoomGroups"/>) - this only counts them, so a household
+    /// with a real backlog can be offered help spreading it out. See docs/ARCHITECTURE.md
+    /// "Beslut: hela dagen i rumsordning".
     /// </summary>
     private List<TaskRow> OverdueItems
         => (_day?.Items.Where(item => item.IsOverdue) ?? [])
-            .OrderBy(item => item.OriginalScheduledDate)
-            .ThenBy(item => item.Name)
             .Select(ToRow)
             .ToList();
 
     /// <summary>
-    /// The rest of today's items (not overdue), grouped by room so the day reads as one room
-    /// at a time instead of a random mix - a task with no room ("Övrigt") gets its own group.
-    /// <see cref="Enumerable.GroupBy{TSource,TKey}(IEnumerable{TSource},System.Func{TSource,TKey})"/>
-    /// preserves each key's first-appearance order, so the room order still reflects
-    /// DailyPlanner's own prioritisation (whichever room's tasks it ranked earliest leads) -
-    /// this only reorganises the DISPLAY of an already-decided list, never what is planned.
+    /// The household's own room order - the same order Rum lists them in, since that is the
+    /// order the household set their home up in. Used to order the day's rooms and floors so
+    /// they read the same way every day.
+    /// </summary>
+    /// <remarks>
+    /// Before this, room order was GroupBy's first-appearance order, which meant it reflected
+    /// whichever room DailyPlanner happened to rank first that morning - so the same home could
+    /// read kitchen-first one day and bathroom-first the next. Product feedback (2026-09-14):
+    /// "det kan inte vara hattigt". A room that no longer exists in the household (its tasks
+    /// outlived it) sorts last rather than first, and "Övrigt" sorts last of all.
+    /// </remarks>
+    private int RoomOrderOf(string? areaName)
+    {
+        if (areaName is null)
+        {
+            return int.MaxValue;
+        }
+
+        var areas = _household?.Areas ?? [];
+        var index = 0;
+
+        foreach (var area in areas)
+        {
+            if (area.Name == areaName)
+            {
+                return index;
+            }
+
+            index++;
+        }
+
+        return int.MaxValue - 1;
+    }
+
+    /// <summary>
+    /// EVERY item today, grouped by room so the day reads as one room at a time - a task with
+    /// no room ("Övrigt") gets its own group. Overdue items are included here rather than
+    /// lifted into their own leading group: being in a room physically is what decides what you
+    /// do next, so everything in the same room has to come in a row. A late item keeps its own
+    /// "Sedan tidigare"-note on the row, and sorts first within its room.
+    /// Rooms follow the household's own order (see <see cref="RoomOrderOf"/>), not whatever
+    /// DailyPlanner ranked first - this only reorganises the DISPLAY of an already-decided
+    /// list, never what is planned.
     /// </summary>
     private List<TaskGroup> RoomGroups
-        => (_day?.Items.Where(item => !item.IsOverdue) ?? [])
+        => (_day?.Items ?? [])
             .Select(ToRow)
             .GroupBy(row => row.Item.AreaName)
-            .Select(group => new TaskGroup(group.Key, [.. group]))
+            .Select(group => new TaskGroup(
+                group.Key,
+                [.. group.OrderByDescending(row => row.Item.IsOverdue)]))
+            .OrderBy(group => RoomOrderOf(group.AreaName))
             .ToList();
 
     /// <summary>
-    /// RoomGroups clustered by floor (see Support/RoomFloors) - product feedback that same-
-    /// floor rooms should "hold together" rather than scatter through the day in whatever order
-    /// DailyPlanner happened to rank their tasks. Same first-appearance-order preservation as
-    /// RoomGroups itself, one level up: a floor's position reflects its earliest-ranked room,
-    /// never an arbitrary (e.g. alphabetical) sort. A household with no "Våning – " naming at
-    /// all collapses to one floor-less cluster, so a single-floor home sees no heading added.
+    /// RoomGroups clustered by floor (see Support/RoomFloors) - same-floor rooms hold together
+    /// so the day never sends anyone up and down the stairs. A floor's position follows its
+    /// first room in the household's own order, so floors read the same way every day. A
+    /// household with no "Våning – " naming at all collapses to one floor-less cluster, so a
+    /// single-floor home sees no heading added.
     /// </summary>
     private List<FloorGroup> FloorGroups
         => RoomGroups
             .GroupBy(group => group.AreaName is { } areaName ? RoomFloors.FloorOf(areaName) : null)
             .Select(group => new FloorGroup(group.Key, [.. group]))
+            .OrderBy(group => group.Rooms.Min(room => RoomOrderOf(room.AreaName)))
             .ToList();
 
     /// <summary>
@@ -1443,6 +1441,12 @@ else
         // has been generated yet) can each see "not yet" at the same time and both create one,
         // duplicating it. Running today's request to completion first means tomorrow's request
         // always sees today's occurrence already committed.
+        // Rummens ordning läses ur hushållets egen rumsordning (se RoomOrderOf), så hushållet
+        // måste vara hemma INNAN _day sätts - annars renderas dagen en gång i fallback-ordning
+        // och hoppar sedan om när hushållet landar. OnInitializedAsync hämtar det också, men
+        // bara när Session.Me redan hunnit bli satt; här är det garanterat.
+        _household ??= await Api.GetHouseholdAsync(householdId);
+
         _day = await Api.GetDailyPlanAsync(householdId, memberId, Today);
         _tomorrow = await Api.GetDailyPlanAsync(householdId, memberId, Today.AddDays(1));
         _focusOffset = 0;
