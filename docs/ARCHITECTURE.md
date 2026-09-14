@@ -2996,6 +2996,55 @@ granskad - kontroller man inte får använda visas inte alls, aldrig gråmarkera
 med en förklarande text om vem de är till för. Se "Hushållsöversikt" i `docs/DESIGN.md`
 för var det landar i UI:t.
 
+### Beslut: Användarguider under /hjalp — `IMPLEMENTED`
+
+Björn ville ha HTML-guider "på det sätt vi gjort det i BowlingPlatform, med bilder och
+anvisningar", med skärmbilder främst för mobil - och efter en första förslagsrunda:
+**mallen ska följa Hemordna**, och det ska vara **två guider**, inte en.
+
+**Struktur lånad, formspråk eget.** BowlingPlatform har ett moget mönster som är värt att
+återanvända rakt av: en hubb med rollkort, delad `assets/guide.css` + `assets/guide.js`, och
+en tunn sida per roll som bara definierar `window.GUIDE = { title, subtitle, intro, fakta,
+sections:[{id,t,html}], footer }` och laddar mallen sist. All layout - sidopanel,
+innehållsförteckning, kapitelnumrering, tabellinkapsling - byggs i `guide.js`, så en ny guide
+bär bara sitt innehåll. Färg och typografi följer däremot `docs/DESIGN.md` §2/§4, inte
+BowlingPlatforms mörkblå palett: gustaviansk blå, kalkvit botten, Familjen Grotesk och
+Atkinson Hyperlegible.
+
+**Typsnitten är appens egna filer.** `guide.css` `@font-face`-ar `../../fonts/*.woff2` i
+stället för att hämta från Google Fonts. DESIGN.md §4 slår fast "ingen extern font-CDN" för
+appen, och det gäller guiderna lika mycket - de ligger i samma `wwwroot` och ska fungera
+offline av samma skäl.
+
+**Två guider, delad gräns med behörighetsmodellen.** `sv/familjen.html` (6 kapitel) och
+`sv/hushallsansvarig.html` (7 kapitel). Uppdelningen är inte påhittad för guiderna utan är
+exakt den `CanManageHousehold` redan drar - se "Beslut: Vem får ändra vad" ovan. Därför har
+familjeguiden ett eget kapitel "Vad du kan ändra" som förklarar varför vissa knappar inte
+syns, i stället för att låtsas att de inte finns.
+
+**Skärmbilderna är en testkörning, inte handarbete.** `GuideSkarmbilderTests` fångar 22
+vyer på 390 × 844 och skriver `mobil_<namn>.png`. Den följer samma opt-in som
+`SkarmbilderTests` redan har - skriver till `HEMORDNA_SCREENSHOT_DIR` om den är satt, annars
+en temp-katalog - så en vanlig testkörning aldrig skriver om filer i källträdet. Filnamnen är
+guidernas kontrakt: byter man namn här måste man byta i `sv/*.html` också.
+
+**En bild i taget på telefon.** Första utkastet lade två skärmbilder i bredd även på mobil.
+Det krymper en 390px-bild till ~170px, och då går texten i själva bilden inte att läsa -
+vilket är hela poängen med en guide som ska läsas på mobil. `.shots` är enkolumns under
+880px, med `max-width: 340px`, så bilden visas nära 1:1.
+
+**Guiderna ligger utanför service workerns cache.** `service-worker.published.js`
+förcachear allt som matchar `.png`/`.html` i tillgångsmanifestet - alltså hade de 22
+skärmbilderna (drygt 1 MB) laddats ner vid varje installation, för en hjälpsida man öppnar
+sällan. Cachen finns till för appskalet, och guiden är inte det. `offlineAssetsExclude` fick
+därför `/^hjalp\//`: appen fungerar offline som förut, guiden kräver nät.
+
+**Verifieringen hittade en falsk positiv innan den hittade något annat.** Ett första
+renderingstest räknade bilder med `naturalWidth === 0` och rapporterade 7 trasiga i
+familjeguiden. De var inte trasiga: varje skärmbild är `loading="lazy"`, så allt under
+vikningen är legitimt oladdat när sidan just öppnats. Rätt fråga - "resolverar sökvägen?" -
+ställs genom att hämta varje `src` och kontrollera svarskoden.
+
 | Fråga | Varför den väntar |
 |---|---|
 | Offline-strategi bortom read-only cache | Utanför MVP; får inte låsas in i förväg |

@@ -810,3 +810,29 @@ Ordbild: **Hemordna**, med underraden *Ett enklare hem, en lugnare vardag*.
 - Färg är aldrig ensam bärare av betydelse – status har alltid text eller ikon.
 - Fokusmarkering syns tydligt och tas aldrig bort.
 - Stor text-läget får inte bryta layouten.
+
+---
+
+## 11. Användarguider (`/hjalp`)
+
+Två HTML-guider ligger i `src/Hemordna.Client/wwwroot/hjalp/`: en hubb med rollkort,
+`sv/familjen.html` för alla i familjen och `sv/hushallsansvarig.html` för den som har
+krysset "Kan ändra rum, uppgifter och medlemmar". Uppdelningen följer behörighetsgränsen,
+inte en egen indelning – se ARCHITECTURE.md "Beslut: Användarguider under /hjalp".
+
+Guiderna är en egen yta med egen stilmall (`assets/guide.css`), men **samma formspråk som
+appen**: tokens ur §2, Familjen Grotesk och Atkinson Hyperlegible ur §4, och appens egna
+självhostade typsnittsfiler – ingen extern font-CDN, av samma skäl som gäller appen. Mörkt
+läge är ritat, inte inverterat.
+
+Strukturen (sidopanel, numrerade kapitel, `.shots`-rutnät, notiser i tre nivåer,
+"så här gör du"-steg) är lånad från BowlingPlatforms guider, på Björns begäran.
+
+**Skärmbilderna är riktiga**, tagna automatiskt av `GuideSkarmbilderTests` på 390 × 844 och
+visade i en neutral telefonram. På skärmar under 880px visas en bild i taget, nära 1:1 – två
+i bredd krymper en 390px-bild så mycket att texten i den inte går att läsa, vilket gör en
+mobilguide meningslös.
+
+Tonen följer PRODUCT.md §8: guiden förklarar vad appen gör, aldrig vad användaren borde ha
+gjort. Kapitlet om behörigheter i familjeguiden beskriver varför vissa knappar inte syns –
+den låtsas inte att de inte finns, och skuldbelägger inte den som saknar dem.

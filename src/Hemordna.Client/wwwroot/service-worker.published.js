@@ -13,7 +13,10 @@ self.addEventListener('fetch', event => event.respondWith(onFetch(event)));
 const cacheNamePrefix = 'hemordna-cache-';
 const cacheName = `${cacheNamePrefix}${self.assetsManifest.version}`;
 const offlineAssetsInclude = [/\.dll$/, /\.pdb$/, /\.wasm/, /\.html/, /\.js$/, /\.json$/, /\.css$/, /\.woff$/, /\.woff2$/, /\.png$/, /\.jpe?g$/, /\.gif$/, /\.ico$/, /\.blat$/, /\.dat$/, /\.svg$/, /\.webmanifest$/];
-const offlineAssetsExclude = [/^service-worker\.js$/];
+// Användarguiderna under /hjalp är inte appskalet. De är drygt 1 MB skärmbilder som annars
+// hade laddats ner vid varje installation, för en hjälpsida man öppnar sällan - det bryter
+// mot vad den här cachen finns till för. Guiden kräver alltså nät; appen gör det inte.
+const offlineAssetsExclude = [/^service-worker\.js$/, /^hjalp\//];
 
 async function onInstall() {
     const assetsRequests = self.assetsManifest.assets
