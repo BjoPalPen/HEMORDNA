@@ -12,8 +12,9 @@ public class DeactivateAreaTests
 
     private readonly InMemoryHouseholdRepository _households = new();
     private readonly InMemoryTaskDefinitionRepository _definitions = new();
+    private readonly InMemoryTaskOccurrenceRepository _occurrences = new();
 
-    private DeactivateArea CreateUseCase() => new(_households, _definitions);
+    private DeactivateArea CreateUseCase() => new(_households, _definitions, _occurrences);
 
     private async Task<(Guid HouseholdId, Area Area, HouseholdMember Member)> ArrangeHouseholdAsync()
     {
@@ -87,5 +88,66 @@ public class DeactivateAreaTests
         var deactivated = await CreateUseCase().HandleAsync(Guid.NewGuid(), Guid.NewGuid(), CancellationToken.None);
 
         Assert.Null(deactivated);
+    }
+
+    /// <summary>Ett riktigt hushåll bytte två sovrum mot våningsnamngivna, och de borttagna
+    /// rummens redan utlagda förekomster levde vidare - 32 planerade uppgifter som fortsatte
+    /// visa "Sovrum 1"/"Sovrum 2" bland dagens arbete i veckor. Se DeactivateArea.</summary>
+    [Fact]
+    public async Task Skips_occurrences_already_scheduled_from_the_removed_rooms_tasks()
+    {
+        var (householdId, area, member) = await ArrangeHouseholdAsync();
+        var definition = TaskDefinition.Create(householdId, "Bädda sängen", 10, Now);
+        definition.AssignToArea(area.Id);
+        _definitions.Seed(definition);
+
+        var occurrence = definition.ScheduleFor(new DateOnly(2026, 2, 10), Now);
+        occurrence.AssignTo(member.Id);
+        _occurrences.Seed(occurrence);
+
+        await CreateUseCase().HandleAsync(householdId, area.Id, CancellationToken.None);
+
+        Assert.Equal(TaskOccurrenceStatus.Skipped, occurrence.Status);
+    }
+
+    [Fact]
+    public async Task Leaves_another_rooms_occurrences_alone()
+    {
+        var (householdId, area, member) = await ArrangeHouseholdAsync();
+        var household = (await _households.FindByIdAsync(householdId, CancellationToken.None))!;
+        var otherArea = household.AddArea("Kök");
+        await _households.UpdateAsync(household, CancellationToken.None);
+
+        var otherDefinition = TaskDefinition.Create(householdId, "Diska", 10, Now);
+        otherDefinition.AssignToArea(otherArea.Id);
+        _definitions.Seed(otherDefinition);
+
+        var occurrence = otherDefinition.ScheduleFor(new DateOnly(2026, 2, 10), Now);
+        occurrence.AssignTo(member.Id);
+        _occurrences.Seed(occurrence);
+
+        await CreateUseCase().HandleAsync(householdId, area.Id, CancellationToken.None);
+
+        Assert.Equal(TaskOccurrenceStatus.Planned, occurrence.Status);
+    }
+
+    /// <summary>Historiken om vad som FAKTISKT gjordes ska stå kvar - en borttagning säger
+    /// bara att rummet inte finns längre, inte att arbetet aldrig utfördes.</summary>
+    [Fact]
+    public async Task Leaves_a_completed_occurrence_alone()
+    {
+        var (householdId, area, member) = await ArrangeHouseholdAsync();
+        var definition = TaskDefinition.Create(householdId, "Vädra rummet", 5, Now);
+        definition.AssignToArea(area.Id);
+        _definitions.Seed(definition);
+
+        var occurrence = definition.ScheduleFor(new DateOnly(2026, 2, 4), Now);
+        occurrence.AssignTo(member.Id);
+        occurrence.Complete(member.Id, Now);
+        _occurrences.Seed(occurrence);
+
+        await CreateUseCase().HandleAsync(householdId, area.Id, CancellationToken.None);
+
+        Assert.Equal(TaskOccurrenceStatus.Completed, occurrence.Status);
     }
 }

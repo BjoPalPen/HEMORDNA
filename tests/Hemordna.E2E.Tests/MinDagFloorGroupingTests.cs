@@ -56,21 +56,15 @@ public class MinDagFloorGroupingTests
         await Assertions.Expect(headings).ToHaveCountAsync(6);
         var texts = (await headings.AllInnerTextsAsync()).ToArray();
 
-        // Both rooms of one floor appear as a contiguous block, immediately followed by the
-        // other floor's heading and its own two rooms - never interleaved between floors.
-        var floorHeadingIndexes = texts
-            .Select((text, index) => (text, index))
-            .Where(pair => pair.text is "Övre plan" or "Entré plan")
-            .Select(pair => pair.index)
-            .ToList();
-        Assert.Equal(2, floorHeadingIndexes.Count);
-        Assert.Equal(0, floorHeadingIndexes[0]);
-        Assert.Equal(3, floorHeadingIndexes[1]);
-
-        var firstFloorRooms = texts[1..3];
-        var secondFloorRooms = texts[4..6];
-        Assert.Equal(["HALL", "SOVRUM 1"], firstFloorRooms.Order());
-        Assert.Equal(["HALL", "KÖK"], secondFloorRooms.Order());
+        // Hela följden, inte bara att våningarna håller ihop. Sedan "Beslut: hela dagen i
+        // rumsordning" följer ordningen hushållets EGEN rumsordning - samma som Rum visar - i
+        // stället för vilket rum DailyPlanner råkade ranka först den morgonen. Rummen såddes
+        // Kök, Sovrum 1, Hall(E), Hall(Ö), så Entré plan leder (dess första rum kom först) och
+        // inom våningen kommer Kök före Hall. Att kunna påstå exakt detta ÄR poängen: en
+        // ordning som byter från dag till dag går inte att lita på när man står i ett rum.
+        Assert.Equal(
+            ["Entré plan", "KÖK", "HALL", "Övre plan", "SOVRUM 1", "HALL"],
+            texts);
 
         // The floor prefix never appears in full, and a grouped row does not repeat its own
         // room heading as a chip (see MinDagDetailTests) - "Hall" only ever appears as a room

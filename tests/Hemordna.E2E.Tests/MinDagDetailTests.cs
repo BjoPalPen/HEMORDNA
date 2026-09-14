@@ -53,7 +53,7 @@ public class MinDagDetailTests
         // product feedback that naming the room twice on the same row (heading + chip) read as
         // redundant, so the chip is suppressed here (ShowAreaChip="false") and shown only in
         // "Sedan tidigare", the one place a row has no room heading above it - see
-        // Shows_the_area_as_a_chip_for_an_overdue_row_which_has_no_room_heading below.
+        // An_overdue_row_sits_under_its_own_rooms_heading below.
         await Assertions.Expect(page.Locator(".task-group-heading", new() { HasText = "Tvättstuga" })).ToBeVisibleAsync();
         var row = page.Locator(".task", new() { HasText = "Plocka tvätt" });
         await Assertions.Expect(row.Locator(".chip")).Not.ToBeVisibleAsync();
@@ -94,8 +94,9 @@ public class MinDagDetailTests
             new { name = "Plocka tvätt", estimatedMinutes = 5, areaId = area.GetProperty("id").GetGuid() }))
             .Content.ReadFromJsonAsync<JsonElement>();
 
-        // Yesterday, still unaddressed - lands in "Sedan tidigare", which has no per-room
-        // heading of its own, so the chip is the only thing naming the room on this row.
+        // Igår, fortfarande ogjord. Sedan "Beslut: hela dagen i rumsordning" ligger den i sitt
+        // EGET rum under rummets rubrik, inte i en egen grupp högst upp - så rummet namnges av
+        // rubriken och raden behöver inget chip som upprepar den.
         var yesterday = today.AddDays(-1);
         await http.PostAsJsonAsync(
             $"/api/households/{householdId}/tasks/{task.GetProperty("id").GetGuid()}/occurrences",
@@ -103,12 +104,18 @@ public class MinDagDetailTests
 
         await page.ReloadAsync();
 
-        var row = page.Locator(".task", new() { HasText = "Plocka tvätt" });
-        await Assertions.Expect(row.Locator(".chip")).ToHaveTextAsync("Tvättstuga");
+        var group = page.Locator("ul[aria-label=\"Tvättstuga\"]");
+        await Assertions.Expect(group.GetByText("Plocka tvätt")).ToBeVisibleAsync();
+
+        // Rummet står i rubriken, alltså inte som ett chip på raden - det vore samma ord två
+        // gånger direkt under varandra.
+        var row = group.Locator(".task", new() { HasText = "Plocka tvätt" });
+        await Assertions.Expect(row.Locator("span.chip:not(.chip-today):not(.chip-time):not(.chip-forward):not(.chip-primary)"))
+            .ToHaveCountAsync(0);
     }
 
     [Fact]
-    public async Task An_overdue_rooms_chip_keeps_its_floor_prefix_to_tell_two_same_named_rooms_apart()
+    public async Task Two_same_named_rooms_on_different_floors_stay_apart_under_their_own_headings()
     {
         // Real report: two different rooms both named "Hall" (one per floor) both showed just
         // "Hall" in "Sedan tidigare" once the chip there was stripped to match the grouped
@@ -150,14 +157,20 @@ public class MinDagDetailTests
 
         await page.ReloadAsync();
 
-        // ".chip" alone (not ".chip-today"/".chip-time"/".chip-forward") - the room chip is the
-        // only one of the row's chips with no secondary modifier class, but "Torka trappsteg" is
-        // also the planner's first task and so additionally carries "Börja här" (Sju enkla
-        // lösningar, del 3), which is a ".chip" too.
-        await Assertions.Expect(page.Locator(".task", new() { HasText = "Torka trappsteg" }).Locator("span.chip:not(.chip-today)"))
-            .ToHaveTextAsync("Övre plan – Hall");
-        await Assertions.Expect(page.Locator(".task", new() { HasText = "Dammsug hallen" }).Locator("span.chip:not(.chip-today)"))
-            .ToHaveTextAsync("Entré plan – Hall");
+        // Två rum som båda heter "Hall" hålls isär av VÅNINGSRUBRIKEN ovanför, inte av ett
+        // prefix på raden. Varje uppgift ligger under sin egen våning och sitt eget rum.
+        var upstairs = page.Locator("ul[aria-label=\"Hall\"]").Filter(new() { HasText = "Torka trappsteg" });
+        var entrance = page.Locator("ul[aria-label=\"Hall\"]").Filter(new() { HasText = "Dammsug hallen" });
+
+        await Assertions.Expect(upstairs).ToHaveCountAsync(1);
+        await Assertions.Expect(entrance).ToHaveCountAsync(1);
+
+        // Och de är inte samma lista - annars hade rummen slagits ihop till ett.
+        await Assertions.Expect(upstairs.GetByText("Dammsug hallen")).ToHaveCountAsync(0);
+
+        var floors = (await page.Locator("h2.floor-heading").AllInnerTextsAsync()).ToList();
+        Assert.Contains("Övre plan", floors);
+        Assert.Contains("Entré plan", floors);
     }
 
     /// <summary>A real user's own iPhone (Safari/WebKit) screenshot showed the room chip's pill

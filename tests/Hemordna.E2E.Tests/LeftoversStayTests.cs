@@ -80,11 +80,12 @@ public class LeftoversStayTests
         await sheet.GetByRole(AriaRole.Button, new() { Name = "Balansera om vem som gör vad" }).ClickAsync();
         await Assertions.Expect(sheet.GetByRole(AriaRole.Status)).ToBeVisibleAsync();
 
-        // Diska is still Astrid's, still overdue, still on HER Idag under "Sedan tidigare" -
-        // never on Bosse's.
+        // Diska är fortfarande Astrids, fortfarande försenad, fortfarande på HENNES Idag -
+        // aldrig på Bosses. Var på hennes dag den ligger är den här testets sak likgiltigt:
+        // sedan "Beslut: hela dagen i rumsordning" ligger försenat i sitt eget rum, inte i en
+        // egen grupp högst upp.
         await aPage.GotoAsync("/");
-        await Assertions.Expect(aPage.GetByRole(AriaRole.List, new() { Name = "Sedan tidigare" }).GetByText("Diska"))
-            .ToBeVisibleAsync();
+        await Assertions.Expect(aPage.GetByText("Diska")).ToBeVisibleAsync();
 
         await bPage.GotoAsync("/");
         await Assertions.Expect(bPage.GetByText("Diska")).Not.ToBeVisibleAsync();
