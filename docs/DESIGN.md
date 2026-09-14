@@ -418,7 +418,7 @@ Vidare, i tur och ordning: hushållets veckogrid (samma prickmatris som nu även
 ett tyst "Idag i hushållet"-kort (en ring, samma mönster som "Senaste händelser" nedan -
 hela hushållets andel klara uppgifter idag, aldrig per medlem, PRODUCT.md §8), "Senaste
 händelser", och sist en lista med "Pausa hushållet"/"Balansera om vem som gör vad"/
-"Inställningar"/"Rensa hushållets data"/"Logga ut" som listrader - de tre första öppnar
+"Inställningar"/"Hjälp och guider"/"Rensa hushållets data"/"Logga ut" som listrader - de tre första öppnar
 varsitt eget ark.
 
 **Rensa hushållets data** (denna revision, se docs/ARCHITECTURE.md "Beslut: Rensa ett
@@ -819,6 +819,12 @@ Två HTML-guider ligger i `src/Hemordna.Client/wwwroot/hjalp/`: en hubb med roll
 `sv/familjen.html` för alla i familjen och `sv/hushallsansvarig.html` för den som har
 krysset "Kan ändra rum, uppgifter och medlemmar". Uppdelningen följer behörighetsgränsen,
 inte en egen indelning – se ARCHITECTURE.md "Beslut: Användarguider under /hjalp".
+
+Ingången ligger som en listrad, **Hjälp och guider**, under Hushållsöversiktens
+inställningar – synlig för alla, inte bara den som sköter hushållet. Länken bär
+`target="_blank"`, vilket inte är en stilfråga: guiderna är statiska filer i `wwwroot`, inte
+Blazor-routes, så utan det fångar routern klicket och letar efter en sida som inte finns.
+Att guiden öppnas bredvid appen är dessutom rimligt – man tappar inte var man var.
 
 Guiderna är en egen yta med egen stilmall (`assets/guide.css`), men **samma formspråk som
 appen**: tokens ur §2, Familjen Grotesk och Atkinson Hyperlegible ur §4, och appens egna

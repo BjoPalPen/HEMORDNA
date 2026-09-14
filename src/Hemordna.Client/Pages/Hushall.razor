@@ -193,6 +193,16 @@ else
                 <Icon Name="chevron-right" Size="18" />
             </a>
         </li>
+        <li class="list-item list-item-flush">
+            <!-- target="_blank" är inte en stilfråga: guiderna är statiska filer i wwwroot, inte
+                 Blazor-routes. Utan target fångar routern klicket och letar efter en sida som
+                 inte finns. Att guiden öppnas bredvid appen är dessutom rimligt - man tappar
+                 inte var man var. Se docs/ARCHITECTURE.md "Beslut: Användarguider under /hjalp". -->
+            <a href="hjalp/index.html" target="_blank" rel="noopener" class="list-row">
+                <span>Hjälp och guider</span>
+                <Icon Name="chevron-right" Size="18" />
+            </a>
+        </li>
         @if (Session.CanManageHousehold)
         {
             <li class="list-item list-item-flush">
