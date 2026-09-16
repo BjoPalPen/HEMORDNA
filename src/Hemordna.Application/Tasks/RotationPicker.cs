@@ -179,6 +179,19 @@ internal static class RotationPicker
             }
         }
 
+        // Ork: en medlem vars tak den här veckodagen är lägre än uppgiftens tyngd är inte
+        // valbar - samma mönster som RequiresAdult ovan. Fallback: finns ingen kvar som klarar
+        // tyngden, används hela den tidigare poolen igen - uppgiften behöver fortfarande en
+        // ägare. Se docs/ARCHITECTURE.md "Beslut: Ork i rotationen".
+        var withinCeiling = eligible
+            .Where(member => member.WeeklyEffortCeiling.Allows(definition.Effort, date.DayOfWeek))
+            .ToList();
+
+        if (withinCeiling.Count > 0)
+        {
+            eligible = withinCeiling;
+        }
+
         return eligible;
     }
 

@@ -88,12 +88,14 @@ public sealed class ScheduleTaskOccurrence
                     // as a side effect of automatic rotation (EnsureOccurrencesGenerated)
                     // choosing between candidates on the household's behalf, not a household
                     // member's own explicit "put this on the calendar" action.
-                    // Rumsregeln gäller även här: lägger någon till en uppgift i ett rum där
-                    // dagens arbete redan är taget, hamnar den hos samma person - se
-                    // RotationPicker och docs/ARCHITECTURE.md "Beslut: ett rum, en person, en dag".
-                    var claimedBy = definition.AreaId is { } areaId
-                        ? (await _occurrences.GetMemberIdsByAreaOnDateAsync(household.Id, date, cancellationToken))
-                            .GetValueOrDefault(areaId) ?? []
+                    // Rumsregeln gäller även här, per BESÖK: lägger någon till en uppgift i ett
+                    // rum där dagens arbete av samma besökstyp redan är taget, hamnar den hos
+                    // samma person - se RotationPicker och docs/ARCHITECTURE.md "Beslut:
+                    // rumsregeln per besök". Routine gör inga anspråk och slår inte ens upp några.
+                    var visitKind = VisitKindClassifier.Of(definition);
+                    var claimedBy = visitKind != VisitKind.Routine && definition.AreaId is { } areaId
+                        ? (await _occurrences.GetMemberIdsByAreaAndVisitKindOnDateAsync(household.Id, date, cancellationToken))
+                            .GetValueOrDefault((areaId, visitKind)) ?? []
                         : (IReadOnlyCollection<Guid>)[];
 
                     memberId = RotationPicker.PickNext(

@@ -66,8 +66,9 @@ public interface ITaskOccurrenceRepository
         CancellationToken cancellationToken);
 
     /// <summary>
-    /// Who already has work in each room on this date, keyed by area id - what
-    /// <see cref="RotationPicker"/> needs to keep one room's work for one day with one person.
+    /// Who already has work in each room on this date, keyed by (area id, <see cref="VisitKind"/>)
+    /// - what <see cref="RotationPicker"/> needs to keep one room's work for one VISIT with one
+    /// person - see docs/ARCHITECTURE.md "Beslut: rumsregeln per besök".
     /// </summary>
     /// <remarks>
     /// Counts <see cref="TaskOccurrenceStatus.Completed"/> as well as
@@ -80,8 +81,13 @@ public interface ITaskOccurrenceRepository
     /// time" is not a claim on the room, and nobody went there.
     /// </para>
     /// <para>Tasks with no area of their own ("Övrigt") are absent: there is no room to hold together.</para>
+    /// <para>
+    /// <see cref="VisitKind.Routine"/> rows are never returned - a daily routine (e.g. doing the
+    /// dishes) makes no claim on the room at all and is never bound by this rule, so a caller
+    /// must not even look one up for a <see cref="VisitKind.Routine"/> task.
+    /// </para>
     /// </remarks>
-    Task<IReadOnlyDictionary<Guid, IReadOnlyCollection<Guid>>> GetMemberIdsByAreaOnDateAsync(
+    Task<IReadOnlyDictionary<(Guid AreaId, VisitKind Kind), IReadOnlyCollection<Guid>>> GetMemberIdsByAreaAndVisitKindOnDateAsync(
         Guid householdId,
         DateOnly date,
         CancellationToken cancellationToken);

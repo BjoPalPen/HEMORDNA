@@ -3357,6 +3357,77 @@ placerad direkt ovanför "Anpassa tid per veckodag" och med samma form: sju rade
 "Spara"-knapp. Döljs helt för den som saknar `CanManageHousehold`, som resten av
 medlemskonfigurationen i samma ark.
 
+### Beslut: Besökstyp härleds — `IMPLEMENTED`
+
+Bakgrund: "ett rum, en person, en dag" (se det beslutet ovan) räknade allt arbete i ett rum lika.
+Den som fick den dagliga disken i köket fick därför automatiskt köksstädningen samma dag - fel
+enligt Björn, eftersom en daglig rutin och en veckostädning inte är samma sorts besök i rummet.
+
+**`VisitKind`: `Routine` / `DeepClean` / `RegularClean`, härlett - aldrig lagrat, aldrig ett
+användarval.** `VisitKindClassifier.Of(TaskDefinition)` (Domain, ren funktion):
+
+| Besök | Villkor |
+|---|---|
+| `Routine` | `Recurrence.Frequency == Daily` och `Interval == 1` |
+| `DeepClean` | inte `Routine` OCH `Effort == Heavy` |
+| `RegularClean` | allt annat |
+
+**`Routine` vinner över `Heavy`.** En daglig uppgift (intervall 1) klassas som `Routine` även om
+den råkar vara märkt Heavy - villkoren testas i den ordningen avsiktligt (se testet
+`Routine_wins_over_effort_even_when_the_task_is_heavy`). En daglig rutin är per definition kort
+och återkommande nog att aldrig binda ett helt rum, oavsett vad hushållet råkat sätta för tyngd
+på den.
+
+**Varför en överload som tar `(RecurrenceRule?, TaskEffort)` i stället för bara `TaskDefinition`.**
+`ITaskOccurrenceRepository.GetMemberIdsByAreaAndVisitKindOnDateAsync` (se nästa beslut) måste
+klassificera rader som kommer direkt från en SQL-join (`Recurrence`/`Effort`-kolumnerna), utan att
+kunna konstruera en full `TaskDefinition` (dess konstruktor är privat). `Of(TaskDefinition)` är en
+tunn wrapper ovanpå samma logik, så det finns bara EN regel att hålla i synk.
+
+### Beslut: rumsregeln per besök — `IMPLEMENTED`
+
+**Detta ändrar "ett rum, en person, en dag" (ovan) på ett sätt som är värt att vara tydlig om:**
+anspråket på ett rum gäller nu per `(AreaId, VisitKind)`, inte per rum. Björns egen ursprungliga
+regel ("har någon redan arbete i rummet får de resten") gäller fortfarande - bara nu skopad till
+samma BESÖK, inte till rummet i sin helhet.
+
+**`Routine` gör inga anspråk och binds inte av regeln.** En daglig disk i köket tar inte
+köksstädningen samma dag, och tvärtom - de roterar eller har fast ägare precis som vanligt, helt
+utanför rumsregeln. Det gäller åt båda hållen: en `Routine`-uppgift varken LÄSER eller SKRIVER ett
+anspråk (`EnsureOccurrencesGenerated.ScheduleGeneratedOccurrenceAsync` slår inte ens upp
+`roomClaims` när `VisitKindClassifier.Of(definition) == VisitKind.Routine`).
+
+**Ett badrums veckostäd (`RegularClean`) och storstäd (`DeepClean`) samma dag kan hamna hos olika
+personer**, eftersom de är två olika besök trots samma rum och datum - se testet
+`A_weekly_clean_and_a_deep_clean_in_the_same_room_can_go_to_different_people`.
+
+**`ITaskOccurrenceRepository.GetMemberIdsByAreaAndVisitKindOnDateAsync`** ersätter den gamla
+`GetMemberIdsByAreaOnDateAsync` - nyckeln är nu `(AreaId, VisitKind)` i stället för bara `AreaId`.
+Fortsätter räkna `Planned` OCH `Completed`, aldrig `Skipped` - exakt samma skäl som förut (se
+kommentaren i `ITaskOccurrenceRepository`): den som är klar med sitt besök i rummet har fortfarande
+gjort anspråk på det. Rader vars härledda `VisitKind` är `Routine` filtreras bort helt innan de
+ens grupperas - dessa uppgifter ska aldrig kunna binda ett annat besök i samma rum.
+
+**Gäller båda vägarna in i schemat:** både `EnsureOccurrencesGenerated` (automatisk generering)
+och `ScheduleTaskOccurrence` (manuell schemaläggning) härleder `VisitKind` och slår upp/binder på
+samma sätt.
+
+### Beslut: Ork i rotationen — `IMPLEMENTED`
+
+`RotationPicker.EligibleMembers` (delad av både `PickNext` och `RebalanceTaskAssignments`) snävar
+nu in poolen ytterligare en gång: en medlem vars `WeeklyEffortCeiling` den aktuella veckodagen är
+lägre än uppgiftens `Effort` är inte valbar. Exakt samma mönster som `RequiresAdult`-narrowingen
+strax ovanför i samma metod - en INSNÄVNING, aldrig en utvidgning, och med samma fallback:
+**finns ingen valbar kvar, används hela den tidigare poolen igen** - uppgiften behöver
+fortfarande en ägare (se `Nobody_meeting_the_days_effort_ceiling_still_gets_the_task_assigned`).
+
+En uppgift med fast ägare (`DefaultResponsibleMemberId`, ingen rotation) påverkas inte alls -
+ork-taket är en ROTATIONS-regel, precis som `RequiresAdult` och rumsregeln.
+
+Eftersom insnävningen ligger i den delade `EligibleMembers`, gäller den automatiskt även
+`RebalanceTaskAssignments` (ombalansera ansvar) - en reassignment kan aldrig hamna på någon vars
+tak den dagen inte tillåter uppgiftens tyngd.
+
 | Fråga | Varför den väntar |
 |---|---|
 | Offline-strategi bortom read-only cache | Utanför MVP; får inte låsas in i förväg |

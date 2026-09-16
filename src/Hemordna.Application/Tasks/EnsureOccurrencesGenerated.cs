@@ -77,7 +77,7 @@ public sealed class EnsureOccurrencesGenerated
         // Same idea, scoped to one calendar date at a time and loaded lazily, one date at a
         // time, as generation actually reaches it - see RotationPicker's daily-cap remarks.
         var assignedMinutesByDate = new Dictionary<DateOnly, Dictionary<Guid, int>>();
-        var roomClaimsByDate = new Dictionary<DateOnly, Dictionary<Guid, IReadOnlyCollection<Guid>>>();
+        var roomClaimsByDate = new Dictionary<DateOnly, Dictionary<(Guid AreaId, VisitKind Kind), IReadOnlyCollection<Guid>>>();
 
         var lookbackStart = today.AddDays(-LookbackDays);
 
@@ -124,7 +124,7 @@ public sealed class EnsureOccurrencesGenerated
         DateOnly today,
         Dictionary<Guid, int> assignedMinutesByMember,
         Dictionary<DateOnly, Dictionary<Guid, int>> assignedMinutesByDate,
-        Dictionary<DateOnly, Dictionary<Guid, IReadOnlyCollection<Guid>>> roomClaimsByDate,
+        Dictionary<DateOnly, Dictionary<(Guid AreaId, VisitKind Kind), IReadOnlyCollection<Guid>>> roomClaimsByDate,
         HashSet<(Guid MemberId, DateOnly Date)> daysOff,
         Dictionary<Guid, int> creditMinutes,
         CancellationToken cancellationToken)
@@ -170,7 +170,7 @@ public sealed class EnsureOccurrencesGenerated
         DateOnly today,
         Dictionary<Guid, int> assignedMinutesByMember,
         Dictionary<DateOnly, Dictionary<Guid, int>> assignedMinutesByDate,
-        Dictionary<DateOnly, Dictionary<Guid, IReadOnlyCollection<Guid>>> roomClaimsByDate,
+        Dictionary<DateOnly, Dictionary<(Guid AreaId, VisitKind Kind), IReadOnlyCollection<Guid>>> roomClaimsByDate,
         HashSet<(Guid MemberId, DateOnly Date)> daysOff,
         Dictionary<Guid, int> creditMinutes,
         CancellationToken cancellationToken)
@@ -248,7 +248,7 @@ public sealed class EnsureOccurrencesGenerated
         DateOnly today,
         Dictionary<Guid, int> assignedMinutesByMember,
         Dictionary<DateOnly, Dictionary<Guid, int>> assignedMinutesByDate,
-        Dictionary<DateOnly, Dictionary<Guid, IReadOnlyCollection<Guid>>> roomClaimsByDate,
+        Dictionary<DateOnly, Dictionary<(Guid AreaId, VisitKind Kind), IReadOnlyCollection<Guid>>> roomClaimsByDate,
         HashSet<(Guid MemberId, DateOnly Date)> daysOff,
         Dictionary<Guid, int> creditMinutes,
         CancellationToken cancellationToken)
@@ -261,12 +261,22 @@ public sealed class EnsureOccurrencesGenerated
             var assignedMinutesOnDate = await GetOrLoadAssignedMinutesOnDateAsync(
                 household.Id, date, assignedMinutesByDate, cancellationToken);
 
-            var roomClaims = await GetOrLoadRoomClaimsOnDateAsync(
-                household.Id, date, roomClaimsByDate, cancellationToken);
+            // Besökstyp härleds här, inte lagras - samma klassificering som placeringsalgoritmen
+            // och rumsregeln nedan delar. Se docs/ARCHITECTURE.md "Beslut: Besökstyp härleds".
+            var visitKind = VisitKindClassifier.Of(definition);
 
-            var claimedBy = definition.AreaId is { } areaId
-                ? roomClaims.GetValueOrDefault(areaId) ?? []
-                : (IReadOnlyCollection<Guid>)[];
+            // Routine-uppgifter gör inga anspråk och binds inte av rumsregeln - de roterar eller
+            // har fast ägare som vanligt, utan att ens slå upp vem som redan är i rummet. Se
+            // docs/ARCHITECTURE.md "Beslut: rumsregeln per besök".
+            Dictionary<(Guid AreaId, VisitKind Kind), IReadOnlyCollection<Guid>>? roomClaims = null;
+            IReadOnlyCollection<Guid> claimedBy = [];
+
+            if (visitKind != VisitKind.Routine && definition.AreaId is { } visitAreaId)
+            {
+                roomClaims = await GetOrLoadRoomClaimsOnDateAsync(
+                    household.Id, date, roomClaimsByDate, cancellationToken);
+                claimedBy = roomClaims.GetValueOrDefault((visitAreaId, visitKind)) ?? [];
+            }
 
             var pick = RotationPicker.PickNext(
                 household, definition, assignedMinutesByMember, assignedMinutesOnDate, date, daysOff, creditMinutes,
@@ -287,16 +297,18 @@ public sealed class EnsureOccurrencesGenerated
                 assignedMinutesOnDate[result.MemberId] =
                     assignedMinutesOnDate.GetValueOrDefault(result.MemberId) + definition.EstimatedMinutes;
 
-                // Rummet är nu taget av den här personen för den här dagen, så nästa uppgift i
-                // samma rum i samma batch hamnar hos dem - samma anledning som
-                // assignedMinutesByMember uppdateras in place ovan.
-                if (definition.AreaId is { } claimedAreaId)
+                // Rummet är nu taget av den här personen för det här BESÖKET den här dagen, så
+                // nästa uppgift av samma besökstyp i samma rum i samma batch hamnar hos dem -
+                // samma anledning som assignedMinutesByMember uppdateras in place ovan. Aldrig
+                // för Routine (roomClaims är null då - se ovan).
+                if (roomClaims is not null && definition.AreaId is { } claimedAreaId)
                 {
-                    var claimants = roomClaims.TryGetValue(claimedAreaId, out var existing)
+                    var claimKey = (claimedAreaId, visitKind);
+                    var claimants = roomClaims.TryGetValue(claimKey, out var existing)
                         ? new HashSet<Guid>(existing)
                         : [];
                     claimants.Add(result.MemberId);
-                    roomClaims[claimedAreaId] = claimants;
+                    roomClaims[claimKey] = claimants;
                 }
 
                 // "Tid i förväg" actually changed who got this occurrence - record it as spent,
@@ -361,10 +373,10 @@ public sealed class EnsureOccurrencesGenerated
     /// <see cref="GetOrLoadAssignedMinutesOnDateAsync"/>, och av samma skäl: den andra uppgiften
     /// i ett rum måste se den första, även när båda skapas i samma svep.
     /// </summary>
-    private async Task<Dictionary<Guid, IReadOnlyCollection<Guid>>> GetOrLoadRoomClaimsOnDateAsync(
+    private async Task<Dictionary<(Guid AreaId, VisitKind Kind), IReadOnlyCollection<Guid>>> GetOrLoadRoomClaimsOnDateAsync(
         Guid householdId,
         DateOnly date,
-        Dictionary<DateOnly, Dictionary<Guid, IReadOnlyCollection<Guid>>> roomClaimsByDate,
+        Dictionary<DateOnly, Dictionary<(Guid AreaId, VisitKind Kind), IReadOnlyCollection<Guid>>> roomClaimsByDate,
         CancellationToken cancellationToken)
     {
         if (roomClaimsByDate.TryGetValue(date, out var forDate))
@@ -372,8 +384,8 @@ public sealed class EnsureOccurrencesGenerated
             return forDate;
         }
 
-        forDate = new Dictionary<Guid, IReadOnlyCollection<Guid>>(
-            await _occurrences.GetMemberIdsByAreaOnDateAsync(householdId, date, cancellationToken));
+        forDate = new Dictionary<(Guid AreaId, VisitKind Kind), IReadOnlyCollection<Guid>>(
+            await _occurrences.GetMemberIdsByAreaAndVisitKindOnDateAsync(householdId, date, cancellationToken));
         roomClaimsByDate[date] = forDate;
 
         return forDate;
