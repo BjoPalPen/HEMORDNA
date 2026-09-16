@@ -32,13 +32,19 @@ public sealed record DailyPlan(
     DateOnly Date,
     int AvailableMinutes,
     IReadOnlyList<PlannedTask> Items,
-    IReadOnlyList<UnplannedTask> Unplanned)
+    IReadOnlyList<UnplannedTask> Unplanned,
+    int CompletedMinutes = 0)
 {
     /// <summary>Total estimated minutes of everything in <see cref="Items"/>.</summary>
     public int PlannedMinutes => Items.Sum(item => item.Candidate.EstimatedMinutes);
 
-    /// <summary>Minutes of the budget still unused.</summary>
-    public int RemainingMinutes => AvailableMinutes - PlannedMinutes;
+    /// <summary>
+    /// Minutes of the budget still unused: the day's time, less what is already done today and
+    /// what is planned. <see cref="AvailableMinutes"/> deliberately stays the whole day's time -
+    /// the client builds an extra task's new time on it, and would otherwise count what is done
+    /// twice.
+    /// </summary>
+    public int RemainingMinutes => AvailableMinutes - CompletedMinutes - PlannedMinutes;
 
     /// <summary>True when there is nothing to do today.</summary>
     public bool IsEmpty => Items.Count == 0;

@@ -70,7 +70,11 @@ public sealed class DailyPlanner
         var remaining = request.Candidates.Where(candidate => IsEligible(candidate, date)).ToList();
         var items = new List<PlannedTask>(remaining.Count);
         var unplanned = new List<UnplannedTask>();
-        var remainingMinutes = request.AvailableMinutes;
+        // What is already ticked off today has used today's time. Without this, every
+        // completion freed time, and since Idag re-fetches the plan after each one the planner
+        // refilled the day: "4 kvar", two ticked off, "5 kvar" - the day never ended. See
+        // docs/ARCHITECTURE.md "Beslut: avbockat räknas av dagens tid".
+        var remainingMinutes = Math.Max(0, request.AvailableMinutes - request.CompletedMinutes);
         var chosenClusters = new HashSet<string>();
 
         while (remaining.Count > 0)
@@ -111,7 +115,7 @@ public sealed class DailyPlanner
             unplanned.Add(new UnplannedTask(next, reason));
         }
 
-        return new DailyPlan(request.MemberId, date, request.AvailableMinutes, items, unplanned);
+        return new DailyPlan(request.MemberId, date, request.AvailableMinutes, items, unplanned, request.CompletedMinutes);
     }
 
     private static bool IsInAnAlreadyChosenCluster(PlanCandidate candidate, HashSet<string> chosenClusters)

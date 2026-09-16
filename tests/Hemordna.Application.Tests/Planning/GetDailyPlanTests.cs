@@ -114,6 +114,66 @@ public class GetDailyPlanTests
         Assert.Equal(UnplannedReason.NoTimeAvailable, Assert.Single(plan.Unplanned).Reason);
     }
 
+    private TaskOccurrence GiveMemberTaskAndReturn(Guid householdId, Guid memberId, string name, int minutes, bool extra = false)
+    {
+        var definition = TaskDefinition.Create(householdId, name, minutes, Now);
+        var occurrence = definition.ScheduleFor(Friday, Now, addedAsExtra: extra);
+        occurrence.AssignTo(memberId);
+
+        _candidates.AssignToMember(memberId, new PlanCandidate(occurrence, name));
+        return occurrence;
+    }
+
+    /// <summary>
+    /// Björn, 2026-09-16: "det kan stå 4 uppgifter när jag börjar och när jag bockat av två så
+    /// står det att det är fem kvar". Idag hämtar om planen efter varje avbockning, och
+    /// planeraren fick hela dagens tid mot bara de ogjorda uppgifterna - så varje avbockning
+    /// frigjorde tid som fylldes på igen. Det avbockade måste räknas av.
+    /// </summary>
+    [Fact]
+    public async Task Ticking_tasks_off_never_makes_the_list_longer()
+    {
+        var (householdId, member) = await ArrangeHouseholdAsync(fridayMinutes: 40);
+        var first = GiveMemberTaskAndReturn(householdId, member.Id, "Diska", 10);
+        var second = GiveMemberTaskAndReturn(householdId, member.Id, "Torka bänkar", 10);
+        GiveMemberTaskAndReturn(householdId, member.Id, "Dammsug", 10);
+        GiveMemberTaskAndReturn(householdId, member.Id, "Vädra", 10);
+        // Det som inte får plats på morgonen - och som förut smög in efter varje avbockning.
+        GiveMemberTaskAndReturn(householdId, member.Id, "Putsa spegeln", 10);
+        GiveMemberTaskAndReturn(householdId, member.Id, "Damma hyllor", 10);
+
+        var morning = await CreateUseCase().HandleAsync(householdId, member.Id, Friday, CancellationToken.None);
+        Assert.NotNull(morning);
+        Assert.Equal(4, morning.Plan.Items.Count);
+
+        first.Complete(member.Id, Now);
+        second.Complete(member.Id, Now);
+
+        var later = await CreateUseCase().HandleAsync(householdId, member.Id, Friday, CancellationToken.None);
+
+        Assert.NotNull(later);
+        Assert.Equal(2, later.Plan.Items.Count);
+        Assert.Equal(40, later.Plan.AvailableMinutes);
+        Assert.Equal(0, later.Plan.RemainingMinutes);
+    }
+
+    /// <summary>En extra uppgift är arbete utöver planen - den får inte knuffa bort en planerad
+    /// uppgift från dagen.</summary>
+    [Fact]
+    public async Task A_completed_extra_task_does_not_push_planned_work_off_the_day()
+    {
+        var (householdId, member) = await ArrangeHouseholdAsync(fridayMinutes: 20);
+        GiveMemberTaskAndReturn(householdId, member.Id, "Diska", 10);
+        GiveMemberTaskAndReturn(householdId, member.Id, "Vädra", 10);
+        var extra = GiveMemberTaskAndReturn(householdId, member.Id, "Rensa kylen", 15, extra: true);
+        extra.Complete(member.Id, Now);
+
+        var day = await CreateUseCase().HandleAsync(householdId, member.Id, Friday, CancellationToken.None);
+
+        Assert.NotNull(day);
+        Assert.Equal(2, day.Plan.Items.Count);
+    }
+
     [Fact]
     public async Task A_member_with_nothing_to_do_gets_an_empty_plan()
     {
@@ -269,8 +329,16 @@ public class MemberDayCompletionTests
         Assert.False(day.IsDayComplete);
     }
 
+    /// <summary>
+    /// Upphäver ett tidigare beslut som bara fanns i det här testets kommentar: att en avklarad
+    /// uppgift frigör tid så att nästa får plats. Det var exakt mekanismen bakom Björns rapport
+    /// ("4 kvar, två avbockade, 5 kvar"). Dagen ska kunna ta slut. Vill man göra mer finns två
+    /// uttryckliga vägar - "Extra uppgift" och "Ta fram morgondagens uppgift" - så mer arbete är
+    /// ett val, aldrig något som dyker upp av sig självt. Se docs/ARCHITECTURE.md
+    /// "Beslut: avbockat räknas av dagens tid".
+    /// </summary>
     [Fact]
-    public async Task A_finished_task_no_longer_takes_room_in_the_budget()
+    public async Task A_finished_task_still_counts_against_the_days_time()
     {
         var (householdId, member) = await ArrangeAsync();
         var done = GiveTask(householdId, member.Id, "Klar", 25);
@@ -279,10 +347,12 @@ public class MemberDayCompletionTests
 
         var day = await CreateUseCase().HandleAsync(householdId, member.Id, Friday, CancellationToken.None);
 
-        // Without completion the 20-minute task would not have fitted beside the 25-minute one.
+        // 25 av dagens minuter är redan använda - de 20 minuterna ryms inte i det som är kvar.
         Assert.NotNull(day);
-        Assert.Equal("Kvar", Assert.Single(day.Plan.Items).Candidate.TaskName);
-        Assert.Empty(day.Plan.Unplanned);
+        Assert.Empty(day.Plan.Items);
+        var left = Assert.Single(day.Plan.Unplanned);
+        Assert.Equal("Kvar", left.Candidate.TaskName);
+        Assert.Equal(UnplannedReason.ExceedsRemainingTime, left.Reason);
     }
 
     [Fact]

@@ -3179,6 +3179,36 @@ av allt.
 gäller framåt. Att flytta om dagens redan utlagda arbete hade gett någon mer att göra än de
 räknat med, mitt på dagen.
 
+### Beslut: avbockat räknas av dagens tid — `IMPLEMENTED`
+
+Björn, 2026-09-16: *"När jag börjar bocka av uppgifter så verkar de bli flera, det kan stå 4
+uppgifter när jag börjar och när jag bockat av två så står det att det är fem kvar."*
+
+**Orsaken.** Idag hämtar om planen efter varje avbockning (`MinDag.CompleteAsync` →
+`LoadDayAsync`). `GetDailyPlan` gav `DailyPlanner` hela dagens tid, men bara de uppgifter som
+fortfarande var ogjorda. Det avbockade drogs aldrig av, så varje avbockning frigjorde tid som
+planeraren genast fyllde med nästa uppgift. Dagen tog aldrig slut.
+
+**Detta upphäver ett tidigare beslut** som bara fanns i ett testnamn,
+`A_finished_task_no_longer_takes_room_in_the_budget`, med kommentaren *"Without completion the
+20-minute task would not have fitted beside the 25-minute one"* - alltså att en avklarad
+uppgift *ska* frigöra tid. Det var exakt mekanismen bakom rapporten. Principen nu: **mer arbete
+är ett val, aldrig något som dyker upp av sig självt.** Den som är klar tidigt har redan två
+uttryckliga vägar - *Extra uppgift* och *Ta fram morgondagens uppgift*.
+
+**Så fungerar det.** `DailyPlanRequest` och `DailyPlan` bär `CompletedMinutes`; planeraren
+startar på `AvailableMinutes - CompletedMinutes` (aldrig under noll). `AvailableMinutes` är
+medvetet oförändrat hela dagens tid, eftersom klienten bygger en extra uppgifts nya tid på det
+(`MinDag.razor`, `(_day.AvailableMinutes) + extra`) - ändrades betydelsen skulle det avbockade
+dras av två gånger. `RemainingMinutes` räknar in det avbockade.
+
+**Extra uppgifter räknas inte av.** De är arbete utöver planen och ger redan "tid i förväg".
+Räknades de av skulle en extra insats knuffa bort en planerad uppgift från dagen - att göra mer
+skulle se ut som att man fick mindre gjort.
+
+Nytt test kodar Björns scenario - fyra ryms, två bockas av, listan ska visa två och aldrig
+fler - och faller utan rättningen (`Expected: 2, Actual: 4`).
+
 | Fråga | Varför den väntar |
 |---|---|
 | Offline-strategi bortom read-only cache | Utanför MVP; får inte låsas in i förväg |
