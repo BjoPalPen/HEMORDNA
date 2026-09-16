@@ -19,4 +19,5 @@ public sealed record DailyPlanRequest(
     Guid MemberId,
     DateOnly Date,
     int AvailableMinutes,
-    IReadOnlyCollection<PlanCandidate> Candidates);
+    IReadOnlyCollection<PlanCandidate> Candidates,
+    int CompletedMinutes = 0);

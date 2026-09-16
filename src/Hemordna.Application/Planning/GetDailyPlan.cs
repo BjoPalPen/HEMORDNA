@@ -68,7 +68,14 @@ public sealed class GetDailyPlan
         var completed =
             await _candidates.FindCompletedForMemberOnAsync(householdId, memberId, date, cancellationToken);
 
-        var plan = _planner.Plan(new DailyPlanRequest(memberId, date, availableMinutes, candidates));
+        // An extra task is work BEYOND the plan and already earns "tid i förväg". Counting it
+        // would let one extra effort push a planned task off today - doing more would look like
+        // getting less done.
+        var completedMinutes = completed
+            .Where(candidate => !candidate.Occurrence.AddedAsExtra)
+            .Sum(candidate => candidate.EstimatedMinutes);
+
+        var plan = _planner.Plan(new DailyPlanRequest(memberId, date, availableMinutes, candidates, completedMinutes));
 
         var isDayOff = await _daysOff.FindAsync(householdId, memberId, date, cancellationToken) is not null;
 
