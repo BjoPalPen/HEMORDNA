@@ -3209,6 +3209,105 @@ skulle se ut som att man fick mindre gjort.
 Nytt test kodar Björns scenario - fyra ryms, två bockas av, listan ska visa två och aldrig
 fler - och faller utan rättningen (`Expected: 2, Actual: 4`).
 
+### Beslut: Tyngd per uppgift — `IMPLEMENTED`
+
+Bakgrund: Helena jobbar heltid och vill ha **lätta** uppgifter på vardagar och ta de **tunga** på
+helgen - tid ensamt fångar inte det. Se "Bakgrund" i det ursprungliga uppdraget
+(`feat/planera-veckan-och-ork`) för Björns fulla resonemang.
+
+**Tre nivåer, aldrig en siffra.** `TaskDefinition.Effort` är ett nytt enum, `TaskEffort { Light,
+Medium, Heavy }`, med UI-etiketterna **Lätt**, **Mellan**, **Tung**. Samma skäl som styr att
+`DailyPlanner` aldrig visar en poängsumma - PRODUCT.md §8 förbjuder poängtavlor och jämförelser
+mellan medlemmar, och en siffra (`1`/`2`/`3`) hade oundvikligen börjat läsas som en sådan.
+Domänmetoden `TaskDefinition.ChangeEffort` validerar `Enum.IsDefined`, samma mönster som
+`ChangePriority`.
+
+**Effort snapshottas INTE på `TaskOccurrence`.** Till skillnad från `EstimatedMinutes`,
+`Priority` och `CanBeDeferred` - som kopieras vid schemaläggning eftersom de är vad en person
+faktiskt ser den dagen - läses `Effort` alltid live från `TaskDefinition`, precis som
+`HasRotatingResponsibility`, `AreaId` och `RequiresAdult` redan gör under generering. Skälet:
+`VisitKindOf` (se "Beslut: Besökstyp härleds" nedan) och placeringsalgoritmen (§ "Planera
+veckan") behöver alltid den AKTUELLA klassificeringen av en uppgift, inte ett historiskt
+ögonblick - en uppgift vars tyngd ändras i efterhand ska genast räknas om i nästa körning, inte
+förbli låst vid vad den var när den senast schemalades.
+
+**Migration `AddTaskEffort`: alla befintliga uppgifter får `Medium`.** Kolumnens `defaultValue`
+sattes manuellt till `1` (Medium) i den genererade migrationen i stället för EF:s egna CLR-
+default (`0` = Light) - samma mönster som `AddCanManageHousehold`, fast enklare: här gäller
+samma värde för ALLA befintliga rader, så ingen efterföljande `UPDATE`-sats behövs. Verifierat i
+dev: `ALTER TABLE "TaskDefinitions" ADD "Effort" integer NOT NULL DEFAULT 1;`.
+
+**API och behörighet.** `CreateTaskRequest.Effort` (default `Medium`) och
+`TaskDefinitionResponse.Effort`, plus `PUT .../tasks/{id}/effort` bakom `HouseholdManageFilter` -
+tyngd är hushållskonfiguration, precis som tid (`estimated-minutes`) och frekvens.
+
+**Klienten håller sin egen kopia av enumet** (`Hemordna.Client.Support.TaskEffort`), samma
+mönster som `HouseholdRole` redan gör där - klienten refererar aldrig `Hemordna.Domain` (se
+lagerregeln i `CLAUDE.md` §2), och enum-fält går över tråden som vanliga strängar (se
+`ApiContracts.cs`s egen kommentar om varför).
+
+**Klassificering av mallarnas uppgifter.** Riktlinje: korta dagliga rutiner → Lätt,
+skura/skrubba/rengöra ugn/avfrosta/putsa fönster/storstädning → Tung, resten → Mellan. Björn
+granskar tabellen nedan - allt är fritt redigerbart per uppgift efteråt, precis som tidsförslaget
+redan är.
+
+| Rum | Uppgift | Tyngd |
+|---|---|---|
+| Litet wc | Torka av handfatet | Lätt |
+| Litet wc | Rengör toalettstolen | Mellan |
+| Litet wc | Putsa spegeln | Lätt |
+| Litet wc | Damma hyllor | Lätt |
+| Litet wc | Dammsug golvet | Mellan |
+| Litet wc | Torka golvet | Mellan |
+| Badrum | Torka av handfatet | Lätt |
+| Badrum | Rengör toalettstolen | Mellan |
+| Badrum | Skrubba dusch eller badkar | Tung |
+| Badrum | Putsa spegeln | Lätt |
+| Badrum | Damma hyllor | Lätt |
+| Badrum | Byt handdukar | Lätt |
+| Badrum | Dammsug golvet | Mellan |
+| Badrum | Torka golvet | Mellan |
+| Kök | Diska eller töm diskmaskinen | Lätt |
+| Kök | Torka av bänkarna | Lätt |
+| Kök | Rengör spisen | Mellan |
+| Kök | Töm soptunnan | Lätt |
+| Kök | Dammsug golvet | Mellan |
+| Kök | Torka golvet | Mellan |
+| Sovrum | Bädda sängen | Lätt |
+| Sovrum | Vädra rummet | Lätt |
+| Sovrum | Dammsug golvet | Mellan |
+| Sovrum | Torka golvet | Mellan |
+| Sovrum | Damma ytor | Lätt |
+| Sovrum | Plocka undan kläder | Lätt |
+| Sovrum | Torka lister | Mellan |
+| Sovrum | Tvätta fönster | Tung |
+| Vardagsrum / Allrum | Dammsug golvet | Mellan |
+| Vardagsrum / Allrum | Damma ytor | Lätt |
+| Vardagsrum / Allrum | Plocka undan | Lätt |
+| Vardagsrum / Allrum | Vädra rummet | Lätt |
+| Matrum | Torka av bordet | Lätt |
+| Matrum | Dammsug golvet | Mellan |
+| Matrum | Damma ytor | Lätt |
+| Hall | Dammsug eller sopa golvet | Mellan |
+| Hall | Torka golvet | Mellan |
+| Hall | Ställ i ordning skorna | Lätt |
+| Hall | Släng gammal post och reklam | Lätt |
+| Tvättstuga | Dammsug golvet | Mellan |
+| Tvättstuga | Torka golvet | Mellan |
+| Tvättstuga | Töm luddfiltret i torktumlaren | Lätt |
+| Tvättstuga | Rengör tvättmaskinens tvättmedelsfack | Mellan |
+| Kontor | Dammsug golvet | Mellan |
+| Kontor | Damma ytor | Lätt |
+| Kontor | Plocka undan skrivbordet | Lätt |
+| Övrigt (`GeneralTaskTemplates`) | Handla mat | Mellan |
+| Övrigt | Tvätta och lägga in tvätt | Mellan |
+| Övrigt | Betala räkningar | Lätt |
+| Övrigt | Sortera och lämna återvinning | Mellan |
+| Övrigt | Vattna växter | Lätt |
+| Övrigt | Rasta hunden | Mellan *(20 min utomhus dagligen - ett genuint pass, inte en kort rutin som bädda/vädra)* |
+| Övrigt | Byta kattlåda | Mellan |
+| Övrigt | Rensa kylskåpet | Mellan |
+
 | Fråga | Varför den väntar |
 |---|---|
 | Offline-strategi bortom read-only cache | Utanför MVP; får inte låsas in i förväg |

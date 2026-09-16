@@ -58,6 +58,7 @@ public sealed class CreateTaskDefinition
 
         definition.ChangeDescription(request.Description);
         definition.ChangePriority(request.Priority);
+        definition.ChangeEffort(request.Effort);
         definition.AssignToArea(request.AreaId);
         definition.SetDefaultResponsibleMember(request.DefaultResponsibleMemberId);
         definition.SetPreferredWeekday(request.PreferredWeekday);
@@ -88,4 +89,5 @@ public sealed record NewTaskDefinition(
     bool RequiresMultiplePeople = false,
     bool RequiresAdult = false,
     RecurrenceRule? Recurrence = null,
-    int? StaleAfterDays = null);
+    int? StaleAfterDays = null,
+    TaskEffort Effort = TaskEffort.Medium);

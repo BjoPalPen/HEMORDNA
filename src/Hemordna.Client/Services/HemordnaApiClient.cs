@@ -436,6 +436,25 @@ public sealed class HemordnaApiClient
             : null;
     }
 
+    /// <summary>How much the task takes out of whoever does it - see TaskEffort. Household
+    /// configuration, same authorization as time and frequency.</summary>
+    public async Task<TaskDefinitionResponse?> ChangeTaskEffortAsync(
+        Guid householdId,
+        Guid taskId,
+        string effort,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Put, $"api/households/{householdId}/tasks/{taskId}/effort", cancellationToken);
+        request.Content = JsonContent.Create(new { effort });
+
+        var response = await _http.SendAsync(request, cancellationToken);
+
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<TaskDefinitionResponse>(cancellationToken)
+            : null;
+    }
+
     public async Task<AreaResponse?> RenameAreaAsync(
         Guid householdId,
         Guid areaId,

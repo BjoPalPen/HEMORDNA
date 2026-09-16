@@ -89,6 +89,32 @@
             <button type="button" class="btn btn-link" @onclick="BackToOptions">Avbryt</button>
             break;
 
+        case View.Effort:
+            <div class="field">
+                <span>Hur tung är uppgiften?</span>
+                <div class="level-picker">
+                    @foreach (var level in EffortLevel.All)
+                    {
+                        <button type="button"
+                                class="@(_effort == level.Effort ? "btn btn-primary" : "btn btn-secondary")"
+                                @onclick="() => _effort = level.Effort">
+                            @level.Label
+                        </button>
+                    }
+                </div>
+            </div>
+
+            @if (_message is { } effortMessage)
+            {
+                <div class="notice notice-problem" role="alert">@effortMessage</div>
+            }
+
+            <button type="button" class="btn btn-primary btn-block" disabled="@_busy" @onclick="SaveEffortAsync">
+                @(_busy ? "Sparar..." : "Spara")
+            </button>
+            <button type="button" class="btn btn-link" @onclick="BackToOptions">Avbryt</button>
+            break;
+
         case View.Room:
             <label class="field">
                 <span>Rum</span>
@@ -144,6 +170,13 @@
                             <Icon Name="chevron-right" Size="18" />
                         </button>
                     </li>
+                    <li class="list-item list-item-flush">
+                        <button type="button" class="task-options-row" @onclick="() => _view = View.Effort">
+                            <span>Tyngd</span>
+                            <span class="task-options-value muted small">@EffortSummary</span>
+                            <Icon Name="chevron-right" Size="18" />
+                        </button>
+                    </li>
                     <li class="list-item">
                         <span class="list-name">Kräver vuxen</span>
                         <label class="field-check">
@@ -167,7 +200,7 @@
 </BottomSheet>
 
 @code {
-    private enum View { Options, Frequency, Assignment, Time, Room }
+    private enum View { Options, Frequency, Assignment, Time, Room, Effort }
 
     [Parameter, EditorRequired]
     public Guid HouseholdId { get; set; }
@@ -197,6 +230,7 @@
     private string _assignmentMemberId = string.Empty;
     private int _estimatedMinutes = TimeLevel.All[0].Minutes;
     private string _roomAreaId = string.Empty;
+    private TaskEffort _effort = TaskEffort.Medium;
     private string? _message;
     private bool _busy;
 
@@ -218,6 +252,8 @@
 
     private string RoomSummary => Areas.FirstOrDefault(a => a.Id == Task.AreaId)?.Name ?? "Övrigt";
 
+    private string EffortSummary => EffortLevel.LabelFor(Task.Effort);
+
     private string TimeSummary
         => TimeLevel.All.First(level => level.Minutes == TimeLevel.ClosestMinutes(Task.EstimatedMinutes)).Label;
 
@@ -233,6 +269,7 @@
         _assignmentMemberId = Task.DefaultResponsibleMemberId?.ToString() ?? string.Empty;
         _estimatedMinutes = TimeLevel.ClosestMinutes(Task.EstimatedMinutes);
         _roomAreaId = Task.AreaId?.ToString() ?? string.Empty;
+        _effort = Enum.TryParse<TaskEffort>(Task.Effort, out var effort) ? effort : TaskEffort.Medium;
     }
 
     private void BackToOptions()
@@ -343,6 +380,32 @@
         try
         {
             if (await Api.ChangeTaskEstimatedMinutesAsync(HouseholdId, Task.Id, _estimatedMinutes) is null)
+            {
+                _message = "Det gick inte att spara. Försök igen.";
+                return;
+            }
+
+            _view = View.Options;
+            await OnChanged.InvokeAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _message = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task SaveEffortAsync()
+    {
+        _busy = true;
+        _message = null;
+
+        try
+        {
+            if (await Api.ChangeTaskEffortAsync(HouseholdId, Task.Id, _effort.ToString()) is null)
             {
                 _message = "Det gick inte att spara. Försök igen.";
                 return;

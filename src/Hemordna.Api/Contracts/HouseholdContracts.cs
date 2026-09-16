@@ -116,7 +116,8 @@ public sealed record CreateTaskRequest(
     bool RequiresMultiplePeople = false,
     bool RequiresAdult = false,
     RecurrenceRuleContract? Recurrence = null,
-    int? StaleAfterDays = null);
+    int? StaleAfterDays = null,
+    TaskEffort Effort = TaskEffort.Medium);
 
 /// <summary>Both null means "ingen - schemaläggs för hand" - see TaskDefinition.</summary>
 public sealed record UpdateTaskFrequencyRequest(RecurrenceRuleContract? Recurrence, int? StaleAfterDays);
@@ -130,6 +131,8 @@ public sealed record MoveTaskAreaRequest(Guid? AreaId);
 public sealed record SetTaskRequiresAdultRequest(bool RequiresAdult);
 
 public sealed record ChangeTaskEstimatedMinutesRequest(int EstimatedMinutes);
+
+public sealed record ChangeTaskEffortRequest(TaskEffort Effort);
 
 public sealed record TaskDefinitionResponse(
     Guid Id,
@@ -146,7 +149,8 @@ public sealed record TaskDefinitionResponse(
     bool RequiresAdult,
     bool IsActive,
     RecurrenceRuleContract? Recurrence,
-    int? StaleAfterDays);
+    int? StaleAfterDays,
+    TaskEffort Effort);
 
 /// <summary>
 /// How a task repeats on its own. Mirrors <see cref="RecurrenceRule"/>'s own public shape -

@@ -142,7 +142,8 @@ public sealed record CreateTaskRequest(
     bool RequiresMultiplePeople,
     RecurrenceRuleContract? Recurrence,
     int? StaleAfterDays = null,
-    bool RequiresAdult = false);
+    bool RequiresAdult = false,
+    string Effort = "Medium");
 
 public sealed record TaskDefinitionResponse(
     Guid Id,
@@ -159,7 +160,8 @@ public sealed record TaskDefinitionResponse(
     bool RequiresAdult,
     bool IsActive,
     RecurrenceRuleContract? Recurrence,
-    int? StaleAfterDays);
+    int? StaleAfterDays,
+    string Effort);
 
 /// <summary>A scheduled instance of a task - only used today for the "Extra uppgift" response,
 /// since every other occurrence-returning call the client already made did not need the body.</summary>

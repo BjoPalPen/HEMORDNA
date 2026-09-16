@@ -495,7 +495,8 @@ else
                             RequiresMultiplePeople: false,
                             Recurrence: recurrence,
                             StaleAfterDays: staleAfterDays,
-                            RequiresAdult: task.AdultsOnly));
+                            RequiresAdult: task.AdultsOnly,
+                            Effort: task.Effort.ToString()));
                     }
 
                     created.Add((name, selectedTasks.Sum(t => t.EstimatedMinutes)));

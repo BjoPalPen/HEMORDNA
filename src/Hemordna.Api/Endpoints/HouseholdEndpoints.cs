@@ -114,6 +114,12 @@ internal static class HouseholdEndpoints
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status404NotFound);
 
+        // Effort is household configuration, same as time and frequency - see
+        // docs/ARCHITECTURE.md "Beslut: Vem får ändra vad".
+        manage.MapPut("/tasks/{taskId:guid}/effort", ChangeTaskEffortAsync)
+            .Produces<TaskDefinitionResponse>()
+            .Produces(StatusCodes.Status404NotFound);
+
         scoped.MapPost("/tasks/rebalance-schedule", RebalanceScheduleAsync)
             .Produces<RebalanceScheduleResponse>();
 
@@ -481,7 +487,8 @@ internal static class HouseholdEndpoints
                 request.RequiresMultiplePeople,
                 request.RequiresAdult,
                 request.Recurrence?.ToDomain(),
-                request.StaleAfterDays),
+                request.StaleAfterDays,
+                request.Effort),
             cancellationToken);
 
         return definition is null
@@ -568,6 +575,18 @@ internal static class HouseholdEndpoints
 
         var definition = await changeTaskEstimatedMinutes.HandleAsync(
             householdId, taskId, request.EstimatedMinutes, cancellationToken);
+
+        return definition is null ? Results.NotFound() : Results.Ok(ToResponse(definition));
+    }
+
+    private static async Task<IResult> ChangeTaskEffortAsync(
+        Guid householdId,
+        Guid taskId,
+        ChangeTaskEffortRequest request,
+        ChangeTaskEffort changeTaskEffort,
+        CancellationToken cancellationToken)
+    {
+        var definition = await changeTaskEffort.HandleAsync(householdId, taskId, request.Effort, cancellationToken);
 
         return definition is null ? Results.NotFound() : Results.Ok(ToResponse(definition));
     }
@@ -1133,7 +1152,8 @@ internal static class HouseholdEndpoints
             definition.RequiresAdult,
             definition.IsActive,
             definition.Recurrence is { } recurrence ? RecurrenceRuleContract.From(recurrence) : null,
-            definition.StaleAfterDays);
+            definition.StaleAfterDays,
+            definition.Effort);
 
     private static TaskOccurrenceResponse ToResponse(TaskOccurrence occurrence)
         => new(

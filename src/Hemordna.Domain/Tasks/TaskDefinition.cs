@@ -30,6 +30,7 @@ public sealed class TaskDefinition
         Name = name;
         EstimatedMinutes = estimatedMinutes;
         Priority = TaskPriority.Normal;
+        Effort = TaskEffort.Medium;
         CanBeDeferred = true;
         IsActive = true;
         CreatedAt = createdAt;
@@ -51,6 +52,14 @@ public sealed class TaskDefinition
     public int EstimatedMinutes { get; private set; }
 
     public TaskPriority Priority { get; private set; }
+
+    /// <summary>
+    /// How much this task takes out of whoever does it, independent of how long it takes - see
+    /// <see cref="TaskEffort"/>. Defaults to <see cref="TaskEffort.Medium"/> for a newly created
+    /// task, and for every task that existed before this field was introduced (see the
+    /// migration that added this column).
+    /// </summary>
+    public TaskEffort Effort { get; private set; }
 
     /// <summary>Who normally owns this task, when the household has agreed on an owner.</summary>
     public Guid? DefaultResponsibleMemberId { get; private set; }
@@ -163,6 +172,17 @@ public sealed class TaskDefinition
         => RequiresMultiplePeople = requiresMultiplePeople;
 
     public void SetRequiresAdult(bool requiresAdult) => RequiresAdult = requiresAdult;
+
+    /// <summary>Changes how much this task takes out of whoever does it - see <see cref="Effort"/>.</summary>
+    public void ChangeEffort(TaskEffort effort)
+    {
+        if (!Enum.IsDefined(effort))
+        {
+            throw new ArgumentOutOfRangeException(nameof(effort), effort, "Not a valid effort level.");
+        }
+
+        Effort = effort;
+    }
 
     /// <summary>Sets or clears the automatic recurrence. Does not touch occurrences already scheduled.</summary>
     public void SetRecurrence(RecurrenceRule? recurrence) => Recurrence = recurrence;

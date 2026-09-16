@@ -509,9 +509,10 @@ Pausa ett rum". Vid återupptagning börjar rummets uppgifter om helt vanligt, i
 - samma mönster som redan gäller för hushålls-/medlemspaus.
 
 Att trycka på en uppgift öppnar `Components/TaskOptionsSheet.razor`:
-Upprepning/Vem gör det/Tid/Rum som varsin rad som drillar ner till ett eget litet formulär inuti
-samma ark ("Tid" med samma kvalitativa knappar - `TimeLevel.All`, se §6a - som
-"Lägg till uppgift" redan använder), en "Kräver vuxen"-växel, och "Ta bort uppgiften" i rönn-ink längst
+Upprepning/Vem gör det/Tid/Rum/Tyngd som varsin rad som drillar ner till ett eget litet formulär
+inuti samma ark ("Tid" med samma kvalitativa knappar - `TimeLevel.All`, se §6a - som
+"Lägg till uppgift" redan använder; "Tyngd" med samma mönster men tre knappar - `EffortLevel.All`,
+se §6a1), en "Kräver vuxen"-växel, och "Ta bort uppgiften" i rönn-ink längst
 ner. "+ Nytt rum" öppnar ett ark med rumsmalls-väljaren (namnge våning, rumstyp, antal - se §6b) och en
 disclosure "Lägg till ett tomt rum i stället" för grupperingar som inte är ett rum (t.ex.
 "Hund", "Garage").
@@ -550,6 +551,17 @@ detta gäller bara VAD den visar som när den är på. Inga förkortningar eller
 inte upprepat varje gång en tid visas. Nivåordens knappar (`.level-picker` - "Extra uppgift",
 `TaskOptionsSheet`, `RoomSheet`, medlemsformulären) visar sitt eget ord OCH minuterna under, så
 valet aldrig är en gissning om vad ett nivåord som "Lite tid" faktiskt sparas som.
+
+### 6a1. Tyngd: tre ord, aldrig en siffra
+
+`Hemordna.Client.Support.EffortLevel` (Lätt/Mellan/Tung, wire-värde `TaskEffort.Light`/`Medium`/
+`Heavy`) visas överallt med samma `.level-picker`-knappar som `TimeLevel`, men utan någon
+motsvarighet till minutetiketten under - det finns inget exakt tal att falla tillbaka på, bara de
+tre orden själva, så de ÄR informationen, inte bara valet. Samma regel som §8 i PRODUCT.md: ingen
+poäng, inget tal, ingen jämförelse mellan uppgifter eller mellan medlemmar. Raden i
+`TaskOptionsSheet` (Tyngd), "Lägg till uppgift" i `RoomSheet` och "Lägg till vanliga
+hushållssysslor" (förvald från mallens egen klassificering, se ARCHITECTURE.md "Beslut: Tyngd per
+uppgift") visar och sparar samma tre knappar.
 
 Bakgrund: alltför mycket tidsvisning (minuträknare, progress-ringar, stapeldiagram) skapar
 stress snarare än lugn – motsatsen till appens syfte. Uppgiften och bocken räcker; tiden är
