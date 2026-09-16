@@ -498,9 +498,6 @@ public class OmradenTests
         await page.GetByText("Skapat, uppskattad tid per rum:").WaitForAsync();
         await CloseSheetAsync(Sheet(page, "Nytt rum"));
 
-        // The manual add-a-task form (unlike the room wizard) always anchors a new weekly task
-        // to today - simulating the real-world case this feature exists for: tasks added to
-        // different rooms over time that happen to collide on the same weekday.
         await OpenNewRoomSheetAsync(page);
         await page.GetByText("Lägg till ett tomt rum i stället").ClickAsync();
         await page.GetByLabel("Rummets namn").FillAsync("Tvättstuga");
@@ -516,8 +513,29 @@ public class OmradenTests
         await addSheet.GetByRole(AriaRole.Button, new() { Name = "Lägg till uppgift" }).ClickAsync();
         await tvattstuga.GetByRole(AriaRole.Button, new() { Name = "Byt handdukar" }).WaitForAsync();
 
+        // The room wizard now places each new room's weekly tasks itself (see
+        // docs/ARCHITECTURE.md "Beslut: Placeringsalgoritmen"), so the two rooms created above
+        // no longer collide on their own. RebalanceSchedule's real purpose is fixing a household
+        // whose tasks predate that placement (or were edited by hand onto the same day) - force
+        // that exact situation directly through the API, same as a stale collision would look.
         var beforeTasks = await FetchTasksAsync(page);
-        Assert.Equal(WeekdayOf(beforeTasks, "Torka av handfatet"), WeekdayOf(beforeTasks, "Byt handdukar"));
+        var handdukarId = beforeTasks.EnumerateArray().Single(t => t.GetProperty("name").GetString() == "Byt handdukar")
+            .GetProperty("id").GetGuid();
+        var collisionDay = WeekdayOf(beforeTasks, "Torka av handfatet")!;
+
+        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
+        http.DefaultRequestHeaders.Authorization = new("Bearer", token);
+        var me = await (await http.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
+        var householdId = me.GetProperty("householdId").GetGuid();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        await http.PutAsJsonAsync(
+            $"/api/households/{householdId}/tasks/{handdukarId}/frequency",
+            new { recurrence = new { frequency = "Weekly", interval = 1, startDate = today, weekday = collisionDay } });
+
+        var collidedTasks = await FetchTasksAsync(page);
+        Assert.Equal(WeekdayOf(collidedTasks, "Torka av handfatet"), WeekdayOf(collidedTasks, "Byt handdukar"));
 
         await page.GotoAsync("/vecka");
         await page.GetByText("Vill du fördela om dagarna?").ClickAsync();

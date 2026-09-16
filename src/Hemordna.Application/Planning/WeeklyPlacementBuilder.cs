@@ -1,0 +1,113 @@
+using Hemordna.Domain.Households;
+using Hemordna.Domain.Tasks;
+
+namespace Hemordna.Application.Planning;
+
+/// <summary>
+/// Builds a <see cref="WeeklyPlacementRequest"/> from a household's current, live state - shared
+/// by <see cref="PreviewWeeklyPlan"/> and <see cref="ApplyWeeklyPlan"/> so the two always agree
+/// on what "the current week" looks like.
+/// </summary>
+internal static class WeeklyPlacementBuilder
+{
+    /// <summary>
+    /// <paramref name="today"/> decides which members currently count as active capacity (not
+    /// paused right now) - a deliberate simplification for a WEEKLY planning aid: a pause that
+    /// lifts mid-week is not modelled day-by-day here, unlike <see cref="Planning.DailyPlanner"/>'s
+    /// own per-day precision.
+    /// </summary>
+    public static WeeklyPlacementRequest Build(Household household, IReadOnlyList<TaskDefinition> definitions, DateOnly today)
+    {
+        var activeMembers = household.Members.Where(member => member.IsActive && !member.IsPausedOn(today)).ToList();
+
+        // Routine tasks take their place first - the same total comes off every weekday, since a
+        // Routine task (daily, interval 1) recurs every day alike. See docs/ARCHITECTURE.md.
+        var routineMinutes = definitions
+            .Where(definition => definition.IsActive && VisitKindClassifier.Of(definition) == VisitKind.Routine)
+            .Sum(definition => definition.EstimatedMinutes);
+
+        var weekdays = Enum.GetValues<DayOfWeek>()
+            .Select(day => new WeekdayCapacity(
+                day,
+                Math.Max(0, activeMembers.Sum(member => member.WeeklyTimeBudget.MinutesFor(day)) - routineMinutes),
+                // No active member at all (an edge case - everyone paused) has no ceiling to
+                // cap by; defaulting to Heavy avoids an artificial restriction nobody chose.
+                activeMembers.Count > 0
+                    ? activeMembers.Max(member => member.WeeklyEffortCeiling.CeilingFor(day))
+                    : TaskEffort.Heavy))
+            .ToList();
+
+        var placeable = definitions
+            .Where(definition => definition.IsActive
+                && IsPlaceableCadence(definition.Recurrence)
+                && VisitKindClassifier.Of(definition) != VisitKind.Routine)
+            .GroupBy(definition => (definition.AreaId, Kind: VisitKindClassifier.Of(definition)))
+            .SelectMany(group => group.Key.AreaId is null
+                // "Övrigt" has no room to hold a visit together - each task is its own visit.
+                ? group.Select(definition => new[] { definition })
+                : [group.ToArray()])
+            .Select(group => new PlaceableVisit(
+                group[0].AreaId,
+                group[0].AreaId is { } areaId ? household.Areas.FirstOrDefault(area => area.Id == areaId)?.Name : null,
+                VisitKindClassifier.Of(group[0]),
+                group.Sum(definition => definition.EstimatedMinutes),
+                group.Max(definition => definition.Effort),
+                [.. group.Select(definition => definition.Id)]))
+            .ToList();
+
+        return new WeeklyPlacementRequest(weekdays, placeable);
+    }
+
+    /// <summary>
+    /// The household's current remaining capacity per weekday - the same base computation as
+    /// <see cref="Build"/>, further reduced by every EXISTING weekly/monthly task's minutes on
+    /// its OWN current weekday. Used to place a brand-new task into the room already there is,
+    /// without recomputing (and potentially moving) anyone else's placement - see
+    /// <see cref="NewTaskWeekdayPlacement"/>.
+    /// </summary>
+    /// <remarks>
+    /// A plain day-of-month monthly task (<see cref="RecurrenceRule.MonthlyWeek"/> null) has no
+    /// single weekday of its own to charge against - it is left out of this reduction, a
+    /// deliberate, minor simplification (see docs/ARCHITECTURE.md "Beslut: Placeringsalgoritmen").
+    /// </remarks>
+    public static IReadOnlyList<WeekdayCapacity> RemainingCapacity(
+        Household household, IReadOnlyList<TaskDefinition> definitions, DateOnly today)
+    {
+        var baseCapacity = Build(household, definitions, today).Weekdays.ToDictionary(w => w.Day, w => w);
+
+        var spentByDay = definitions
+            .Where(definition => definition.IsActive
+                && definition.Recurrence is { Weekday: { } }
+                && VisitKindClassifier.Of(definition) != VisitKind.Routine)
+            .GroupBy(definition => definition.Recurrence!.Weekday!.Value)
+            .ToDictionary(group => group.Key, group => group.Sum(definition => definition.EstimatedMinutes));
+
+        // Deliberately NOT clamped at zero, unlike Build()'s own base computation - a household
+        // with little or no time budget yet (the default for a brand-new one, before anyone
+        // sets a weekly budget - see docs/PRODUCT.md §5) would otherwise see every weekday
+        // clamp to the same 0 "remaining", erasing the very signal this method exists to
+        // preserve: which day already has more already-placed work than another. The planner
+        // itself already treats negative remaining minutes as a normal, orderable value - see
+        // WeeklyPlacementPlanner's own "Overflow is allowed" remarks.
+        return Enum.GetValues<DayOfWeek>()
+            .Select(day => baseCapacity[day] with
+            {
+                AvailableMinutes = baseCapacity[day].AvailableMinutes - spentByDay.GetValueOrDefault(day)
+            })
+            .ToList();
+    }
+
+    /// <summary>
+    /// Weekly and monthly tasks get a weekday placement. Daily tasks (interval 2-3, e.g.
+    /// "TwiceWeekly"/"EveryOtherDay" on the client) are spread by their own start date phase
+    /// instead - a single weekday choice does not describe a task that lands on a different
+    /// weekday every cycle. "Vid behov" (no <see cref="RecurrenceRule"/> at all) is never placed.
+    /// See docs/ARCHITECTURE.md "Beslut: Placeringsalgoritmen" for the full reasoning.
+    /// </summary>
+    private static bool IsPlaceableCadence(RecurrenceRule? recurrence) => recurrence?.Frequency switch
+    {
+        RecurrenceFrequency.Weekly => true,
+        RecurrenceFrequency.Monthly => true,
+        _ => false
+    };
+}

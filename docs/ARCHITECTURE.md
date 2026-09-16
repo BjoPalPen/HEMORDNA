@@ -3428,6 +3428,126 @@ Eftersom insnävningen ligger i den delade `EligibleMembers`, gäller den automa
 `RebalanceTaskAssignments` (ombalansera ansvar) - en reassignment kan aldrig hamna på någon vars
 tak den dagen inte tillåter uppgiftens tyngd.
 
+### Beslut: Placeringsalgoritmen — `IMPLEMENTED`
+
+Löser den ursprungliga skevheten Björn rapporterade: nästa veckas arbete per dag var 128, 120,
+33, 128, 25, 29, 97 minuter, eftersom varje rum bara fick "nästa veckodag i tur"
+(`roomSpreadIndex`) oavsett storlek.
+
+**`WeeklyPlacementPlanner` (`Hemordna.Application.Planning`): ren, deterministisk, som
+`DailyPlanner`.** Ingen klocka, ingen lagring - tar en `WeeklyPlacementRequest` (kapacitet per
+veckodag + en lista `PlaceableVisit`) och returnerar var varje besök hamnar.
+
+1. **Kapacitet per veckodag** = summan av aktiva, ej pausade medlemmars `WeeklyTimeBudget` den
+   dagen, minus ALLA `Routine`-uppgifters minuter (rutiner tar plats först, samma totalsumma
+   dras av varje dag eftersom en rutin sker dagligen).
+2. **Tillåten tyngd per veckodag** = den högsta `WeeklyEffortCeiling` bland aktiva, ej pausade
+   medlemmar den dagen (eller Heavy om ingen aktiv medlem finns - ett konservativt, reversibelt
+   val för ett degenererat edge-case).
+3. **Besök** = uppgifter grupperade på `(AreaId, VisitKind)`; "Övrigt" (`AreaId == null`)
+   placeras var för sig. Ett besök kan blanda Weekly- och Monthly-uppgifter (t.ex. sovrummets
+   veckovisa dammsugning och månatliga listtorkning är samma `RegularClean`-besök) - bara
+   VECKODAGEN delas, varje uppgift behåller sin egen frekvens när dess nya `RecurrenceRule`
+   byggs.
+4. **Giriga placeringar:** tyngst först (`DeepClean` före `RegularClean`), sedan störst
+   veckominuter, sluttie-break på uppgiftens minsta `Id` (för fullständig determinism oavsett
+   input-ordning - se `The_result_does_not_depend_on_the_order_visits_arrive_in`). Varje besök
+   hamnar på den TILLÅTNA veckodagen med mest återstående minuter; oavgjort bryts till måndag
+   först. Finns ingen tillåten veckodag alls (t.ex. ingen medlems tak når Heavy någon dag),
+   används alla sju som kandidater - samma "alltid en hemvist"-fallback som resten av
+   planeringen.
+5. **Överdrag tillåtet.** En veckodags återstående minuter får bli negativa - det här är ett
+   planeringshjälpmedel, inte en hård kapacitetsspärr.
+
+**Omfattning - vad som placeras och inte.** Weekly och Monthly placeras på en veckodag (Monthly
+via `RecurrenceRule.MonthlyOnWeekday`, med `WeekOfMonth` valt i tur och ordning när flera
+månadsbesök hamnar på samma veckodag, så de sprids över månadens veckor i stället för att alla
+bli "tredje tisdagen"). `Routine` och "vid behov" (`StaleAfterDays`) placeras aldrig. **Daglig
+uppgift med intervall 2-3 placeras INTE av algoritmen** - en syssla som sker "var tredje dag"
+byter veckodag varje cykel, så ett enda veckodagsval beskriver den inte meningsfullt. Den sprids
+i stället genom sin egen startdatumsfas, exakt som `RoomTemplateTask.ToScheduling`s
+`spreadIndex` redan gjorde - en medveten, dokumenterad avgränsning, inte en lucka som glömts.
+
+**`TaskDefinition.PreferredWeekday` - undersökt, oanvänt, INTE kopplat in.** Fältet finns sedan
+tidigare ("uppgiftens föredragna veckodag"), sparas vid skapande och visas i API-svaret, men
+`grep` genom hela repot visar att INGENTING läser det - varken `RecurrenceRule`,
+`EnsureOccurrencesGenerated`, `RotationPicker`, `DailyPlanner` eller den nya
+placeringsalgoritmen. Det är, redan innan detta uppdrag, ett dött fält. Att koppla in det i
+placeringen hade krävt ett produktbeslut som inte är givet av uppgiften: ska det vara en HÅRD
+pin (uppgiften MÅSTE ligga där, oavsett kapacitet) eller en MJUK nudge (en tie-break-faktor i
+steg 4)? Ingetdera är specificerat, så det byggdes inte - flaggat åt Björn som en öppen fråga i
+tabellen nedan.
+
+**"Använd" (`ApplyWeeklyPlan`) skriver bara `TaskDefinition.Recurrence` - rör ALDRIG en redan
+genererad förekomst.** Detta är en avsiktlig, uttrycklig skillnad mot `RebalanceSchedule`, som
+DELVIS gör motsatta (den flyttar redan utlagd men ännu ej klar bakgrundsarbete via
+`TaskOccurrence.ReanchorTo`) - Björn har uttryckligen bett om att en ny planeringsregel aldrig
+skriver om redan utlagt arbete (`[[feedback_forward_only_scheduling]]`).
+
+**Ingen dubblett, inget hopp - utan att röra bakgrunden.** Varje ny `RecurrenceRule` ankras från
+`today` (samma teknik `RebalanceSchedule.Reanchor` redan bevisat använder: `RecurrenceRule.Weekly`
+och `.MonthlyOnWeekday` normaliserar sitt eget startdatum framåt till första matchande
+datum/veckodag på eller efter det datum som skickas in) - ALDRIG från den gamla kursorn
+(`FindMostRecentOriginalDateAsync`, som `EnsureOccurrencesGenerated` läser nästa gång den körs).
+Eftersom `EnsureOccurrencesGenerated` aldrig genererar längre fram än `today`, kan det aldrig
+finnas en förekomst med ett datum senare än idag att kollidera med - ett ankare rotat i `today`
+kan därför varken dubblera eller hoppa över något. Bevisat i
+`Applying_a_plan_never_touches_outstanding_work_and_never_duplicates_or_skips_the_next_occurrence`
+(Application) och i ett eget E2E-test: faller garanterat om ankaret i stället byggs från den
+gamla, potentiellt förlegade `StartDate` (`Expected: 2, Actual: 3` - en dubblett).
+
+**"changedCount" jämför bara veckodag/veckoläge/intervall, inte hela `RecurrenceRule`.** Ett
+`StartDate` normaliserat från `today` skiljer sig nästan alltid från förra körningens, även när
+den faktiska VECKODAGEN är oförändrad - full `RecurrenceRule.Equals` hade därför räknat praktiskt
+taget allt som "ändrat" varje gång planen används igen, och skrivit onödiga uppdateringar.
+
+**Placering vid skapande (`NewTaskWeekdayPlacement`, i `CreateTaskDefinition` bakom
+`AutoPlaceWeekday`).** Ersätter `roomSpreadIndex` i `Rum.razor`/`RoomSheet.razor`. Två vägar:
+
+1. **Finns redan en aktiv uppgift i samma `(AreaId, VisitKind)` med en veckodag** - den nya
+   uppgiften ansluter till SAMMA dag (och, för Monthly, samma `WeekOfMonth` om en syskon-uppgift
+   redan har en). Detta är hur ett rums flera uppgifter, skapade i SEPARATA HTTP-anrop (klienten
+   loopar fortfarande ett `CreateTaskAsync`-anrop per uppgift), ändå hamnar på samma dag - varje
+   anrop ser redan-skapade syskon i databasen.
+2. **Annars** placeras uppgiften fräscht mot `WeeklyPlacementBuilder.RemainingCapacity` - samma
+   kapacitetsbas som `Build`, men ytterligare minskad med varje BEFINTLIG vecko-/månadsuppgifts
+   minuter på DESS EGEN nuvarande veckodag. Bara den NYA uppgiften går in i algoritmen; inget
+   befintligt flyttas.
+
+**Kritisk rättning under arbetet: `RemainingCapacity` får INTE golvas vid noll.**
+`WeeklyPlacementBuilder.Build`s egen bas golvas vid 0 (rimligt för "hur mycket finns att
+placera"), men ett nystartat hushåll har normalt 0 minuter/dag tills någon sätter en tidsbudget
+(se docs/PRODUCT.md §5) - om `RemainingCapacity` DÅ ocksÅ golvar vid 0 blir VARJE veckodag "0 kvar"
+oavsett hur mycket som redan är placerat där, och signalen "vilken dag är redan mest belastad"
+försvinner helt. E2E-testet `A_rooms_weekly_tasks_share_a_weekday_but_a_second_room_lands_on_a_different_one`
+(befintligt sedan tidigare, skrivet för den gamla spreadIndex-mekaniken) avslöjade detta - ett
+andra rum hamnade på SAMMA dag som det första i stället för att sprida sig, eftersom minskningen
+osynliggjordes av golvet. Rättat genom att låta `RemainingCapacity` bli negativ (algoritmen
+hanterar redan negativa värden, se "Överdrag tillåtet" ovan).
+
+**UI:** knappen "Planera veckan" på Rum (bara `CanManageHousehold`) öppnar `WeeklyPlanSheet.razor`,
+en förhandsvisning per veckodag (rum, besökstyp, minuter före/efter, aldrig något per person),
+med "Använd" och "Avbryt". Efter "Använd": en lugn bekräftelse som uttryckligen säger att det
+gäller kommande veckor, inte redan utlagt arbete.
+
+**En riktig bugg hittad och rättad under E2E-arbetet: `ChangeTaskEffort` och
+`SetMemberWeeklyEffortCeiling` var aldrig registrerade i `Program.cs`s DI-container** (steg 1 och
+2 lade till use casen men glömde `builder.Services.AddScoped<...>()`) - deras endpoints hade
+kastat vid första anropet. Upptäckt och rättat i samma svep som `PreviewWeeklyPlan`/
+`ApplyWeeklyPlan` las till.
+
+**En andra riktig bugg: `MemberSheet`s rollval uppdaterade inte "Hur mycket orkar personen"-
+och "Anpassa tid per veckodag"-formulären inom SAMMA ark-session.** Båda seedas bara en gång per
+öppning (`??=`, för att aldrig skriva över en pågående handredigering) - men det gällde även
+EFTER att `SetRoleAsync` själv sparat ett nytt preset, så arket kunde visa FÖRE-värden tills det
+stängdes och öppnades igen. Rättat: `SetRoleAsync` nollställer båda formulären innan den anropar
+`OnChanged`, så de byggs om från det färska medlemsobjektet. Redan verifierat via reload-baserade
+E2E-test (`Setting_a_days_effort_ceiling_is_saved_and_survives_a_reload`,
+`Picking_a_role_sets_a_starting_effort_ceiling_that_stays_freely_editable`); **inte** verifierat
+för scenariot "kontrollera SAMMA sessions vy direkt efter rollvalet, utan mellanliggande reload",
+flaggat som en känd, mindre, redan existerande (samma mönster gällde `_weekdayForm` sedan
+tidigare) trubbighet i UI:t, inte en dataförlust.
+
 | Fråga | Varför den väntar |
 |---|---|
 | Offline-strategi bortom read-only cache | Utanför MVP; får inte låsas in i förväg |

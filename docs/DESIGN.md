@@ -590,6 +590,22 @@ ytterligare ett, snävare undantag (denna revision): "Tid i förväg: N min" und
 avsiktligt bara ETT tal och EN mening, aldrig ett diagram, en historik eller en streak (CLAUDE.md
 §12) - se ARCHITECTURE.md "Beslut: Kvarlämnat, Imorgon på Idag, ledig dag och tid i förväg".
 
+### 6c. Planera veckan – en förhandsvisning, aldrig ett automatiskt val
+
+Knappen "Planera veckan" på Rum (bara `Session.CanManageHousehold`) öppnar
+`Components/WeeklyPlanSheet.razor` - ett `BottomSheet` som hämtar ett förslag
+(`GET .../weekly-plan`) och visar det dag för dag: veckodagens namn, och för varje besök (rum +
+besökstyp + minuter) som algoritmen skulle placera dit. **Aldrig ett tal per person** - se
+docs/ARCHITECTURE.md "Beslut: Placeringsalgoritmen" - det här är en planeringsyta för DAGAR, inte
+en jämförelse mellan hushållets medlemmar (samma princip som redan styr Idag/Vecka, CLAUDE.md
+§12).
+
+Två knappar avslutar: **Använd** skriver förslaget (`POST .../weekly-plan/apply`) och visar en
+lugn bekräftelse - "Klart. Det gäller kommande veckor - det som redan ligger ute på någons dag
+är orört." - texten säger uttryckligen att redan utlagt arbete inte rörs, samma "gäller
+framåt"-princip som `RebalanceSchedule`s egna ändringar. **Avbryt** stänger arket utan att spara
+något; förslaget hämtas fräscht nästa gång arket öppnas, aldrig cachat mellan besök.
+
 ### 6b. Roller och rumsmallar – färre val vid start
 
 Även fyra kvalitativa lägen per veckodag var för många beslut på en gång (produktfeedback).

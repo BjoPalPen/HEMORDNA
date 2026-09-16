@@ -140,6 +140,11 @@ public sealed record WeeklyEffortCeilingContract(
         });
 }
 
+/// <param name="AutoPlaceWeekday">
+/// See <c>NewTaskDefinition</c>'s own remarks. When true and <c>Recurrence</c> is Weekly or
+/// Monthly, only its <c>Frequency</c>/<c>Interval</c> are read - <c>StartDate</c>/<c>Weekday</c>/
+/// <c>MonthlyWeek</c> may be left at any placeholder value, since the server chooses them.
+/// </param>
 public sealed record CreateTaskRequest(
     string? Name,
     int EstimatedMinutes,
@@ -154,7 +159,8 @@ public sealed record CreateTaskRequest(
     bool RequiresAdult = false,
     RecurrenceRuleContract? Recurrence = null,
     int? StaleAfterDays = null,
-    TaskEffort Effort = TaskEffort.Medium);
+    TaskEffort Effort = TaskEffort.Medium,
+    bool AutoPlaceWeekday = false);
 
 /// <summary>Both null means "ingen - schemaläggs för hand" - see TaskDefinition.</summary>
 public sealed record UpdateTaskFrequencyRequest(RecurrenceRuleContract? Recurrence, int? StaleAfterDays);
@@ -308,3 +314,23 @@ public sealed record CompleteOccurrenceRequest(DateOnly? Today);
 /// <summary>A member's own "tid i förväg" balance - see <c>GetMemberTimeCredit</c>. Always the
 /// calling member's own balance; there is no way to ask for anyone else's.</summary>
 public sealed record TimeCreditResponse(int Minutes);
+
+/// <summary>
+/// "Planera veckan" - one visit's placement, for the preview. Deliberately no per-person
+/// numbers: this is a planning surface for DAYS, not a comparison between people - see
+/// docs/ARCHITECTURE.md "Beslut: Placeringsalgoritmen".
+/// </summary>
+public sealed record WeeklyPlanVisitResponse(Guid? AreaId, string? AreaName, VisitKind VisitKind, int Minutes);
+
+public sealed record WeeklyPlanDayResponse(
+    DayOfWeek Day, int MinutesBefore, int MinutesAfter, IReadOnlyList<WeeklyPlanVisitResponse> Visits);
+
+public sealed record WeeklyPlanResponse(IReadOnlyList<WeeklyPlanDayResponse> Days);
+
+/// <summary><c>Today</c> lets the client name its own local date - see
+/// <c>CompleteOccurrenceRequest</c> for why. The server's own date is used when it is
+/// <c>null</c>.</summary>
+public sealed record ApplyWeeklyPlanRequest(DateOnly? Today);
+
+/// <summary>How many task definitions actually got a new weekday - see <c>ApplyWeeklyPlan</c>.</summary>
+public sealed record ApplyWeeklyPlanResponse(int ChangedTaskCount);

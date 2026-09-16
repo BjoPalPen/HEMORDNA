@@ -65,7 +65,12 @@ public class HushallTests
         // Role management lives behind the member's own avatar, not on Idag - that page is not
         // something every member opens daily, unlike their own day. See DESIGN.md §6b.
         var sheet = await HushallHelper.OpenMemberSheetAsync(page, "Cecilia");
-        await sheet.GetByRole(AriaRole.Button, new() { Name = "Pensionär / hemma dagtid" }).ClickAsync();
+        var retiredButton = sheet.GetByRole(AriaRole.Button, new() { Name = "Pensionär / hemma dagtid" });
+        await retiredButton.ClickAsync();
+        // The click starts concurrent API calls (role, budget, effort ceiling) - wait for that
+        // round trip to finish (the button re-enables) before reading anything back over HTTP,
+        // or the check below can race the still-in-flight request.
+        await Assertions.Expect(retiredButton).ToBeEnabledAsync();
 
         var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
         using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
@@ -103,13 +108,13 @@ public class HushallTests
         var sheet = await HushallHelper.OpenMemberSheetAsync(page, "Nils");
 
         await sheet.GetByText("Anpassa tid per veckodag").ClickAsync();
-        await sheet.GetByLabel("Måndag").FillAsync("20");
-        await sheet.GetByLabel("Tisdag").FillAsync("20");
-        await sheet.GetByLabel("Onsdag").FillAsync("20");
-        await sheet.GetByLabel("Torsdag").FillAsync("20");
-        await sheet.GetByLabel("Fredag").FillAsync("20");
-        await sheet.GetByLabel("Lördag").FillAsync("90");
-        await sheet.GetByLabel("Söndag").FillAsync("90");
+        await sheet.GetByLabel("Måndag", new() { Exact = true }).FillAsync("20");
+        await sheet.GetByLabel("Tisdag", new() { Exact = true }).FillAsync("20");
+        await sheet.GetByLabel("Onsdag", new() { Exact = true }).FillAsync("20");
+        await sheet.GetByLabel("Torsdag", new() { Exact = true }).FillAsync("20");
+        await sheet.GetByLabel("Fredag", new() { Exact = true }).FillAsync("20");
+        await sheet.GetByLabel("Lördag", new() { Exact = true }).FillAsync("90");
+        await sheet.GetByLabel("Söndag", new() { Exact = true }).FillAsync("90");
         await sheet.GetByRole(AriaRole.Button, new() { Name = "Spara" }).ClickAsync();
 
         var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
@@ -132,8 +137,8 @@ public class HushallTests
         await page.ReloadAsync();
         sheet = await HushallHelper.OpenMemberSheetAsync(page, "Nils");
         await sheet.GetByText("Anpassa tid per veckodag").ClickAsync();
-        await Assertions.Expect(sheet.GetByLabel("Lördag")).ToHaveValueAsync("90");
-        await Assertions.Expect(sheet.GetByLabel("Måndag")).ToHaveValueAsync("20");
+        await Assertions.Expect(sheet.GetByLabel("Lördag", new() { Exact = true })).ToHaveValueAsync("90");
+        await Assertions.Expect(sheet.GetByLabel("Måndag", new() { Exact = true })).ToHaveValueAsync("20");
     }
 
     [Fact]

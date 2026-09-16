@@ -677,6 +677,32 @@ public sealed class HemordnaApiClient
         return response.IsSuccessStatusCode;
     }
 
+    /// <summary>"Planera veckan" - a read-only preview, saves nothing. <paramref name="today"/>
+    /// is this device's own local date; the server's own date is used when it is null.</summary>
+    public async Task<WeeklyPlanResponse?> GetWeeklyPlanAsync(
+        Guid householdId, DateOnly? today = null, CancellationToken cancellationToken = default)
+        => await GetAsync<WeeklyPlanResponse>(
+            today is { } date
+                ? $"api/households/{householdId}/weekly-plan?today={date:yyyy-MM-dd}"
+                : $"api/households/{householdId}/weekly-plan",
+            cancellationToken);
+
+    /// <summary>"Använd" - writes the plan previewed by GetWeeklyPlanAsync. Gäller framåt; rör
+    /// aldrig redan utlagda förekomster - se ApplyWeeklyPlan.</summary>
+    public async Task<ApplyWeeklyPlanResponse?> ApplyWeeklyPlanAsync(
+        Guid householdId, DateOnly? today = null, CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Post, $"api/households/{householdId}/weekly-plan/apply", cancellationToken);
+        request.Content = JsonContent.Create(new { today });
+
+        var response = await _http.SendAsync(request, cancellationToken);
+
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<ApplyWeeklyPlanResponse>(cancellationToken)
+            : null;
+    }
+
     public async Task<DailyPlanResponse?> GetDailyPlanAsync(
         Guid householdId,
         Guid memberId,

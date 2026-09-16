@@ -254,6 +254,16 @@ internal static class HouseholdEndpoints
             .Produces(StatusCodes.Status404NotFound)
             .ProducesValidationProblem();
 
+        // "Planera veckan" - se docs/ARCHITECTURE.md "Beslut: Placeringsalgoritmen". Hushålls-
+        // konfiguration, samma behörighet som rum och uppgifter.
+        manage.MapGet("/weekly-plan", PreviewWeeklyPlanAsync)
+            .Produces<WeeklyPlanResponse>()
+            .Produces(StatusCodes.Status404NotFound);
+
+        manage.MapPost("/weekly-plan/apply", ApplyWeeklyPlanAsync)
+            .Produces<ApplyWeeklyPlanResponse>()
+            .Produces(StatusCodes.Status404NotFound);
+
         return app;
     }
 
@@ -497,7 +507,8 @@ internal static class HouseholdEndpoints
                 request.RequiresAdult,
                 request.Recurrence?.ToDomain(),
                 request.StaleAfterDays,
-                request.Effort),
+                request.Effort,
+                request.AutoPlaceWeekday),
             cancellationToken);
 
         return definition is null
@@ -1134,6 +1145,51 @@ internal static class HouseholdEndpoints
 
         return day is null ? Results.NotFound() : Results.Ok(ToResponse(day));
     }
+
+    private static async Task<IResult> PreviewWeeklyPlanAsync(
+        Guid householdId,
+        DateOnly? today,
+        PreviewWeeklyPlan previewWeeklyPlan,
+        TimeProvider timeProvider,
+        CancellationToken cancellationToken)
+    {
+        var planDate = today ?? DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        var result = await previewWeeklyPlan.HandleAsync(householdId, planDate, cancellationToken);
+
+        return result is null ? Results.NotFound() : Results.Ok(ToResponse(result));
+    }
+
+    private static async Task<IResult> ApplyWeeklyPlanAsync(
+        Guid householdId,
+        ApplyWeeklyPlanRequest request,
+        ApplyWeeklyPlan applyWeeklyPlan,
+        TimeProvider timeProvider,
+        CancellationToken cancellationToken)
+    {
+        var planDate = request.Today ?? DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        var changedCount = await applyWeeklyPlan.HandleAsync(householdId, planDate, cancellationToken);
+
+        return changedCount is null ? Results.NotFound() : Results.Ok(new ApplyWeeklyPlanResponse(changedCount.Value));
+    }
+
+    /// <summary>Monday first - matches the placement algorithm's own tie-break order, never
+    /// DayOfWeek's own underlying order (which starts at Sunday).</summary>
+    private static readonly DayOfWeek[] WeekOrder =
+    [
+        DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday,
+        DayOfWeek.Friday, DayOfWeek.Saturday, DayOfWeek.Sunday
+    ];
+
+    private static WeeklyPlanResponse ToResponse(WeeklyPlacementResult result)
+        => new(
+            [.. WeekOrder.Select(day => new WeeklyPlanDayResponse(
+                day,
+                result.MinutesBeforeByDay.GetValueOrDefault(day),
+                result.MinutesAfterByDay.GetValueOrDefault(day),
+                [.. result.PlacedVisits
+                    .Where(placement => placement.Day == day)
+                    .Select(placement => new WeeklyPlanVisitResponse(
+                        placement.Visit.AreaId, placement.Visit.AreaName, placement.Visit.VisitKind, placement.Visit.Minutes))]))]);
 
     private static HouseholdResponse ToResponse(Household household)
         => new(

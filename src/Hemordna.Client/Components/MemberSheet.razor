@@ -50,8 +50,8 @@
             {
                 @foreach (var (day, label) in WeekdayLabels)
                 {
-                    <div class="field">
-                        <span>@label</span>
+                    <div class="field" role="group" aria-label="@($"Ork {label}")">
+                        <span aria-hidden="true">@label</span>
                         <div class="level-picker">
                             @foreach (var level in EffortLevel.All)
                             {
@@ -334,6 +334,13 @@
 
             if (await budgetTask && await effortTask)
             {
+                // Both editors below are only ever seeded once from Member (see
+                // OnParametersSet's "??=") so an in-progress hand edit is never clobbered by a
+                // routine re-render - but that means they must be explicitly cleared here, or
+                // they would keep showing the PRE-role values even after the preset's own
+                // budget/ceiling round-trip completes and a fresh Member comes back down.
+                _weekdayForm = null;
+                _effortForm = null;
                 await OnChanged.InvokeAsync();
             }
             else

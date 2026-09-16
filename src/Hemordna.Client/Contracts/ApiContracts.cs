@@ -156,7 +156,8 @@ public sealed record CreateTaskRequest(
     RecurrenceRuleContract? Recurrence,
     int? StaleAfterDays = null,
     bool RequiresAdult = false,
-    string Effort = "Medium");
+    string Effort = "Medium",
+    bool AutoPlaceWeekday = false);
 
 public sealed record TaskDefinitionResponse(
     Guid Id,
@@ -188,6 +189,17 @@ public sealed record TaskOccurrenceResponse(
     bool CanBeDeferred,
     Guid? AssignedMemberId,
     string Status);
+
+/// <summary>"Planera veckan" - one visit's placement, for the preview. No per-person numbers -
+/// see the API's own contract.</summary>
+public sealed record WeeklyPlanVisitResponse(Guid? AreaId, string? AreaName, string VisitKind, int Minutes);
+
+public sealed record WeeklyPlanDayResponse(
+    string Day, int MinutesBefore, int MinutesAfter, IReadOnlyList<WeeklyPlanVisitResponse> Visits);
+
+public sealed record WeeklyPlanResponse(IReadOnlyList<WeeklyPlanDayResponse> Days);
+
+public sealed record ApplyWeeklyPlanResponse(int ChangedTaskCount);
 
 public sealed record RebalanceScheduleResponse(int ChangedTaskCount);
 

@@ -1,0 +1,189 @@
+@inject HemordnaApiClient Api
+@inject TimeProvider TimeProvider
+
+<BottomSheet Title="Planera veckan" IsOpen="IsOpen" IsOpenChanged="OnIsOpenChanged" Detent="SheetDetent.Full">
+    @if (_confirmed)
+    {
+        <div class="notice" role="status">
+            Klart. Det gäller kommande veckor - det som redan ligger ute på någons dag är orört.
+        </div>
+        <button type="button" class="btn btn-primary btn-block" @onclick="CloseAsync">Stäng</button>
+    }
+    else if (_loading)
+    {
+        <p class="muted">Räknar ut ett förslag...</p>
+    }
+    else if (_plan is null)
+    {
+        <div class="notice notice-problem" role="alert">Det gick inte att hämta ett förslag. Försök igen.</div>
+        <button type="button" class="btn btn-link" @onclick="CloseAsync">Stäng</button>
+    }
+    else
+    {
+        <p class="muted small">
+            Ett förslag på hur veckans återkommande städning kan fördelas - efter hur mycket tid
+            och ork hushållet har varje dag, inte bara turordning. Gäller framåt: det som redan
+            ligger ute på någons dag rörs inte.
+        </p>
+
+        <ul class="list" aria-label="Förslag per veckodag">
+            @foreach (var day in _plan.Days)
+            {
+                <li class="list-item">
+                    <div class="weekly-plan-day">
+                        <span class="list-name">@SwedishDayName(day.Day)</span>
+                        @if (day.Visits.Count == 0)
+                        {
+                            <span class="muted small">Inga besök</span>
+                        }
+                        else
+                        {
+                            <ul class="weekly-plan-visits">
+                                @foreach (var visit in day.Visits)
+                                {
+                                    <li class="muted small">
+                                        @(visit.AreaName ?? "Övrigt") · @VisitKindLabel(visit.VisitKind) · @visit.Minutes min
+                                    </li>
+                                }
+                            </ul>
+                        }
+                    </div>
+                </li>
+            }
+        </ul>
+
+        @if (_message is { } message)
+        {
+            <div class="notice notice-problem" role="alert">@message</div>
+        }
+
+        <button type="button" class="btn btn-primary btn-block" disabled="@_busy" @onclick="ApplyAsync">
+            @(_busy ? "Använder..." : "Använd")
+        </button>
+        <button type="button" class="btn btn-link" @onclick="CloseAsync">Avbryt</button>
+    }
+</BottomSheet>
+
+@code {
+    [Parameter, EditorRequired]
+    public Guid HouseholdId { get; set; }
+
+    [Parameter]
+    public bool IsOpen { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> IsOpenChanged { get; set; }
+
+    /// <summary>Raised after "Använd" succeeds, so the parent (Rum.razor) reloads its task list.</summary>
+    [Parameter, EditorRequired]
+    public EventCallback OnChanged { get; set; }
+
+    private WeeklyPlanResponse? _plan;
+    private bool _loading;
+    private bool _busy;
+    private bool _confirmed;
+    private string? _message;
+
+    private static readonly System.Globalization.CultureInfo SwedishCulture = new("sv-SE");
+
+    private static readonly Dictionary<string, string> DayLabels = new()
+    {
+        ["Monday"] = "Måndag",
+        ["Tuesday"] = "Tisdag",
+        ["Wednesday"] = "Onsdag",
+        ["Thursday"] = "Torsdag",
+        ["Friday"] = "Fredag",
+        ["Saturday"] = "Lördag",
+        ["Sunday"] = "Söndag"
+    };
+
+    private static string SwedishDayName(string day) => DayLabels.GetValueOrDefault(day, day);
+
+    private static string VisitKindLabel(string visitKind) => visitKind switch
+    {
+        "DeepClean" => "Storstäd",
+        _ => "Städ"
+    };
+
+    private DateOnly Today => DateOnly.FromDateTime(TimeProvider.GetLocalNow().DateTime);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!IsOpen)
+        {
+            return;
+        }
+
+        if (_plan is null && !_loading && !_confirmed)
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _message = null;
+
+        try
+        {
+            _plan = await Api.GetWeeklyPlanAsync(HouseholdId, Today);
+        }
+        catch (HttpRequestException)
+        {
+            _plan = null;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task ApplyAsync()
+    {
+        _busy = true;
+        _message = null;
+
+        try
+        {
+            if (await Api.ApplyWeeklyPlanAsync(HouseholdId, Today) is null)
+            {
+                _message = "Det gick inte att spara. Försök igen.";
+                return;
+            }
+
+            _confirmed = true;
+            await OnChanged.InvokeAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _message = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task CloseAsync()
+    {
+        _plan = null;
+        _confirmed = false;
+        _message = null;
+        await OnIsOpenChanged(false);
+    }
+
+    private async Task OnIsOpenChanged(bool isOpen)
+    {
+        IsOpen = isOpen;
+
+        if (!isOpen)
+        {
+            _plan = null;
+            _confirmed = false;
+            _message = null;
+        }
+
+        await IsOpenChanged.InvokeAsync(isOpen);
+    }
+}

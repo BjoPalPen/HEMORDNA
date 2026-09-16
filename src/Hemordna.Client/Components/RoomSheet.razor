@@ -684,7 +684,8 @@
                 Recurrence: recurrence,
                 StaleAfterDays: staleAfterDays,
                 RequiresAdult: _addForm.RequiresAdult,
-                Effort: _addForm.Effort.ToString());
+                Effort: _addForm.Effort.ToString(),
+                AutoPlaceWeekday: true);
 
             if (await Api.CreateTaskAsync(HouseholdId, request) is null)
             {
@@ -724,9 +725,12 @@
 
         try
         {
-            foreach (var (task, index) in selected.Select((task, index) => (task, index)))
+            // Var uppgiften hamnar i veckan avgörs serverside (se docs/ARCHITECTURE.md "Beslut:
+            // Placeringsalgoritmen") - ett konstant spreadIndex=0 räcker här av samma skäl som i
+            // Rum.razor.
+            foreach (var task in selected)
             {
-                var (recurrence, staleAfterDays) = task.ToScheduling(Today, index, Members.Count);
+                var (recurrence, staleAfterDays) = task.ToScheduling(Today, spreadIndex: 0, Members.Count);
 
                 await Api.CreateTaskAsync(HouseholdId, new CreateTaskRequest(
                     task.Name,
@@ -742,7 +746,8 @@
                     Recurrence: recurrence,
                     StaleAfterDays: staleAfterDays,
                     RequiresAdult: task.AdultsOnly,
-                    Effort: _suggestedEffort.GetValueOrDefault(task.Name, task.Effort).ToString()));
+                    Effort: _suggestedEffort.GetValueOrDefault(task.Name, task.Effort).ToString(),
+                    AutoPlaceWeekday: true));
             }
 
             foreach (var task in selected)
