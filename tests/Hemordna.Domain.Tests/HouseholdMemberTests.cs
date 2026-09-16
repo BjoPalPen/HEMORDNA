@@ -1,5 +1,6 @@
 using Hemordna.Domain.Common;
 using Hemordna.Domain.Households;
+using Hemordna.Domain.Tasks;
 
 namespace Hemordna.Domain.Tests;
 
@@ -84,5 +85,20 @@ public class HouseholdMemberTests
         member.SetCanManageHousehold(false);
 
         Assert.False(member.CanManageHousehold);
+    }
+
+    [Fact]
+    public void A_new_member_defaults_to_no_effort_limitation()
+        => Assert.Equal(WeeklyEffortCeiling.Default, CreateMember().WeeklyEffortCeiling);
+
+    [Fact]
+    public void ChangeWeeklyEffortCeiling_replaces_the_ceiling()
+    {
+        var member = CreateMember();
+        var ceiling = WeeklyEffortCeiling.Uniform(TaskEffort.Light);
+
+        member.ChangeWeeklyEffortCeiling(ceiling);
+
+        Assert.Equal(ceiling, member.WeeklyEffortCeiling);
     }
 }

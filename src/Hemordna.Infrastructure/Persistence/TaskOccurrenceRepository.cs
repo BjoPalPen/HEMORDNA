@@ -95,12 +95,15 @@ internal sealed class TaskOccurrenceRepository : ITaskOccurrenceRepository
                 && occurrence.Status == TaskOccurrenceStatus.Planned)
             .ToListAsync(cancellationToken);
 
-    public async Task<IReadOnlyDictionary<Guid, IReadOnlyCollection<Guid>>> GetMemberIdsByAreaOnDateAsync(
+    public async Task<IReadOnlyDictionary<(Guid AreaId, VisitKind Kind), IReadOnlyCollection<Guid>>> GetMemberIdsByAreaAndVisitKindOnDateAsync(
         Guid householdId,
         DateOnly date,
         CancellationToken cancellationToken)
     {
         // Read-only, and the area lives on the definition, not the occurrence - hence the join.
+        // Recurrence/Effort travel along too, so VisitKind can be derived once the rows are
+        // materialized - VisitKindClassifier is not translatable to SQL (Recurrence is a JSON
+        // column behind a value converter).
         var rows = await _dbContext.TaskOccurrences
             .AsNoTracking()
             .Where(occurrence => occurrence.HouseholdId == householdId
@@ -112,15 +115,20 @@ internal sealed class TaskOccurrenceRepository : ITaskOccurrenceRepository
                 _dbContext.TaskDefinitions.AsNoTracking(),
                 occurrence => occurrence.TaskDefinitionId,
                 definition => definition.Id,
-                (occurrence, definition) => new { definition.AreaId, occurrence.AssignedMemberId })
+                (occurrence, definition)
+                    => new { definition.AreaId, occurrence.AssignedMemberId, definition.Recurrence, definition.Effort })
             .Where(row => row.AreaId != null)
-            .Distinct()
             .ToListAsync(cancellationToken);
 
         return rows
-            .GroupBy(row => row.AreaId!.Value)
+            .Select(row => (
+                AreaId: row.AreaId!.Value,
+                Kind: VisitKindClassifier.Of(row.Recurrence, row.Effort),
+                MemberId: row.AssignedMemberId!.Value))
+            .Where(row => row.Kind != VisitKind.Routine)
+            .GroupBy(row => (row.AreaId, row.Kind))
             .ToDictionary(
                 group => group.Key,
-                group => (IReadOnlyCollection<Guid>)[.. group.Select(row => row.AssignedMemberId!.Value)]);
+                group => (IReadOnlyCollection<Guid>)[.. group.Select(row => row.MemberId).Distinct()]);
     }
 }

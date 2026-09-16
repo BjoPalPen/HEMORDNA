@@ -31,7 +31,8 @@ public sealed record HouseholdMemberResponse(
     HouseholdRole? Role,
     DateOnly? PausedUntil,
     bool CanManageHousehold,
-    bool HasAccount);
+    bool HasAccount,
+    WeeklyEffortCeilingContract WeeklyEffortCeiling);
 
 /// <summary>Grants or removes a member's ability to manage the household - see docs/ARCHITECTURE.md
 /// "Beslut: Vem får ändra vad".</summary>
@@ -103,6 +104,47 @@ public sealed record WeeklyTimeBudgetContract(
         });
 }
 
+/// <summary>
+/// The heaviest task effort a member takes on, per weekday - see <see cref="WeeklyEffortCeiling"/>.
+/// Mirrors <see cref="WeeklyTimeBudgetContract"/>'s own shape and reasoning.
+/// </summary>
+public sealed record WeeklyEffortCeilingContract(
+    TaskEffort Monday,
+    TaskEffort Tuesday,
+    TaskEffort Wednesday,
+    TaskEffort Thursday,
+    TaskEffort Friday,
+    TaskEffort Saturday,
+    TaskEffort Sunday)
+{
+    internal static WeeklyEffortCeilingContract From(WeeklyEffortCeiling ceiling)
+        => new(
+            ceiling.CeilingFor(DayOfWeek.Monday),
+            ceiling.CeilingFor(DayOfWeek.Tuesday),
+            ceiling.CeilingFor(DayOfWeek.Wednesday),
+            ceiling.CeilingFor(DayOfWeek.Thursday),
+            ceiling.CeilingFor(DayOfWeek.Friday),
+            ceiling.CeilingFor(DayOfWeek.Saturday),
+            ceiling.CeilingFor(DayOfWeek.Sunday));
+
+    internal WeeklyEffortCeiling ToDomain()
+        => WeeklyEffortCeiling.Create(new Dictionary<DayOfWeek, TaskEffort>
+        {
+            [DayOfWeek.Monday] = Monday,
+            [DayOfWeek.Tuesday] = Tuesday,
+            [DayOfWeek.Wednesday] = Wednesday,
+            [DayOfWeek.Thursday] = Thursday,
+            [DayOfWeek.Friday] = Friday,
+            [DayOfWeek.Saturday] = Saturday,
+            [DayOfWeek.Sunday] = Sunday
+        });
+}
+
+/// <param name="AutoPlaceWeekday">
+/// See <c>NewTaskDefinition</c>'s own remarks. When true and <c>Recurrence</c> is Weekly or
+/// Monthly, only its <c>Frequency</c>/<c>Interval</c> are read - <c>StartDate</c>/<c>Weekday</c>/
+/// <c>MonthlyWeek</c> may be left at any placeholder value, since the server chooses them.
+/// </param>
 public sealed record CreateTaskRequest(
     string? Name,
     int EstimatedMinutes,
@@ -116,7 +158,9 @@ public sealed record CreateTaskRequest(
     bool RequiresMultiplePeople = false,
     bool RequiresAdult = false,
     RecurrenceRuleContract? Recurrence = null,
-    int? StaleAfterDays = null);
+    int? StaleAfterDays = null,
+    TaskEffort Effort = TaskEffort.Medium,
+    bool AutoPlaceWeekday = false);
 
 /// <summary>Both null means "ingen - schemaläggs för hand" - see TaskDefinition.</summary>
 public sealed record UpdateTaskFrequencyRequest(RecurrenceRuleContract? Recurrence, int? StaleAfterDays);
@@ -130,6 +174,8 @@ public sealed record MoveTaskAreaRequest(Guid? AreaId);
 public sealed record SetTaskRequiresAdultRequest(bool RequiresAdult);
 
 public sealed record ChangeTaskEstimatedMinutesRequest(int EstimatedMinutes);
+
+public sealed record ChangeTaskEffortRequest(TaskEffort Effort);
 
 public sealed record TaskDefinitionResponse(
     Guid Id,
@@ -146,7 +192,8 @@ public sealed record TaskDefinitionResponse(
     bool RequiresAdult,
     bool IsActive,
     RecurrenceRuleContract? Recurrence,
-    int? StaleAfterDays);
+    int? StaleAfterDays,
+    TaskEffort Effort);
 
 /// <summary>
 /// How a task repeats on its own. Mirrors <see cref="RecurrenceRule"/>'s own public shape -
@@ -267,3 +314,23 @@ public sealed record CompleteOccurrenceRequest(DateOnly? Today);
 /// <summary>A member's own "tid i förväg" balance - see <c>GetMemberTimeCredit</c>. Always the
 /// calling member's own balance; there is no way to ask for anyone else's.</summary>
 public sealed record TimeCreditResponse(int Minutes);
+
+/// <summary>
+/// "Planera veckan" - one visit's placement, for the preview. Deliberately no per-person
+/// numbers: this is a planning surface for DAYS, not a comparison between people - see
+/// docs/ARCHITECTURE.md "Beslut: Placeringsalgoritmen".
+/// </summary>
+public sealed record WeeklyPlanVisitResponse(Guid? AreaId, string? AreaName, VisitKind VisitKind, int Minutes);
+
+public sealed record WeeklyPlanDayResponse(
+    DayOfWeek Day, int MinutesBefore, int MinutesAfter, IReadOnlyList<WeeklyPlanVisitResponse> Visits);
+
+public sealed record WeeklyPlanResponse(IReadOnlyList<WeeklyPlanDayResponse> Days);
+
+/// <summary><c>Today</c> lets the client name its own local date - see
+/// <c>CompleteOccurrenceRequest</c> for why. The server's own date is used when it is
+/// <c>null</c>.</summary>
+public sealed record ApplyWeeklyPlanRequest(DateOnly? Today);
+
+/// <summary>How many task definitions actually got a new weekday - see <c>ApplyWeeklyPlan</c>.</summary>
+public sealed record ApplyWeeklyPlanResponse(int ChangedTaskCount);

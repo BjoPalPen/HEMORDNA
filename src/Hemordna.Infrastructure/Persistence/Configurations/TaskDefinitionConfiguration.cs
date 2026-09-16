@@ -34,6 +34,10 @@ internal sealed class TaskDefinitionConfiguration : IEntityTypeConfiguration<Tas
         // domain contract, so ordering survives into the database.
         builder.Property(definition => definition.Priority).IsRequired();
 
+        // Stored as its underlying int, same reasoning as Priority above. New and pre-existing
+        // rows both land on TaskEffort.Medium (1) - see the migration that adds this column.
+        builder.Property(definition => definition.Effort).IsRequired();
+
         builder.Property(definition => definition.CanBeDeferred).IsRequired();
         builder.Property(definition => definition.HasRotatingResponsibility).IsRequired();
         builder.Property(definition => definition.RequiresMultiplePeople).IsRequired();

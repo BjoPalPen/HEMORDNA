@@ -16,17 +16,19 @@ public static class GeneralTaskTemplates
 {
     public static readonly IReadOnlyList<RoomTemplateTask> All =
     [
-        new("Handla mat", 45, TaskFrequency.Weekly),
+        new("Handla mat", 45, TaskFrequency.Weekly, Effort: TaskEffort.Medium),
         // Tid per tvättomgång är konstant - det som faktiskt skiljer ett litet hushåll från ett
         // stort är hur OFTA en omgång behövs, inte hur länge den tar. Se
         // RoomTemplateTask.FrequencyFor för skalningen; docs/ARCHITECTURE.md "Beslut:
         // Mallfrekvens skalad efter hushållsstorlek".
-        new("Tvätta och lägga in tvätt", 20, TaskFrequency.Weekly, ScalesWithHouseholdSize: true),
-        new("Betala räkningar", 10, TaskFrequency.Monthly),
-        new("Sortera och lämna återvinning", 10, TaskFrequency.Weekly),
-        new("Vattna växter", 5, TaskFrequency.Weekly),
-        new("Rasta hunden", 20, TaskFrequency.Daily),
-        new("Byta kattlåda", 5, TaskFrequency.Weekly),
-        new("Rensa kylskåpet", 10, TaskFrequency.AsNeeded)
+        new("Tvätta och lägga in tvätt", 20, TaskFrequency.Weekly, ScalesWithHouseholdSize: true, Effort: TaskEffort.Medium),
+        new("Betala räkningar", 10, TaskFrequency.Monthly, Effort: TaskEffort.Light),
+        new("Sortera och lämna återvinning", 10, TaskFrequency.Weekly, Effort: TaskEffort.Medium),
+        new("Vattna växter", 5, TaskFrequency.Weekly, Effort: TaskEffort.Light),
+        // 20 minuter utomhus, dagligen - mer ett genuint pass än en kort rutin som bädda/vädra,
+        // så Mellan snarare än Lätt trots att den är daglig. Se docs/ARCHITECTURE.md.
+        new("Rasta hunden", 20, TaskFrequency.Daily, Effort: TaskEffort.Medium),
+        new("Byta kattlåda", 5, TaskFrequency.Weekly, Effort: TaskEffort.Medium),
+        new("Rensa kylskåpet", 10, TaskFrequency.AsNeeded, Effort: TaskEffort.Medium)
     ];
 }

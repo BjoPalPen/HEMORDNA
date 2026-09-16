@@ -26,10 +26,14 @@ public enum TaskFrequency
 /// washing windows) - see TaskDefinition.RequiresAdult. <paramref name="ScalesWithHouseholdSize"/>
 /// marks a task whose real-world frequency depends on how many people generate the work (e.g.
 /// laundry loads) rather than how dirty a fixed room gets - see FrequencyFor.
+/// <paramref name="Effort"/> is the template's default classification - see docs/ARCHITECTURE.md
+/// for the full table and the guideline it follows: short daily routines are Light, scrubbing/
+/// oven-cleaning/defrosting/window-washing/big cleans are Heavy, everything else is Medium.
+/// Always freely editable per task afterwards, same as the time estimate.
 /// </summary>
 public sealed record RoomTemplateTask(
     string Name, int EstimatedMinutes, TaskFrequency Frequency, bool AdultsOnly = false,
-    bool ScalesWithHouseholdSize = false)
+    bool ScalesWithHouseholdSize = false, TaskEffort Effort = TaskEffort.Medium)
 {
     /// <summary>Default "as needed" interval - not shown, and not user-configurable, anywhere it is used.</summary>
     public const int AsNeededDefaultDays = 21;
@@ -118,88 +122,88 @@ public static class RoomTemplates
     [
         new("SmallToilet", "Litet wc",
         [
-            new("Torka av handfatet", 2, TaskFrequency.Weekly),
-            new("Rengör toalettstolen", 5, TaskFrequency.Weekly),
-            new("Putsa spegeln", 2, TaskFrequency.AsNeeded),
-            new("Damma hyllor", 2, TaskFrequency.AsNeeded),
-            new("Dammsug golvet", 3, TaskFrequency.Weekly),
-            new("Torka golvet", 3, TaskFrequency.Weekly)
+            new("Torka av handfatet", 2, TaskFrequency.Weekly, Effort: TaskEffort.Light),
+            new("Rengör toalettstolen", 5, TaskFrequency.Weekly, Effort: TaskEffort.Medium),
+            new("Putsa spegeln", 2, TaskFrequency.AsNeeded, Effort: TaskEffort.Light),
+            new("Damma hyllor", 2, TaskFrequency.AsNeeded, Effort: TaskEffort.Light),
+            new("Dammsug golvet", 3, TaskFrequency.Weekly, Effort: TaskEffort.Medium),
+            new("Torka golvet", 3, TaskFrequency.Weekly, Effort: TaskEffort.Medium)
         ]),
         new("Bathroom", "Badrum",
         [
-            new("Torka av handfatet", 2, TaskFrequency.Weekly),
-            new("Rengör toalettstolen", 5, TaskFrequency.Weekly),
-            new("Skrubba dusch eller badkar", 8, TaskFrequency.Weekly),
-            new("Putsa spegeln", 2, TaskFrequency.AsNeeded),
-            new("Damma hyllor", 2, TaskFrequency.AsNeeded),
-            new("Byt handdukar", 1, TaskFrequency.Weekly),
-            new("Dammsug golvet", 3, TaskFrequency.Weekly),
-            new("Torka golvet", 5, TaskFrequency.Weekly)
+            new("Torka av handfatet", 2, TaskFrequency.Weekly, Effort: TaskEffort.Light),
+            new("Rengör toalettstolen", 5, TaskFrequency.Weekly, Effort: TaskEffort.Medium),
+            new("Skrubba dusch eller badkar", 8, TaskFrequency.Weekly, Effort: TaskEffort.Heavy),
+            new("Putsa spegeln", 2, TaskFrequency.AsNeeded, Effort: TaskEffort.Light),
+            new("Damma hyllor", 2, TaskFrequency.AsNeeded, Effort: TaskEffort.Light),
+            new("Byt handdukar", 1, TaskFrequency.Weekly, Effort: TaskEffort.Light),
+            new("Dammsug golvet", 3, TaskFrequency.Weekly, Effort: TaskEffort.Medium),
+            new("Torka golvet", 5, TaskFrequency.Weekly, Effort: TaskEffort.Medium)
         ]),
         new("Kitchen", "Kök",
         [
-            new("Diska eller töm diskmaskinen", 8, TaskFrequency.Daily),
-            new("Torka av bänkarna", 3, TaskFrequency.Daily),
-            new("Rengör spisen", 5, TaskFrequency.Weekly),
-            new("Töm soptunnan", 2, TaskFrequency.Weekly),
-            new("Dammsug golvet", 5, TaskFrequency.Weekly),
-            new("Torka golvet", 5, TaskFrequency.Weekly)
+            new("Diska eller töm diskmaskinen", 8, TaskFrequency.Daily, Effort: TaskEffort.Light),
+            new("Torka av bänkarna", 3, TaskFrequency.Daily, Effort: TaskEffort.Light),
+            new("Rengör spisen", 5, TaskFrequency.Weekly, Effort: TaskEffort.Medium),
+            new("Töm soptunnan", 2, TaskFrequency.Weekly, Effort: TaskEffort.Light),
+            new("Dammsug golvet", 5, TaskFrequency.Weekly, Effort: TaskEffort.Medium),
+            new("Torka golvet", 5, TaskFrequency.Weekly, Effort: TaskEffort.Medium)
         ]),
         new("Bedroom", "Sovrum",
         [
-            new("Bädda sängen", 2, TaskFrequency.Daily),
+            new("Bädda sängen", 2, TaskFrequency.Daily, Effort: TaskEffort.Light),
             // Opening a window and closing it again - barely any active effort, but a daily
             // habit rather than something to be reminded of occasionally, so it keeps a token,
             // near-zero estimate rather than 0 and repeats daily alongside making the bed.
-            new("Vädra rummet", 1, TaskFrequency.Daily),
-            new("Dammsug golvet", 5, TaskFrequency.TwiceWeekly),
-            new("Torka golvet", 3, TaskFrequency.Weekly),
-            new("Damma ytor", 3, TaskFrequency.AsNeeded),
-            new("Plocka undan kläder", 5, TaskFrequency.Weekly),
-            new("Torka lister", 5, TaskFrequency.Monthly),
+            new("Vädra rummet", 1, TaskFrequency.Daily, Effort: TaskEffort.Light),
+            new("Dammsug golvet", 5, TaskFrequency.TwiceWeekly, Effort: TaskEffort.Medium),
+            new("Torka golvet", 3, TaskFrequency.Weekly, Effort: TaskEffort.Medium),
+            new("Damma ytor", 3, TaskFrequency.AsNeeded, Effort: TaskEffort.Light),
+            new("Plocka undan kläder", 5, TaskFrequency.Weekly, Effort: TaskEffort.Light),
+            new("Torka lister", 5, TaskFrequency.Monthly, Effort: TaskEffort.Medium),
             // Ladders, reach, and a bit more care than most chores here - kept off children's
             // rotation by default; still fully editable per task afterwards.
-            new("Tvätta fönster", 10, TaskFrequency.Monthly, AdultsOnly: true)
+            new("Tvätta fönster", 10, TaskFrequency.Monthly, AdultsOnly: true, Effort: TaskEffort.Heavy)
         ]),
         new("LivingRoom", "Vardagsrum",
         [
-            new("Dammsug golvet", 5, TaskFrequency.Weekly),
-            new("Damma ytor", 5, TaskFrequency.AsNeeded),
-            new("Plocka undan", 5, TaskFrequency.Weekly),
-            new("Vädra rummet", 1, TaskFrequency.AsNeeded)
+            new("Dammsug golvet", 5, TaskFrequency.Weekly, Effort: TaskEffort.Medium),
+            new("Damma ytor", 5, TaskFrequency.AsNeeded, Effort: TaskEffort.Light),
+            new("Plocka undan", 5, TaskFrequency.Weekly, Effort: TaskEffort.Light),
+            new("Vädra rummet", 1, TaskFrequency.AsNeeded, Effort: TaskEffort.Light)
         ]),
         new("FamilyRoom", "Allrum",
         [
-            new("Dammsug golvet", 5, TaskFrequency.Weekly),
-            new("Damma ytor", 5, TaskFrequency.AsNeeded),
-            new("Plocka undan", 5, TaskFrequency.Weekly),
-            new("Vädra rummet", 1, TaskFrequency.AsNeeded)
+            new("Dammsug golvet", 5, TaskFrequency.Weekly, Effort: TaskEffort.Medium),
+            new("Damma ytor", 5, TaskFrequency.AsNeeded, Effort: TaskEffort.Light),
+            new("Plocka undan", 5, TaskFrequency.Weekly, Effort: TaskEffort.Light),
+            new("Vädra rummet", 1, TaskFrequency.AsNeeded, Effort: TaskEffort.Light)
         ]),
         new("DiningRoom", "Matrum",
         [
-            new("Torka av bordet", 2, TaskFrequency.Daily),
-            new("Dammsug golvet", 5, TaskFrequency.Weekly),
-            new("Damma ytor", 3, TaskFrequency.AsNeeded)
+            new("Torka av bordet", 2, TaskFrequency.Daily, Effort: TaskEffort.Light),
+            new("Dammsug golvet", 5, TaskFrequency.Weekly, Effort: TaskEffort.Medium),
+            new("Damma ytor", 3, TaskFrequency.AsNeeded, Effort: TaskEffort.Light)
         ]),
         new("Hallway", "Hall",
         [
-            new("Dammsug eller sopa golvet", 3, TaskFrequency.Weekly),
-            new("Torka golvet", 3, TaskFrequency.Weekly),
-            new("Ställ i ordning skorna", 2, TaskFrequency.AsNeeded),
-            new("Släng gammal post och reklam", 2, TaskFrequency.AsNeeded)
+            new("Dammsug eller sopa golvet", 3, TaskFrequency.Weekly, Effort: TaskEffort.Medium),
+            new("Torka golvet", 3, TaskFrequency.Weekly, Effort: TaskEffort.Medium),
+            new("Ställ i ordning skorna", 2, TaskFrequency.AsNeeded, Effort: TaskEffort.Light),
+            new("Släng gammal post och reklam", 2, TaskFrequency.AsNeeded, Effort: TaskEffort.Light)
         ]),
         new("LaundryRoom", "Tvättstuga",
         [
-            new("Dammsug golvet", 3, TaskFrequency.Weekly),
-            new("Torka golvet", 3, TaskFrequency.Weekly),
-            new("Töm luddfiltret i torktumlaren", 1, TaskFrequency.Weekly),
-            new("Rengör tvättmaskinens tvättmedelsfack", 2, TaskFrequency.Monthly)
+            new("Dammsug golvet", 3, TaskFrequency.Weekly, Effort: TaskEffort.Medium),
+            new("Torka golvet", 3, TaskFrequency.Weekly, Effort: TaskEffort.Medium),
+            new("Töm luddfiltret i torktumlaren", 1, TaskFrequency.Weekly, Effort: TaskEffort.Light),
+            new("Rengör tvättmaskinens tvättmedelsfack", 2, TaskFrequency.Monthly, Effort: TaskEffort.Medium)
         ]),
         new("Office", "Kontor",
         [
-            new("Dammsug golvet", 5, TaskFrequency.Weekly),
-            new("Damma ytor", 3, TaskFrequency.AsNeeded),
-            new("Plocka undan skrivbordet", 5, TaskFrequency.Weekly)
+            new("Dammsug golvet", 5, TaskFrequency.Weekly, Effort: TaskEffort.Medium),
+            new("Damma ytor", 3, TaskFrequency.AsNeeded, Effort: TaskEffort.Light),
+            new("Plocka undan skrivbordet", 5, TaskFrequency.Weekly, Effort: TaskEffort.Light)
         ])
     ];
 }

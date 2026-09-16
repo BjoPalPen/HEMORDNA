@@ -3209,6 +3209,345 @@ skulle se ut som att man fick mindre gjort.
 Nytt test kodar Björns scenario - fyra ryms, två bockas av, listan ska visa två och aldrig
 fler - och faller utan rättningen (`Expected: 2, Actual: 4`).
 
+### Beslut: Tyngd per uppgift — `IMPLEMENTED`
+
+Bakgrund: Helena jobbar heltid och vill ha **lätta** uppgifter på vardagar och ta de **tunga** på
+helgen - tid ensamt fångar inte det. Se "Bakgrund" i det ursprungliga uppdraget
+(`feat/planera-veckan-och-ork`) för Björns fulla resonemang.
+
+**Tre nivåer, aldrig en siffra.** `TaskDefinition.Effort` är ett nytt enum, `TaskEffort { Light,
+Medium, Heavy }`, med UI-etiketterna **Lätt**, **Mellan**, **Tung**. Samma skäl som styr att
+`DailyPlanner` aldrig visar en poängsumma - PRODUCT.md §8 förbjuder poängtavlor och jämförelser
+mellan medlemmar, och en siffra (`1`/`2`/`3`) hade oundvikligen börjat läsas som en sådan.
+Domänmetoden `TaskDefinition.ChangeEffort` validerar `Enum.IsDefined`, samma mönster som
+`ChangePriority`.
+
+**Effort snapshottas INTE på `TaskOccurrence`.** Till skillnad från `EstimatedMinutes`,
+`Priority` och `CanBeDeferred` - som kopieras vid schemaläggning eftersom de är vad en person
+faktiskt ser den dagen - läses `Effort` alltid live från `TaskDefinition`, precis som
+`HasRotatingResponsibility`, `AreaId` och `RequiresAdult` redan gör under generering. Skälet:
+`VisitKindOf` (se "Beslut: Besökstyp härleds" nedan) och placeringsalgoritmen (§ "Planera
+veckan") behöver alltid den AKTUELLA klassificeringen av en uppgift, inte ett historiskt
+ögonblick - en uppgift vars tyngd ändras i efterhand ska genast räknas om i nästa körning, inte
+förbli låst vid vad den var när den senast schemalades.
+
+**Migration `AddTaskEffort`: alla befintliga uppgifter får `Medium`.** Kolumnens `defaultValue`
+sattes manuellt till `1` (Medium) i den genererade migrationen i stället för EF:s egna CLR-
+default (`0` = Light) - samma mönster som `AddCanManageHousehold`, fast enklare: här gäller
+samma värde för ALLA befintliga rader, så ingen efterföljande `UPDATE`-sats behövs. Verifierat i
+dev: `ALTER TABLE "TaskDefinitions" ADD "Effort" integer NOT NULL DEFAULT 1;`.
+
+**API och behörighet.** `CreateTaskRequest.Effort` (default `Medium`) och
+`TaskDefinitionResponse.Effort`, plus `PUT .../tasks/{id}/effort` bakom `HouseholdManageFilter` -
+tyngd är hushållskonfiguration, precis som tid (`estimated-minutes`) och frekvens.
+
+**Klienten håller sin egen kopia av enumet** (`Hemordna.Client.Support.TaskEffort`), samma
+mönster som `HouseholdRole` redan gör där - klienten refererar aldrig `Hemordna.Domain` (se
+lagerregeln i `CLAUDE.md` §2), och enum-fält går över tråden som vanliga strängar (se
+`ApiContracts.cs`s egen kommentar om varför).
+
+**Klassificering av mallarnas uppgifter.** Riktlinje: korta dagliga rutiner → Lätt,
+skura/skrubba/rengöra ugn/avfrosta/putsa fönster/storstädning → Tung, resten → Mellan. Björn
+granskar tabellen nedan - allt är fritt redigerbart per uppgift efteråt, precis som tidsförslaget
+redan är.
+
+| Rum | Uppgift | Tyngd |
+|---|---|---|
+| Litet wc | Torka av handfatet | Lätt |
+| Litet wc | Rengör toalettstolen | Mellan |
+| Litet wc | Putsa spegeln | Lätt |
+| Litet wc | Damma hyllor | Lätt |
+| Litet wc | Dammsug golvet | Mellan |
+| Litet wc | Torka golvet | Mellan |
+| Badrum | Torka av handfatet | Lätt |
+| Badrum | Rengör toalettstolen | Mellan |
+| Badrum | Skrubba dusch eller badkar | Tung |
+| Badrum | Putsa spegeln | Lätt |
+| Badrum | Damma hyllor | Lätt |
+| Badrum | Byt handdukar | Lätt |
+| Badrum | Dammsug golvet | Mellan |
+| Badrum | Torka golvet | Mellan |
+| Kök | Diska eller töm diskmaskinen | Lätt |
+| Kök | Torka av bänkarna | Lätt |
+| Kök | Rengör spisen | Mellan |
+| Kök | Töm soptunnan | Lätt |
+| Kök | Dammsug golvet | Mellan |
+| Kök | Torka golvet | Mellan |
+| Sovrum | Bädda sängen | Lätt |
+| Sovrum | Vädra rummet | Lätt |
+| Sovrum | Dammsug golvet | Mellan |
+| Sovrum | Torka golvet | Mellan |
+| Sovrum | Damma ytor | Lätt |
+| Sovrum | Plocka undan kläder | Lätt |
+| Sovrum | Torka lister | Mellan |
+| Sovrum | Tvätta fönster | Tung |
+| Vardagsrum / Allrum | Dammsug golvet | Mellan |
+| Vardagsrum / Allrum | Damma ytor | Lätt |
+| Vardagsrum / Allrum | Plocka undan | Lätt |
+| Vardagsrum / Allrum | Vädra rummet | Lätt |
+| Matrum | Torka av bordet | Lätt |
+| Matrum | Dammsug golvet | Mellan |
+| Matrum | Damma ytor | Lätt |
+| Hall | Dammsug eller sopa golvet | Mellan |
+| Hall | Torka golvet | Mellan |
+| Hall | Ställ i ordning skorna | Lätt |
+| Hall | Släng gammal post och reklam | Lätt |
+| Tvättstuga | Dammsug golvet | Mellan |
+| Tvättstuga | Torka golvet | Mellan |
+| Tvättstuga | Töm luddfiltret i torktumlaren | Lätt |
+| Tvättstuga | Rengör tvättmaskinens tvättmedelsfack | Mellan |
+| Kontor | Dammsug golvet | Mellan |
+| Kontor | Damma ytor | Lätt |
+| Kontor | Plocka undan skrivbordet | Lätt |
+| Övrigt (`GeneralTaskTemplates`) | Handla mat | Mellan |
+| Övrigt | Tvätta och lägga in tvätt | Mellan |
+| Övrigt | Betala räkningar | Lätt |
+| Övrigt | Sortera och lämna återvinning | Mellan |
+| Övrigt | Vattna växter | Lätt |
+| Övrigt | Rasta hunden | Mellan *(20 min utomhus dagligen - ett genuint pass, inte en kort rutin som bädda/vädra)* |
+| Övrigt | Byta kattlåda | Mellan |
+| Övrigt | Rensa kylskåpet | Mellan |
+
+### Beslut: Ork per person och veckodag — `IMPLEMENTED`
+
+Bakgrund: samma som "Beslut: Tyngd per uppgift" ovan - Helena jobbar heltid och vill bara ha
+lätta uppgifter på vardagar, tunga på helgen. Tyngd per uppgift (föregående beslut) beskriver
+UPPGIFTEN; detta beskriver PERSONEN - vad de är beredda att ta sig an en given veckodag.
+
+**`WeeklyEffortCeiling`: samma form som `WeeklyTimeBudget`, samma betydelse av "taket".**
+Immutable value object, sju dagar, en `TaskEffort` per veckodag - den TYNGSTA nivån personen tar
+sig an den dagen (`Allows(effort, day) => effort <= CeilingFor(day)`, eftersom
+`TaskEffort`-nivåerna är ordnade Light < Medium < Heavy). En Heavy-uppgift kräver ett Heavy-tak;
+ett Medium-tak stänger bara ute Heavy, inte Light eller Medium själva.
+
+**`Default` är Heavy alla dagar, och betyder uttryckligen "ingen begränsning".** Precis som
+`CanManageHousehold`s migration (se "Beslut: Vem får ändra vad") får INGEN befintlig medlem en
+snävare vardag den dag detta driftsätts - taket är bara en broms någon aktivt sätter på, aldrig
+ett golv som dyker upp av sig självt.
+
+**Migration `AddWeeklyEffortCeiling`.** Samma `integer[]`-mappning som `WeeklyTimeBudgetMinutes`
+(`TaskEffort`s underliggande int, Sunday..Saturday). EF:s egen genererade `defaultValue` för en
+ny `int[]`-kolumn var en TOM array - hade det stått kvar hade varje befintlig medlems
+`WeeklyEffortCeiling.CeilingFor` kastat `IndexOutOfRangeException` första gången den lästes. Satt
+manuellt till `defaultValueSql: "'{2,2,2,2,2,2,2}'"` (sju Heavy-värden) i stället. Verifierat i
+dev, både kommandots utdata och en direkt kontroll av faktiska rader:
+`ALTER TABLE "HouseholdMembers" ADD "WeeklyEffortCeiling" integer[] NOT NULL DEFAULT
+('{2,2,2,2,2,2,2}');` och `SELECT "WeeklyEffortCeiling" FROM "HouseholdMembers"` gav
+`{2,2,2,2,2,2,2}` på redan existerande medlemmar.
+
+**Rollförslag, samma mönster som `HouseholdRolePresets.BudgetFor` - bara vid ett aktivt val,
+aldrig retroaktivt.** `AdultFullTime` → Light mån-fre (lite ork kvar efter en heltidsdag), Heavy
+lör-sön. `Retired` → Heavy alla dagar (ingen begränsning). `ChildOrTeen` → Medium alla dagar.
+`MemberSheet.SetRoleAsync` sätter nu roll, tidsbudget OCH ork-tak samtidigt (tre parallella
+anrop) när en roll väljs eller ändras - identiskt med hur budgeten redan hanteras, bara utökat
+med ett tredje fält. Fritt redigerbart per veckodag efteråt, oavsett vilken väg som satte det
+ursprungliga värdet.
+
+**API och behörighet.** `PUT .../members/{memberId}/effort-ceiling`, bakom `HouseholdManageFilter`
+- exakt samma behörighet som `weekly-budget`, eftersom det är samma sorts hushållskonfiguration.
+
+**Flaggat för Björn, inte byggt:** han kan komma att vilja att en person sätter sin EGEN ork
+själv (samma "jag eller den som sköter hushållet"-resonemang som redan finns för paus, se
+`MemberSelfOrManageFilter`). Det kräver ett eget beslut om vilket filter som ska gälla - inte
+byggt här, bara en kommentar i koden vid endpointen som pekar hit.
+
+**UI:** `MemberSheet.razor` får en ny disclosure "Hur mycket orkar personen per veckodag",
+placerad direkt ovanför "Anpassa tid per veckodag" och med samma form: sju rader, en
+`.level-picker` (Lätt/Mellan/Tung) per veckodag i stället för ett sifferfält, en egen
+"Spara"-knapp. Döljs helt för den som saknar `CanManageHousehold`, som resten av
+medlemskonfigurationen i samma ark.
+
+### Beslut: Besökstyp härleds — `IMPLEMENTED`
+
+Bakgrund: "ett rum, en person, en dag" (se det beslutet ovan) räknade allt arbete i ett rum lika.
+Den som fick den dagliga disken i köket fick därför automatiskt köksstädningen samma dag - fel
+enligt Björn, eftersom en daglig rutin och en veckostädning inte är samma sorts besök i rummet.
+
+**`VisitKind`: `Routine` / `DeepClean` / `RegularClean`, härlett - aldrig lagrat, aldrig ett
+användarval.** `VisitKindClassifier.Of(TaskDefinition)` (Domain, ren funktion):
+
+| Besök | Villkor |
+|---|---|
+| `Routine` | `Recurrence.Frequency == Daily` och `Interval == 1` |
+| `DeepClean` | inte `Routine` OCH `Effort == Heavy` |
+| `RegularClean` | allt annat |
+
+**`Routine` vinner över `Heavy`.** En daglig uppgift (intervall 1) klassas som `Routine` även om
+den råkar vara märkt Heavy - villkoren testas i den ordningen avsiktligt (se testet
+`Routine_wins_over_effort_even_when_the_task_is_heavy`). En daglig rutin är per definition kort
+och återkommande nog att aldrig binda ett helt rum, oavsett vad hushållet råkat sätta för tyngd
+på den.
+
+**Varför en överload som tar `(RecurrenceRule?, TaskEffort)` i stället för bara `TaskDefinition`.**
+`ITaskOccurrenceRepository.GetMemberIdsByAreaAndVisitKindOnDateAsync` (se nästa beslut) måste
+klassificera rader som kommer direkt från en SQL-join (`Recurrence`/`Effort`-kolumnerna), utan att
+kunna konstruera en full `TaskDefinition` (dess konstruktor är privat). `Of(TaskDefinition)` är en
+tunn wrapper ovanpå samma logik, så det finns bara EN regel att hålla i synk.
+
+### Beslut: rumsregeln per besök — `IMPLEMENTED`
+
+**Detta ändrar "ett rum, en person, en dag" (ovan) på ett sätt som är värt att vara tydlig om:**
+anspråket på ett rum gäller nu per `(AreaId, VisitKind)`, inte per rum. Björns egen ursprungliga
+regel ("har någon redan arbete i rummet får de resten") gäller fortfarande - bara nu skopad till
+samma BESÖK, inte till rummet i sin helhet.
+
+**`Routine` gör inga anspråk och binds inte av regeln.** En daglig disk i köket tar inte
+köksstädningen samma dag, och tvärtom - de roterar eller har fast ägare precis som vanligt, helt
+utanför rumsregeln. Det gäller åt båda hållen: en `Routine`-uppgift varken LÄSER eller SKRIVER ett
+anspråk (`EnsureOccurrencesGenerated.ScheduleGeneratedOccurrenceAsync` slår inte ens upp
+`roomClaims` när `VisitKindClassifier.Of(definition) == VisitKind.Routine`).
+
+**Ett badrums veckostäd (`RegularClean`) och storstäd (`DeepClean`) samma dag kan hamna hos olika
+personer**, eftersom de är två olika besök trots samma rum och datum - se testet
+`A_weekly_clean_and_a_deep_clean_in_the_same_room_can_go_to_different_people`.
+
+**`ITaskOccurrenceRepository.GetMemberIdsByAreaAndVisitKindOnDateAsync`** ersätter den gamla
+`GetMemberIdsByAreaOnDateAsync` - nyckeln är nu `(AreaId, VisitKind)` i stället för bara `AreaId`.
+Fortsätter räkna `Planned` OCH `Completed`, aldrig `Skipped` - exakt samma skäl som förut (se
+kommentaren i `ITaskOccurrenceRepository`): den som är klar med sitt besök i rummet har fortfarande
+gjort anspråk på det. Rader vars härledda `VisitKind` är `Routine` filtreras bort helt innan de
+ens grupperas - dessa uppgifter ska aldrig kunna binda ett annat besök i samma rum.
+
+**Gäller båda vägarna in i schemat:** både `EnsureOccurrencesGenerated` (automatisk generering)
+och `ScheduleTaskOccurrence` (manuell schemaläggning) härleder `VisitKind` och slår upp/binder på
+samma sätt.
+
+### Beslut: Ork i rotationen — `IMPLEMENTED`
+
+`RotationPicker.EligibleMembers` (delad av både `PickNext` och `RebalanceTaskAssignments`) snävar
+nu in poolen ytterligare en gång: en medlem vars `WeeklyEffortCeiling` den aktuella veckodagen är
+lägre än uppgiftens `Effort` är inte valbar. Exakt samma mönster som `RequiresAdult`-narrowingen
+strax ovanför i samma metod - en INSNÄVNING, aldrig en utvidgning, och med samma fallback:
+**finns ingen valbar kvar, används hela den tidigare poolen igen** - uppgiften behöver
+fortfarande en ägare (se `Nobody_meeting_the_days_effort_ceiling_still_gets_the_task_assigned`).
+
+En uppgift med fast ägare (`DefaultResponsibleMemberId`, ingen rotation) påverkas inte alls -
+ork-taket är en ROTATIONS-regel, precis som `RequiresAdult` och rumsregeln.
+
+Eftersom insnävningen ligger i den delade `EligibleMembers`, gäller den automatiskt även
+`RebalanceTaskAssignments` (ombalansera ansvar) - en reassignment kan aldrig hamna på någon vars
+tak den dagen inte tillåter uppgiftens tyngd.
+
+### Beslut: Placeringsalgoritmen — `IMPLEMENTED`
+
+Löser den ursprungliga skevheten Björn rapporterade: nästa veckas arbete per dag var 128, 120,
+33, 128, 25, 29, 97 minuter, eftersom varje rum bara fick "nästa veckodag i tur"
+(`roomSpreadIndex`) oavsett storlek.
+
+**`WeeklyPlacementPlanner` (`Hemordna.Application.Planning`): ren, deterministisk, som
+`DailyPlanner`.** Ingen klocka, ingen lagring - tar en `WeeklyPlacementRequest` (kapacitet per
+veckodag + en lista `PlaceableVisit`) och returnerar var varje besök hamnar.
+
+1. **Kapacitet per veckodag** = summan av aktiva, ej pausade medlemmars `WeeklyTimeBudget` den
+   dagen, minus ALLA `Routine`-uppgifters minuter (rutiner tar plats först, samma totalsumma
+   dras av varje dag eftersom en rutin sker dagligen).
+2. **Tillåten tyngd per veckodag** = den högsta `WeeklyEffortCeiling` bland aktiva, ej pausade
+   medlemmar den dagen (eller Heavy om ingen aktiv medlem finns - ett konservativt, reversibelt
+   val för ett degenererat edge-case).
+3. **Besök** = uppgifter grupperade på `(AreaId, VisitKind)`; "Övrigt" (`AreaId == null`)
+   placeras var för sig. Ett besök kan blanda Weekly- och Monthly-uppgifter (t.ex. sovrummets
+   veckovisa dammsugning och månatliga listtorkning är samma `RegularClean`-besök) - bara
+   VECKODAGEN delas, varje uppgift behåller sin egen frekvens när dess nya `RecurrenceRule`
+   byggs.
+4. **Giriga placeringar:** tyngst först (`DeepClean` före `RegularClean`), sedan störst
+   veckominuter, sluttie-break på uppgiftens minsta `Id` (för fullständig determinism oavsett
+   input-ordning - se `The_result_does_not_depend_on_the_order_visits_arrive_in`). Varje besök
+   hamnar på den TILLÅTNA veckodagen med mest återstående minuter; oavgjort bryts till måndag
+   först. Finns ingen tillåten veckodag alls (t.ex. ingen medlems tak når Heavy någon dag),
+   används alla sju som kandidater - samma "alltid en hemvist"-fallback som resten av
+   planeringen.
+5. **Överdrag tillåtet.** En veckodags återstående minuter får bli negativa - det här är ett
+   planeringshjälpmedel, inte en hård kapacitetsspärr.
+
+**Omfattning - vad som placeras och inte.** Weekly och Monthly placeras på en veckodag (Monthly
+via `RecurrenceRule.MonthlyOnWeekday`, med `WeekOfMonth` valt i tur och ordning när flera
+månadsbesök hamnar på samma veckodag, så de sprids över månadens veckor i stället för att alla
+bli "tredje tisdagen"). `Routine` och "vid behov" (`StaleAfterDays`) placeras aldrig. **Daglig
+uppgift med intervall 2-3 placeras INTE av algoritmen** - en syssla som sker "var tredje dag"
+byter veckodag varje cykel, så ett enda veckodagsval beskriver den inte meningsfullt. Den sprids
+i stället genom sin egen startdatumsfas, exakt som `RoomTemplateTask.ToScheduling`s
+`spreadIndex` redan gjorde - en medveten, dokumenterad avgränsning, inte en lucka som glömts.
+
+**`TaskDefinition.PreferredWeekday` - undersökt, oanvänt, INTE kopplat in.** Fältet finns sedan
+tidigare ("uppgiftens föredragna veckodag"), sparas vid skapande och visas i API-svaret, men
+`grep` genom hela repot visar att INGENTING läser det - varken `RecurrenceRule`,
+`EnsureOccurrencesGenerated`, `RotationPicker`, `DailyPlanner` eller den nya
+placeringsalgoritmen. Det är, redan innan detta uppdrag, ett dött fält. Att koppla in det i
+placeringen hade krävt ett produktbeslut som inte är givet av uppgiften: ska det vara en HÅRD
+pin (uppgiften MÅSTE ligga där, oavsett kapacitet) eller en MJUK nudge (en tie-break-faktor i
+steg 4)? Ingetdera är specificerat, så det byggdes inte - flaggat åt Björn som en öppen fråga i
+tabellen nedan.
+
+**"Använd" (`ApplyWeeklyPlan`) skriver bara `TaskDefinition.Recurrence` - rör ALDRIG en redan
+genererad förekomst.** Detta är en avsiktlig, uttrycklig skillnad mot `RebalanceSchedule`, som
+DELVIS gör motsatta (den flyttar redan utlagd men ännu ej klar bakgrundsarbete via
+`TaskOccurrence.ReanchorTo`) - Björn har uttryckligen bett om att en ny planeringsregel aldrig
+skriver om redan utlagt arbete (`[[feedback_forward_only_scheduling]]`).
+
+**Ingen dubblett, inget hopp - utan att röra bakgrunden.** Varje ny `RecurrenceRule` ankras från
+`today` (samma teknik `RebalanceSchedule.Reanchor` redan bevisat använder: `RecurrenceRule.Weekly`
+och `.MonthlyOnWeekday` normaliserar sitt eget startdatum framåt till första matchande
+datum/veckodag på eller efter det datum som skickas in) - ALDRIG från den gamla kursorn
+(`FindMostRecentOriginalDateAsync`, som `EnsureOccurrencesGenerated` läser nästa gång den körs).
+Eftersom `EnsureOccurrencesGenerated` aldrig genererar längre fram än `today`, kan det aldrig
+finnas en förekomst med ett datum senare än idag att kollidera med - ett ankare rotat i `today`
+kan därför varken dubblera eller hoppa över något. Bevisat i
+`Applying_a_plan_never_touches_outstanding_work_and_never_duplicates_or_skips_the_next_occurrence`
+(Application) och i ett eget E2E-test: faller garanterat om ankaret i stället byggs från den
+gamla, potentiellt förlegade `StartDate` (`Expected: 2, Actual: 3` - en dubblett).
+
+**"changedCount" jämför bara veckodag/veckoläge/intervall, inte hela `RecurrenceRule`.** Ett
+`StartDate` normaliserat från `today` skiljer sig nästan alltid från förra körningens, även när
+den faktiska VECKODAGEN är oförändrad - full `RecurrenceRule.Equals` hade därför räknat praktiskt
+taget allt som "ändrat" varje gång planen används igen, och skrivit onödiga uppdateringar.
+
+**Placering vid skapande (`NewTaskWeekdayPlacement`, i `CreateTaskDefinition` bakom
+`AutoPlaceWeekday`).** Ersätter `roomSpreadIndex` i `Rum.razor`/`RoomSheet.razor`. Två vägar:
+
+1. **Finns redan en aktiv uppgift i samma `(AreaId, VisitKind)` med en veckodag** - den nya
+   uppgiften ansluter till SAMMA dag (och, för Monthly, samma `WeekOfMonth` om en syskon-uppgift
+   redan har en). Detta är hur ett rums flera uppgifter, skapade i SEPARATA HTTP-anrop (klienten
+   loopar fortfarande ett `CreateTaskAsync`-anrop per uppgift), ändå hamnar på samma dag - varje
+   anrop ser redan-skapade syskon i databasen.
+2. **Annars** placeras uppgiften fräscht mot `WeeklyPlacementBuilder.RemainingCapacity` - samma
+   kapacitetsbas som `Build`, men ytterligare minskad med varje BEFINTLIG vecko-/månadsuppgifts
+   minuter på DESS EGEN nuvarande veckodag. Bara den NYA uppgiften går in i algoritmen; inget
+   befintligt flyttas.
+
+**Kritisk rättning under arbetet: `RemainingCapacity` får INTE golvas vid noll.**
+`WeeklyPlacementBuilder.Build`s egen bas golvas vid 0 (rimligt för "hur mycket finns att
+placera"), men ett nystartat hushåll har normalt 0 minuter/dag tills någon sätter en tidsbudget
+(se docs/PRODUCT.md §5) - om `RemainingCapacity` DÅ ocksÅ golvar vid 0 blir VARJE veckodag "0 kvar"
+oavsett hur mycket som redan är placerat där, och signalen "vilken dag är redan mest belastad"
+försvinner helt. E2E-testet `A_rooms_weekly_tasks_share_a_weekday_but_a_second_room_lands_on_a_different_one`
+(befintligt sedan tidigare, skrivet för den gamla spreadIndex-mekaniken) avslöjade detta - ett
+andra rum hamnade på SAMMA dag som det första i stället för att sprida sig, eftersom minskningen
+osynliggjordes av golvet. Rättat genom att låta `RemainingCapacity` bli negativ (algoritmen
+hanterar redan negativa värden, se "Överdrag tillåtet" ovan).
+
+**UI:** knappen "Planera veckan" på Rum (bara `CanManageHousehold`) öppnar `WeeklyPlanSheet.razor`,
+en förhandsvisning per veckodag (rum, besökstyp, minuter före/efter, aldrig något per person),
+med "Använd" och "Avbryt". Efter "Använd": en lugn bekräftelse som uttryckligen säger att det
+gäller kommande veckor, inte redan utlagt arbete.
+
+**En riktig bugg hittad och rättad under E2E-arbetet: `ChangeTaskEffort` och
+`SetMemberWeeklyEffortCeiling` var aldrig registrerade i `Program.cs`s DI-container** (steg 1 och
+2 lade till use casen men glömde `builder.Services.AddScoped<...>()`) - deras endpoints hade
+kastat vid första anropet. Upptäckt och rättat i samma svep som `PreviewWeeklyPlan`/
+`ApplyWeeklyPlan` las till.
+
+**En andra riktig bugg: `MemberSheet`s rollval uppdaterade inte "Hur mycket orkar personen"-
+och "Anpassa tid per veckodag"-formulären inom SAMMA ark-session.** Båda seedas bara en gång per
+öppning (`??=`, för att aldrig skriva över en pågående handredigering) - men det gällde även
+EFTER att `SetRoleAsync` själv sparat ett nytt preset, så arket kunde visa FÖRE-värden tills det
+stängdes och öppnades igen. Rättat: `SetRoleAsync` nollställer båda formulären innan den anropar
+`OnChanged`, så de byggs om från det färska medlemsobjektet. Redan verifierat via reload-baserade
+E2E-test (`Setting_a_days_effort_ceiling_is_saved_and_survives_a_reload`,
+`Picking_a_role_sets_a_starting_effort_ceiling_that_stays_freely_editable`); **inte** verifierat
+för scenariot "kontrollera SAMMA sessions vy direkt efter rollvalet, utan mellanliggande reload",
+flaggat som en känd, mindre, redan existerande (samma mönster gällde `_weekdayForm` sedan
+tidigare) trubbighet i UI:t, inte en dataförlust.
+
 | Fråga | Varför den väntar |
 |---|---|
 | Offline-strategi bortom read-only cache | Utanför MVP; får inte låsas in i förväg |

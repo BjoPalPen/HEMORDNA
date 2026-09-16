@@ -7,12 +7,13 @@ internal sealed class InMemoryTaskOccurrenceRepository : ITaskOccurrenceReposito
 {
     private readonly List<TaskOccurrence> _occurrences = [];
 
-    /// <summary>Vilket rum varje uppgiftsdefinition hör till. Förekomster bär inte själva någon
+    /// <summary>Vilket rum varje uppgiftsdefinition hör till, och definitionen själv (för att
+    /// kunna härleda VisitKind - se VisitKindClassifier). Förekomster bär inte själva någon
     /// AreaId - i produktion kommer den från en join mot TaskDefinitions - så ett test som vill
     /// pröva rumsregeln registrerar kopplingen här.</summary>
-    private readonly Dictionary<Guid, Guid> _areaByDefinition = [];
+    private readonly Dictionary<Guid, (Guid AreaId, TaskDefinition Definition)> _areaByDefinition = [];
 
-    internal void SeedArea(Guid taskDefinitionId, Guid areaId) => _areaByDefinition[taskDefinitionId] = areaId;
+    internal void SeedArea(TaskDefinition definition, Guid areaId) => _areaByDefinition[definition.Id] = (areaId, definition);
 
     internal int UpdateCallCount { get; private set; }
 
@@ -79,22 +80,30 @@ internal sealed class InMemoryTaskOccurrenceRepository : ITaskOccurrenceReposito
         => Task.FromResult<IReadOnlyList<TaskOccurrence>>([.. _occurrences.Where(o =>
             o.HouseholdId == householdId && o.Status == TaskOccurrenceStatus.Planned)]);
 
-    public Task<IReadOnlyDictionary<Guid, IReadOnlyCollection<Guid>>> GetMemberIdsByAreaOnDateAsync(
+    public Task<IReadOnlyDictionary<(Guid AreaId, VisitKind Kind), IReadOnlyCollection<Guid>>> GetMemberIdsByAreaAndVisitKindOnDateAsync(
         Guid householdId,
         DateOnly date,
         CancellationToken cancellationToken)
     {
-        var byArea = _occurrences
+        var byAreaAndKind = _occurrences
             .Where(o => o.HouseholdId == householdId
                 && o.ScheduledDate == date
                 && o.AssignedMemberId is not null
                 && (o.Status == TaskOccurrenceStatus.Planned || o.Status == TaskOccurrenceStatus.Completed)
                 && _areaByDefinition.ContainsKey(o.TaskDefinitionId))
-            .GroupBy(o => _areaByDefinition[o.TaskDefinitionId])
+            .Select(o => (
+                Claim: _areaByDefinition[o.TaskDefinitionId],
+                o.AssignedMemberId))
+            .Select(row => (
+                AreaId: row.Claim.AreaId,
+                Kind: VisitKindClassifier.Of(row.Claim.Definition),
+                MemberId: row.AssignedMemberId!.Value))
+            .Where(row => row.Kind != VisitKind.Routine)
+            .GroupBy(row => (row.AreaId, row.Kind))
             .ToDictionary(
                 group => group.Key,
-                group => (IReadOnlyCollection<Guid>)[.. group.Select(o => o.AssignedMemberId!.Value).Distinct()]);
+                group => (IReadOnlyCollection<Guid>)[.. group.Select(row => row.MemberId).Distinct()]);
 
-        return Task.FromResult<IReadOnlyDictionary<Guid, IReadOnlyCollection<Guid>>>(byArea);
+        return Task.FromResult<IReadOnlyDictionary<(Guid AreaId, VisitKind Kind), IReadOnlyCollection<Guid>>>(byAreaAndKind);
     }
 }

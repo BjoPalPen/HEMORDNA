@@ -509,9 +509,10 @@ Pausa ett rum". Vid återupptagning börjar rummets uppgifter om helt vanligt, i
 - samma mönster som redan gäller för hushålls-/medlemspaus.
 
 Att trycka på en uppgift öppnar `Components/TaskOptionsSheet.razor`:
-Upprepning/Vem gör det/Tid/Rum som varsin rad som drillar ner till ett eget litet formulär inuti
-samma ark ("Tid" med samma kvalitativa knappar - `TimeLevel.All`, se §6a - som
-"Lägg till uppgift" redan använder), en "Kräver vuxen"-växel, och "Ta bort uppgiften" i rönn-ink längst
+Upprepning/Vem gör det/Tid/Rum/Tyngd som varsin rad som drillar ner till ett eget litet formulär
+inuti samma ark ("Tid" med samma kvalitativa knappar - `TimeLevel.All`, se §6a - som
+"Lägg till uppgift" redan använder; "Tyngd" med samma mönster men tre knappar - `EffortLevel.All`,
+se §6a1), en "Kräver vuxen"-växel, och "Ta bort uppgiften" i rönn-ink längst
 ner. "+ Nytt rum" öppnar ett ark med rumsmalls-väljaren (namnge våning, rumstyp, antal - se §6b) och en
 disclosure "Lägg till ett tomt rum i stället" för grupperingar som inte är ett rum (t.ex.
 "Hund", "Garage").
@@ -551,6 +552,27 @@ inte upprepat varje gång en tid visas. Nivåordens knappar (`.level-picker` - "
 `TaskOptionsSheet`, `RoomSheet`, medlemsformulären) visar sitt eget ord OCH minuterna under, så
 valet aldrig är en gissning om vad ett nivåord som "Lite tid" faktiskt sparas som.
 
+### 6a2. Ork per veckodag: samma nivåord, en rad per dag
+
+`MemberSheet.razor` har en ny disclosure "Hur mycket orkar personen per veckodag", direkt ovanför
+"Anpassa tid per veckodag" och byggd på samma sätt: sju rader (en per veckodag), men i stället för
+ett sifferfält en `.level-picker` med `EffortLevel.All` (Lätt/Mellan/Tung) - taket för den dagen,
+dvs. den tyngsta nivå personen tar sig an. Ett rollval (samma `.level-picker` som redan väljer
+tidsbudgetens preset) sätter både tid och ork-tak i ett svep; kryssrutorna nedanför är alltid
+fritt redigerbara efteråt, oavsett vilken väg som satte startvärdet. Se docs/ARCHITECTURE.md
+"Beslut: Ork per person och veckodag".
+
+### 6a1. Tyngd: tre ord, aldrig en siffra
+
+`Hemordna.Client.Support.EffortLevel` (Lätt/Mellan/Tung, wire-värde `TaskEffort.Light`/`Medium`/
+`Heavy`) visas överallt med samma `.level-picker`-knappar som `TimeLevel`, men utan någon
+motsvarighet till minutetiketten under - det finns inget exakt tal att falla tillbaka på, bara de
+tre orden själva, så de ÄR informationen, inte bara valet. Samma regel som §8 i PRODUCT.md: ingen
+poäng, inget tal, ingen jämförelse mellan uppgifter eller mellan medlemmar. Raden i
+`TaskOptionsSheet` (Tyngd), "Lägg till uppgift" i `RoomSheet` och "Lägg till vanliga
+hushållssysslor" (förvald från mallens egen klassificering, se ARCHITECTURE.md "Beslut: Tyngd per
+uppgift") visar och sparar samma tre knappar.
+
 Bakgrund: alltför mycket tidsvisning (minuträknare, progress-ringar, stapeldiagram) skapar
 stress snarare än lugn – motsatsen till appens syfte. Uppgiften och bocken räcker; tiden är
 ett internt planeringsverktyg, inte något användaren ska behöva förhålla sig till. Det gäller
@@ -567,6 +589,22 @@ dagens lista - att bedöma en dags omfång är planering, inte den dagliga vyn s
 ytterligare ett, snävare undantag (denna revision): "Tid i förväg: N min" under "Min vecka" -
 avsiktligt bara ETT tal och EN mening, aldrig ett diagram, en historik eller en streak (CLAUDE.md
 §12) - se ARCHITECTURE.md "Beslut: Kvarlämnat, Imorgon på Idag, ledig dag och tid i förväg".
+
+### 6c. Planera veckan – en förhandsvisning, aldrig ett automatiskt val
+
+Knappen "Planera veckan" på Rum (bara `Session.CanManageHousehold`) öppnar
+`Components/WeeklyPlanSheet.razor` - ett `BottomSheet` som hämtar ett förslag
+(`GET .../weekly-plan`) och visar det dag för dag: veckodagens namn, och för varje besök (rum +
+besökstyp + minuter) som algoritmen skulle placera dit. **Aldrig ett tal per person** - se
+docs/ARCHITECTURE.md "Beslut: Placeringsalgoritmen" - det här är en planeringsyta för DAGAR, inte
+en jämförelse mellan hushållets medlemmar (samma princip som redan styr Idag/Vecka, CLAUDE.md
+§12).
+
+Två knappar avslutar: **Använd** skriver förslaget (`POST .../weekly-plan/apply`) och visar en
+lugn bekräftelse - "Klart. Det gäller kommande veckor - det som redan ligger ute på någons dag
+är orört." - texten säger uttryckligen att redan utlagt arbete inte rörs, samma "gäller
+framåt"-princip som `RebalanceSchedule`s egna ändringar. **Avbryt** stänger arket utan att spara
+något; förslaget hämtas fräscht nästa gång arket öppnas, aldrig cachat mellan besök.
 
 ### 6b. Roller och rumsmallar – färre val vid start
 

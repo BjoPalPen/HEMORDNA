@@ -70,4 +70,22 @@ public static class HouseholdRolePresets
 
         return null;
     }
+
+    /// <summary>
+    /// A rough weekly effort ceiling per role, applied only when a role is picked or changed -
+    /// never retroactively on an existing member - same "picked once, freely editable after"
+    /// pattern as <see cref="BudgetFor"/>. See docs/ARCHITECTURE.md "Beslut: Ork per person och
+    /// veckodag": <see cref="HouseholdRole.AdultFullTime"/> takes only Light on weekdays (little
+    /// energy after a full day of work) and opens up to Heavy on weekends; Retired has no
+    /// limitation any day; ChildOrTeen stays at Medium every day.
+    /// </summary>
+    public static WeeklyEffortCeilingContract EffortCeilingFor(HouseholdRole role) => role switch
+    {
+        HouseholdRole.AdultFullTime => new WeeklyEffortCeilingContract(
+            "Light", "Light", "Light", "Light", "Light", "Heavy", "Heavy"),
+        HouseholdRole.Retired => new WeeklyEffortCeilingContract(
+            "Heavy", "Heavy", "Heavy", "Heavy", "Heavy", "Heavy", "Heavy"),
+        _ => new WeeklyEffortCeilingContract(
+            "Medium", "Medium", "Medium", "Medium", "Medium", "Medium", "Medium")
+    };
 }

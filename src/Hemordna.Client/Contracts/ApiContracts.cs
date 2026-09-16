@@ -77,7 +77,20 @@ public sealed record HouseholdMemberResponse(
     string? Role,
     DateOnly? PausedUntil,
     bool CanManageHousehold,
-    bool HasAccount);
+    bool HasAccount,
+    WeeklyEffortCeilingContract WeeklyEffortCeiling);
+
+/// <summary>The heaviest task effort a member takes on, per weekday. Mirrors the API's contract -
+/// see it for the domain mapping. Days travel as plain strings, same as every other enum-shaped
+/// field the client carries - see this file's header.</summary>
+public sealed record WeeklyEffortCeilingContract(
+    string Monday,
+    string Tuesday,
+    string Wednesday,
+    string Thursday,
+    string Friday,
+    string Saturday,
+    string Sunday);
 
 /// <summary>Pauses through and including <c>Until</c>, or resumes immediately when it is <c>null</c>.</summary>
 public sealed record PauseRequest(DateOnly? Until);
@@ -142,7 +155,9 @@ public sealed record CreateTaskRequest(
     bool RequiresMultiplePeople,
     RecurrenceRuleContract? Recurrence,
     int? StaleAfterDays = null,
-    bool RequiresAdult = false);
+    bool RequiresAdult = false,
+    string Effort = "Medium",
+    bool AutoPlaceWeekday = false);
 
 public sealed record TaskDefinitionResponse(
     Guid Id,
@@ -159,7 +174,8 @@ public sealed record TaskDefinitionResponse(
     bool RequiresAdult,
     bool IsActive,
     RecurrenceRuleContract? Recurrence,
-    int? StaleAfterDays);
+    int? StaleAfterDays,
+    string Effort);
 
 /// <summary>A scheduled instance of a task - only used today for the "Extra uppgift" response,
 /// since every other occurrence-returning call the client already made did not need the body.</summary>
@@ -173,6 +189,17 @@ public sealed record TaskOccurrenceResponse(
     bool CanBeDeferred,
     Guid? AssignedMemberId,
     string Status);
+
+/// <summary>"Planera veckan" - one visit's placement, for the preview. No per-person numbers -
+/// see the API's own contract.</summary>
+public sealed record WeeklyPlanVisitResponse(Guid? AreaId, string? AreaName, string VisitKind, int Minutes);
+
+public sealed record WeeklyPlanDayResponse(
+    string Day, int MinutesBefore, int MinutesAfter, IReadOnlyList<WeeklyPlanVisitResponse> Visits);
+
+public sealed record WeeklyPlanResponse(IReadOnlyList<WeeklyPlanDayResponse> Days);
+
+public sealed record ApplyWeeklyPlanResponse(int ChangedTaskCount);
 
 public sealed record RebalanceScheduleResponse(int ChangedTaskCount);
 

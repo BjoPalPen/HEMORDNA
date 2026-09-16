@@ -436,6 +436,25 @@ public sealed class HemordnaApiClient
             : null;
     }
 
+    /// <summary>How much the task takes out of whoever does it - see TaskEffort. Household
+    /// configuration, same authorization as time and frequency.</summary>
+    public async Task<TaskDefinitionResponse?> ChangeTaskEffortAsync(
+        Guid householdId,
+        Guid taskId,
+        string effort,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Put, $"api/households/{householdId}/tasks/{taskId}/effort", cancellationToken);
+        request.Content = JsonContent.Create(new { effort });
+
+        var response = await _http.SendAsync(request, cancellationToken);
+
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<TaskDefinitionResponse>(cancellationToken)
+            : null;
+    }
+
     public async Task<AreaResponse?> RenameAreaAsync(
         Guid householdId,
         Guid areaId,
@@ -658,6 +677,32 @@ public sealed class HemordnaApiClient
         return response.IsSuccessStatusCode;
     }
 
+    /// <summary>"Planera veckan" - a read-only preview, saves nothing. <paramref name="today"/>
+    /// is this device's own local date; the server's own date is used when it is null.</summary>
+    public async Task<WeeklyPlanResponse?> GetWeeklyPlanAsync(
+        Guid householdId, DateOnly? today = null, CancellationToken cancellationToken = default)
+        => await GetAsync<WeeklyPlanResponse>(
+            today is { } date
+                ? $"api/households/{householdId}/weekly-plan?today={date:yyyy-MM-dd}"
+                : $"api/households/{householdId}/weekly-plan",
+            cancellationToken);
+
+    /// <summary>"Använd" - writes the plan previewed by GetWeeklyPlanAsync. Gäller framåt; rör
+    /// aldrig redan utlagda förekomster - se ApplyWeeklyPlan.</summary>
+    public async Task<ApplyWeeklyPlanResponse?> ApplyWeeklyPlanAsync(
+        Guid householdId, DateOnly? today = null, CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Post, $"api/households/{householdId}/weekly-plan/apply", cancellationToken);
+        request.Content = JsonContent.Create(new { today });
+
+        var response = await _http.SendAsync(request, cancellationToken);
+
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<ApplyWeeklyPlanResponse>(cancellationToken)
+            : null;
+    }
+
     public async Task<DailyPlanResponse?> GetDailyPlanAsync(
         Guid householdId,
         Guid memberId,
@@ -868,6 +913,24 @@ public sealed class HemordnaApiClient
             $"api/households/{householdId}/members/{memberId}/weekly-budget",
             cancellationToken);
         request.Content = JsonContent.Create(weeklyTimeBudget);
+
+        var response = await _http.SendAsync(request, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
+    /// <summary>How much this member takes on per weekday - see WeeklyEffortCeilingContract.
+    /// Same authorization as SetWeeklyBudgetAsync.</summary>
+    public async Task<bool> SetWeeklyEffortCeilingAsync(
+        Guid householdId,
+        Guid memberId,
+        WeeklyEffortCeilingContract weeklyEffortCeiling,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Put,
+            $"api/households/{householdId}/members/{memberId}/effort-ceiling",
+            cancellationToken);
+        request.Content = JsonContent.Create(weeklyEffortCeiling);
 
         var response = await _http.SendAsync(request, cancellationToken);
         return response.IsSuccessStatusCode;

@@ -142,4 +142,22 @@ public class TaskDefinitionTests
     [InlineData(-5)]
     public void SetStaleAfterDays_rejects_a_non_positive_interval(int days)
         => Assert.Throws<ArgumentOutOfRangeException>(() => CreateDefinition().SetStaleAfterDays(days));
+
+    [Fact]
+    public void A_new_definition_defaults_to_medium_effort()
+        => Assert.Equal(TaskEffort.Medium, CreateDefinition().Effort);
+
+    [Fact]
+    public void ChangeEffort_changes_the_level()
+    {
+        var definition = CreateDefinition();
+
+        definition.ChangeEffort(TaskEffort.Heavy);
+
+        Assert.Equal(TaskEffort.Heavy, definition.Effort);
+    }
+
+    [Fact]
+    public void ChangeEffort_rejects_an_undefined_level()
+        => Assert.Throws<ArgumentOutOfRangeException>(() => CreateDefinition().ChangeEffort((TaskEffort)99));
 }

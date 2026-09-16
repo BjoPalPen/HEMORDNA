@@ -114,6 +114,12 @@ internal static class HouseholdEndpoints
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status404NotFound);
 
+        // Effort is household configuration, same as time and frequency - see
+        // docs/ARCHITECTURE.md "Beslut: Vem får ändra vad".
+        manage.MapPut("/tasks/{taskId:guid}/effort", ChangeTaskEffortAsync)
+            .Produces<TaskDefinitionResponse>()
+            .Produces(StatusCodes.Status404NotFound);
+
         scoped.MapPost("/tasks/rebalance-schedule", RebalanceScheduleAsync)
             .Produces<RebalanceScheduleResponse>();
 
@@ -142,6 +148,15 @@ internal static class HouseholdEndpoints
         manage.MapPut("/members/{memberId:guid}/role", SetMemberRoleAsync)
             .Produces<HouseholdMemberResponse>()
             .Produces(StatusCodes.Status404NotFound);
+
+        // Same authorization as weekly-budget above - see docs/ARCHITECTURE.md "Beslut: Ork per
+        // person och veckodag". Note for a later product decision, not built here: Björn may
+        // want a member to set their OWN ceiling - that would need its own filter, the way
+        // MemberSelfAccessFilter does for availability/preferences.
+        manage.MapPut("/members/{memberId:guid}/effort-ceiling", SetWeeklyEffortCeilingAsync)
+            .Produces<HouseholdMemberResponse>()
+            .Produces(StatusCodes.Status404NotFound)
+            .ProducesValidationProblem();
 
         manage.MapPost("/invite-code/regenerate", RegenerateInviteCodeAsync)
             .Produces<HouseholdResponse>()
@@ -238,6 +253,16 @@ internal static class HouseholdEndpoints
             .Produces<TaskOccurrenceResponse>(StatusCodes.Status201Created)
             .Produces(StatusCodes.Status404NotFound)
             .ProducesValidationProblem();
+
+        // "Planera veckan" - se docs/ARCHITECTURE.md "Beslut: Placeringsalgoritmen". Hushålls-
+        // konfiguration, samma behörighet som rum och uppgifter.
+        manage.MapGet("/weekly-plan", PreviewWeeklyPlanAsync)
+            .Produces<WeeklyPlanResponse>()
+            .Produces(StatusCodes.Status404NotFound);
+
+        manage.MapPost("/weekly-plan/apply", ApplyWeeklyPlanAsync)
+            .Produces<ApplyWeeklyPlanResponse>()
+            .Produces(StatusCodes.Status404NotFound);
 
         return app;
     }
@@ -481,7 +506,9 @@ internal static class HouseholdEndpoints
                 request.RequiresMultiplePeople,
                 request.RequiresAdult,
                 request.Recurrence?.ToDomain(),
-                request.StaleAfterDays),
+                request.StaleAfterDays,
+                request.Effort,
+                request.AutoPlaceWeekday),
             cancellationToken);
 
         return definition is null
@@ -568,6 +595,18 @@ internal static class HouseholdEndpoints
 
         var definition = await changeTaskEstimatedMinutes.HandleAsync(
             householdId, taskId, request.EstimatedMinutes, cancellationToken);
+
+        return definition is null ? Results.NotFound() : Results.Ok(ToResponse(definition));
+    }
+
+    private static async Task<IResult> ChangeTaskEffortAsync(
+        Guid householdId,
+        Guid taskId,
+        ChangeTaskEffortRequest request,
+        ChangeTaskEffort changeTaskEffort,
+        CancellationToken cancellationToken)
+    {
+        var definition = await changeTaskEffort.HandleAsync(householdId, taskId, request.Effort, cancellationToken);
 
         return definition is null ? Results.NotFound() : Results.Ok(ToResponse(definition));
     }
@@ -692,6 +731,19 @@ internal static class HouseholdEndpoints
         CancellationToken cancellationToken)
     {
         var member = await setWeeklyBudget.HandleAsync(
+            householdId, memberId, request.ToDomain(), cancellationToken);
+
+        return member is null ? Results.NotFound() : Results.Ok(ToResponse(member));
+    }
+
+    private static async Task<IResult> SetWeeklyEffortCeilingAsync(
+        Guid householdId,
+        Guid memberId,
+        WeeklyEffortCeilingContract request,
+        SetMemberWeeklyEffortCeiling setWeeklyEffortCeiling,
+        CancellationToken cancellationToken)
+    {
+        var member = await setWeeklyEffortCeiling.HandleAsync(
             householdId, memberId, request.ToDomain(), cancellationToken);
 
         return member is null ? Results.NotFound() : Results.Ok(ToResponse(member));
@@ -1094,6 +1146,51 @@ internal static class HouseholdEndpoints
         return day is null ? Results.NotFound() : Results.Ok(ToResponse(day));
     }
 
+    private static async Task<IResult> PreviewWeeklyPlanAsync(
+        Guid householdId,
+        DateOnly? today,
+        PreviewWeeklyPlan previewWeeklyPlan,
+        TimeProvider timeProvider,
+        CancellationToken cancellationToken)
+    {
+        var planDate = today ?? DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        var result = await previewWeeklyPlan.HandleAsync(householdId, planDate, cancellationToken);
+
+        return result is null ? Results.NotFound() : Results.Ok(ToResponse(result));
+    }
+
+    private static async Task<IResult> ApplyWeeklyPlanAsync(
+        Guid householdId,
+        ApplyWeeklyPlanRequest request,
+        ApplyWeeklyPlan applyWeeklyPlan,
+        TimeProvider timeProvider,
+        CancellationToken cancellationToken)
+    {
+        var planDate = request.Today ?? DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        var changedCount = await applyWeeklyPlan.HandleAsync(householdId, planDate, cancellationToken);
+
+        return changedCount is null ? Results.NotFound() : Results.Ok(new ApplyWeeklyPlanResponse(changedCount.Value));
+    }
+
+    /// <summary>Monday first - matches the placement algorithm's own tie-break order, never
+    /// DayOfWeek's own underlying order (which starts at Sunday).</summary>
+    private static readonly DayOfWeek[] WeekOrder =
+    [
+        DayOfWeek.Monday, DayOfWeek.Tuesday, DayOfWeek.Wednesday, DayOfWeek.Thursday,
+        DayOfWeek.Friday, DayOfWeek.Saturday, DayOfWeek.Sunday
+    ];
+
+    private static WeeklyPlanResponse ToResponse(WeeklyPlacementResult result)
+        => new(
+            [.. WeekOrder.Select(day => new WeeklyPlanDayResponse(
+                day,
+                result.MinutesBeforeByDay.GetValueOrDefault(day),
+                result.MinutesAfterByDay.GetValueOrDefault(day),
+                [.. result.PlacedVisits
+                    .Where(placement => placement.Day == day)
+                    .Select(placement => new WeeklyPlanVisitResponse(
+                        placement.Visit.AreaId, placement.Visit.AreaName, placement.Visit.VisitKind, placement.Visit.Minutes))]))]);
+
     private static HouseholdResponse ToResponse(Household household)
         => new(
             household.Id,
@@ -1113,7 +1210,8 @@ internal static class HouseholdEndpoints
             member.Role,
             member.PausedUntil,
             member.CanManageHousehold,
-            HasAccount: member.UserId is not null);
+            HasAccount: member.UserId is not null,
+            WeeklyEffortCeilingContract.From(member.WeeklyEffortCeiling));
 
     private static AreaResponse ToResponse(Area area) => new(area.Id, area.Name, area.IsActive, area.PausedUntil);
 
@@ -1133,7 +1231,8 @@ internal static class HouseholdEndpoints
             definition.RequiresAdult,
             definition.IsActive,
             definition.Recurrence is { } recurrence ? RecurrenceRuleContract.From(recurrence) : null,
-            definition.StaleAfterDays);
+            definition.StaleAfterDays,
+            definition.Effort);
 
     private static TaskOccurrenceResponse ToResponse(TaskOccurrence occurrence)
         => new(
