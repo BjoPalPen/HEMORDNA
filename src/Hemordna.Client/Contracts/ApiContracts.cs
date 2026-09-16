@@ -77,7 +77,20 @@ public sealed record HouseholdMemberResponse(
     string? Role,
     DateOnly? PausedUntil,
     bool CanManageHousehold,
-    bool HasAccount);
+    bool HasAccount,
+    WeeklyEffortCeilingContract WeeklyEffortCeiling);
+
+/// <summary>The heaviest task effort a member takes on, per weekday. Mirrors the API's contract -
+/// see it for the domain mapping. Days travel as plain strings, same as every other enum-shaped
+/// field the client carries - see this file's header.</summary>
+public sealed record WeeklyEffortCeilingContract(
+    string Monday,
+    string Tuesday,
+    string Wednesday,
+    string Thursday,
+    string Friday,
+    string Saturday,
+    string Sunday);
 
 /// <summary>Pauses through and including <c>Until</c>, or resumes immediately when it is <c>null</c>.</summary>
 public sealed record PauseRequest(DateOnly? Until);

@@ -39,6 +39,45 @@
         </details>
 
         <details class="more-options">
+            <summary>Hur mycket orkar personen per veckodag</summary>
+            <p class="muted small">
+                Det tyngsta uppgifter personen tar på sig den dagen - en vardagskväll kanske bara
+                lätta uppgifter, helgen även de tunga. Sätts per roll ovan, men går alltid att
+                ändra per dag här.
+            </p>
+
+            @if (_effortForm is { } effortForm)
+            {
+                @foreach (var (day, label) in WeekdayLabels)
+                {
+                    <div class="field">
+                        <span>@label</span>
+                        <div class="level-picker">
+                            @foreach (var level in EffortLevel.All)
+                            {
+                                <button type="button"
+                                        class="@(effortForm[day] == level.Effort ? "btn btn-primary" : "btn btn-secondary")"
+                                        disabled="@_effortBusy"
+                                        @onclick="() => effortForm[day] = level.Effort">
+                                    @level.Label
+                                </button>
+                            }
+                        </div>
+                    </div>
+                }
+            }
+
+            @if (_effortMessage is { } effortMessage)
+            {
+                <div class="notice notice-problem" role="alert">@effortMessage</div>
+            }
+
+            <button type="button" class="btn btn-secondary btn-block" disabled="@_effortBusy" @onclick="SaveEffortCeilingAsync">
+                @(_effortBusy ? "Sparar..." : "Spara")
+            </button>
+        </details>
+
+        <details class="more-options">
             <summary>Anpassa tid per veckodag</summary>
             <p class="muted small">
                 Sätt ett eget antal minuter för varje dag - till exempel mer tid på helgen, eller en
@@ -189,6 +228,21 @@
     private bool _weekdayBusy;
     private string? _weekdayMessage;
 
+    private static readonly (DayOfWeek Day, string Label)[] WeekdayLabels =
+    [
+        (DayOfWeek.Monday, "Måndag"),
+        (DayOfWeek.Tuesday, "Tisdag"),
+        (DayOfWeek.Wednesday, "Onsdag"),
+        (DayOfWeek.Thursday, "Torsdag"),
+        (DayOfWeek.Friday, "Fredag"),
+        (DayOfWeek.Saturday, "Lördag"),
+        (DayOfWeek.Sunday, "Söndag")
+    ];
+
+    private Dictionary<DayOfWeek, TaskEffort>? _effortForm;
+    private bool _effortBusy;
+    private string? _effortMessage;
+
     private DateOnly? _pauseUntilInput;
     private bool _pauseBusy;
     private string? _pauseMessage;
@@ -217,6 +271,7 @@
             _pauseMessage = null;
             _removeMessage = null;
             _canManageMessage = null;
+            _effortMessage = null;
             return;
         }
 
@@ -231,7 +286,20 @@
             Saturday = Member.WeeklyTimeBudgetMinutes.Saturday,
             Sunday = Member.WeeklyTimeBudgetMinutes.Sunday
         };
+        _effortForm ??= new Dictionary<DayOfWeek, TaskEffort>
+        {
+            [DayOfWeek.Monday] = ParseEffort(Member.WeeklyEffortCeiling.Monday),
+            [DayOfWeek.Tuesday] = ParseEffort(Member.WeeklyEffortCeiling.Tuesday),
+            [DayOfWeek.Wednesday] = ParseEffort(Member.WeeklyEffortCeiling.Wednesday),
+            [DayOfWeek.Thursday] = ParseEffort(Member.WeeklyEffortCeiling.Thursday),
+            [DayOfWeek.Friday] = ParseEffort(Member.WeeklyEffortCeiling.Friday),
+            [DayOfWeek.Saturday] = ParseEffort(Member.WeeklyEffortCeiling.Saturday),
+            [DayOfWeek.Sunday] = ParseEffort(Member.WeeklyEffortCeiling.Sunday)
+        };
     }
+
+    private static TaskEffort ParseEffort(string effort)
+        => Enum.TryParse<TaskEffort>(effort, out var parsed) ? parsed : TaskEffort.Heavy;
 
     private async Task OnIsOpenChanged(bool isOpen)
     {
@@ -241,6 +309,7 @@
         {
             _pauseUntilInput = null;
             _weekdayForm = null;
+            _effortForm = null;
         }
 
         await IsOpenChanged.InvokeAsync(isOpen);
@@ -253,15 +322,17 @@
 
         try
         {
-            // Both calls describe the same pick from the UI's point of view - the role itself,
-            // and the budget the preset implies for it (still freely editable afterwards) - and
-            // neither depends on the other, so they run concurrently rather than doubling the
-            // round trip.
+            // Three calls describe the same pick from the UI's point of view - the role itself,
+            // and the time budget AND effort ceiling the preset implies for it (both still
+            // freely editable afterwards) - none depends on the others, so they run concurrently
+            // rather than tripling the round trip.
             var roleTask = Api.SetMemberRoleAsync(HouseholdId, Member.Id, role.ToString());
             var budgetTask = Api.SetWeeklyBudgetAsync(HouseholdId, Member.Id, HouseholdRolePresets.BudgetFor(role));
-            await Task.WhenAll(roleTask, budgetTask);
+            var effortTask = Api.SetWeeklyEffortCeilingAsync(
+                HouseholdId, Member.Id, HouseholdRolePresets.EffortCeilingFor(role));
+            await Task.WhenAll(roleTask, budgetTask, effortTask);
 
-            if (await budgetTask)
+            if (await budgetTask && await effortTask)
             {
                 await OnChanged.InvokeAsync();
             }
@@ -343,6 +414,42 @@
         finally
         {
             _weekdayBusy = false;
+        }
+    }
+
+    private async Task SaveEffortCeilingAsync()
+    {
+        if (_effortForm is not { } form)
+        {
+            return;
+        }
+
+        _effortBusy = true;
+        _effortMessage = null;
+
+        try
+        {
+            var ceiling = new WeeklyEffortCeilingContract(
+                form[DayOfWeek.Monday].ToString(), form[DayOfWeek.Tuesday].ToString(),
+                form[DayOfWeek.Wednesday].ToString(), form[DayOfWeek.Thursday].ToString(),
+                form[DayOfWeek.Friday].ToString(), form[DayOfWeek.Saturday].ToString(),
+                form[DayOfWeek.Sunday].ToString());
+
+            if (!await Api.SetWeeklyEffortCeilingAsync(HouseholdId, Member.Id, ceiling))
+            {
+                _effortMessage = "Det gick inte att spara. Försök igen.";
+                return;
+            }
+
+            await OnChanged.InvokeAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _effortMessage = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _effortBusy = false;
         }
     }
 

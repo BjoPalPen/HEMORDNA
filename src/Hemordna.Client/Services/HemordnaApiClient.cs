@@ -892,6 +892,24 @@ public sealed class HemordnaApiClient
         return response.IsSuccessStatusCode;
     }
 
+    /// <summary>How much this member takes on per weekday - see WeeklyEffortCeilingContract.
+    /// Same authorization as SetWeeklyBudgetAsync.</summary>
+    public async Task<bool> SetWeeklyEffortCeilingAsync(
+        Guid householdId,
+        Guid memberId,
+        WeeklyEffortCeilingContract weeklyEffortCeiling,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Put,
+            $"api/households/{householdId}/members/{memberId}/effort-ceiling",
+            cancellationToken);
+        request.Content = JsonContent.Create(weeklyEffortCeiling);
+
+        var response = await _http.SendAsync(request, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
     public async Task<IReadOnlyList<RecentActivityResponse>> GetRecentActivityAsync(
         Guid householdId,
         CancellationToken cancellationToken = default)

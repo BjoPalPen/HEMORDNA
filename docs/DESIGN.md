@@ -552,6 +552,16 @@ inte upprepat varje gång en tid visas. Nivåordens knappar (`.level-picker` - "
 `TaskOptionsSheet`, `RoomSheet`, medlemsformulären) visar sitt eget ord OCH minuterna under, så
 valet aldrig är en gissning om vad ett nivåord som "Lite tid" faktiskt sparas som.
 
+### 6a2. Ork per veckodag: samma nivåord, en rad per dag
+
+`MemberSheet.razor` har en ny disclosure "Hur mycket orkar personen per veckodag", direkt ovanför
+"Anpassa tid per veckodag" och byggd på samma sätt: sju rader (en per veckodag), men i stället för
+ett sifferfält en `.level-picker` med `EffortLevel.All` (Lätt/Mellan/Tung) - taket för den dagen,
+dvs. den tyngsta nivå personen tar sig an. Ett rollval (samma `.level-picker` som redan väljer
+tidsbudgetens preset) sätter både tid och ork-tak i ett svep; kryssrutorna nedanför är alltid
+fritt redigerbara efteråt, oavsett vilken väg som satte startvärdet. Se docs/ARCHITECTURE.md
+"Beslut: Ork per person och veckodag".
+
 ### 6a1. Tyngd: tre ord, aldrig en siffra
 
 `Hemordna.Client.Support.EffortLevel` (Lätt/Mellan/Tung, wire-värde `TaskEffort.Light`/`Medium`/

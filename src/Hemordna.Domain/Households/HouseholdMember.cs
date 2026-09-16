@@ -20,6 +20,7 @@ public sealed class HouseholdMember
         HouseholdId = householdId;
         DisplayName = displayName;
         WeeklyTimeBudget = weeklyTimeBudget;
+        WeeklyEffortCeiling = WeeklyEffortCeiling.Default;
         IsActive = true;
         CreatedAt = createdAt;
         Role = role;
@@ -34,6 +35,14 @@ public sealed class HouseholdMember
 
     /// <summary>Normal available minutes per weekday. Not metadata - the planner reads it.</summary>
     public WeeklyTimeBudget WeeklyTimeBudget { get; private set; }
+
+    /// <summary>
+    /// The heaviest task effort this member takes on, per weekday - see
+    /// <see cref="WeeklyEffortCeiling"/>. Defaults to <see cref="Households.WeeklyEffortCeiling.Default"/>
+    /// (Heavy every day, i.e. no limitation) for a newly created member, and for every member
+    /// that existed before this field was introduced.
+    /// </summary>
+    public WeeklyEffortCeiling WeeklyEffortCeiling { get; private set; }
 
     public bool IsActive { get; private set; }
 
@@ -96,6 +105,13 @@ public sealed class HouseholdMember
     {
         ArgumentNullException.ThrowIfNull(weeklyTimeBudget);
         WeeklyTimeBudget = weeklyTimeBudget;
+    }
+
+    /// <summary>Replaces this member's weekly effort ceiling - see <see cref="WeeklyEffortCeiling"/>.</summary>
+    public void ChangeWeeklyEffortCeiling(WeeklyEffortCeiling weeklyEffortCeiling)
+    {
+        ArgumentNullException.ThrowIfNull(weeklyEffortCeiling);
+        WeeklyEffortCeiling = weeklyEffortCeiling;
     }
 
     /// <summary>

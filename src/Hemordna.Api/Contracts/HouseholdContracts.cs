@@ -31,7 +31,8 @@ public sealed record HouseholdMemberResponse(
     HouseholdRole? Role,
     DateOnly? PausedUntil,
     bool CanManageHousehold,
-    bool HasAccount);
+    bool HasAccount,
+    WeeklyEffortCeilingContract WeeklyEffortCeiling);
 
 /// <summary>Grants or removes a member's ability to manage the household - see docs/ARCHITECTURE.md
 /// "Beslut: Vem får ändra vad".</summary>
@@ -92,6 +93,42 @@ public sealed record WeeklyTimeBudgetContract(
 
     internal WeeklyTimeBudget ToDomain()
         => WeeklyTimeBudget.Create(new Dictionary<DayOfWeek, int>
+        {
+            [DayOfWeek.Monday] = Monday,
+            [DayOfWeek.Tuesday] = Tuesday,
+            [DayOfWeek.Wednesday] = Wednesday,
+            [DayOfWeek.Thursday] = Thursday,
+            [DayOfWeek.Friday] = Friday,
+            [DayOfWeek.Saturday] = Saturday,
+            [DayOfWeek.Sunday] = Sunday
+        });
+}
+
+/// <summary>
+/// The heaviest task effort a member takes on, per weekday - see <see cref="WeeklyEffortCeiling"/>.
+/// Mirrors <see cref="WeeklyTimeBudgetContract"/>'s own shape and reasoning.
+/// </summary>
+public sealed record WeeklyEffortCeilingContract(
+    TaskEffort Monday,
+    TaskEffort Tuesday,
+    TaskEffort Wednesday,
+    TaskEffort Thursday,
+    TaskEffort Friday,
+    TaskEffort Saturday,
+    TaskEffort Sunday)
+{
+    internal static WeeklyEffortCeilingContract From(WeeklyEffortCeiling ceiling)
+        => new(
+            ceiling.CeilingFor(DayOfWeek.Monday),
+            ceiling.CeilingFor(DayOfWeek.Tuesday),
+            ceiling.CeilingFor(DayOfWeek.Wednesday),
+            ceiling.CeilingFor(DayOfWeek.Thursday),
+            ceiling.CeilingFor(DayOfWeek.Friday),
+            ceiling.CeilingFor(DayOfWeek.Saturday),
+            ceiling.CeilingFor(DayOfWeek.Sunday));
+
+    internal WeeklyEffortCeiling ToDomain()
+        => WeeklyEffortCeiling.Create(new Dictionary<DayOfWeek, TaskEffort>
         {
             [DayOfWeek.Monday] = Monday,
             [DayOfWeek.Tuesday] = Tuesday,

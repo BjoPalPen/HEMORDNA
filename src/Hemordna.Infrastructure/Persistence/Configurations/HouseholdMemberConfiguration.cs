@@ -1,4 +1,5 @@
 using Hemordna.Domain.Households;
+using Hemordna.Domain.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
@@ -56,6 +57,23 @@ internal sealed class HouseholdMemberConfiguration : IEntityTypeConfiguration<Ho
                     budget => budget.GetHashCode(),
                     budget => budget));
 
+        // WeeklyEffortCeiling mirrors WeeklyTimeBudget's own mapping: a native PostgreSQL
+        // integer[] (TaskEffort's underlying int), ordered Sunday..Saturday. New members and
+        // every member that existed before this column was introduced both land on Heavy every
+        // day ("no limitation") - see the migration that adds this column.
+        builder.Property(member => member.WeeklyEffortCeiling)
+            .HasColumnName("WeeklyEffortCeiling")
+            .HasColumnType("integer[]")
+            .IsRequired()
+            .HasConversion(
+                new ValueConverter<WeeklyEffortCeiling, int[]>(
+                    ceiling => ToEffortPerWeekday(ceiling),
+                    values => FromEffortPerWeekday(values)),
+                new ValueComparer<WeeklyEffortCeiling>(
+                    (left, right) => left!.Equals(right),
+                    ceiling => ceiling.GetHashCode(),
+                    ceiling => ceiling));
+
         builder.HasIndex(member => member.HouseholdId);
 
         // One user signs in as at most one member. The unique index is what stops a second
@@ -71,4 +89,11 @@ internal sealed class HouseholdMemberConfiguration : IEntityTypeConfiguration<Ho
     private static WeeklyTimeBudget FromMinutesPerWeekday(int[] minutes)
         => WeeklyTimeBudget.Create(
             Enum.GetValues<DayOfWeek>().ToDictionary(day => day, day => minutes[(int)day]));
+
+    private static int[] ToEffortPerWeekday(WeeklyEffortCeiling ceiling)
+        => Enum.GetValues<DayOfWeek>().Select(day => (int)ceiling.CeilingFor(day)).ToArray();
+
+    private static WeeklyEffortCeiling FromEffortPerWeekday(int[] values)
+        => WeeklyEffortCeiling.Create(
+            Enum.GetValues<DayOfWeek>().ToDictionary(day => day, day => (TaskEffort)values[(int)day]));
 }

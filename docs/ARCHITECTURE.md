@@ -3308,6 +3308,55 @@ redan är.
 | Övrigt | Byta kattlåda | Mellan |
 | Övrigt | Rensa kylskåpet | Mellan |
 
+### Beslut: Ork per person och veckodag — `IMPLEMENTED`
+
+Bakgrund: samma som "Beslut: Tyngd per uppgift" ovan - Helena jobbar heltid och vill bara ha
+lätta uppgifter på vardagar, tunga på helgen. Tyngd per uppgift (föregående beslut) beskriver
+UPPGIFTEN; detta beskriver PERSONEN - vad de är beredda att ta sig an en given veckodag.
+
+**`WeeklyEffortCeiling`: samma form som `WeeklyTimeBudget`, samma betydelse av "taket".**
+Immutable value object, sju dagar, en `TaskEffort` per veckodag - den TYNGSTA nivån personen tar
+sig an den dagen (`Allows(effort, day) => effort <= CeilingFor(day)`, eftersom
+`TaskEffort`-nivåerna är ordnade Light < Medium < Heavy). En Heavy-uppgift kräver ett Heavy-tak;
+ett Medium-tak stänger bara ute Heavy, inte Light eller Medium själva.
+
+**`Default` är Heavy alla dagar, och betyder uttryckligen "ingen begränsning".** Precis som
+`CanManageHousehold`s migration (se "Beslut: Vem får ändra vad") får INGEN befintlig medlem en
+snävare vardag den dag detta driftsätts - taket är bara en broms någon aktivt sätter på, aldrig
+ett golv som dyker upp av sig självt.
+
+**Migration `AddWeeklyEffortCeiling`.** Samma `integer[]`-mappning som `WeeklyTimeBudgetMinutes`
+(`TaskEffort`s underliggande int, Sunday..Saturday). EF:s egen genererade `defaultValue` för en
+ny `int[]`-kolumn var en TOM array - hade det stått kvar hade varje befintlig medlems
+`WeeklyEffortCeiling.CeilingFor` kastat `IndexOutOfRangeException` första gången den lästes. Satt
+manuellt till `defaultValueSql: "'{2,2,2,2,2,2,2}'"` (sju Heavy-värden) i stället. Verifierat i
+dev, både kommandots utdata och en direkt kontroll av faktiska rader:
+`ALTER TABLE "HouseholdMembers" ADD "WeeklyEffortCeiling" integer[] NOT NULL DEFAULT
+('{2,2,2,2,2,2,2}');` och `SELECT "WeeklyEffortCeiling" FROM "HouseholdMembers"` gav
+`{2,2,2,2,2,2,2}` på redan existerande medlemmar.
+
+**Rollförslag, samma mönster som `HouseholdRolePresets.BudgetFor` - bara vid ett aktivt val,
+aldrig retroaktivt.** `AdultFullTime` → Light mån-fre (lite ork kvar efter en heltidsdag), Heavy
+lör-sön. `Retired` → Heavy alla dagar (ingen begränsning). `ChildOrTeen` → Medium alla dagar.
+`MemberSheet.SetRoleAsync` sätter nu roll, tidsbudget OCH ork-tak samtidigt (tre parallella
+anrop) när en roll väljs eller ändras - identiskt med hur budgeten redan hanteras, bara utökat
+med ett tredje fält. Fritt redigerbart per veckodag efteråt, oavsett vilken väg som satte det
+ursprungliga värdet.
+
+**API och behörighet.** `PUT .../members/{memberId}/effort-ceiling`, bakom `HouseholdManageFilter`
+- exakt samma behörighet som `weekly-budget`, eftersom det är samma sorts hushållskonfiguration.
+
+**Flaggat för Björn, inte byggt:** han kan komma att vilja att en person sätter sin EGEN ork
+själv (samma "jag eller den som sköter hushållet"-resonemang som redan finns för paus, se
+`MemberSelfOrManageFilter`). Det kräver ett eget beslut om vilket filter som ska gälla - inte
+byggt här, bara en kommentar i koden vid endpointen som pekar hit.
+
+**UI:** `MemberSheet.razor` får en ny disclosure "Hur mycket orkar personen per veckodag",
+placerad direkt ovanför "Anpassa tid per veckodag" och med samma form: sju rader, en
+`.level-picker` (Lätt/Mellan/Tung) per veckodag i stället för ett sifferfält, en egen
+"Spara"-knapp. Döljs helt för den som saknar `CanManageHousehold`, som resten av
+medlemskonfigurationen i samma ark.
+
 | Fråga | Varför den väntar |
 |---|---|
 | Offline-strategi bortom read-only cache | Utanför MVP; får inte låsas in i förväg |

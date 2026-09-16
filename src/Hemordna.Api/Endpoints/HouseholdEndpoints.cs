@@ -149,6 +149,15 @@ internal static class HouseholdEndpoints
             .Produces<HouseholdMemberResponse>()
             .Produces(StatusCodes.Status404NotFound);
 
+        // Same authorization as weekly-budget above - see docs/ARCHITECTURE.md "Beslut: Ork per
+        // person och veckodag". Note for a later product decision, not built here: Björn may
+        // want a member to set their OWN ceiling - that would need its own filter, the way
+        // MemberSelfAccessFilter does for availability/preferences.
+        manage.MapPut("/members/{memberId:guid}/effort-ceiling", SetWeeklyEffortCeilingAsync)
+            .Produces<HouseholdMemberResponse>()
+            .Produces(StatusCodes.Status404NotFound)
+            .ProducesValidationProblem();
+
         manage.MapPost("/invite-code/regenerate", RegenerateInviteCodeAsync)
             .Produces<HouseholdResponse>()
             .Produces(StatusCodes.Status404NotFound);
@@ -716,6 +725,19 @@ internal static class HouseholdEndpoints
         return member is null ? Results.NotFound() : Results.Ok(ToResponse(member));
     }
 
+    private static async Task<IResult> SetWeeklyEffortCeilingAsync(
+        Guid householdId,
+        Guid memberId,
+        WeeklyEffortCeilingContract request,
+        SetMemberWeeklyEffortCeiling setWeeklyEffortCeiling,
+        CancellationToken cancellationToken)
+    {
+        var member = await setWeeklyEffortCeiling.HandleAsync(
+            householdId, memberId, request.ToDomain(), cancellationToken);
+
+        return member is null ? Results.NotFound() : Results.Ok(ToResponse(member));
+    }
+
     private static async Task<IResult> SetMemberRoleAsync(
         Guid householdId,
         Guid memberId,
@@ -1132,7 +1154,8 @@ internal static class HouseholdEndpoints
             member.Role,
             member.PausedUntil,
             member.CanManageHousehold,
-            HasAccount: member.UserId is not null);
+            HasAccount: member.UserId is not null,
+            WeeklyEffortCeilingContract.From(member.WeeklyEffortCeiling));
 
     private static AreaResponse ToResponse(Area area) => new(area.Id, area.Name, area.IsActive, area.PausedUntil);
 
