@@ -97,6 +97,40 @@ else
         }
     }
 
+    @* "Mycket föreslår morgondagens uppgifter" - föreslå, hämta aldrig automatiskt (samma
+       princip som "avbockat räknas av dagens tid": mer arbete är ett val). Visas bara när
+       Mycket är valt OCH dagen har tid kvar OCH något av imorgondagens uppgifter ryms i den -
+       annars visas ingenting alls. Samma befintliga åtgärd som "Imorgon"-sektionen redan har
+       (BringForwardAsync) - ingen ny framtagningslogik. *@
+    @if (SuggestedTomorrowItems.Count > 0)
+    {
+        <div class="notice suggested-tomorrow" role="status">
+            <p>Du har @SuggestedTomorrowRemainingMinutes min över idag.</p>
+            <ul class="task-list">
+                @foreach (var item in SuggestedTomorrowItems)
+                {
+                    <li class="task task-rest">
+                        @if (ShowIcons)
+                        {
+                            <img class="task-icon" src="@IconSrc(item.Name, item.AreaName)" alt="" width="24" height="24" />
+                        }
+                        <span class="task-name">
+                            @item.Name
+                            @if (item.AreaName is { } suggestedArea)
+                            {
+                                <span class="chip">@suggestedArea</span>
+                            }
+                        </span>
+                        <button type="button" class="btn btn-link" disabled="@(_tomorrowBusyOccurrence == item.OccurrenceId)"
+                                @onclick="() => BringForwardAsync(item.OccurrenceId)">
+                            Gör idag i stället
+                        </button>
+                    </li>
+                }
+            </ul>
+        </div>
+    }
+
     @if (_day is { IsDayOff: true })
     {
         <p class="notice" role="status">Du är ledig idag. Inget nytt läggs på dig.</p>
@@ -768,6 +802,23 @@ else
             return [.. _tomorrow.Items.Where(item => !todayIds.Contains(item.OccurrenceId))];
         }
     }
+
+    /// <summary>
+    /// "Mycket föreslår morgondagens uppgifter" - only when Mycket is the chosen level AND
+    /// today's own remaining time is greater than zero: the subset of TomorrowItems that fits in
+    /// what is left, each still offered through the EXISTING "Gör idag i stället" action
+    /// (BringForwardAsync) - nothing is fetched or added on its own. Empty (and so nothing shown)
+    /// whenever nothing of tomorrow's own new work actually fits.
+    /// </summary>
+    private List<PlannedTaskResponse> SuggestedTomorrowItems
+        => _energyChoice == "Mycket" && _day is { RemainingMinutes: > 0 } day
+            ? [.. TomorrowItems.Where(item => item.EstimatedMinutes <= day.RemainingMinutes)]
+            : [];
+
+    /// <summary>The number shown in <see cref="SuggestedTomorrowItems"/>'s own notice - a
+    /// separate property (rather than <c>_day!.RemainingMinutes</c> in the markup) so the
+    /// nullability the compiler already knows about is respected instead of silenced.</summary>
+    private int SuggestedTomorrowRemainingMinutes => _day?.RemainingMinutes ?? 0;
 
     private static string RoomHeadingName(TaskGroup group)
         => group.AreaName is { } areaName ? RoomFloors.RoomNameOf(areaName) : "Övrigt";
