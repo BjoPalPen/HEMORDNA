@@ -177,6 +177,11 @@ public sealed record ChangeTaskEstimatedMinutesRequest(int EstimatedMinutes);
 
 public sealed record ChangeTaskEffortRequest(TaskEffort Effort);
 
+/// <summary>Null clears the lock. <c>Today</c> lets the client name its own local date - see
+/// <c>CompleteOccurrenceRequest</c> for why; it is the date the re-anchored recurrence is
+/// anchored from when a weekday is set.</summary>
+public sealed record SetPreferredWeekdayRequest(DayOfWeek? Weekday, DateOnly? Today = null);
+
 public sealed record TaskDefinitionResponse(
     Guid Id,
     string Name,
@@ -320,7 +325,10 @@ public sealed record TimeCreditResponse(int Minutes);
 /// numbers: this is a planning surface for DAYS, not a comparison between people - see
 /// docs/ARCHITECTURE.md "Beslut: Placeringsalgoritmen".
 /// </summary>
-public sealed record WeeklyPlanVisitResponse(Guid? AreaId, string? AreaName, VisitKind VisitKind, int Minutes);
+/// <param name="IsLocked">True when this visit is "Alltid på" a fixed weekday (Björns krav) -
+/// see TaskDefinition.PreferredWeekday. The client marks these calmly in the preview instead of
+/// explaining why they never move.</param>
+public sealed record WeeklyPlanVisitResponse(Guid? AreaId, string? AreaName, VisitKind VisitKind, int Minutes, bool IsLocked);
 
 public sealed record WeeklyPlanDayResponse(
     DayOfWeek Day, int MinutesBefore, int MinutesAfter, IReadOnlyList<WeeklyPlanVisitResponse> Visits);

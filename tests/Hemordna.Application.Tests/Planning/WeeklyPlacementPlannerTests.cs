@@ -15,14 +15,16 @@ public class WeeklyPlacementPlannerTests
         VisitKind kind = VisitKind.RegularClean,
         TaskEffort requiredEffort = TaskEffort.Medium,
         Guid? areaId = null,
-        Guid? taskId = null)
+        Guid? taskId = null,
+        DayOfWeek? lockedWeekday = null)
         => new(
             areaId ?? Guid.NewGuid(),
             "Rum",
             kind,
             minutes,
             requiredEffort,
-            [taskId ?? Guid.NewGuid()]);
+            [taskId ?? Guid.NewGuid()],
+            lockedWeekday);
 
     [Fact]
     public void No_visits_leaves_every_weekday_untouched()
@@ -173,5 +175,70 @@ public class WeeklyPlacementPlannerTests
         // and no day is left carrying two rooms while others carry none.
         var days = result.PlacedVisits.Select(p => p.Day).ToList();
         Assert.Equal(days.Count, days.Distinct().Count());
+    }
+
+    // "Alltid på en viss veckodag" - Björns krav. See docs/ARCHITECTURE.md "Beslut: Alltid på en
+    // viss veckodag".
+
+    [Fact]
+    public void A_locked_visit_lands_on_its_own_weekday_and_is_counted_into_capacity_first()
+    {
+        var locked = Visit(40, lockedWeekday: DayOfWeek.Tuesday);
+        // An unlocked visit would otherwise prefer Tuesday too (most remaining minutes) - but
+        // the locked visit already claimed 40 of Tuesday's 60, so the unlocked one goes
+        // elsewhere instead, proving the locked visit's minutes were counted BEFORE the greedy
+        // pass ran, not just placed alongside it.
+        var unlocked = Visit(30);
+
+        var result = _planner.Plan(new WeeklyPlacementRequest(UniformCapacity(60), [locked, unlocked]));
+
+        Assert.Equal(DayOfWeek.Tuesday, result.PlacedVisits.Single(p => p.Visit == locked).Day);
+        Assert.NotEqual(DayOfWeek.Tuesday, result.PlacedVisits.Single(p => p.Visit == unlocked).Day);
+        Assert.Equal(20, result.MinutesAfterByDay[DayOfWeek.Tuesday]);
+    }
+
+    [Fact]
+    public void A_locked_visit_is_placed_on_its_day_even_when_nobody_has_the_ceiling_for_its_effort()
+    {
+        // Every weekday caps at Medium - a Heavy visit would normally fall back to "every
+        // weekday is a candidate" and pick the emptiest one (Monday). Locked to Thursday, the
+        // requirement wins outright - no effort check at all.
+        var weekdays = UniformCapacity(30, TaskEffort.Medium);
+        var locked = Visit(20, VisitKind.DeepClean, TaskEffort.Heavy, lockedWeekday: DayOfWeek.Thursday);
+
+        var result = _planner.Plan(new WeeklyPlacementRequest(weekdays, [locked]));
+
+        Assert.Equal(DayOfWeek.Thursday, Assert.Single(result.PlacedVisits).Day);
+    }
+
+    [Fact]
+    public void A_visit_with_exactly_one_locked_task_takes_the_whole_visit_with_it()
+    {
+        // Two tasks in the same room/kind, only one locked - the room rule holds, so the
+        // UNLOCKED task's minutes count too, and the whole thing goes to the locked day.
+        var areaId = Guid.NewGuid();
+        var visit = new PlaceableVisit(
+            areaId, "Badrum", VisitKind.RegularClean, 50, TaskEffort.Medium,
+            [Guid.NewGuid(), Guid.NewGuid()], DayOfWeek.Wednesday);
+
+        var result = _planner.Plan(new WeeklyPlacementRequest(UniformCapacity(60), [visit]));
+
+        var placement = Assert.Single(result.PlacedVisits);
+        Assert.Equal(DayOfWeek.Wednesday, placement.Day);
+        Assert.Equal(10, result.MinutesAfterByDay[DayOfWeek.Wednesday]);
+    }
+
+    [Fact]
+    public void Locked_visits_are_placed_before_the_greedy_pass_regardless_of_how_light_they_are()
+    {
+        // A tiny locked visit and a big unlocked one - if the locked visit were run through the
+        // normal "heaviest/biggest first" ordering it would lose to the big one and never get
+        // priority. It must still claim its day unconditionally.
+        var locked = Visit(5, VisitKind.RegularClean, TaskEffort.Light, lockedWeekday: DayOfWeek.Friday);
+        var big = Visit(50, VisitKind.DeepClean, TaskEffort.Heavy);
+
+        var result = _planner.Plan(new WeeklyPlacementRequest(UniformCapacity(60), [big, locked]));
+
+        Assert.Equal(DayOfWeek.Friday, result.PlacedVisits.Single(p => p.Visit == locked).Day);
     }
 }

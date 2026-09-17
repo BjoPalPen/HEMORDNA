@@ -515,13 +515,19 @@ Pausa ett rum". Vid återupptagning börjar rummets uppgifter om helt vanligt, i
 - samma mönster som redan gäller för hushålls-/medlemspaus.
 
 Att trycka på en uppgift öppnar `Components/TaskOptionsSheet.razor`:
-Upprepning/Vem gör det/Tid/Rum/Tyngd som varsin rad som drillar ner till ett eget litet formulär
-inuti samma ark ("Tid" med samma kvalitativa knappar - `TimeLevel.All`, se §6a - som
+Upprepning/Alltid på/Vem gör det/Tid/Rum/Tyngd som varsin rad som drillar ner till ett eget litet
+formulär inuti samma ark ("Tid" med samma kvalitativa knappar - `TimeLevel.All`, se §6a - som
 "Lägg till uppgift" redan använder; "Tyngd" med samma mönster men tre knappar - `EffortLevel.All`,
 se §6a1), en "Kräver vuxen"-växel, och "Ta bort uppgiften" i rönn-ink längst
 ner. "+ Nytt rum" öppnar ett ark med rumsmalls-väljaren (namnge våning, rumstyp, antal - se §6b) och en
 disclosure "Lägg till ett tomt rum i stället" för grupperingar som inte är ett rum (t.ex.
 "Hund", "Garage").
+
+**"Alltid på"** (denna revision, se docs/ARCHITECTURE.md "Beslut: Alltid på en viss veckodag"):
+*Ingen särskild dag* eller måndag–söndag - ett krav, inte ett önskemål, så uppgiften alltid ligger
+på den dagen (t.ex. soptömning på hämtningsdagen). Visas bara för veckovisa och månadsvisa
+uppgifter - en daglig eller "vid behov"-uppgift har ingen enskild veckodag att välja, så raden
+döljs helt i stället för att visas gråmarkerad.
 
 Totalrad "Totalt: N uppgifter · M min" (en platt summa, till skillnad från varje bricka
 egen viktade "min/v") ligger tillsammans med den frekvensviktade veckosumman och hushållets
@@ -610,7 +616,10 @@ Knappen "Planera veckan" på Rum (bara `Session.CanManageHousehold`) öppnar
 besökstyp + minuter) som algoritmen skulle placera dit. **Aldrig ett tal per person** - se
 docs/ARCHITECTURE.md "Beslut: Placeringsalgoritmen" - det här är en planeringsyta för DAGAR, inte
 en jämförelse mellan hushållets medlemmar (samma princip som redan styr Idag/Vecka, CLAUDE.md
-§12).
+§12). Ett besök som ligger "Alltid på" en viss dag (se ovan och docs/ARCHITECTURE.md "Beslut:
+Alltid på en viss veckodag") markeras lugnt inline - "· alltid tisdag" - i stället för att
+förklaras eller varnas för; det är fortfarande bara en saklig upplysning om VARFÖR besöket ligger
+där.
 
 Två knappar avslutar: **Använd** skriver förslaget (`POST .../weekly-plan/apply`) och visar en
 lugn bekräftelse - "Klart. Det gäller kommande veckor - det som redan ligger ute på någons dag

@@ -120,6 +120,15 @@ internal static class HouseholdEndpoints
             .Produces<TaskDefinitionResponse>()
             .Produces(StatusCodes.Status404NotFound);
 
+        // "Alltid på en viss veckodag" - household configuration, same authorization as
+        // frequency. 409 when the task has no weekly/monthly recurrence to lock to a weekday -
+        // see TaskDefinition.SetPreferredWeekday and docs/ARCHITECTURE.md "Beslut: Alltid på en
+        // viss veckodag".
+        manage.MapPut("/tasks/{taskId:guid}/preferred-weekday", SetTaskPreferredWeekdayAsync)
+            .Produces<TaskDefinitionResponse>()
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status409Conflict);
+
         scoped.MapPost("/tasks/rebalance-schedule", RebalanceScheduleAsync)
             .Produces<RebalanceScheduleResponse>();
 
@@ -610,6 +619,25 @@ internal static class HouseholdEndpoints
         CancellationToken cancellationToken)
     {
         var definition = await changeTaskEffort.HandleAsync(householdId, taskId, request.Effort, cancellationToken);
+
+        return definition is null ? Results.NotFound() : Results.Ok(ToResponse(definition));
+    }
+
+    private static async Task<IResult> SetTaskPreferredWeekdayAsync(
+        Guid householdId,
+        Guid taskId,
+        SetPreferredWeekdayRequest request,
+        SetTaskPreferredWeekday setPreferredWeekday,
+        TimeProvider timeProvider,
+        CancellationToken cancellationToken)
+    {
+        // The client's own "today" when it sends one - see CompleteOccurrenceAsync's own
+        // remarks. Matters here: it is the exact date the re-anchored recurrence is anchored
+        // from - see RecurrenceReanchoring.
+        var today = request.Today ?? DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+
+        var definition = await setPreferredWeekday.HandleAsync(
+            householdId, taskId, request.Weekday, today, cancellationToken);
 
         return definition is null ? Results.NotFound() : Results.Ok(ToResponse(definition));
     }
@@ -1192,7 +1220,11 @@ internal static class HouseholdEndpoints
                 [.. result.PlacedVisits
                     .Where(placement => placement.Day == day)
                     .Select(placement => new WeeklyPlanVisitResponse(
-                        placement.Visit.AreaId, placement.Visit.AreaName, placement.Visit.VisitKind, placement.Visit.Minutes))]))]);
+                        placement.Visit.AreaId,
+                        placement.Visit.AreaName,
+                        placement.Visit.VisitKind,
+                        placement.Visit.Minutes,
+                        placement.Visit.LockedWeekday is not null))]))]);
 
     private static HouseholdResponse ToResponse(Household household)
         => new(

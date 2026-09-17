@@ -84,13 +84,15 @@ public sealed class CreateTaskDefinition
         definition.ChangeEffort(request.Effort);
         definition.AssignToArea(request.AreaId);
         definition.SetDefaultResponsibleMember(request.DefaultResponsibleMemberId);
-        definition.SetPreferredWeekday(request.PreferredWeekday);
         definition.SetCanBeDeferred(request.CanBeDeferred);
         definition.SetRotatingResponsibility(request.HasRotatingResponsibility);
         definition.SetRequiresMultiplePeople(request.RequiresMultiplePeople);
         definition.SetRequiresAdult(request.RequiresAdult);
+        // Recurrence before PreferredWeekday: SetPreferredWeekday requires a Weekly/Monthly
+        // recurrence to already be in place - see TaskDefinition's own remarks.
         definition.SetRecurrence(recurrence);
         definition.SetStaleAfterDays(request.StaleAfterDays);
+        definition.SetPreferredWeekday(request.PreferredWeekday);
 
         await _definitions.AddAsync(definition, cancellationToken);
 

@@ -172,4 +172,49 @@ public class ApplyWeeklyPlanTests
         Assert.Equal(DayOfWeek.Monday, reloadedSecond!.Recurrence!.Weekday);
         Assert.NotEqual(reloadedFirst.Recurrence.MonthlyWeek, reloadedSecond.Recurrence.MonthlyWeek);
     }
+
+    /// <summary>
+    /// "Alltid på en viss veckodag" (Björns krav) - ApplyWeeklyPlan must never move a locked
+    /// task, even under a scenario that WOULD move it if it were treated as an ordinary
+    /// unlocked visit. Both tasks are the same VisitKind/effort, so without the lock they would
+    /// compete on size in the normal greedy order (biggest first) and swap outcomes: the big
+    /// task would claim Monday and the small one would be pushed to Tuesday instead - see
+    /// docs/ARCHITECTURE.md "Beslut: Alltid på en viss veckodag".
+    /// </summary>
+    [Fact]
+    public async Task Applying_a_plan_never_moves_a_task_locked_to_a_weekday()
+    {
+        var household = await new CreateHousehold(_households, new FixedTimeProvider(Now))
+            .HandleAsync("Familjen", Guid.NewGuid(), "Anna", CancellationToken.None);
+        var anna = household.Members.Single();
+        anna.ChangeWeeklyTimeBudget(WeeklyTimeBudget.Uniform(120));
+        await _households.UpdateAsync(household, CancellationToken.None);
+
+        // Locked to Monday - soptömning på hämtningsdagen, ett krav, inte ett önskemål. Small
+        // (10 min), so an ordinary greedy pass would place it AFTER the big task below.
+        var locked = TaskDefinition.Create(household.Id, "Släng soporna", 10, Now);
+        locked.SetDefaultResponsibleMember(anna.Id);
+        locked.SetRecurrence(RecurrenceRule.Weekly(OldFriday, DayOfWeek.Monday));
+        locked.SetPreferredWeekday(DayOfWeek.Monday);
+        _definitions.Seed(locked);
+
+        // Unlocked, big (100 min) - an ordinary greedy pass would place THIS one first and claim
+        // Monday (all days tied at 120 initially), pushing the small task to Tuesday instead.
+        var big = TaskDefinition.Create(household.Id, "Storstäda källaren", 100, Now);
+        big.SetDefaultResponsibleMember(anna.Id);
+        big.SetRecurrence(RecurrenceRule.Weekly(OldFriday, DayOfWeek.Friday));
+        _definitions.Seed(big);
+
+        var changedCount = await CreateUseCase().HandleAsync(household.Id, Wednesday, CancellationToken.None);
+
+        // The big task moved (Friday -> Tuesday, since Monday's 110 remaining minutes, after the
+        // locked visit's 10 were counted in first, is now less than every other day's 120); the
+        // locked one did not, even though - unlocked - it would have been outcompeted for Monday.
+        Assert.Equal(1, changedCount);
+        var reloadedLocked = await _definitions.FindByIdAsync(household.Id, locked.Id, CancellationToken.None);
+        var reloadedBig = await _definitions.FindByIdAsync(household.Id, big.Id, CancellationToken.None);
+        Assert.Equal(DayOfWeek.Monday, reloadedLocked!.Recurrence!.Weekday);
+        Assert.Equal(DayOfWeek.Monday, reloadedLocked.PreferredWeekday);
+        Assert.Equal(DayOfWeek.Tuesday, reloadedBig!.Recurrence!.Weekday);
+    }
 }

@@ -192,7 +192,7 @@ public sealed record TaskOccurrenceResponse(
 
 /// <summary>"Planera veckan" - one visit's placement, for the preview. No per-person numbers -
 /// see the API's own contract.</summary>
-public sealed record WeeklyPlanVisitResponse(Guid? AreaId, string? AreaName, string VisitKind, int Minutes);
+public sealed record WeeklyPlanVisitResponse(Guid? AreaId, string? AreaName, string VisitKind, int Minutes, bool IsLocked);
 
 public sealed record WeeklyPlanDayResponse(
     string Day, int MinutesBefore, int MinutesAfter, IReadOnlyList<WeeklyPlanVisitResponse> Visits);

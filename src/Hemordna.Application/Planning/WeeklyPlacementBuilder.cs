@@ -43,19 +43,62 @@ internal static class WeeklyPlacementBuilder
                 && VisitKindClassifier.Of(definition) != VisitKind.Routine)
             .GroupBy(definition => (definition.AreaId, Kind: VisitKindClassifier.Of(definition)))
             .SelectMany(group => group.Key.AreaId is null
-                // "Övrigt" has no room to hold a visit together - each task is its own visit.
-                ? group.Select(definition => new[] { definition })
-                : [group.ToArray()])
-            .Select(group => new PlaceableVisit(
-                group[0].AreaId,
-                group[0].AreaId is { } areaId ? household.Areas.FirstOrDefault(area => area.Id == areaId)?.Name : null,
-                VisitKindClassifier.Of(group[0]),
-                group.Sum(definition => definition.EstimatedMinutes),
-                group.Max(definition => definition.Effort),
-                [.. group.Select(definition => definition.Id)]))
+                // "Övrigt" has no room to hold a visit together - each task is its own visit,
+                // locked to its own PreferredWeekday if it has one.
+                ? group.Select(definition => (Tasks: (IReadOnlyList<TaskDefinition>)[definition], LockedWeekday: definition.PreferredWeekday))
+                : SplitByLock(group.ToArray()))
+            .Select(entry => new PlaceableVisit(
+                entry.Tasks[0].AreaId,
+                entry.Tasks[0].AreaId is { } areaId ? household.Areas.FirstOrDefault(area => area.Id == areaId)?.Name : null,
+                VisitKindClassifier.Of(entry.Tasks[0]),
+                entry.Tasks.Sum(definition => definition.EstimatedMinutes),
+                entry.Tasks.Max(definition => definition.Effort),
+                [.. entry.Tasks.Select(definition => definition.Id)],
+                entry.LockedWeekday))
             .ToList();
 
         return new WeeklyPlacementRequest(weekdays, placeable);
+    }
+
+    /// <summary>
+    /// Splits one room's (AreaId, VisitKind) group into the visit(s) it actually becomes, given
+    /// which of its tasks are locked to a weekday (Björns krav, "Alltid på en viss veckodag").
+    /// </summary>
+    /// <remarks>
+    /// Zero or exactly one distinct locked weekday among the group's tasks: the room rule holds
+    /// - the WHOLE group (locked and unlocked tasks together) stays one visit, carrying that
+    /// single day as its <see cref="PlaceableVisit.LockedWeekday"/> (or null when none of them
+    /// are locked). More than one distinct locked weekday: the room rule cannot hold everyone
+    /// together any more - each locked task becomes its own single-task visit on its own day,
+    /// and any remaining unlocked tasks form their own ordinary visit, placed by the greedy
+    /// algorithm as usual.
+    /// </remarks>
+    private static IEnumerable<(IReadOnlyList<TaskDefinition> Tasks, DayOfWeek? LockedWeekday)> SplitByLock(
+        IReadOnlyList<TaskDefinition> group)
+    {
+        var lockedDays = group
+            .Where(definition => definition.PreferredWeekday is not null)
+            .Select(definition => definition.PreferredWeekday!.Value)
+            .Distinct()
+            .ToList();
+
+        if (lockedDays.Count <= 1)
+        {
+            yield return (group, lockedDays.Count == 1 ? lockedDays[0] : null);
+            yield break;
+        }
+
+        foreach (var day in lockedDays)
+        {
+            yield return ([.. group.Where(definition => definition.PreferredWeekday == day)], day);
+        }
+
+        var unlocked = group.Where(definition => definition.PreferredWeekday is null).ToList();
+
+        if (unlocked.Count > 0)
+        {
+            yield return (unlocked, null);
+        }
     }
 
     /// <summary>

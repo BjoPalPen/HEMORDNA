@@ -15,13 +15,21 @@ namespace Hemordna.Application.Planning;
 /// own frequency when its new <see cref="RecurrenceRule"/> is built after placement - see the
 /// use case that applies a plan.
 /// </remarks>
+/// <param name="LockedWeekday">
+/// Set when every task in this visit shares the same <see cref="TaskDefinition.PreferredWeekday"/>
+/// (Björns krav, "Alltid på en viss veckodag") - the visit is placed on exactly this day,
+/// unconditionally, instead of going through the greedy algorithm. Null for an ordinary,
+/// freely-placed visit. See <see cref="WeeklyPlacementBuilder"/> for how a room's visit is split
+/// when its tasks disagree on which day they are locked to.
+/// </param>
 public sealed record PlaceableVisit(
     Guid? AreaId,
     string? AreaName,
     VisitKind VisitKind,
     int Minutes,
     TaskEffort RequiredEffort,
-    IReadOnlyList<Guid> TaskDefinitionIds);
+    IReadOnlyList<Guid> TaskDefinitionIds,
+    DayOfWeek? LockedWeekday = null);
 
 /// <summary>The household's placeable capacity for one weekday - see
 /// docs/ARCHITECTURE.md for how <paramref name="AvailableMinutes"/> and
@@ -73,6 +81,15 @@ public sealed record WeeklyPlacementResult(
 /// <b>Overflow is allowed.</b> A weekday's remaining minutes can go negative once a visit is
 /// placed there - this is a planning aid, not a hard capacity limiter.
 /// </para>
+/// <para>
+/// <b>Locked visits go first, unconditionally.</b> A visit with
+/// <see cref="PlaceableVisit.LockedWeekday"/> set is placed on exactly that day before anything
+/// else, without regard to <see cref="WeekdayCapacity.MaxEffort"/> - the requirement wins,
+/// `RotationPicker`'s own existing fallback settles WHO ends up doing it. Its minutes are
+/// subtracted from that day's remaining capacity first, so the greedy pass below spreads the
+/// REST of the week around it rather than in ignorance of it. See docs/ARCHITECTURE.md "Beslut:
+/// Alltid på en viss veckodag".
+/// </para>
 /// </remarks>
 public sealed class WeeklyPlacementPlanner
 {
@@ -99,13 +116,28 @@ public sealed class WeeklyPlacementPlanner
         var remaining = request.Weekdays.ToDictionary(w => w.Day, w => w.AvailableMinutes);
         var before = new Dictionary<DayOfWeek, int>(remaining);
 
+        var placed = new List<PlacedVisit>(request.Visits.Count);
+
+        // Locked visits first - placed on their own day unconditionally, and counted into
+        // capacity, so the greedy pass below evens the rest of the week out AROUND them.
+        var lockedVisits = request.Visits
+            .Where(visit => visit.LockedWeekday is not null)
+            .OrderBy(visit => Array.IndexOf(WeekOrder, visit.LockedWeekday!.Value))
+            .ThenBy(visit => visit.TaskDefinitionIds.Count > 0 ? visit.TaskDefinitionIds.Min() : Guid.Empty);
+
+        foreach (var visit in lockedVisits)
+        {
+            var day = visit.LockedWeekday!.Value;
+            remaining[day] -= visit.Minutes;
+            placed.Add(new PlacedVisit(visit, day));
+        }
+
         var orderedVisits = request.Visits
+            .Where(visit => visit.LockedWeekday is null)
             .OrderByDescending(visit => visit.VisitKind == VisitKind.DeepClean)
             .ThenByDescending(visit => visit.Minutes)
             .ThenBy(visit => visit.TaskDefinitionIds.Count > 0 ? visit.TaskDefinitionIds.Min() : Guid.Empty)
             .ToList();
-
-        var placed = new List<PlacedVisit>(orderedVisits.Count);
 
         foreach (var visit in orderedVisits)
         {
