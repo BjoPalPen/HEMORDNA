@@ -1,6 +1,7 @@
 using Hemordna.Application.Households;
 using Hemordna.Application.Tasks;
 using Hemordna.Application.Tests.Households;
+using Hemordna.Domain.Common;
 using Hemordna.Domain.Households;
 using Hemordna.Domain.Tasks;
 
@@ -53,6 +54,42 @@ public class CreateTaskDefinitionTests
             householdId, new NewTaskDefinition("Skrubba dusch", 15, Effort: TaskEffort.Heavy), CancellationToken.None);
 
         Assert.Equal(TaskEffort.Heavy, definition!.Effort);
+    }
+
+    /// <summary>"Every Tuesday" locked to Thursday would generate on Tuesdays while planning
+    /// treats the task as pinned to Thursday - rejected rather than stored in disagreement.</summary>
+    [Fact]
+    public async Task Rejects_a_locked_weekday_that_disagrees_with_the_recurrence()
+    {
+        var householdId = await ArrangeHouseholdAsync();
+        var tuesday = new DateOnly(2026, 3, 3);
+
+        await Assert.ThrowsAsync<DomainException>(() => CreateUseCase().HandleAsync(
+            householdId,
+            new NewTaskDefinition(
+                "Tömma sopor", 5,
+                Recurrence: RecurrenceRule.Weekly(tuesday, DayOfWeek.Tuesday),
+                PreferredWeekday: DayOfWeek.Thursday),
+            CancellationToken.None));
+
+        Assert.Empty(await _definitions.ListByHouseholdAsync(householdId, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Accepts_a_locked_weekday_that_matches_the_recurrence()
+    {
+        var householdId = await ArrangeHouseholdAsync();
+        var tuesday = new DateOnly(2026, 3, 3);
+
+        var definition = await CreateUseCase().HandleAsync(
+            householdId,
+            new NewTaskDefinition(
+                "Tömma sopor", 5,
+                Recurrence: RecurrenceRule.Weekly(tuesday, DayOfWeek.Tuesday),
+                PreferredWeekday: DayOfWeek.Tuesday),
+            CancellationToken.None);
+
+        Assert.Equal(DayOfWeek.Tuesday, definition!.PreferredWeekday);
     }
 
     [Fact]

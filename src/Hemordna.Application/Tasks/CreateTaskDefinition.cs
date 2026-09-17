@@ -93,6 +93,7 @@ public sealed class CreateTaskDefinition
         definition.SetRecurrence(recurrence);
         definition.SetStaleAfterDays(request.StaleAfterDays);
         definition.SetPreferredWeekday(request.PreferredWeekday);
+        definition.EnsurePreferredWeekdayMatchesRecurrence();
 
         await _definitions.AddAsync(definition, cancellationToken);
 

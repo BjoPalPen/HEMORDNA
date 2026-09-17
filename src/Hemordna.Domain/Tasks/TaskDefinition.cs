@@ -187,6 +187,21 @@ public sealed class TaskDefinition
         PreferredWeekday = day;
     }
 
+    /// <summary>
+    /// Rejects a locked weekday that disagrees with the recurrence it sits on - e.g. "every
+    /// Tuesday" locked to Thursday, which would generate on Tuesdays while planning treats the
+    /// task as pinned to Thursday. For a task created with both at once; changing the lock
+    /// afterwards goes through SetTaskPreferredWeekday, which re-anchors the recurrence instead.
+    /// </summary>
+    public void EnsurePreferredWeekdayMatchesRecurrence()
+    {
+        if (PreferredWeekday is { } day && Recurrence?.Weekday != day)
+        {
+            throw new DomainException(
+                $"Task definition '{Name}' is locked to {day}, but its recurrence falls on {Recurrence?.Weekday?.ToString() ?? "no fixed weekday"}.");
+        }
+    }
+
     public void SetCanBeDeferred(bool canBeDeferred) => CanBeDeferred = canBeDeferred;
 
     public void SetRotatingResponsibility(bool rotating) => HasRotatingResponsibility = rotating;
