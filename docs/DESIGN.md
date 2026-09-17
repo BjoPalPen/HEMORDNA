@@ -198,13 +198,29 @@ klara" och en tunn framstegslinje.
 
 **Hur är orken idag?** (denna revision): direkt under rubriken, före listan, tre kvalitativa
 val - "Lite" · "Lagom" · "Mycket" - samma regel som §6a om att aldrig visa en minutsiffra. Ett
-val skalar bara DAGENS tillgängliga tid (`Support/EnergyLevel.cs`), aldrig veckobudgeten
-(PRODUCT.md §5: mindre tid idag rubbar inte normen) - vad valet faktiskt gör syns i listan genom
-vilka uppgifter som får plats, ingen förklarande text vid själva valet. Visas varje dag tills ett
-val gjorts, döljs helt om medlemmen saknar tid alls den veckodagen; efter valet syns bara den
-valda chipen, ett nytt tryck öppnar de tre igen. Enhetslokalt (`Support/EnergyChoice.cs`) minns
-bara VILKEN etikett som valdes, så chipen läser rätt tillbaka efter en omladdning - servern ser
-bara minuterna, aldrig ordet "orken" eller vilken nivå som valdes.
+val skalar DAGENS tillgängliga tid (`Support/EnergyLevel.cs`), aldrig veckobudgeten (PRODUCT.md
+§5: mindre tid idag rubbar inte normen) - vad valet faktiskt gör syns i listan genom vilka
+uppgifter som får plats, ingen förklarande text vid själva valet. Visas varje dag tills ett val
+gjorts, döljs helt om medlemmen saknar tid alls den veckodagen; efter valet syns bara den valda
+chipen, ett nytt tryck öppnar de tre igen. Enhetslokalt (`Support/EnergyChoice.cs`) minns bara
+VILKEN etikett som valdes, så chipen läser rätt tillbaka efter en omladdning - servern ser bara
+minuterna (och sedan "orkvalet styr dagens tyngd" nedan: taket), aldrig ordet "orken" eller vilken
+nivå som valdes.
+
+**Orkvalet styr dagens tyngd** (denna revision, se docs/ARCHITECTURE.md "Beslut: orkvalet styr
+dagens tyngd"): "Lite" sätter, utöver mindre tid, även ett tak på hur TUNGA dagens uppgifter får
+vara - bara Lätt-märkta uppgifter (och rutiner, som alltid är med) planeras. "Lagom" och "Mycket"
+lägger inget tyngdfilter alls. Inget nytt syns vid själva valet - precis som tidsskalningen märks
+detta bara genom vilka uppgifter som faktiskt listas, aldrig en förklarande text eller siffra.
+
+**Mycket föreslår morgondagens uppgifter** (denna revision, se docs/ARCHITECTURE.md "Beslut:
+Mycket föreslår morgondagens uppgifter"): väljer man "Mycket" och det blir tid över när dagens
+egna uppgifter är planerade, visas en lugn notis direkt under orkvalet - "Du har N min över
+idag" (ett medvetet, dokumenterat undantag från §6a, samma sort som "Tid i förväg" och
+"Imorgon"-sektionens "Totalt") - med de av morgondagens uppgifter som ryms i den tiden, var och
+en med samma "Gör idag i stället"-knapp som "Imorgon"-sektionen redan har. Ren föreslagen, aldrig
+hämtad av sig själv: ingenting flyttas eller läggs till förrän medlemmen själv trycker på en av
+dem. Inget visas om inget ryms - ingen tom ruta, ingen förklarande "inget att föreslå".
 
 Varje chip har en egen batterisymbol (`Icon.razor`: `battery-low`/`battery-medium`/`battery-full`,
 en respektive två respektive tre fyllda staplar i samma konturstil som appens övriga ikoner) -
