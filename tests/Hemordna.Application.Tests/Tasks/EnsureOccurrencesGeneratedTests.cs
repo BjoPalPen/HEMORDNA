@@ -825,4 +825,32 @@ public class EnsureOccurrencesGeneratedTests
         var occurrence = Assert.Single(await _occurrences.ListOutstandingByHouseholdAsync(household.Id, CancellationToken.None));
         Assert.NotNull(occurrence.AssignedMemberId);
     }
+
+    /// <summary>
+    /// Björn, 2026-09-17: after resetting the household and creating new rooms, brand new tasks
+    /// showed as "sedan tidigare" with due dates 1-7 September - before they existed. Monthly
+    /// "first week of the month" rules anchor to the start of the month, and generation caught
+    /// up the already-passed slot. A task must never get a slot from before it was created.
+    /// </summary>
+    [Fact]
+    public async Task A_monthly_task_created_mid_month_gets_no_slot_until_next_month()
+    {
+        var householdId = await ArrangeHouseholdAsync();
+        var createdMidMonth = new DateTimeOffset(2026, 3, 17, 9, 0, 0, TimeSpan.Zero);
+
+        var definition = TaskDefinition.Create(householdId, "Torka lister", 10, createdMidMonth);
+        // First Tuesday of March 2026 is the 3rd - two weeks before the task existed.
+        definition.SetRecurrence(RecurrenceRule.MonthlyOnWeekday(
+            new DateOnly(2026, 3, 3), WeekOfMonth.First, DayOfWeek.Tuesday));
+        _definitions.Seed(definition);
+
+        await CreateUseCase().HandleAsync(householdId, new DateOnly(2026, 3, 18), CancellationToken.None);
+
+        Assert.Empty(await _occurrences.ListOutstandingByHouseholdAsync(householdId, CancellationToken.None));
+
+        await CreateUseCase().HandleAsync(householdId, new DateOnly(2026, 4, 8), CancellationToken.None);
+
+        var generated = Assert.Single(await _occurrences.ListOutstandingByHouseholdAsync(householdId, CancellationToken.None));
+        Assert.Equal(new DateOnly(2026, 4, 7), generated.ScheduledDate);
+    }
 }

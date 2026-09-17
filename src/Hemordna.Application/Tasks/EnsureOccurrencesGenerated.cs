@@ -132,7 +132,13 @@ public sealed class EnsureOccurrencesGenerated
         var lastDate = await _occurrences.FindMostRecentOriginalDateAsync(
             household.Id, definition.Id, cancellationToken);
 
-        var next = recurrence.NextOnOrAfter(lastDate?.AddDays(1) ?? recurrence.StartDate);
+        // Never a slot from before the task existed. A monthly "first week of the month" rule
+        // created on the 17th anchors to the 1st - without this floor, generation caught up that
+        // already-passed September slot and the brand new task opened as "sedan tidigare" (seen
+        // in production right after a household reset). The first real slot is next month's.
+        var createdOn = DateOnly.FromDateTime(definition.CreatedAt.UtcDateTime);
+        var from = lastDate?.AddDays(1) ?? recurrence.StartDate;
+        var next = recurrence.NextOnOrAfter(from < createdOn ? createdOn : from);
 
         // Counts skipped-for-pause slots too, not just generated ones - otherwise a household
         // paused for longer than this bound would never advance past the pause window at all.
