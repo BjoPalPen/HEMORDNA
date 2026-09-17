@@ -23,7 +23,8 @@
         <p class="muted small">
             Ett förslag på hur veckans återkommande städning kan fördelas - efter hur mycket tid
             och ork hushållet har varje dag, inte bara turordning. Gäller framåt: det som redan
-            ligger ute på någons dag rörs inte.
+            ligger ute på någons dag rörs inte. Flytta ett besök till en annan dag om det passar
+            bättre - det låser besöket dit, så nästa "Planera veckan" flyttar det inte tillbaka.
         </p>
 
         <ul class="list" aria-label="Förslag per veckodag">
@@ -41,12 +42,25 @@
                             <ul class="weekly-plan-visits">
                                 @foreach (var visit in day.Visits)
                                 {
-                                    <li class="muted small">
-                                        @(visit.AreaName ?? "Övrigt") · @VisitKindLabel(visit.VisitKind) · @visit.Minutes min
-                                        @if (visit.IsLocked)
-                                        {
-                                            <text> · alltid @SwedishDayName(day.Day).ToLowerInvariant()</text>
-                                        }
+                                    <li class="weekly-plan-visit">
+                                        <span class="muted small">
+                                            @(visit.AreaName ?? "Övrigt") · @VisitKindLabel(visit.VisitKind) · @visit.Minutes min
+                                            @if (visit.IsLocked)
+                                            {
+                                                <text> · alltid @SwedishDayName(day.Day).ToLowerInvariant()</text>
+                                            }
+                                        </span>
+                                        <select
+                                            aria-label="Flytta @(visit.AreaName ?? "Övrigt") · @VisitKindLabel(visit.VisitKind) till en annan dag"
+                                            class="weekly-plan-move"
+                                            disabled="@_movePending"
+                                            value="@day.Day"
+                                            @onchange="e => MoveAsync(visit.VisitKey, (string)e.Value!)">
+                                            @foreach (var weekday in WeekdayOrder)
+                                            {
+                                                <option value="@weekday">@SwedishDayName(weekday)</option>
+                                            }
+                                        </select>
                                     </li>
                                 }
                             </ul>
@@ -55,6 +69,13 @@
                 </li>
             }
         </ul>
+
+        @foreach (var warningDay in _plan.EffortWarningDays)
+        {
+            <div class="notice" role="status">
+                Ingen orkar tunga uppgifter på @SwedishDayName(warningDay).ToLowerInvariant().
+            </div>
+        }
 
         @if (_message is { } message)
         {
@@ -84,11 +105,16 @@
 
     private WeeklyPlanResponse? _plan;
     private bool _loading;
+    private bool _movePending;
     private bool _busy;
     private bool _confirmed;
     private string? _message;
 
-    private static readonly System.Globalization.CultureInfo SwedishCulture = new("sv-SE");
+    /// <summary>The household member's own pending edits to the suggestion this open ("Planera
+    /// veckan går att ändra") - visit key to chosen weekday. Recomputed server-side on every
+    /// change (see MoveAsync); the client never re-derives a placement itself. Cleared whenever
+    /// the sheet closes or a plan is applied.</summary>
+    private readonly Dictionary<Guid, string> _moves = new();
 
     private static readonly Dictionary<string, string> DayLabels = new()
     {
@@ -100,6 +126,11 @@
         ["Saturday"] = "Lördag",
         ["Sunday"] = "Söndag"
     };
+
+    /// <summary>Monday first, matching every other weekday picker in the app (MemberSheet,
+    /// TaskOptionsSheet).</summary>
+    private static readonly string[] WeekdayOrder =
+        ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
     private static string SwedishDayName(string day) => DayLabels.GetValueOrDefault(day, day);
 
@@ -126,22 +157,48 @@
 
     private async Task LoadAsync()
     {
-        _loading = true;
+        // Only the very first load blanks the whole sheet - a move recomputes the same
+        // suggestion in place (_movePending just disables the pickers while it does), so picking
+        // a day for one visit doesn't make the rest of an already-visible list disappear.
+        var isFirstLoad = _plan is null;
+        _loading = isFirstLoad;
+        _movePending = !isFirstLoad;
         _message = null;
 
         try
         {
-            _plan = await Api.GetWeeklyPlanAsync(HouseholdId, Today);
+            var result = await Api.GetWeeklyPlanAsync(HouseholdId, Today, ToMoveRequests());
+
+            if (result is not null || isFirstLoad)
+            {
+                _plan = result;
+            }
         }
         catch (HttpRequestException)
         {
-            _plan = null;
+            if (isFirstLoad)
+            {
+                _plan = null;
+            }
         }
         finally
         {
             _loading = false;
+            _movePending = false;
         }
     }
+
+    /// <summary>"Flytta ett besök" (Björns krav) - the client stays thin: it only remembers WHICH
+    /// day was picked and asks the server to recompute the whole suggestion around it, exactly
+    /// like an existing "Alltid på" lock.</summary>
+    private async Task MoveAsync(Guid visitKey, string weekday)
+    {
+        _moves[visitKey] = weekday;
+        await LoadAsync();
+    }
+
+    private List<WeeklyPlanMoveRequest> ToMoveRequests()
+        => [.. _moves.Select(move => new WeeklyPlanMoveRequest(move.Key, move.Value))];
 
     private async Task ApplyAsync()
     {
@@ -150,7 +207,7 @@
 
         try
         {
-            if (await Api.ApplyWeeklyPlanAsync(HouseholdId, Today) is null)
+            if (await Api.ApplyWeeklyPlanAsync(HouseholdId, Today, ToMoveRequests()) is null)
             {
                 _message = "Det gick inte att spara. Försök igen.";
                 return;
@@ -174,6 +231,7 @@
         _plan = null;
         _confirmed = false;
         _message = null;
+        _moves.Clear();
         await OnIsOpenChanged(false);
     }
 
@@ -186,6 +244,7 @@
             _plan = null;
             _confirmed = false;
             _message = null;
+            _moves.Clear();
         }
 
         await IsOpenChanged.InvokeAsync(isOpen);

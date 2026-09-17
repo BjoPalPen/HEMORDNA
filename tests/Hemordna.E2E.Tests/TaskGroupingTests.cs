@@ -102,6 +102,26 @@ public class TaskGroupingTests
         return task.GetProperty("id").GetGuid();
     }
 
+    /// <summary>A daily, interval-1 task - VisitKindClassifier.Of classifies this as a Routine,
+    /// see docs/ARCHITECTURE.md "Beslut: Besökstyp härleds" and "Beslut: rutiner alltid först".
+    /// Its own occurrence for today is generated automatically the next time the day's plan is
+    /// fetched (EnsureOccurrencesGenerated, via GetDailyPlan) - no manual scheduling needed.</summary>
+    private static async Task<Guid> CreateRoutineTaskAsync(HttpClient http, Guid householdId, string name, Guid areaId, DateOnly today)
+    {
+        var task = await (await http.PostAsJsonAsync(
+            $"/api/households/{householdId}/tasks",
+            new
+            {
+                name,
+                estimatedMinutes = 5,
+                areaId,
+                hasRotatingResponsibility = true,
+                recurrence = new { frequency = "Daily", interval = 1, startDate = today }
+            }))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        return task.GetProperty("id").GetGuid();
+    }
+
     private static Task ScheduleAsync(HttpClient http, Guid householdId, Guid taskId, DateOnly date, Guid memberId)
         => http.PostAsJsonAsync(
             $"/api/households/{householdId}/tasks/{taskId}/occurrences",
@@ -170,5 +190,62 @@ public class TaskGroupingTests
         // Det andra handfatet - samma namn, annan våning - ligger efter hela lilla wc:t.
         var upstairsIndex = names.FindLastIndex(n => n.Contains("Torka av handfatet"));
         Assert.True(upstairsIndex > last, "Badrummets handfat bröt in i lilla wc:ts svit.");
+    }
+
+    /// <summary>
+    /// Björns beslut: "överst och alltid med" - en rutin (daglig, intervall 1) hamnar i en egen
+    /// grupp överst, oavsett rum, före resten av dagen i vånings-/rumsordning. Chippen på
+    /// rutinraden visar rummet UTAN våningsprefix (rummet är "Övre plan – Badrum") eftersom
+    /// gruppen saknar en egen rumsrubrik - se docs/ARCHITECTURE.md.
+    /// </summary>
+    [Fact]
+    public async Task Routines_are_grouped_first_regardless_of_room_and_the_rest_follows_in_room_order()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Rut");
+
+        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
+        http.DefaultRequestHeaders.Authorization = new("Bearer", token);
+
+        var me = await (await http.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
+        var householdId = me.GetProperty("householdId").GetGuid();
+        var memberId = me.GetProperty("memberId").GetGuid();
+
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        await http.PutAsJsonAsync(
+            $"/api/households/{householdId}/members/{memberId}/availability",
+            new { date = today, availableMinutes = 60 });
+
+        var bathroomId = await CreateAreaAsync(http, householdId, "Övre plan – Badrum");
+        var kitchenId = await CreateAreaAsync(http, householdId, "Kök");
+
+        await CreateRoutineTaskAsync(http, householdId, "Vadra rummet", bathroomId, today);
+        var bathTaskId = await CreateTaskAsync(http, householdId, "Byt handdukar", bathroomId);
+        var kitchenTaskId = await CreateTaskAsync(http, householdId, "Dammsug golvet", kitchenId);
+
+        await ScheduleAsync(http, householdId, bathTaskId, today, memberId);
+        await ScheduleAsync(http, householdId, kitchenTaskId, today, memberId);
+
+        await page.GotoAsync("/");
+        await page.Locator("h1", new() { HasText = "Rut" }).WaitForAsync();
+
+        var routinesGroup = page.Locator("ul[aria-label=\"Rutiner\"]");
+        await Assertions.Expect(routinesGroup.GetByText("Vadra rummet")).ToBeVisibleAsync();
+
+        // "Rutiner" ligger överst, före alla rumsrubriker - inte bara synligt någonstans.
+        var headingTexts = await page.Locator(".task-group-heading > span:first-child").AllTextContentsAsync();
+        Assert.Equal("Rutiner", headingTexts[0]);
+        Assert.Contains("Badrum", headingTexts);
+        Assert.Contains("Kök", headingTexts);
+
+        // Rummet visas som chip, utan våningsprefixet "Övre plan – ".
+        await Assertions.Expect(routinesGroup.GetByText("Badrum", new() { Exact = true })).ToBeVisibleAsync();
+        await Assertions.Expect(routinesGroup.GetByText("Övre plan", new() { Exact = false })).Not.ToBeVisibleAsync();
+
+        // Rutinen ligger inte kvar i sitt vanliga rums egen lista - resten av rummet gör det.
+        var bathroomGroup = page.Locator("ul[aria-label=\"Badrum\"]");
+        await Assertions.Expect(bathroomGroup.GetByText("Vadra rummet")).Not.ToBeVisibleAsync();
+        await Assertions.Expect(bathroomGroup.GetByText("Byt handdukar")).ToBeVisibleAsync();
     }
 }

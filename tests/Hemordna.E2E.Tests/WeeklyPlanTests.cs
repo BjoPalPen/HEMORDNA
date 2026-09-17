@@ -108,4 +108,62 @@ public class WeeklyPlanTests
         Assert.NotEqual(
             WeekdayOf(afterTasks, "Storstäda badrummet"), WeekdayOf(afterTasks, "Diska köket varje vecka"));
     }
+
+    /// <summary>
+    /// "Planera veckan går att ändra" (Björns krav) - flytta ett besök i förhandsvisningen, använd
+    /// planen, och se att flytten överlevde en riktig reload som ett lås ("alltid torsdag") - inte
+    /// bara den öppna komponentinstansen. Se docs/ARCHITECTURE.md "Beslut: redigerbar plan".
+    /// </summary>
+    [Fact]
+    public async Task Moving_a_visit_in_the_sheet_and_using_the_plan_locks_it_to_the_chosen_day()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Nils");
+
+        var (http, householdId) = await AuthorizedHttpAsync(page);
+        using var _ = http;
+
+        var me = await (await http.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
+        var memberId = me.GetProperty("memberId").GetGuid();
+        await http.PutAsJsonAsync(
+            $"/api/households/{householdId}/members/{memberId}/weekly-budget",
+            new { monday = 120, tuesday = 120, wednesday = 120, thursday = 120, friday = 120, saturday = 120, sunday = 120 });
+
+        var bathroom = await CreateAreaAsync(http, householdId, "Badrum");
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        await CreateTaskAsync(http, householdId, "Skrubba handfatet", 20, "Medium", bathroom, today, "Friday");
+
+        await page.GotoAsync("/rum");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Planera veckan" }).ClickAsync();
+        var planSheet = Sheet(page, "Planera veckan");
+        await planSheet.WaitForAsync();
+
+        var moveSelect = planSheet.GetByLabel("Flytta Badrum", new() { Exact = false });
+        await moveSelect.WaitForAsync();
+        await moveSelect.SelectOptionAsync("Thursday");
+
+        // Flytten skickas om serverside och besöket markeras lugnt som låst till den nya dagen.
+        await Assertions.Expect(planSheet.GetByText("alltid torsdag", new() { Exact = false })).ToBeVisibleAsync();
+
+        await planSheet.GetByRole(AriaRole.Button, new() { Name = "Använd" }).ClickAsync();
+        await Assertions.Expect(planSheet.GetByText("Klart.", new() { Exact = false })).ToBeVisibleAsync();
+
+        // Två "Stäng"-knappar finns nu samtidigt: arkets eget header-kryss och bekräftelsevyns
+        // egen knapp (btn-primary) - den senare kommer sist i DOM-ordningen.
+        await planSheet.GetByRole(AriaRole.Button, new() { Name = "Stäng" }).Last.ClickAsync();
+
+        // Riktig reload, inte bara samma komponentinstans igen - bevisar att låset faktiskt
+        // sparades via API:t, inte bara lokal state i arket.
+        await page.ReloadAsync();
+        await page.GetByRole(AriaRole.Button, new() { Name = "Planera veckan" }).ClickAsync();
+        var reopenedSheet = Sheet(page, "Planera veckan");
+        await reopenedSheet.WaitForAsync();
+
+        await Assertions.Expect(reopenedSheet.GetByText("alltid torsdag", new() { Exact = false })).ToBeVisibleAsync();
+
+        var tasksAfter = await FetchTasksAsync(http, householdId);
+        var task = tasksAfter.EnumerateArray().Single(t => t.GetProperty("name").GetString() == "Skrubba handfatet");
+        Assert.Equal("Thursday", task.GetProperty("preferredWeekday").GetString());
+        Assert.Equal("Thursday", task.GetProperty("recurrence").GetProperty("weekday").GetString());
+    }
 }

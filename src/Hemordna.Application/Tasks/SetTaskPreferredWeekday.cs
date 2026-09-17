@@ -38,17 +38,13 @@ public sealed class SetTaskPreferredWeekday
             return null;
         }
 
-        // Validates weekday/frequency compatibility - throws before anything else changes.
-        definition.SetPreferredWeekday(weekday);
-
-        if (weekday is { } day && definition.Recurrence is { } current)
+        if (weekday is { } day)
         {
-            var reanchored = RecurrenceReanchoring.ForWeekday(current, today, day, () => current.MonthlyWeek ?? WeekOfMonth.First);
-
-            if (RecurrenceReanchoring.HasMeaningfulChange(reanchored, current))
-            {
-                definition.SetRecurrence(reanchored);
-            }
+            RecurrenceReanchoring.LockToWeekday(definition, today, day);
+        }
+        else
+        {
+            definition.SetPreferredWeekday(null);
         }
 
         await _definitions.UpdateAsync(definition, cancellationToken);

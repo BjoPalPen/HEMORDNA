@@ -276,13 +276,15 @@ window.GUIDE = {
                 + "<ol class='gor'>"
                 + "  <li>Gå till <span class='ui'>Rum</span> och tryck <span class='ui'>Planera veckan</span>.</li>"
                 + "  <li>Bläddra igenom förslaget, dag för dag.</li>"
+                + "  <li>Passar en annan dag bättre för ett besök? Välj den i besökets egen dagväljare.</li>"
                 + "  <li>Tryck <span class='ui'>Använd</span> för att spara det, eller "
                 + "      <span class='ui'>Avbryt</span> för att låta allt vara.</li>"
                 + "</ol>"
 
                 + "<div class='shots'>"
                 + "  <figure><div class='telefon'><img src='../img/mobil_planera-veckan.png' alt='Förslag per veckodag' loading='lazy'></div>"
-                + "    <figcaption><b>Förslaget</b> – rum och minuter per dag, aldrig ett tal per person.</figcaption></figure>"
+                + "    <figcaption><b>Förslaget</b> – rum och minuter per dag, aldrig ett tal per person. "
+                + "Varje besök har en egen dagväljare.</figcaption></figure>"
                 + "</div>"
 
                 + "<div class='notis'><p><strong>Gäller framåt.</strong> Det som redan ligger ute på "
@@ -292,8 +294,11 @@ window.GUIDE = {
                 + "storstädning för sig, och de korta dagliga sysslorna (som att tömma diskmaskinen) "
                 + "räknas inte in eftersom de görs varje dag ändå.</p></div>"
 
-                + "<div class='notis tips'><strong>Ett besök markerat \"alltid tisdag\"</strong> ligger "
-                + "fast oavsett förslag - se <a href='#alltid-pa'>Alltid på en viss dag</a>.</div>"
+                + "<div class='notis tips'><strong>En flytt låser besöket till den nya dagen</strong> - "
+                + "precis som en uppgift satt \"alltid tisdag\" ligger fast oavsett förslag, se "
+                + "<a href='#alltid-pa'>Alltid på en viss dag</a>. Nästa <span class='ui'>Planera "
+                + "veckan</span> flyttar det därför inte tillbaka. Passar ingen dag hushållets ork "
+                + "för ett tungt besök, går flytten ändå igenom - appen säger bara till lugnt om det.</div>"
         },
         {
             id: "pausa",

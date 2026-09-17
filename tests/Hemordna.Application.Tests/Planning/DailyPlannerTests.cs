@@ -162,6 +162,44 @@ public class DailyPlannerTests
         Assert.Equal(["Lag forfallen", "Hog idag"], NamesOf(plan));
     }
 
+    /// <summary>
+    /// Björns beslut: "överst och alltid med" - a routine (making the bed, airing out a room)
+    /// must never lose its place to a heavier task that merely outranks it on priority. Both
+    /// tasks take the whole budget on their own, so without the routine-first rule the High
+    /// priority task would win (rule 3, both otherwise tied) and the routine would be bumped.
+    /// </summary>
+    [Fact]
+    public void Routines_are_planned_before_a_heavier_task_that_would_otherwise_win_on_priority()
+    {
+        var plan = PlanWith(
+            10,
+            PlanCandidateBuilder.Task("Badda sangen").Minutes(10).Priority(TaskPriority.Low).Routine().Build(),
+            PlanCandidateBuilder.Task("Storstada badrummet").Minutes(10).Priority(TaskPriority.High).Build());
+
+        Assert.Equal("Badda sangen", Assert.Single(plan.Items).Candidate.TaskName);
+        Assert.Equal("Storstada badrummet", Assert.Single(plan.Unplanned).Candidate.TaskName);
+    }
+
+    /// <summary>
+    /// The documented trade-off (see DailyPlanner's own ordering-rules remarks): routines rank
+    /// even above a task that cannot be deferred at all - normally the single strongest rule,
+    /// since losing THAT task's budget loses the task outright. A routine recurs every day
+    /// regardless, so "first and always" was the explicit, stronger requirement.
+    /// </summary>
+    [Fact]
+    public void A_routine_is_planned_before_a_task_that_cannot_be_deferred()
+    {
+        var plan = PlanWith(
+            10,
+            PlanCandidateBuilder.Task("Vadra rummet").Minutes(10).Routine().Build(),
+            PlanCandidateBuilder.Task("Maste goras idag").Minutes(10).NotDeferrable().Build());
+
+        Assert.Equal("Vadra rummet", Assert.Single(plan.Items).Candidate.TaskName);
+        var unplanned = Assert.Single(plan.Unplanned);
+        Assert.Equal("Maste goras idag", unplanned.Candidate.TaskName);
+        Assert.Equal(UnplannedReason.ExceedsRemainingTime, unplanned.Reason);
+    }
+
     [Fact]
     public void Tasks_that_cannot_be_deferred_are_planned_first()
     {

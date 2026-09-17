@@ -220,6 +220,34 @@ else
         {
             @if (_day.Items.Count > 0)
             {
+                @* "Rutiner" (Björns beslut: "överst och alltid med") - alla dagens rutiner,
+                   oavsett rum, i en egen grupp överst - innan allt annat, inklusive eftersläpnings-
+                   notisen nedan. En tung uppgift ska aldrig kunna knuffa bort bäddning eller
+                   vädring, se DailyPlanner. Rummet visas som chip här (utan våningsprefix) eftersom
+                   gruppen saknar rumsrubrik. *@
+                @if (RoutineItems.Count > 0)
+                {
+                    @GroupHeading("Rutiner", OutstandingCount(RoutineItems))
+                    <ul class="task-list" aria-label="Rutiner">
+                        @foreach (var row in WithStartedFirst(RoutineItems))
+                        {
+                            @if (row.IsRemotelyCompleted)
+                            {
+                                @RemotelyCompletedRow(row.Item)
+                            }
+                            else
+                            {
+                                <TaskListItem Item="row.Item" Today="Today" ShowIcon="ShowIcons" ShowAreaChip="true" StripFloorFromAreaChip="true" ShowTimeLevel="_showTimeLevel"
+                                              IsBusy="_busyOccurrence == row.Item.OccurrenceId"
+                                              IsExpanded="_expandedOccurrence == row.Item.OccurrenceId"
+                                              IsStartHere="row.Item.OccurrenceId == StartHereOccurrenceId"
+                                              IsStarted="row.Item.OccurrenceId == _startedOccurrenceId"
+                                              OnComplete="CompleteAsync" OnToggleExpand="ToggleExpand" OnDefer="DeferAsync" OnToggleStart="ToggleStartAsync" />
+                            }
+                        }
+                    </ul>
+                }
+
                 @*  Förfallna uppgifter ligger i sina egna rum, inte i en egen grupp högst upp:
                     det är var man befinner sig fysiskt som avgör vad man gör härnäst, så allt i
                     samma rum måste komma på rad. Raden bär sin egen "Sedan tidigare"-notis.
@@ -302,7 +330,20 @@ else
                 }
                 else
                 {
-                    @* Utskriften följer samma ordning som skärmen - våning, rum, uppgifter. *@
+                    @* Utskriften följer samma ordning som skärmen - rutiner överst, sedan
+                       våning, rum, uppgifter. *@
+                    @if (RoutineItems.Count > 0)
+                    {
+                        <div class="print-room">
+                            <p class="print-room-heading">Rutiner</p>
+                            <ul>
+                                @foreach (var row in RoutineItems)
+                                {
+                                    @PrintTaskRow(row.Item)
+                                }
+                            </ul>
+                        </div>
+                    }
                     @foreach (var floorGroup in FloorGroups)
                     {
                         @if (floorGroup.Floor is { } floor)
@@ -608,14 +649,32 @@ else
     private TaskRow ToRow(PlannedTaskResponse item) => new(item, _remotelyCompletedIds.Contains(item.OccurrenceId));
 
     /// <summary>
-    /// Today's late items. They are NOT a display group of their own any more - each one sits
-    /// in its own room (see <see cref="RoomGroups"/>) - this only counts them, so a household
-    /// with a real backlog can be offered help spreading it out. See docs/ARCHITECTURE.md
-    /// "Beslut: hela dagen i rumsordning".
+    /// Today's late items, ROUTINES EXCLUDED. They are NOT a display group of their own any
+    /// more - each one sits in its own room (see <see cref="RoomGroups"/>) - this only counts
+    /// them, so a household with a real backlog can be offered help spreading it out. See
+    /// docs/ARCHITECTURE.md "Beslut: hela dagen i rumsordning". A routine is excluded here for
+    /// the same reason it is excluded from <see cref="RoomGroups"/> - see
+    /// <see cref="RoutineItems"/> - a daily routine recurring again tomorrow regardless is not
+    /// the kind of "backlog" this notice/rebalance offer is about.
     /// </summary>
     private List<TaskRow> OverdueItems
-        => (_day?.Items.Where(item => item.IsOverdue) ?? [])
+        => (_day?.Items.Where(item => item.IsOverdue && !item.IsRoutine) ?? [])
             .Select(ToRow)
+            .ToList();
+
+    /// <summary>
+    /// "Rutiner" (Björns beslut: "överst och alltid med") - every one of today's routines
+    /// (<see cref="PlannedTaskResponse.IsRoutine"/>), regardless of room, in its own leading
+    /// group above the room-ordered rest of the day (see <see cref="RoomGroups"/>, which
+    /// excludes them). A routine that is also overdue stays in this group rather than moving
+    /// anywhere else - it keeps its own "sedan tidigare" note (TaskListItem's ShowOverdueNote)
+    /// and sorts first within the group, the same overdue-first convention every other group on
+    /// Idag already uses.
+    /// </summary>
+    private List<TaskRow> RoutineItems
+        => (_day?.Items.Where(item => item.IsRoutine) ?? [])
+            .Select(ToRow)
+            .OrderByDescending(row => row.Item.IsOverdue)
             .ToList();
 
     /// <summary>
@@ -654,17 +713,19 @@ else
     }
 
     /// <summary>
-    /// EVERY item today, grouped by room so the day reads as one room at a time - a task with
-    /// no room ("Övrigt") gets its own group. Overdue items are included here rather than
-    /// lifted into their own leading group: being in a room physically is what decides what you
-    /// do next, so everything in the same room has to come in a row. A late item keeps its own
-    /// "Sedan tidigare"-note on the row, and sorts first within its room.
+    /// EVERY non-routine item today, grouped by room so the day reads as one room at a time -
+    /// a task with no room ("Övrigt") gets its own group. Overdue items are included here rather
+    /// than lifted into their own leading group: being in a room physically is what decides what
+    /// you do next, so everything in the same room has to come in a row. A late item keeps its
+    /// own "Sedan tidigare"-note on the row, and sorts first within its room. A routine is
+    /// excluded - it lives in its own leading "Rutiner" group instead (see
+    /// <see cref="RoutineItems"/>, Björns beslut: "överst och alltid med").
     /// Rooms follow the household's own order (see <see cref="RoomOrderOf"/>), not whatever
     /// DailyPlanner ranked first - this only reorganises the DISPLAY of an already-decided
     /// list, never what is planned.
     /// </summary>
     private List<TaskGroup> RoomGroups
-        => (_day?.Items ?? [])
+        => (_day?.Items.Where(item => !item.IsRoutine) ?? [])
             .Select(ToRow)
             .GroupBy(row => row.Item.AreaName)
             .Select(group => new TaskGroup(
@@ -717,10 +778,11 @@ else
     private static int OutstandingCount(IEnumerable<TaskRow> rows) => rows.Count(row => !row.IsRemotelyCompleted);
 
     /// <summary>"En uppgift åt gången" (docs/PRODUCT.md §7): the same order the grouped view
-    /// would show. A row a remote change just marked done is skipped - it is no longer anyone's
-    /// "next" task, remotely completed or not.</summary>
+    /// would show - routines first (Björns beslut: "överst och alltid med"), same as the list
+    /// and the print view. A row a remote change just marked done is skipped - it is no longer
+    /// anyone's "next" task, remotely completed or not.</summary>
     private List<PlannedTaskResponse> FocusOrder
-        => OverdueItems.Concat(RoomGroups.SelectMany(group => group.Items))
+        => RoutineItems.Concat(OverdueItems).Concat(RoomGroups.SelectMany(group => group.Items))
             .Where(row => !row.IsRemotelyCompleted)
             .Select(row => row.Item)
             .ToList();

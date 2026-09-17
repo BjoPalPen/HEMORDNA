@@ -18,6 +18,7 @@ internal sealed class PlanCandidateBuilder
     private bool _canBeDeferred = true;
     private DateOnly _scheduledDate = DailyPlannerTests.Friday;
     private string? _areaName;
+    private bool _isRoutine;
 
     public static PlanCandidateBuilder Task(string name) => new() { _name = name };
 
@@ -57,7 +58,15 @@ internal sealed class PlanCandidateBuilder
         return this;
     }
 
-    public PlanCandidate Build() => new(BuildOccurrence(), _name, _areaName);
+    /// <summary>Marks this candidate as a <see cref="VisitKind.Routine"/> - see
+    /// DailyPlanner's "rutiner först" ordering rule.</summary>
+    public PlanCandidateBuilder Routine()
+    {
+        _isRoutine = true;
+        return this;
+    }
+
+    public PlanCandidate Build() => new(BuildOccurrence(), _name, _areaName, isRoutine: _isRoutine);
 
     public TaskOccurrence BuildOccurrence()
     {

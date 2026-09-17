@@ -50,7 +50,15 @@ internal sealed class PlanCandidateQuery : IPlanCandidateQuery
                 _dbContext.TaskDefinitions.AsNoTracking(),
                 occurrence => occurrence.TaskDefinitionId,
                 definition => definition.Id,
-                (occurrence, definition) => new { Occurrence = occurrence, definition.Name, definition.AreaId, definition.Description })
+                (occurrence, definition) => new
+                {
+                    Occurrence = occurrence,
+                    definition.Name,
+                    definition.AreaId,
+                    definition.Description,
+                    definition.Recurrence,
+                    definition.Effort
+                })
             // Left join: not every task belongs to an area.
             .GroupJoin(
                 _dbContext.Areas.AsNoTracking(),
@@ -59,9 +67,26 @@ internal sealed class PlanCandidateQuery : IPlanCandidateQuery
                 (row, areas) => new { row, areas })
             .SelectMany(
                 joined => joined.areas.DefaultIfEmpty(),
-                (joined, area) => new { joined.row.Occurrence, joined.row.Name, joined.row.Description, AreaName = area != null ? area.Name : null })
+                (joined, area) => new
+                {
+                    joined.row.Occurrence,
+                    joined.row.Name,
+                    joined.row.Description,
+                    joined.row.Recurrence,
+                    joined.row.Effort,
+                    AreaName = area != null ? area.Name : null
+                })
             .ToListAsync(cancellationToken);
 
-        return [.. rows.Select(row => new PlanCandidate(row.Occurrence, row.Name, row.AreaName, row.Description))];
+        // VisitKindClassifier is not translatable to SQL (Recurrence is a JSON column behind a
+        // value converter, see TaskOccurrenceRepository's own GetMemberIdsByAreaAndVisitKindOnDateAsync)
+        // - applied here, after the rows are materialized, same as there. "Rutiner först" (Björns
+        // beslut) reuses this classification rather than a second "is this a routine" check.
+        return [.. rows.Select(row => new PlanCandidate(
+            row.Occurrence,
+            row.Name,
+            row.AreaName,
+            row.Description,
+            isRoutine: VisitKindClassifier.Of(row.Recurrence, row.Effort) == VisitKind.Routine))];
     }
 }

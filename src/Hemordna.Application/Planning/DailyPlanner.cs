@@ -23,8 +23,15 @@ namespace Hemordna.Application.Planning;
 /// <para>
 /// <b>Ordering rules</b>, applied in this order:
 /// <list type="number">
-///   <item>Tasks that cannot be deferred come first. They cannot be moved to another day at
-///   all, so if they lose the budget they are simply lost.</item>
+///   <item><b>Routines first, unconditionally</b> (Björns beslut: "överst och alltid med" - see
+///   <see cref="PlanCandidate.IsRoutine"/>/<see cref="Hemordna.Domain.Tasks.VisitKindClassifier"/>).
+///   A quick daily routine - making the bed, airing out a room - must never lose its place to a
+///   heavier task that merely outranks it on priority or due date. This is a deliberate
+///   trade-off: a task that cannot be deferred at all (rule 2) now comes AFTER every routine,
+///   even though losing the budget loses that task outright, because a routine recurs every
+///   single day regardless and "first and always" was the explicit, stronger requirement.</item>
+///   <item>Tasks that cannot be deferred come first among the rest. They cannot be moved to
+///   another day at all, so if they lose the budget they are simply lost.</item>
 ///   <item>Overdue tasks before tasks first due today. Something already late should not keep
 ///   slipping.</item>
 ///   <item>Higher priority before lower.</item>
@@ -43,9 +50,10 @@ namespace Hemordna.Application.Planning;
 ///   <item>Occurrence id, ascending. A stable final tie-break so the ordering is total and
 ///   never depends on input order.</item>
 /// </list>
-/// Rule 5 is the only one where a pick depends on picks already made today, so unlike the rest
-/// this cannot be a single static sort: candidates are chosen one at a time, in order, each
-/// pick re-evaluating which rooms/floors are already represented among today's picks so far.
+/// Rule 6 (room/floor clustering) is the only one where a pick depends on picks already made
+/// today, so unlike the rest this cannot be a single static sort: candidates are chosen one at a
+/// time, in order, each pick re-evaluating which rooms/floors are already represented among
+/// today's picks so far.
 /// </para>
 /// </remarks>
 public sealed class DailyPlanner
@@ -80,7 +88,8 @@ public sealed class DailyPlanner
         while (remaining.Count > 0)
         {
             var next = remaining
-                .OrderBy(candidate => candidate.CanBeDeferred)
+                .OrderByDescending(candidate => candidate.IsRoutine)
+                .ThenBy(candidate => candidate.CanBeDeferred)
                 .ThenByDescending(candidate => candidate.Occurrence.IsOverdueOn(date))
                 .ThenByDescending(candidate => candidate.Priority)
                 .ThenBy(candidate => candidate.Occurrence.OriginalScheduledDate)

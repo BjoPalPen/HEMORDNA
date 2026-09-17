@@ -668,19 +668,21 @@ Tillämpas i denna ordning:
 
 | # | Regel | Varför |
 |---|---|---|
-| 1 | Icke uppskjutbara först | De kan inte flyttas till en annan dag alls – förlorar de budgeten är de förlorade |
-| 2 | Förfallna före det som förfaller idag | Något som redan är sent ska inte fortsätta halka |
-| 3 | Högre prioritet före lägre | Hushållets uttalade viktning |
-| 4 | Tidigast ursprungligt förfallodatum först | Äldst arbete leder |
-| 5 | Delar rum/våning med något redan valt idag (2026-09-08) | Se "Beslut: rums-/våningsklustring" nedan - bara en mjuk preferens bland redan likvärdiga kandidater |
-| 6 | Kortare uppgift först | Vid lika ställning: att bli klar slår att påbörja, och mer ryms i budgeten |
-| 7 | `ChoreSequenceHint.RankFor` (2026-09-07) | Ett fåtal kända "gör X före Y"-par, se nedan |
-| 8 | Occurrence-id stigande | Stabil slutlig tie-break som gör ordningen total |
+| 1 | Rutiner (`VisitKind.Routine`) alltid först | Björns beslut: "överst och alltid med" - se "Beslut: rutiner alltid först" nedan |
+| 2 | Icke uppskjutbara först bland resten | De kan inte flyttas till en annan dag alls – förlorar de budgeten är de förlorade |
+| 3 | Förfallna före det som förfaller idag | Något som redan är sent ska inte fortsätta halka |
+| 4 | Högre prioritet före lägre | Hushållets uttalade viktning |
+| 5 | Tidigast ursprungligt förfallodatum först | Äldst arbete leder |
+| 6 | Delar rum/våning med något redan valt idag (2026-09-08) | Se "Beslut: rums-/våningsklustring" nedan - bara en mjuk preferens bland redan likvärdiga kandidater |
+| 7 | Kortare uppgift först | Vid lika ställning: att bli klar slår att påbörja, och mer ryms i budgeten |
+| 8 | `ChoreSequenceHint.RankFor` (2026-09-07) | Ett fåtal kända "gör X före Y"-par, se nedan |
+| 9 | Occurrence-id stigande | Stabil slutlig tie-break som gör ordningen total |
 
-Regel 1 före regel 2 och 3 är ett medvetet val: en förfallen uppgift kan fortfarande flyttas,
-en icke uppskjutbar kan inte det.
+Regel 2 före regel 3 och 4 är ett medvetet val: en förfallen uppgift kan fortfarande flyttas,
+en icke uppskjutbar kan inte det. Regel 1 går före regel 2 på samma sätt, fast starkare - se
+"Beslut: rutiner alltid först" nedan för avvägningen det innebär.
 
-**`ChoreSequenceHint`** (regel 7) är en medvetet SMAL nudge, inte ett generellt
+**`ChoreSequenceHint`** (regel 8) är en medvetet SMAL nudge, inte ett generellt
 städordnings-system - efterfrågat konkret: dammsug (eller sopa) golvet innan man torkar det,
 eftersom smuts annars bara flyttas runt. Ren nyckelordsmatchning på uppgiftsnamnet
 (`"torka golvet"`/`"moppa"` rankas efter `"dammsug"`/`"sopa golvet"`), tillämpad EFTER allt
@@ -794,12 +796,63 @@ våning.
 Min dag" (ovan) fick sin egen uppföljning att INTE upprepa rummets namn som en chip på raden
 (rumsrubriken räcker) togs våningsprefixet bort från chippen rakt av
 (`Support.RoomFloors.RoomNameOf`) - men chippen visas numera BARA i "Sedan tidigare", den enda
-platsen en rad saknar både rums- OCH våningsrubrik. Två olika rum med samma namn på olika
+platsen en rad saknar både rums- OCH våningsrubrik (2026-09 - se dock "Beslut: rutiner alltid
+först" nedan för en ANDRA plats en rad numera saknar rumsrubrik, med motsatt val: kort
+rumsnamn, inte hela `AreaName`, av ett annat skäl). Två olika rum med samma namn på olika
 våningar (två "Hall") blev då omöjliga att skilja åt där. `TaskListItem`s chip visar nu hela
 `AreaName` (våningsprefixet inkluderat) igen - eftersom chippen bara någonsin renderas i just
 det kontext som saknar all annan disambiguering, är den fulla strängen alltid rätt val där.
 Ny regressionstest, `MinDagDetailTests
 .An_overdue_rooms_chip_keeps_its_floor_prefix_to_tell_two_same_named_rooms_apart`.
+
+---
+
+### Beslut: rutiner alltid först — `IMPLEMENTED`
+
+Björns beslut: "överst och alltid med". En daglig rutin (`VisitKind.Routine`, se "Beslut:
+Besökstyp härleds" ovan - samma klassificering, inte en ny) ska aldrig kunna knuffas bort av en
+tyngre uppgift som råkar vinna på prioritet, förfallodatum eller storlek - en tung veckouppgift
+ska inte kunna tränga undan bäddning eller vädring bara för att den är mer uppskjutbar-vänlig
+eller högre prioriterad.
+
+**`DailyPlanner`s första ordningsregel, före allt annat** - se tabellen ovan. En medveten
+avvägning, värd att vara tydlig om: en uppgift som inte kan skjutas upp alls (regel 2, tidigare
+regel 1) kommer nu EFTER rutinerna, trots att den normalt är den starkaste regeln (att förlora
+dess budget förlorar uppgiften helt, medan en rutin bara återkommer imorgon ändå). Björns krav var
+uttryckligt starkare: rutiner är "alltid med", oavsett vad de konkurrerar mot.
+
+**`PlanCandidate.IsRoutine`** - en ny bool, satt av `PlanCandidateQuery` via samma join mot
+uppgiftsdefinitionen som redan hämtar namn/rum/beskrivning, klassificerat med
+`VisitKindClassifier.Of(Recurrence, Effort)` EFTER materialisering (samma mönster, och samma skäl,
+som `TaskOccurrenceRepository.GetMemberIdsByAreaAndVisitKindOnDateAsync` redan använder -
+`Recurrence` är en JSON-kolumn bakom en value converter, inte översättbar till SQL).
+`DailyPlanner` förblir en ren, deterministisk funktion - `IsRoutine` är bara ytterligare ett fält
+på indata, ingen ny dependency.
+
+**Min dag (`MinDag.razor`):** en egen grupp **"Rutiner"** överst - före till och med
+eftersläpningsnotisen ("N uppgifter är sedan tidigare") - med alla dagens rutiner oavsett rum.
+`RoomGroups` och `OverdueItems` exkluderar numera rutiner (en rutin gör inte anspråk på
+eftersläpningsnotisen/ombalanseringserbjudandet - den återkommer i morgon oavsett, det är inte
+den sortens backlogg funktionen finns för). En rutin som samtidigt är förfallen ligger KVAR i
+Rutiner, med sin egen "sedan tidigare"-notis och sorterad först i gruppen - den flyttas
+ingenstans annorstans.
+
+**En andra plats en rad visar rummet som chip** (utöver "Sedan tidigare", se ovan) - men med
+motsatt val: `TaskListItem.StripFloorFromAreaChip` (ny parameter) visar rummets namn UTAN
+våningsprefix i Rutiner-gruppen, eftersom syftet är att säga VILKET RUM rutinen hör till, inte
+att skilja två likanamnda rum åt på olika våningar (det syftet finns bara i "Sedan tidigare").
+
+**Alla renderingsvägar delar samma ordning:** den vanliga listan, utskriften (`_isPrinting`) och
+`FocusOrder` (fokusläget, "En uppgift åt gången") sätter alla `RoutineItems` (rutiner,
+förfallna sorterade först) FÖRE resten - `FocusOrder` konkatenerar `RoutineItems.Concat(...)` i
+stället för att lägga till en särskild gren, så "Visa nästa" och "Börja här" pekar på samma
+uppgift som toppen av listan skulle visat.
+
+**Tester:** `DailyPlannerTests` (en rutin planeras före en tyngre uppgift som annars skulle vunnit
+på prioritet, och även före en uppgift som inte kan skjutas upp alls - den dokumenterade
+avvägningen), `TaskGroupingTests.Routines_are_grouped_first_regardless_of_room_and_the_rest_
+follows_in_room_order` (E2E: rutinerna ligger överst, resten i rumsordning, chippen saknar
+våningsprefix). Alla nya beteendetest bevisade falla innan respektive rättning fanns.
 
 ---
 
@@ -3632,6 +3685,67 @@ en låst uppgift, även i ett scenario som skulle flyttat den om den vore olåst
 rensa låset rör inte `Recurrence`), samt `TaskDefinitionTests` för domäninvarianten. Minst ett
 E2E (`AlwaysOnWeekdayTests`): sätta en veckodag överlever en reload, och raden visas aldrig för
 en daglig uppgift. Alla nya beteendetest bevisade falla innan respektive rättning fanns.
+
+### Beslut: redigerbar plan — `IMPLEMENTED`
+
+Björns krav: "Planera veckan" ska gå att ändra, inte bara godkännas rakt av. Löser detta genom
+att ÅTERANVÄNDA lås-mekaniken "Alltid på en viss veckodag" (ovan) byggde, i stället för en andra
+placeringsväg - exakt vad Björn efterfrågade uttryckligen.
+
+**`PlaceableVisit.VisitKey`** (ny, `Guid`, beräknad egenskap) - det minsta uppgifts-id:t besöket
+bär. Stabil mellan förhandsvisningsanrop inom samma redigeringssession, eftersom
+`WeeklyPlacementBuilder`s egen gruppering (rum/besökstyp, vidare delad av ett befintligt lås) bara
+beror på hushållets lagrade state, aldrig på en pågående flytt - grupperingen är alltså opåverkad
+av vilka flyttar som skickas in, bara VAR ett redan grupperat besök hamnar. En rumslös uppgift är
+sitt eget besök, så dess `VisitKey` blir helt enkelt dess egen `TaskDefinitionId`.
+
+**`WeeklyPlacementBuilder.ApplyMoves`** (ny) - lägger hushållsmedlemmens egna flyttar
+(`IReadOnlyDictionary<Guid VisitKey, DayOfWeek>`) ovanpå en redan byggd besökslista genom att
+sätta `PlaceableVisit.LockedWeekday`, PRECIS samma fält ett befintligt `PreferredWeekday`-lås
+redan använder. `WeeklyPlacementPlanner` behöver därmed ingen ändring alls - den vet inte, och
+behöver inte veta, om ett `LockedWeekday` kommer från en flytt eller ett riktigt lås. En flytt
+övertrumfar ett besöks eventuella befintliga lås (samma fält skrivs över).
+
+**`PreviewWeeklyPlan`/`ApplyWeeklyPlan`** tar båda emot samma `moves`-parameter, bygger besöken,
+kör `ApplyMoves`, och planerar. `PreviewWeeklyPlan` beräknar dessutom `EffortWarningDays` - de
+veckodagar en flyttad visit landar på trots att ingen aktiv medlems `WeeklyEffortCeiling`
+täcker dess tyngd (kravet vinner - ingen ork-kontroll för lås/flytt, se planerarens egna regler -
+men klienten ska ändå kunna visa en lugn notis om det i stället för att tiga).
+
+**Beslut: ett flyttat besök låses** (`ApplyWeeklyPlan`). Varje uppgift i ett flyttat besök får
+`TaskDefinition.PreferredWeekday` satt till den valda dagen via
+`RecurrenceReanchoring.LockToWeekday` (ny, delad metod - samma "sätt kravet, ankra om vid behov"-
+sekvens `SetTaskPreferredWeekday` redan använde, nu på EN plats i stället för två). Nästa
+"Planera veckan" flyttar därför inte tillbaka det. Flyttas ett besök som redan var låst till en
+ANNAN dag, byts låset till den nya dagen - `ApplyWeeklyPlan`s "hoppa över redan låst"-gren (för
+ORÖRDA lås) gäller uttryckligen inte flyttade besök, som alltid går igenom `LockToWeekday`
+oavsett tidigare låsstatus. "Gäller framåt" hålls: precis som all annan omankring i det här
+dokumentet ankras den nya `RecurrenceRule` från `today`, aldrig den gamla kursorn - ingen
+dubblett, inget hopp, redan utlagt arbete orört.
+
+**API:** `GET .../weekly-plan` blev `POST .../weekly-plan/preview` - flyttar är strukturerad
+indata (`WeeklyPlanMoveRequest[]`, visit-nyckel + veckodag) som inte passar en query-sträng, och
+endpointen är fortfarande utan sidoeffekter trots verbet. `WeeklyPlanVisitResponse.VisitKey`
+(ny) och `WeeklyPlanResponse.EffortWarningDays` (ny) följer med. `ApplyWeeklyPlanRequest` fick
+samma `Moves`-lista - måste vara EXAKT de flyttar förhandsvisningen som visades beräknades med,
+annars stämmer inte det som sparas med det som visats.
+
+**UI (`WeeklyPlanSheet.razor`):** varje besöksrad får en `<select>` (måndag–söndag) bunden till
+den dag besöket just nu visas under; att välja en annan dag lägger till/uppdaterar en post i
+klientens egna `_moves` (`Dictionary<Guid, string>`) och skickar om HELA förhandsvisningen -
+klienten räknar aldrig ut en placering själv, bara vilken dag som valts. Ett flyttat besök visas
+med samma lugna "· alltid X" som ett riktigt lås (sant nog: det blir det så fort "Använd"
+trycks). En rad `EffortWarningDays` renderas som "Ingen orkar tunga uppgifter på {dag}." - lugn
+notis, ingen spärr. `_moves` rensas när arket stängs eller en plan används.
+
+**Tester:** `PreviewWeeklyPlanTests` (en flytt placerar besöket på vald dag och resten sprids
+runt det, en flytt till en dag ingen orkar tyngden för placeras ändå där och ger en varning),
+`ApplyWeeklyPlanTests` (ett flyttat besöks alla uppgifter låses, utan att röra redan utlagt
+arbete eller duplicera/hoppa över nästa förekomst; flytt av ett redan låst besök byter låset;
+en flytt till samma dag som ett befintligt lås räknas inte som en ändring). Minst ett E2E
+(`WeeklyPlanTests.Moving_a_visit_in_the_sheet_and_using_the_plan_locks_it_to_the_chosen_day`):
+flytta ett besök i arket, använd, öppna igen efter en riktig reload och se att det ligger kvar
+låst. Alla nya beteendetest bevisade falla innan respektive rättning fanns.
 
 | Fråga | Varför den väntar |
 |---|---|

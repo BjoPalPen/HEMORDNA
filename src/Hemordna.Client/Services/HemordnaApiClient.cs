@@ -698,23 +698,40 @@ public sealed class HemordnaApiClient
     }
 
     /// <summary>"Planera veckan" - a read-only preview, saves nothing. <paramref name="today"/>
-    /// is this device's own local date; the server's own date is used when it is null.</summary>
+    /// is this device's own local date; the server's own date is used when it is null.
+    /// <paramref name="moves"/> is the household member's own pending edits to the suggestion
+    /// (Björns krav, "Planera veckan går att ändra") - treated server-side exactly like an
+    /// existing "Alltid på" lock. POST, not GET, since moves don't fit a query string - see the
+    /// API's own endpoint comment.</summary>
     public async Task<WeeklyPlanResponse?> GetWeeklyPlanAsync(
-        Guid householdId, DateOnly? today = null, CancellationToken cancellationToken = default)
-        => await GetAsync<WeeklyPlanResponse>(
-            today is { } date
-                ? $"api/households/{householdId}/weekly-plan?today={date:yyyy-MM-dd}"
-                : $"api/households/{householdId}/weekly-plan",
-            cancellationToken);
+        Guid householdId,
+        DateOnly? today = null,
+        IReadOnlyList<WeeklyPlanMoveRequest>? moves = null,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Post, $"api/households/{householdId}/weekly-plan/preview", cancellationToken);
+        request.Content = JsonContent.Create(new { today, moves });
+
+        var response = await _http.SendAsync(request, cancellationToken);
+
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<WeeklyPlanResponse>(cancellationToken)
+            : null;
+    }
 
     /// <summary>"Använd" - writes the plan previewed by GetWeeklyPlanAsync. Gäller framåt; rör
-    /// aldrig redan utlagda förekomster - se ApplyWeeklyPlan.</summary>
+    /// aldrig redan utlagda förekomster - se ApplyWeeklyPlan. <paramref name="moves"/> must be the
+    /// same moves the previewed plan was computed with, or the two will disagree.</summary>
     public async Task<ApplyWeeklyPlanResponse?> ApplyWeeklyPlanAsync(
-        Guid householdId, DateOnly? today = null, CancellationToken cancellationToken = default)
+        Guid householdId,
+        DateOnly? today = null,
+        IReadOnlyList<WeeklyPlanMoveRequest>? moves = null,
+        CancellationToken cancellationToken = default)
     {
         var request = await AuthorizedAsync(
             HttpMethod.Post, $"api/households/{householdId}/weekly-plan/apply", cancellationToken);
-        request.Content = JsonContent.Create(new { today });
+        request.Content = JsonContent.Create(new { today, moves });
 
         var response = await _http.SendAsync(request, cancellationToken);
 
