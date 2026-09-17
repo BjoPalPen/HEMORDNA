@@ -139,7 +139,9 @@ public class GuideSkarmbilderTests
         // weekly-budget above - so the greedy placement concentrates real besök on
         // Saturday/Sunday. Scroll there so the screenshot shows an actual besök, not several
         // "Inga besök" rows in a row.
-        await weeklyPlanSheet.GetByText("Söndag").ScrollIntoViewIfNeededAsync();
+        // .list-name (the day heading), not GetByText("Söndag") - the new per-visit day picker
+        // (Björns krav, "Planera veckan går att ändra") also offers "Söndag" as an <option>.
+        await weeklyPlanSheet.Locator(".list-name", new() { HasText = "Söndag" }).ScrollIntoViewIfNeededAsync();
         await ShootViewportAsync(page, "planera-veckan");
         await weeklyPlanSheet.GetByRole(AriaRole.Button, new() { Name = "Avbryt" }).ClickAsync();
 

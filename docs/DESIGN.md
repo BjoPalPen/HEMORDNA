@@ -214,7 +214,14 @@ chipparna snarare än på samma rad som dem, så de tre alltid får hela radens 
 - annars kunde "Mycket" bli ensam kvar på en egen rad, särskilt i Stor text (§10:s "Stor text får
 inte bryta layouten" är ovillkorligt).
 
-Uppgifter
+**Rutiner** (Björns beslut: "överst och alltid med", docs/ARCHITECTURE.md) - dagliga sysslor med
+intervall 1 (bädda sängen, vädra) - står i en egen grupp överst, före allt annat, oavsett rum.
+Samma `VisitKindClassifier` som redan avgör besökstyp i "Planera veckan", inte en ny regel.
+Chippen på en rutinrad visar rummet (utan våningsprefix) eftersom gruppen saknar en egen
+rumsrubrik - den enda andra platsen en rad bär en sådan chip är "Sedan tidigare", som visar hela
+namnet VÅNINGSPREFIX inräknat, av ett annat skäl (disambiguering mellan två likanamda rum).
+
+Resten av uppgifterna
 grupperas per rum (`RoomGroups`, oförändrad sorteringslogik) med rumsnamnet i versaler och
 antal kvar till höger; en förfallen uppgift hamnar alltid först i en egen "Sedan tidigare"-grupp,
 oavsett rum. Har hushållet fler än en våning klustras rummen ytterligare ett steg
@@ -608,12 +615,12 @@ ytterligare ett, snävare undantag (denna revision): "Tid i förväg: N min" und
 avsiktligt bara ETT tal och EN mening, aldrig ett diagram, en historik eller en streak (CLAUDE.md
 §12) - se ARCHITECTURE.md "Beslut: Kvarlämnat, Imorgon på Idag, ledig dag och tid i förväg".
 
-### 6c. Planera veckan – en förhandsvisning, aldrig ett automatiskt val
+### 6c. Planera veckan – en förhandsvisning, redigerbar innan den används
 
 Knappen "Planera veckan" på Rum (bara `Session.CanManageHousehold`) öppnar
 `Components/WeeklyPlanSheet.razor` - ett `BottomSheet` som hämtar ett förslag
-(`GET .../weekly-plan`) och visar det dag för dag: veckodagens namn, och för varje besök (rum +
-besökstyp + minuter) som algoritmen skulle placera dit. **Aldrig ett tal per person** - se
+(`POST .../weekly-plan/preview`) och visar det dag för dag: veckodagens namn, och för varje besök
+(rum + besökstyp + minuter) som algoritmen skulle placera dit. **Aldrig ett tal per person** - se
 docs/ARCHITECTURE.md "Beslut: Placeringsalgoritmen" - det här är en planeringsyta för DAGAR, inte
 en jämförelse mellan hushållets medlemmar (samma princip som redan styr Idag/Vecka, CLAUDE.md
 §12). Ett besök som ligger "Alltid på" en viss dag (se ovan och docs/ARCHITECTURE.md "Beslut:
@@ -621,11 +628,22 @@ Alltid på en viss veckodag") markeras lugnt inline - "· alltid tisdag" - i st�
 förklaras eller varnas för; det är fortfarande bara en saklig upplysning om VARFÖR besöket ligger
 där.
 
-Två knappar avslutar: **Använd** skriver förslaget (`POST .../weekly-plan/apply`) och visar en
-lugn bekräftelse - "Klart. Det gäller kommande veckor - det som redan ligger ute på någons dag
-är orört." - texten säger uttryckligen att redan utlagt arbete inte rörs, samma "gäller
-framåt"-princip som `RebalanceSchedule`s egna ändringar. **Avbryt** stänger arket utan att spara
-något; förslaget hämtas fräscht nästa gång arket öppnas, aldrig cachat mellan besök.
+**Varje besök har en egen dagväljare** (`<select>`, måndag–söndag, samma
+`.level-picker`-fria mönster som `TaskOptionsSheet`s "Alltid på") - se docs/ARCHITECTURE.md
+"Beslut: redigerbar plan". Att välja en dag skickar om HELA förslaget till servern med den
+pågående flytten inräknad (`_moves`, klienten håller bara VILKEN dag som valts, aldrig
+placeringslogiken själv) - resten av veckan jämnas sedan om runt flytten, precis som runt ett
+befintligt lås. Flyttade besök visas med samma lugna "· alltid X"-markering som ett riktigt lås,
+eftersom de blir exakt det så fort "Använd" trycks. En flytt till en dag ingen orkar besökets
+tyngd för är tillåten (kravet vinner) men får en egen lugn notis - "Ingen orkar tunga uppgifter på
+tisdag" - i stället för att tigas ihjäl.
+
+Två knappar avslutar: **Använd** skriver förslaget, flyttarna inräknade (`POST
+.../weekly-plan/apply`), och visar en lugn bekräftelse - "Klart. Det gäller kommande veckor - det
+som redan ligger ute på någons dag är orört." - texten säger uttryckligen att redan utlagt arbete
+inte rörs, samma "gäller framåt"-princip som `RebalanceSchedule`s egna ändringar. **Avbryt**
+stänger arket utan att spara något, pågående flyttar inräknat; förslaget hämtas fräscht nästa
+gång arket öppnas, aldrig cachat mellan besök.
 
 ### 6b. Roller och rumsmallar – färre val vid start
 
