@@ -55,6 +55,26 @@ public class GuideSkarmbilderTests
         });
     }
 
+    /// <summary>
+    /// Viewport-only, NOT full-page - for a screen with an open, <c>position: fixed</c> sheet
+    /// over a page that has more content further down (a room list, a household page with its
+    /// own footer links). Playwright's <c>FullPage</c> capture scrolls and stitches the whole
+    /// document; a fixed-position sheet stays pinned to the same screen position in every
+    /// stitched slice, so slices below the first show real page content bleeding in where the
+    /// sheet should continue. A viewport-only shot has no scrolling to stitch, so it has nothing
+    /// to bleed - see ShootAsync's own screenshots (e.g. mobil_medlem.png) for the artifact this
+    /// avoids.
+    /// </summary>
+    private static async Task ShootViewportAsync(IPage page, string name)
+    {
+        await Task.Delay(350);
+        await page.ScreenshotAsync(new PageScreenshotOptions
+        {
+            Path = Path.Combine(OutputDirectory, $"mobil_{name}.png"),
+            FullPage = false
+        });
+    }
+
     [Fact]
     public async Task Capture_every_screen_the_guides_use()
     {
@@ -109,6 +129,20 @@ public class GuideSkarmbilderTests
         await newRoomSheet.GetByRole(AriaRole.Button, new() { Name = "Stäng" }).ClickAsync();
         await ShootAsync(page, "rum");
 
+        // "Planera veckan" - the rooms above already seeded real, weighted tasks via their
+        // templates, so the suggestion has something to show.
+        await page.GetByRole(AriaRole.Button, new() { Name = "Planera veckan" }).ClickAsync();
+        var weeklyPlanSheet = page.GetByRole(AriaRole.Dialog, new() { Name = "Planera veckan" });
+        await weeklyPlanSheet.WaitForAsync();
+        await Assertions.Expect(page.GetByText("Räknar ut ett förslag...")).Not.ToBeVisibleAsync();
+        // Weekday budget (45 min) is much smaller than the weekend's (90) - see the seeded
+        // weekly-budget above - so the greedy placement concentrates real besök on
+        // Saturday/Sunday. Scroll there so the screenshot shows an actual besök, not several
+        // "Inga besök" rows in a row.
+        await weeklyPlanSheet.GetByText("Söndag").ScrollIntoViewIfNeededAsync();
+        await ShootViewportAsync(page, "planera-veckan");
+        await weeklyPlanSheet.GetByRole(AriaRole.Button, new() { Name = "Avbryt" }).ClickAsync();
+
         await page.GetByRole(AriaRole.Button, new() { Name = "Kök" }).First.ClickAsync();
         var kitchen = page.GetByRole(AriaRole.Dialog, new() { Name = "Kök" });
         await kitchen.WaitForAsync();
@@ -121,6 +155,29 @@ public class GuideSkarmbilderTests
         await addSheet.GetByRole(AriaRole.Button, new() { Name = "Lägg till uppgift" }).ClickAsync();
         await Assertions.Expect(kitchen.GetByRole(AriaRole.Button, new() { Name = "Vattna blommorna" }))
             .ToBeVisibleAsync();
+
+        // Tyngd och Alltid på - båda rader i samma uppgifts TaskOptionsSheet.
+        await kitchen.GetByRole(AriaRole.Button, new() { Name = "Vattna blommorna" }).ClickAsync();
+        var flowerTaskSheet = page.GetByRole(AriaRole.Dialog, new() { Name = "Vattna blommorna" });
+        await flowerTaskSheet.WaitForAsync();
+
+        await flowerTaskSheet.GetByRole(AriaRole.Button, new() { Name = "Tyngd" }).ClickAsync();
+        await ShootViewportAsync(page, "tyngd");
+        await flowerTaskSheet.GetByRole(AriaRole.Button, new() { Name = "Avbryt" }).ClickAsync();
+
+        // "Alltid på" visas bara för en uppgift med en veckodag att välja - sätt Upprepning till
+        // "Varje vecka" först.
+        await flowerTaskSheet.GetByRole(AriaRole.Button, new() { Name = "Upprepning" }).ClickAsync();
+        await flowerTaskSheet.GetByLabel("Upprepning").SelectOptionAsync("Weekly");
+        await flowerTaskSheet.GetByRole(AriaRole.Button, new() { Name = "Spara" }).ClickAsync();
+        await Assertions.Expect(flowerTaskSheet.Locator("select")).Not.ToBeVisibleAsync();
+
+        await flowerTaskSheet.GetByRole(AriaRole.Button, new() { Name = "Alltid på" }).ClickAsync();
+        await flowerTaskSheet.GetByLabel("Alltid på").SelectOptionAsync("Wednesday");
+        await ShootViewportAsync(page, "alltid-pa");
+        await flowerTaskSheet.GetByRole(AriaRole.Button, new() { Name = "Spara" }).ClickAsync();
+        await flowerTaskSheet.GetByRole(AriaRole.Button, new() { Name = "Stäng" }).ClickAsync();
+
         await kitchen.GetByRole(AriaRole.Button, new() { Name = "Stäng" }).ClickAsync();
 
         // Visiting "Idag" is what generates today's occurrences from the seeded rooms; the reload
@@ -158,6 +215,14 @@ public class GuideSkarmbilderTests
 
         var annaSheet = await HushallHelper.OpenMemberSheetAsync(page, "Anna");
         await ShootAsync(page, "medlem");
+
+        await annaSheet.GetByText("Hur mycket orkar personen per veckodag").ClickAsync();
+        // The disclosure's own weekday rows sit below the fold at this Half-detent sheet's
+        // height - scroll to the first one so the screenshot actually shows the level pickers,
+        // not just the intro paragraph above them.
+        await annaSheet.GetByRole(AriaRole.Group, new() { Name = "Ork Måndag", Exact = true }).ScrollIntoViewIfNeededAsync();
+        await ShootViewportAsync(page, "ork");
+
         await annaSheet.GetByRole(AriaRole.Button, new() { Name = "Stäng" }).ClickAsync();
 
         await page.GetByRole(AriaRole.Button, new() { Name = "Pausa hushållet" }).ClickAsync();

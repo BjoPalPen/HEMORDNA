@@ -459,6 +459,12 @@ text som förklarar vad de inte får - appen ställer bara inte frågan. Paus-ko
 har kryssrutan. Att pausa någon påverkar vad hushållets schema ger dem, så den är varken
 lika privat som visningsvalen eller lika gemensam som rum och uppgifter - se
 ARCHITECTURE.md "Beslut: Vem får ändra vad" för de tre reglerna och varför de skiljs åt.
+"Hur mycket orkar personen per veckodag" flyttade in under samma regel (Björns
+uppföljningsbeslut): var och en vet bäst hur mycket de själva orkar en viss veckodag, så
+disclosuren syns i ditt eget ark utan kryssrutan, och i någon annans bara med den - samma
+`MemberSheet.IsSelfOrCanManageHousehold` som paus-kontrollen använder. Rollval, "Anpassad
+tid", veckodagsbudgeten och "Ta bort medlem" ligger kvar bakom kryssrutan ensam - den
+VECKOVISA TIDSBUDGETEN är fortfarande hushållskonfiguration, inte en personlig känsla.
 
 "Bjud in" (`BottomSheet`) slår ihop två funktioner bakom en enda ingång: hushållets
 inbjudningskod (åtta tecken, versaler, inga förväxlingsbara siffror/bokstäver) med en "Dela
@@ -509,13 +515,19 @@ Pausa ett rum". Vid återupptagning börjar rummets uppgifter om helt vanligt, i
 - samma mönster som redan gäller för hushålls-/medlemspaus.
 
 Att trycka på en uppgift öppnar `Components/TaskOptionsSheet.razor`:
-Upprepning/Vem gör det/Tid/Rum/Tyngd som varsin rad som drillar ner till ett eget litet formulär
-inuti samma ark ("Tid" med samma kvalitativa knappar - `TimeLevel.All`, se §6a - som
+Upprepning/Alltid på/Vem gör det/Tid/Rum/Tyngd som varsin rad som drillar ner till ett eget litet
+formulär inuti samma ark ("Tid" med samma kvalitativa knappar - `TimeLevel.All`, se §6a - som
 "Lägg till uppgift" redan använder; "Tyngd" med samma mönster men tre knappar - `EffortLevel.All`,
 se §6a1), en "Kräver vuxen"-växel, och "Ta bort uppgiften" i rönn-ink längst
 ner. "+ Nytt rum" öppnar ett ark med rumsmalls-väljaren (namnge våning, rumstyp, antal - se §6b) och en
 disclosure "Lägg till ett tomt rum i stället" för grupperingar som inte är ett rum (t.ex.
 "Hund", "Garage").
+
+**"Alltid på"** (denna revision, se docs/ARCHITECTURE.md "Beslut: Alltid på en viss veckodag"):
+*Ingen särskild dag* eller måndag–söndag - ett krav, inte ett önskemål, så uppgiften alltid ligger
+på den dagen (t.ex. soptömning på hämtningsdagen). Visas bara för veckovisa och månadsvisa
+uppgifter - en daglig eller "vid behov"-uppgift har ingen enskild veckodag att välja, så raden
+döljs helt i stället för att visas gråmarkerad.
 
 Totalrad "Totalt: N uppgifter · M min" (en platt summa, till skillnad från varje bricka
 egen viktade "min/v") ligger tillsammans med den frekvensviktade veckosumman och hushållets
@@ -554,13 +566,19 @@ valet aldrig är en gissning om vad ett nivåord som "Lite tid" faktiskt sparas 
 
 ### 6a2. Ork per veckodag: samma nivåord, en rad per dag
 
-`MemberSheet.razor` har en ny disclosure "Hur mycket orkar personen per veckodag", direkt ovanför
-"Anpassa tid per veckodag" och byggd på samma sätt: sju rader (en per veckodag), men i stället för
-ett sifferfält en `.level-picker` med `EffortLevel.All` (Lätt/Mellan/Tung) - taket för den dagen,
-dvs. den tyngsta nivå personen tar sig an. Ett rollval (samma `.level-picker` som redan väljer
+`MemberSheet.razor` har en disclosure "Hur mycket orkar personen per veckodag", byggd som
+"Anpassa tid per veckodag": sju rader (en per veckodag), men i stället för ett sifferfält en
+`.level-picker` med `EffortLevel.All` (Lätt/Mellan/Tung) - taket för den dagen, dvs. den
+tyngsta nivå personen tar sig an. Ett rollval (samma `.level-picker` som redan väljer
 tidsbudgetens preset) sätter både tid och ork-tak i ett svep; kryssrutorna nedanför är alltid
 fritt redigerbara efteråt, oavsett vilken väg som satte startvärdet. Se docs/ARCHITECTURE.md
 "Beslut: Ork per person och veckodag".
+
+Disclosuren ligger INTE i samma block som rollvalet och "Anpassa tid per veckodag" (de
+kräver kryssrutan) - den flyttade till blocket den delar med paus-kontrollen
+(`IsSelfOrCanManageHousehold`, se "Kan ändra hushållet" ovan), eftersom Björns
+uppföljningsbeslut gör den egna orken till något var och en sätter själv. Den VECKOVISA
+TIDSBUDGETEN rördes inte - "Anpassa tid per veckodag" är fortfarande hushållskonfiguration.
 
 ### 6a1. Tyngd: tre ord, aldrig en siffra
 
@@ -598,7 +616,10 @@ Knappen "Planera veckan" på Rum (bara `Session.CanManageHousehold`) öppnar
 besökstyp + minuter) som algoritmen skulle placera dit. **Aldrig ett tal per person** - se
 docs/ARCHITECTURE.md "Beslut: Placeringsalgoritmen" - det här är en planeringsyta för DAGAR, inte
 en jämförelse mellan hushållets medlemmar (samma princip som redan styr Idag/Vecka, CLAUDE.md
-§12).
+§12). Ett besök som ligger "Alltid på" en viss dag (se ovan och docs/ARCHITECTURE.md "Beslut:
+Alltid på en viss veckodag") markeras lugnt inline - "· alltid tisdag" - i stället för att
+förklaras eller varnas för; det är fortfarande bara en saklig upplysning om VARFÖR besöket ligger
+där.
 
 Två knappar avslutar: **Använd** skriver förslaget (`POST .../weekly-plan/apply`) och visar en
 lugn bekräftelse - "Klart. Det gäller kommande veckor - det som redan ligger ute på någons dag

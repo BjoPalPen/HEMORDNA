@@ -17,6 +17,11 @@ namespace Hemordna.Application.Planning;
 /// day - see docs/ARCHITECTURE.md "Beslut: Placeringsalgoritmen".
 /// </para>
 /// <para>
+/// <b>A locked task is never moved.</b> A task with <see cref="TaskDefinition.PreferredWeekday"/>
+/// set is placed by <see cref="WeeklyPlacementBuilder"/> on that exact day every time, so this
+/// use case skips it explicitly - see docs/ARCHITECTURE.md "Beslut: Alltid på en viss veckodag".
+/// </para>
+/// <para>
 /// <b>No duplicate, no skipped period.</b> Every new <see cref="RecurrenceRule"/> is anchored
 /// from <paramref name="today" /> forward (via <see cref="RecurrenceRule.Weekly"/> or
 /// <see cref="RecurrenceRule.MonthlyOnWeekday"/>, both of which normalise their own anchor to the
@@ -83,28 +88,20 @@ public sealed class ApplyWeeklyPlan
                     continue;
                 }
 
-                var newRecurrence = current.Frequency switch
+                // A locked task (Björns krav, "Alltid på en viss veckodag") is never moved by
+                // this use case, full stop - the planner already places it on its own
+                // PreferredWeekday (see WeeklyPlacementBuilder), so this would be a no-op via
+                // HasMeaningfulChange anyway, but an explicit skip makes the guarantee hold
+                // regardless of that coincidence.
+                if (definition.PreferredWeekday is not null)
                 {
-                    RecurrenceFrequency.Weekly => RecurrenceRule.Weekly(today, placement.Day, current.Interval),
-                    RecurrenceFrequency.Monthly => RecurrenceRule.MonthlyOnWeekday(
-                        today,
-                        NextMonthlyWeek(monthlyRotationIndexByDay, placement.Day),
-                        placement.Day,
-                        current.Interval),
-                    _ => (RecurrenceRule?)null
-                };
+                    continue;
+                }
 
-                // Compares only what the plan actually decides - weekday, week-of-month and
-                // interval - not StartDate: a fresh StartDate is normalised forward from TODAY
-                // every time (see the remarks above), so it would differ on almost every call
-                // even when the task is already sitting on the day the plan would still choose.
-                // EnsureOccurrencesGenerated's own cursor logic never depends on how "fresh"
-                // StartDate is, so leaving it as-is when nothing meaningful changed is safe, and
-                // keeps "changedCount" meaning what it says.
-                if (newRecurrence is null
-                    || (newRecurrence.Weekday == current.Weekday
-                        && newRecurrence.MonthlyWeek == current.MonthlyWeek
-                        && newRecurrence.Interval == current.Interval))
+                var newRecurrence = RecurrenceReanchoring.ForWeekday(
+                    current, today, placement.Day, () => NextMonthlyWeek(monthlyRotationIndexByDay, placement.Day));
+
+                if (!RecurrenceReanchoring.HasMeaningfulChange(newRecurrence, current))
                 {
                     continue;
                 }

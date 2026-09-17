@@ -14,7 +14,7 @@ window.GUIDE = {
     subtitle: "Användarguide",
     intro: "Du som satt upp hemmet i appen: rummen, sysslorna och vem som är med. Allt i "
         + "familjeguiden gäller dig också – det här är det som tillkommer.",
-    fakta: ["7 kapitel", "Tagna på 390 × 844", "Uppdaterad 14 september 2026"],
+    fakta: ["11 kapitel", "Tagna på 390 × 844", "Uppdaterad 17 september 2026"],
     sections: [
         {
             id: "rum",
@@ -83,6 +83,57 @@ window.GUIDE = {
                 + "</ul>"
         },
         {
+            id: "tyngd",
+            t: "Hur tung är uppgiften",
+            html:
+                "<p>Tid och tyngd är inte samma sak. Att skrubba ugnen tar kanske bara tio minuter, "
+                + "men känns tyngre än att vika tvätt i tjugo. Sätter du tyngden på en uppgift vet "
+                + "appen skillnaden när den planerar veckan.</p>"
+
+                + "<ol class='gor'>"
+                + "  <li>Öppna uppgiften och välj raden <span class='ui'>Tyngd</span>.</li>"
+                + "  <li>Välj <span class='ui'>Lätt</span>, <span class='ui'>Mellan</span> eller "
+                + "      <span class='ui'>Tung</span>.</li>"
+                + "  <li>Tryck <span class='ui'>Spara</span>.</li>"
+                + "</ol>"
+
+                + "<div class='shots'>"
+                + "  <figure><div class='telefon'><img src='../img/mobil_tyngd.png' alt='Tyngdväljaren med tre nivåer' loading='lazy'></div>"
+                + "    <figcaption><b>Tyngd</b> – tre nivåer, oberoende av hur lång tid det tar.</figcaption></figure>"
+                + "</div>"
+
+                + "<div class='notis'><p>En ny uppgift startar på <b>Mellan</b>. Städuppgifter som "
+                + "skapas via en rumsmall (se <a href='#rum'>Lägg till rum</a>) får sin tyngd redan "
+                + "föreslagen, men går alltid att ändra här efteråt.</p></div>"
+        },
+        {
+            id: "alltid-pa",
+            t: "Alltid på en viss dag",
+            html:
+                "<p>Vissa sysslor hör till en bestämd dag – soporna måste ut kvällen före hämtningen, "
+                + "inte när det råkar passa. <span class='ui'>Alltid på</span> låser en uppgift till "
+                + "en veckodag, så den aldrig hamnar någon annanstans.</p>"
+
+                + "<ol class='gor'>"
+                + "  <li>Öppna uppgiften och välj raden <span class='ui'>Alltid på</span>.</li>"
+                + "  <li>Välj en veckodag, eller <span class='ui'>Ingen särskild dag</span> för att "
+                + "      ta bort låsningen.</li>"
+                + "  <li>Tryck <span class='ui'>Spara</span>.</li>"
+                + "</ol>"
+
+                + "<div class='shots'>"
+                + "  <figure><div class='telefon'><img src='../img/mobil_alltid-pa.png' alt='Väljaren för alltid på veckodag' loading='lazy'></div>"
+                + "    <figcaption><b>Alltid på</b> – ett krav, inte bara ett förslag.</figcaption></figure>"
+                + "</div>"
+
+                + "<div class='notis'><p><strong>Bara för uppgifter som återkommer varje vecka eller "
+                + "månad.</strong> En daglig syssla eller en som görs vid behov har ingen enskild "
+                + "veckodag att välja, så raden syns inte där.</p></div>"
+
+                + "<div class='notis tips'><strong>Redan utlagt rörs inte.</strong> En låsning gäller "
+                + "framåt. Ligger uppgiften redan på någons dag den här veckan påverkas den inte.</div>"
+        },
+        {
             id: "bjud-in",
             t: "Bjud in familjen",
             html:
@@ -107,6 +158,36 @@ window.GUIDE = {
                 + "<div class='notis obs'><strong>Koden ger medlemskap, ingenting mer.</strong> Hamnar "
                 + "den fel skapar du en ny med <span class='ui'>Skapa ny kod</span>. Den gamla slutar då "
                 + "fungera, men ingen som redan gått med påverkas.</div>"
+        },
+        {
+            id: "ork",
+            t: "Hur mycket var och en orkar",
+            html:
+                "<p>En vardagskväll räcker orken kanske bara till lätta sysslor. På helgen finns ofta "
+                + "utrymme för de tyngre. Varje person i hushållet har ett eget tak för det, en nivå "
+                + "per veckodag – appen planerar sedan de tunga sysslorna på en dag som faktiskt "
+                + "orkar med dem.</p>"
+
+                + "<ol class='gor'>"
+                + "  <li>Gå till <span class='ui'>Hushåll</span> och tryck på personens namn.</li>"
+                + "  <li>Öppna <span class='ui'>Hur mycket orkar personen per veckodag</span>.</li>"
+                + "  <li>Välj <span class='ui'>Lätt</span>, <span class='ui'>Mellan</span> eller "
+                + "      <span class='ui'>Tung</span> för varje dag.</li>"
+                + "  <li>Tryck <span class='ui'>Spara</span>.</li>"
+                + "</ol>"
+
+                + "<div class='shots'>"
+                + "  <figure><div class='telefon'><img src='../img/mobil_ork.png' alt='Orken per veckodag, en rad per dag' loading='lazy'></div>"
+                + "    <figcaption><b>Ork per veckodag</b> – samma tre nivåer som en uppgifts tyngd.</figcaption></figure>"
+                + "</div>"
+
+                + "<div class='notis'><p><strong>Rollen sätter en start, inte ett slutgiltigt val.</strong> "
+                + "Väljer du en roll för personen (se <a href='#bjud-in'>Bjud in familjen</a>) får de "
+                + "en rimlig ork per dag på köpet - fri att ändra dag för dag efteråt.</p></div>"
+
+                + "<div class='notis tips'><strong>Var och en kan ändra sin egen ork själv</strong> - "
+                + "utan att ha kryss för att sköta hushållet. Det är samma kort, bara öppnat av "
+                + "personen själv.</div>"
         },
         {
             id: "behorighet",
@@ -182,6 +263,37 @@ window.GUIDE = {
                 + "<div class='notis tips'><strong>Var och ens tid ställer du per person.</strong> Öppna "
                 + "personens kort under <span class='ui'>Hushåll</span> – välj en roll, eller sätt tid "
                 + "per veckodag om helgen ser annorlunda ut än vardagen.</div>"
+        },
+        {
+            id: "planera-veckan",
+            t: "Planera veckan",
+            html:
+                "<p>Rummens städbesök hamnar i tur och ordning från början. Har hushållet vuxit, eller "
+                + "känns veckan skev, visar <span class='ui'>Planera veckan</span> ett nytt förslag på "
+                + "vilken dag varje besök passar bäst - efter hur mycket tid och ork hushållet har, "
+                + "inte bara turordning.</p>"
+
+                + "<ol class='gor'>"
+                + "  <li>Gå till <span class='ui'>Rum</span> och tryck <span class='ui'>Planera veckan</span>.</li>"
+                + "  <li>Bläddra igenom förslaget, dag för dag.</li>"
+                + "  <li>Tryck <span class='ui'>Använd</span> för att spara det, eller "
+                + "      <span class='ui'>Avbryt</span> för att låta allt vara.</li>"
+                + "</ol>"
+
+                + "<div class='shots'>"
+                + "  <figure><div class='telefon'><img src='../img/mobil_planera-veckan.png' alt='Förslag per veckodag' loading='lazy'></div>"
+                + "    <figcaption><b>Förslaget</b> – rum och minuter per dag, aldrig ett tal per person.</figcaption></figure>"
+                + "</div>"
+
+                + "<div class='notis'><p><strong>Gäller framåt.</strong> Det som redan ligger ute på "
+                + "någons dag den här veckan rörs inte - förslaget styr bara kommande veckor.</p></div>"
+
+                + "<div class='notis'><p>Varje rad är ett besök i ett rum - vardagsstädet för sig, en "
+                + "storstädning för sig, och de korta dagliga sysslorna (som att tömma diskmaskinen) "
+                + "räknas inte in eftersom de görs varje dag ändå.</p></div>"
+
+                + "<div class='notis tips'><strong>Ett besök markerat \"alltid tisdag\"</strong> ligger "
+                + "fast oavsett förslag - se <a href='#alltid-pa'>Alltid på en viss dag</a>.</div>"
         },
         {
             id: "pausa",

@@ -95,4 +95,33 @@ public class EffortCeilingTests
         await Assertions.Expect(DayRow(reopenedSheet, "Onsdag").GetByRole(AriaRole.Button, new() { Name = "Tung" }))
             .ToHaveClassAsync(new Regex("btn-primary"));
     }
+
+    /// <summary>Known bug (docs/ARCHITECTURE.md, MemberSheet.razor remarks): picking a role updated
+    /// the effort/weekday forms on the SERVER right away, but within the SAME open sheet the
+    /// disclosure kept showing the pre-role values until the sheet was closed and reopened (or the
+    /// page reloaded) - every other test in this file proves the round trip via a reload, which
+    /// papers over exactly this gap. No reload here on purpose.</summary>
+    [Fact]
+    public async Task Picking_a_role_updates_the_effort_disclosure_in_the_same_open_sheet_without_a_reload()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Petra");
+
+        await page.GotoAsync("/hushall");
+        var sheet = await HushallHelper.OpenMemberSheetAsync(page, "Petra");
+
+        var adultButton = sheet.GetByRole(AriaRole.Button, new() { Name = "Vuxen, jobbar heltid" });
+        await adultButton.ClickAsync();
+        // Wait for the role/budget/ceiling round trip to finish before opening the disclosure -
+        // not for the data (that's on the server the instant the PUTs land), but so the click that
+        // follows lands on a stable UI instead of one mid-request.
+        await Assertions.Expect(adultButton).ToBeEnabledAsync();
+
+        await sheet.GetByText("Hur mycket orkar personen per veckodag").ClickAsync();
+
+        // AdultFullTime -> Lätt on weekdays - see HouseholdRolePresets.EffortCeilingFor. Checked
+        // in THIS still-open sheet, with no page.ReloadAsync anywhere in this test.
+        await Assertions.Expect(DayRow(sheet, "Onsdag").GetByRole(AriaRole.Button, new() { Name = "Lätt" }))
+            .ToHaveClassAsync(new Regex("btn-primary"));
+    }
 }

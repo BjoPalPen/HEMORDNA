@@ -9,7 +9,7 @@ disable-model-invocation: true
 Två guider under `src/Hemordna.Client/wwwroot/hjalp/`, publikt nåbara på
 `app.hemordna.se/hjalp/` och länkade från Hushållsöversikten.
 
-Kör den här **bara när det uttryckligen begärts.** Att ta om 22 skärmbilder och skriva om
+Kör den här **bara när det uttryckligen begärts.** Att ta om 26 skärmbilder och skriva om
 guider är inget som ska hända som sidoeffekt av något annat.
 
 Beslut och bakgrund: `docs/ARCHITECTURE.md` "Beslut: Användarguider under /hjalp",
@@ -89,7 +89,7 @@ hubben är undantaget, den bär sin egen tillbaka-länk i markup eftersom den in
 
 ## Ta om skärmbilderna
 
-`GuideSkarmbilderTests` fångar 22 vyer på 390 × 844. Den följer samma opt-in som
+`GuideSkarmbilderTests` fångar 26 vyer på 390 × 844. Den följer samma opt-in som
 `SkarmbilderTests`: skriver till `HEMORDNA_SCREENSHOT_DIR` om den är satt, annars en
 temp-katalog - så en vanlig testkörning aldrig skriver om filer i källträdet.
 

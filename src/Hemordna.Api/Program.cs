@@ -57,6 +57,7 @@ builder.Services.AddScoped<MoveTaskToArea>();
 builder.Services.AddScoped<SetTaskRequiresAdult>();
 builder.Services.AddScoped<ChangeTaskEstimatedMinutes>();
 builder.Services.AddScoped<ChangeTaskEffort>();
+builder.Services.AddScoped<SetTaskPreferredWeekday>();
 builder.Services.AddScoped<SetMemberWeeklyEffortCeiling>();
 builder.Services.AddScoped<PreviewWeeklyPlan>();
 builder.Services.AddScoped<ApplyWeeklyPlan>();

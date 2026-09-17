@@ -115,6 +115,33 @@
             <button type="button" class="btn btn-link" @onclick="BackToOptions">Avbryt</button>
             break;
 
+        case View.PreferredWeekday:
+            <label class="field">
+                <span>Alltid på</span>
+                <select @bind="_preferredWeekday">
+                    <option value="">Ingen särskild dag</option>
+                    @foreach (var (day, label) in WeekdayOptions)
+                    {
+                        <option value="@day">@label</option>
+                    }
+                </select>
+            </label>
+            <p class="muted small">
+                Uppgiften läggs alltid på den här veckodagen, till exempel soptömning på
+                hämtningsdagen - aldrig något som tyst flyttas.
+            </p>
+
+            @if (_message is { } preferredWeekdayMessage)
+            {
+                <div class="notice notice-problem" role="alert">@preferredWeekdayMessage</div>
+            }
+
+            <button type="button" class="btn btn-primary btn-block" disabled="@_busy" @onclick="SavePreferredWeekdayAsync">
+                @(_busy ? "Sparar..." : "Spara")
+            </button>
+            <button type="button" class="btn btn-link" @onclick="BackToOptions">Avbryt</button>
+            break;
+
         case View.Room:
             <label class="field">
                 <span>Rum</span>
@@ -149,6 +176,16 @@
                             <Icon Name="chevron-right" Size="18" />
                         </button>
                     </li>
+                    @if (HasWeekdayToChoose)
+                    {
+                        <li class="list-item list-item-flush">
+                            <button type="button" class="task-options-row" @onclick="() => _view = View.PreferredWeekday">
+                                <span>Alltid på</span>
+                                <span class="task-options-value muted small">@PreferredWeekdaySummary</span>
+                                <Icon Name="chevron-right" Size="18" />
+                            </button>
+                        </li>
+                    }
                     <li class="list-item list-item-flush">
                         <button type="button" class="task-options-row" @onclick="() => _view = View.Assignment">
                             <span>Vem gör det</span>
@@ -200,7 +237,7 @@
 </BottomSheet>
 
 @code {
-    private enum View { Options, Frequency, Assignment, Time, Room, Effort }
+    private enum View { Options, Frequency, Assignment, Time, Room, Effort, PreferredWeekday }
 
     [Parameter, EditorRequired]
     public Guid HouseholdId { get; set; }
@@ -231,8 +268,22 @@
     private int _estimatedMinutes = TimeLevel.All[0].Minutes;
     private string _roomAreaId = string.Empty;
     private TaskEffort _effort = TaskEffort.Medium;
+    private string _preferredWeekday = string.Empty;
     private string? _message;
     private bool _busy;
+
+    /// <summary>Monday first - matches every other weekday picker in the app (MemberSheet,
+    /// WeeklyPlanSheet).</summary>
+    private static readonly (DayOfWeek Day, string Label)[] WeekdayOptions =
+    [
+        (DayOfWeek.Monday, "Måndag"),
+        (DayOfWeek.Tuesday, "Tisdag"),
+        (DayOfWeek.Wednesday, "Onsdag"),
+        (DayOfWeek.Thursday, "Torsdag"),
+        (DayOfWeek.Friday, "Fredag"),
+        (DayOfWeek.Saturday, "Lördag"),
+        (DayOfWeek.Sunday, "Söndag")
+    ];
 
     private string RecurrenceSummary => Task switch
     {
@@ -245,6 +296,14 @@
         { Recurrence.Frequency: "Monthly" } => "Varje månad",
         _ => "Ingen"
     };
+
+    /// <summary>Only a Weekly or Monthly task has a single weekday to lock to - see
+    /// TaskDefinition's own remarks. Daily and "vid behov" never show the row at all.</summary>
+    private bool HasWeekdayToChoose => Task.Recurrence?.Frequency is "Weekly" or "Monthly";
+
+    private string PreferredWeekdaySummary
+        => WeekdayOptions.FirstOrDefault(option => option.Day.ToString() == Task.PreferredWeekday).Label
+            ?? "Ingen särskild dag";
 
     private string AssignmentSummary => Task.HasRotatingResponsibility
         ? "Roterar mellan alla"
@@ -270,6 +329,7 @@
         _estimatedMinutes = TimeLevel.ClosestMinutes(Task.EstimatedMinutes);
         _roomAreaId = Task.AreaId?.ToString() ?? string.Empty;
         _effort = Enum.TryParse<TaskEffort>(Task.Effort, out var effort) ? effort : TaskEffort.Medium;
+        _preferredWeekday = Task.PreferredWeekday ?? string.Empty;
     }
 
     private void BackToOptions()
@@ -434,6 +494,34 @@
             var areaId = string.IsNullOrEmpty(_roomAreaId) ? (Guid?)null : Guid.Parse(_roomAreaId);
 
             if (await Api.MoveTaskToAreaAsync(HouseholdId, Task.Id, areaId) is null)
+            {
+                _message = "Det gick inte att spara. Försök igen.";
+                return;
+            }
+
+            _view = View.Options;
+            await OnChanged.InvokeAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _message = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task SavePreferredWeekdayAsync()
+    {
+        _busy = true;
+        _message = null;
+
+        try
+        {
+            var weekday = string.IsNullOrEmpty(_preferredWeekday) ? null : _preferredWeekday;
+
+            if (await Api.SetTaskPreferredWeekdayAsync(HouseholdId, Task.Id, weekday) is null)
             {
                 _message = "Det gick inte att spara. Försök igen.";
                 return;

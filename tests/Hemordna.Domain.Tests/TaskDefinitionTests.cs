@@ -160,4 +160,119 @@ public class TaskDefinitionTests
     [Fact]
     public void ChangeEffort_rejects_an_undefined_level()
         => Assert.Throws<ArgumentOutOfRangeException>(() => CreateDefinition().ChangeEffort((TaskEffort)99));
+
+    // "Alltid på en viss veckodag" - Björns krav: PreferredWeekday is a requirement, only
+    // meaningful for a Weekly or Monthly recurrence. See docs/ARCHITECTURE.md "Beslut: Alltid på
+    // en viss veckodag".
+
+    [Fact]
+    public void SetPreferredWeekday_is_accepted_for_a_weekly_task()
+    {
+        var definition = CreateDefinition();
+        definition.SetRecurrence(RecurrenceRule.Weekly(Friday, DayOfWeek.Friday));
+
+        definition.SetPreferredWeekday(DayOfWeek.Tuesday);
+
+        Assert.Equal(DayOfWeek.Tuesday, definition.PreferredWeekday);
+    }
+
+    [Fact]
+    public void SetPreferredWeekday_is_accepted_for_a_monthly_task()
+    {
+        var definition = CreateDefinition();
+        definition.SetRecurrence(RecurrenceRule.Monthly(Friday));
+
+        definition.SetPreferredWeekday(DayOfWeek.Wednesday);
+
+        Assert.Equal(DayOfWeek.Wednesday, definition.PreferredWeekday);
+    }
+
+    [Fact]
+    public void SetPreferredWeekday_is_rejected_for_a_daily_task()
+    {
+        var definition = CreateDefinition();
+        definition.SetRecurrence(RecurrenceRule.Daily(Friday));
+
+        Assert.Throws<DomainException>(() => definition.SetPreferredWeekday(DayOfWeek.Tuesday));
+        Assert.Null(definition.PreferredWeekday);
+    }
+
+    [Fact]
+    public void SetPreferredWeekday_is_rejected_for_an_as_needed_task()
+    {
+        var definition = CreateDefinition();
+        definition.SetStaleAfterDays(14);
+
+        Assert.Throws<DomainException>(() => definition.SetPreferredWeekday(DayOfWeek.Tuesday));
+        Assert.Null(definition.PreferredWeekday);
+    }
+
+    [Fact]
+    public void SetPreferredWeekday_is_rejected_when_there_is_no_recurrence_at_all()
+        => Assert.Throws<DomainException>(() => CreateDefinition().SetPreferredWeekday(DayOfWeek.Tuesday));
+
+    [Fact]
+    public void Clearing_the_preferred_weekday_is_always_allowed()
+    {
+        var definition = CreateDefinition();
+        definition.SetRecurrence(RecurrenceRule.Weekly(Friday, DayOfWeek.Friday));
+        definition.SetPreferredWeekday(DayOfWeek.Tuesday);
+
+        definition.SetPreferredWeekday(null);
+
+        Assert.Null(definition.PreferredWeekday);
+    }
+
+    [Fact]
+    public void Switching_recurrence_to_daily_clears_an_existing_preferred_weekday()
+    {
+        var definition = CreateDefinition();
+        definition.SetRecurrence(RecurrenceRule.Weekly(Friday, DayOfWeek.Friday));
+        definition.SetPreferredWeekday(DayOfWeek.Friday);
+
+        definition.SetRecurrence(RecurrenceRule.Daily(Friday));
+
+        Assert.Null(definition.PreferredWeekday);
+    }
+
+    [Fact]
+    public void Clearing_recurrence_entirely_clears_an_existing_preferred_weekday()
+    {
+        var definition = CreateDefinition();
+        definition.SetRecurrence(RecurrenceRule.Weekly(Friday, DayOfWeek.Friday));
+        definition.SetPreferredWeekday(DayOfWeek.Friday);
+
+        definition.SetRecurrence(null);
+
+        Assert.Null(definition.PreferredWeekday);
+    }
+
+    /// <summary>A raw SetRecurrence call (e.g. via "Upprepning" in the UI, which edits frequency
+    /// directly) that moves the task to a DIFFERENT weekday must not leave a stale lock pointing
+    /// at the day it no longer actually sits on - see SetRecurrence's own remarks. Locking to a
+    /// new day on purpose goes through SetTaskPreferredWeekday instead, which re-anchors
+    /// Recurrence and PreferredWeekday together in one step.</summary>
+    [Fact]
+    public void Switching_recurrence_to_a_different_weekly_day_clears_a_stale_preferred_weekday()
+    {
+        var definition = CreateDefinition();
+        definition.SetRecurrence(RecurrenceRule.Weekly(Friday, DayOfWeek.Friday));
+        definition.SetPreferredWeekday(DayOfWeek.Friday);
+
+        definition.SetRecurrence(RecurrenceRule.Weekly(Friday, DayOfWeek.Monday));
+
+        Assert.Null(definition.PreferredWeekday);
+    }
+
+    [Fact]
+    public void Re_setting_recurrence_to_the_same_weekday_keeps_the_preferred_weekday()
+    {
+        var definition = CreateDefinition();
+        definition.SetRecurrence(RecurrenceRule.Weekly(Friday, DayOfWeek.Friday));
+        definition.SetPreferredWeekday(DayOfWeek.Friday);
+
+        definition.SetRecurrence(RecurrenceRule.Weekly(Friday.AddDays(7), DayOfWeek.Friday));
+
+        Assert.Equal(DayOfWeek.Friday, definition.PreferredWeekday);
+    }
 }

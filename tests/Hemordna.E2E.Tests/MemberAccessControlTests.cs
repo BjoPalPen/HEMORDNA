@@ -186,4 +186,56 @@ public class MemberAccessControlTests
 
         Assert.True(response.IsSuccessStatusCode);
     }
+
+    // Effort ceiling (STEG B, "Egen ork") moved to the same rule as pause: your own always,
+    // anyone else's only with CanManageHousehold. The weekly TIME BUDGET is unaffected - it
+    // stays household configuration on HouseholdManageFilter.
+    private static readonly object SomeEffortCeiling = new
+    {
+        monday = "Light",
+        tuesday = "Light",
+        wednesday = "Light",
+        thursday = "Light",
+        friday = "Light",
+        saturday = "Heavy",
+        sunday = "Heavy"
+    };
+
+    [Fact]
+    public async Task Anyone_can_set_their_own_effort_ceiling_without_the_flag()
+    {
+        var (_, bjornHttp, householdId, _, bjornMemberId) = await ArrangeTwoAccountHoldersAsync();
+
+        var response = await bjornHttp.PutAsJsonAsync(
+            $"/api/households/{householdId}/members/{bjornMemberId}/effort-ceiling",
+            SomeEffortCeiling);
+
+        Assert.True(response.IsSuccessStatusCode);
+    }
+
+    [Fact]
+    public async Task Without_the_flag_a_member_cannot_set_someone_elses_effort_ceiling()
+    {
+        // Björn joined via code, so he does not manage the household.
+        var (_, bjornHttp, householdId, annaMemberId, _) = await ArrangeTwoAccountHoldersAsync();
+
+        var response = await bjornHttp.PutAsJsonAsync(
+            $"/api/households/{householdId}/members/{annaMemberId}/effort-ceiling",
+            SomeEffortCeiling);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task With_the_flag_a_member_can_set_someone_elses_effort_ceiling()
+    {
+        // Anna created the household, so she manages it.
+        var (annaHttp, _, householdId, _, bjornMemberId) = await ArrangeTwoAccountHoldersAsync();
+
+        var response = await annaHttp.PutAsJsonAsync(
+            $"/api/households/{householdId}/members/{bjornMemberId}/effort-ceiling",
+            SomeEffortCeiling);
+
+        Assert.True(response.IsSuccessStatusCode);
+    }
 }

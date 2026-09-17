@@ -11,9 +11,12 @@ namespace Hemordna.Domain.Tasks;
 /// member being away, or a task being skipped once, is handled on
 /// <see cref="TaskOccurrence"/>.
 /// <para>
-/// <see cref="PreferredWeekday"/> is a soft scheduling hint used when an occurrence is
-/// scheduled manually. <see cref="Recurrence"/> is the separate, self-contained rule an
-/// automatic generator uses to keep occurrences coming without a human scheduling each one.
+/// <see cref="PreferredWeekday"/> is a REQUIREMENT, not a hint - Björn's decision: a task with
+/// a chosen weekday always sits on that day (e.g. bin day on collection day), never silently
+/// moved by the weekly placement algorithm. Only meaningful for a Weekly or Monthly
+/// <see cref="Recurrence"/> - a Daily or "as needed" (<see cref="StaleAfterDays"/>) task has no
+/// single weekday to lock to, so setting it is rejected. See docs/ARCHITECTURE.md "Beslut:
+/// Alltid på en viss veckodag".
 /// </para>
 /// </remarks>
 public sealed class TaskDefinition
@@ -64,7 +67,8 @@ public sealed class TaskDefinition
     /// <summary>Who normally owns this task, when the household has agreed on an owner.</summary>
     public Guid? DefaultResponsibleMemberId { get; private set; }
 
-    /// <summary>The weekday the household prefers this to happen on, when it matters.</summary>
+    /// <summary>The weekday this task is locked to, or null when it has none. See
+    /// <see cref="SetPreferredWeekday"/> and this class's own remarks.</summary>
     public DayOfWeek? PreferredWeekday { get; private set; }
 
     /// <summary>Whether an occurrence may be pushed to a later date.</summary>
@@ -154,14 +158,33 @@ public sealed class TaskDefinition
         DefaultResponsibleMemberId = memberId;
     }
 
+    /// <summary>
+    /// Locks this task to a weekday, or clears the lock with <c>null</c>. Only a Weekly or
+    /// Monthly <see cref="Recurrence"/> has a single weekday to lock to - rejected for a Daily
+    /// or "as needed" task. Clearing is always allowed. Does not, by itself, move the task's
+    /// current <see cref="Recurrence"/> to the new day - see the use case that calls this
+    /// (<c>SetTaskPreferredWeekday</c>) for the actual re-anchoring.
+    /// </summary>
     public void SetPreferredWeekday(DayOfWeek? weekday)
     {
-        if (weekday is { } day && !Enum.IsDefined(day))
+        if (weekday is not { } day)
+        {
+            PreferredWeekday = null;
+            return;
+        }
+
+        if (!Enum.IsDefined(day))
         {
             throw new ArgumentOutOfRangeException(nameof(weekday), weekday, "Not a valid weekday.");
         }
 
-        PreferredWeekday = weekday;
+        if (Recurrence is not { Frequency: RecurrenceFrequency.Weekly or RecurrenceFrequency.Monthly })
+        {
+            throw new DomainException(
+                $"Task definition '{Name}' has no weekly or monthly recurrence to lock to a weekday.");
+        }
+
+        PreferredWeekday = day;
     }
 
     public void SetCanBeDeferred(bool canBeDeferred) => CanBeDeferred = canBeDeferred;
@@ -184,8 +207,24 @@ public sealed class TaskDefinition
         Effort = effort;
     }
 
-    /// <summary>Sets or clears the automatic recurrence. Does not touch occurrences already scheduled.</summary>
-    public void SetRecurrence(RecurrenceRule? recurrence) => Recurrence = recurrence;
+    /// <summary>
+    /// Sets or clears the automatic recurrence. Does not touch occurrences already scheduled.
+    /// Clears <see cref="PreferredWeekday"/> whenever the new recurrence's own weekday no longer
+    /// matches it - a lock is a promise that the task sits on THAT day, so a recurrence change
+    /// that moves it elsewhere (a Daily/"as needed" switch, a plain day-of-month Monthly with no
+    /// weekday of its own, or simply a different Weekly day picked via "Upprepning") must not
+    /// leave a stale lock pointing at a day the task no longer actually occupies - the same
+    /// invariant <see cref="SetPreferredWeekday"/> enforces on ITS OWN entry point.
+    /// </summary>
+    public void SetRecurrence(RecurrenceRule? recurrence)
+    {
+        Recurrence = recurrence;
+
+        if (PreferredWeekday is not null && recurrence?.Weekday != PreferredWeekday)
+        {
+            PreferredWeekday = null;
+        }
+    }
 
     /// <summary>Sets or clears the "as needed" interval. See <see cref="StaleAfterDays"/>.</summary>
     public void SetStaleAfterDays(int? staleAfterDays)

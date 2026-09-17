@@ -455,6 +455,26 @@ public sealed class HemordnaApiClient
             : null;
     }
 
+    /// <summary>"Alltid på en viss veckodag" - null clears the lock. Household configuration,
+    /// same authorization as frequency. A 409 (task has no weekly/monthly recurrence to lock
+    /// to) surfaces as a null return, same as a 404 - the caller only needs to know it failed.</summary>
+    public async Task<TaskDefinitionResponse?> SetTaskPreferredWeekdayAsync(
+        Guid householdId,
+        Guid taskId,
+        string? weekday,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Put, $"api/households/{householdId}/tasks/{taskId}/preferred-weekday", cancellationToken);
+        request.Content = JsonContent.Create(new { weekday });
+
+        var response = await _http.SendAsync(request, cancellationToken);
+
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<TaskDefinitionResponse>(cancellationToken)
+            : null;
+    }
+
     public async Task<AreaResponse?> RenameAreaAsync(
         Guid householdId,
         Guid areaId,

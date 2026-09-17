@@ -43,6 +43,10 @@
                                 {
                                     <li class="muted small">
                                         @(visit.AreaName ?? "Övrigt") · @VisitKindLabel(visit.VisitKind) · @visit.Minutes min
+                                        @if (visit.IsLocked)
+                                        {
+                                            <text> · alltid @SwedishDayName(day.Day).ToLowerInvariant()</text>
+                                        }
                                     </li>
                                 }
                             </ul>

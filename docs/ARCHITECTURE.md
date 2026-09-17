@@ -117,8 +117,8 @@ slutförande, ångrad completion) har uppstått än.
 Ett självständigt value object på `TaskDefinition.Recurrence`: daily/weekly/monthly, inklusive
 "var Nde vecka/månad" och "tredje tisdagen i månaden". Beräknar bara "nästa datum på eller
 efter X" via stegning framåt - inget kalenderbibliotek, ingen closed-form-matematik.
-`TaskDefinition.PreferredWeekday` är kvar oförändrad som ett fristående, manuellt
-schemaläggningshint.
+`TaskDefinition.PreferredWeekday` är inte längre ett dött, fristående fält - se "Beslut: Alltid
+på en viss veckodag" nedan för hur det kopplades in.
 
 **Vem genererar `TaskOccurrence` (löser §10):** on demand, i `EnsureOccurrencesGenerated`,
 anropad från `GetDailyPlan` varje gång en medlems dag hämtas. Inget schemalagt jobb, ingen
@@ -2996,6 +2996,23 @@ granskad - kontroller man inte får använda visas inte alls, aldrig gråmarkera
 med en förklarande text om vem de är till för. Se "Hushållsöversikt" i `docs/DESIGN.md`
 för var det landar i UI:t.
 
+**Uppföljning: "Egen ork" fick samma tredje regel som pausen.** `PUT
+.../effort-ceiling` låg från start bakom `HouseholdManageFilter`, med en kommentar om att
+"en medlem sätter sin EGEN ork" var ett senare produktbeslut. Björn tog det beslutet: precis
+som pausen är ens egen ork inte hushållskonfiguration - det är något var och en vet bäst om
+sig själv, medan att sätta NÅGON ANNANS ork fortfarande kräver flaggan. Endpointen flyttade
+från `manage`-gruppen till `scoped` med sitt eget `MemberSelfOrManageFilter`, exakt samma
+mönster som `pause`. Den **veckovisa tidsbudgeten** (`PUT .../weekly-budget`) rördes
+INTE - den är fortfarande hushållskonfiguration, satt av den som sköter hushållet, inte en
+personlig känsla av ork. `MemberSheet.razor` speglar det: ork-disclosuren flyttade ut ur
+blocket `@if (Session.CanManageHousehold)` till samma villkor som pausen
+(`MemberSheet.IsSelfOrCanManageHousehold` - döpt om från `CanPauseThisMember` eftersom
+den nu gäller båda), medan rollval, anpassad tid, veckodagsbudget och "Ta bort medlem"
+förblir kvar bakom flaggan. Verifierat med tre nya E2E-test i `MemberAccessControlTests`
+(egen ork utan flagga → OK, någon annans utan flagga → 403, någon annans med flagga → OK) -
+det första av dem föll (403 i stället för OK) mot den gamla `HouseholdManageFilter`, vilket
+bevisar att filterbytet var nödvändigt.
+
 ### Beslut: Användarguider under /hjalp — `IMPLEMENTED`
 
 Björn ville ha HTML-guider "på det sätt vi gjort det i BowlingPlatform, med bilder och
@@ -3468,15 +3485,9 @@ byter veckodag varje cykel, så ett enda veckodagsval beskriver den inte menings
 i stället genom sin egen startdatumsfas, exakt som `RoomTemplateTask.ToScheduling`s
 `spreadIndex` redan gjorde - en medveten, dokumenterad avgränsning, inte en lucka som glömts.
 
-**`TaskDefinition.PreferredWeekday` - undersökt, oanvänt, INTE kopplat in.** Fältet finns sedan
-tidigare ("uppgiftens föredragna veckodag"), sparas vid skapande och visas i API-svaret, men
-`grep` genom hela repot visar att INGENTING läser det - varken `RecurrenceRule`,
-`EnsureOccurrencesGenerated`, `RotationPicker`, `DailyPlanner` eller den nya
-placeringsalgoritmen. Det är, redan innan detta uppdrag, ett dött fält. Att koppla in det i
-placeringen hade krävt ett produktbeslut som inte är givet av uppgiften: ska det vara en HÅRD
-pin (uppgiften MÅSTE ligga där, oavsett kapacitet) eller en MJUK nudge (en tie-break-faktor i
-steg 4)? Ingetdera är specificerat, så det byggdes inte - flaggat åt Björn som en öppen fråga i
-tabellen nedan.
+**`TaskDefinition.PreferredWeekday` är inte längre dött.** Se "Beslut: Alltid på en viss
+veckodag" längre ned i det här dokumentet för hur fältet kopplades in, och varför det blev en
+HÅRD pin, inte en mjuk nudge.
 
 **"Använd" (`ApplyWeeklyPlan`) skriver bara `TaskDefinition.Recurrence` - rör ALDRIG en redan
 genererad förekomst.** Detta är en avsiktlig, uttrycklig skillnad mot `RebalanceSchedule`, som
@@ -3536,17 +3547,91 @@ gäller kommande veckor, inte redan utlagt arbete.
 kastat vid första anropet. Upptäckt och rättat i samma svep som `PreviewWeeklyPlan`/
 `ApplyWeeklyPlan` las till.
 
-**En andra riktig bugg: `MemberSheet`s rollval uppdaterade inte "Hur mycket orkar personen"-
-och "Anpassa tid per veckodag"-formulären inom SAMMA ark-session.** Båda seedas bara en gång per
-öppning (`??=`, för att aldrig skriva över en pågående handredigering) - men det gällde även
-EFTER att `SetRoleAsync` själv sparat ett nytt preset, så arket kunde visa FÖRE-värden tills det
-stängdes och öppnades igen. Rättat: `SetRoleAsync` nollställer båda formulären innan den anropar
-`OnChanged`, så de byggs om från det färska medlemsobjektet. Redan verifierat via reload-baserade
-E2E-test (`Setting_a_days_effort_ceiling_is_saved_and_survives_a_reload`,
-`Picking_a_role_sets_a_starting_effort_ceiling_that_stays_freely_editable`); **inte** verifierat
-för scenariot "kontrollera SAMMA sessions vy direkt efter rollvalet, utan mellanliggande reload",
-flaggat som en känd, mindre, redan existerande (samma mönster gällde `_weekdayForm` sedan
-tidigare) trubbighet i UI:t, inte en dataförlust.
+**En andra riktig bugg, nu rättad: `MemberSheet`s rollval uppdaterade inte "Hur mycket orkar
+personen"- och "Anpassa tid per veckodag"-formulären inom SAMMA ark-session.** Båda seedas bara
+en gång per öppning (`??=`, för att aldrig skriva över en pågående handredigering). Ett första
+försök nollställde bara båda formulären i `SetRoleAsync` och lät `OnParametersSet` bygga om dem
+när ett färskt medlemsobjekt kom tillbaka via `OnChanged` → förälderns reload → nytt
+`Member`-parametervärde - men det beror på att förälderns re-render hinner landa före den här
+komponentens egen, vilket inte är garanterat. I praktiken visade arket FÖRE-värden tills det
+stängdes och öppnades igen, bekräftat av ett E2E-test utan mellanliggande reload
+(`Picking_a_role_updates_the_effort_disclosure_in_the_same_open_sheet_without_a_reload`), som
+föll innan rättningen. Rättat: `SetRoleAsync` bygger om båda formulären direkt från exakt samma
+preset (`HouseholdRolePresets.BudgetFor`/`EffortCeilingFor`) den just sparade, i stället för att
+nollställa och vänta på att ett nytt `Member` ska komma nedifrån - arket är korrekt direkt när
+handlern returnerar, oberoende av renderingsordning. Verifierat både med det nya testet och de
+befintliga reload-baserade (`Setting_a_days_effort_ceiling_is_saved_and_survives_a_reload`,
+`Picking_a_role_sets_a_starting_effort_ceiling_that_stays_freely_editable`).
+
+### Beslut: Alltid på en viss veckodag — `IMPLEMENTED`
+
+`TaskDefinition.PreferredWeekday` fanns sedan tidigare, sparades vid skapande och visades i
+API-svaret, men lästes ingenstans - flaggat ovan som ett dött fält med en öppen fråga: HÅRD pin
+eller MJUK nudge? Björns svar: **hårt krav, inte önskemål.** En uppgift med vald veckodag ligger
+alltid där (t.ex. soptömning på hämtningsdagen) - motiveringen är att ett "önskemål" som tyst
+flyttas känns trasigt, samma princip som redan styr att "Använd" aldrig skriver om redan utlagt
+arbete.
+
+**Bara Weekly och Monthly har en veckodag att låsa till.** En Daily eller "vid behov"-uppgift
+har ingen enskild veckodag begreppet ens ger mening för. `TaskDefinition.SetPreferredWeekday`
+avvisar (kastar `DomainException`, 409) ett veckodagsval när `Recurrence` inte är Weekly eller
+Monthly. Klienten (`TaskOptionsSheet.HasWeekdayToChoose`) visar inte ens raden "Alltid på" i det
+fallet - samma "döljs, nekas inte"-princip som resten av UI:t.
+
+**Invariant: `PreferredWeekday`, när satt, matchar alltid `Recurrence.Weekday`.** En stale lås som
+pekar på en dag uppgiften inte längre faktiskt ligger på hade varit värre än inget lås alls -
+planeraren och den verkliga schemaläggningen (`EnsureOccurrencesGenerated`, som bara läser
+`Recurrence`, aldrig `PreferredWeekday`) skulle då tyst gå isär. `TaskDefinition.SetRecurrence`
+nollställer därför `PreferredWeekday` varje gång den nya regelns egen veckodag inte längre
+matchar - oavsett VARFÖR `SetRecurrence` anropades (ett frekvensbyte via "Upprepning", ett byte
+till Daily/"vid behov", eller `ApplyWeeklyPlan`s egen omankring av en ANNAN, olåst uppgift).
+Samma invariant hålls INTE cross-validerad vid `CreateTaskDefinition` (klienten skickar i
+praktiken aldrig `PreferredWeekday` vid skapande - `Rum.razor`/`RoomSheet.razor` skickar alltid
+`null`) - ett medvetet avgränsat, litet API-kontraktsförtroende, inte en lucka som glömts.
+
+**Att sätta en veckodag ankrar om `Recurrence` direkt, med EXAKT samma teknik som `ApplyWeeklyPlan`
+redan bevisat.** Extraherad till en delad `RecurrenceReanchoring` (Application.Planning) - både
+`ApplyWeeklyPlan` och den nya `SetTaskPreferredWeekday` anropar samma
+`ForWeekday`/`HasMeaningfulChange`, i stället för att skriva om "ingen dubblett, inget hopp"-
+logiken en andra gång. Redan utlagda förekomster rörs aldrig - samma
+`gäller-framåt`-princip som "Använd".
+
+**`WeeklyPlacementPlanner`: låsta besök placeras först, ovillkorligt.** Innan den giriga
+algoritmen ens körs, placeras varje besök med `PlaceableVisit.LockedWeekday` på sin dag och
+räknas av mot dagens kapacitet - resten av veckan jämnas sedan ut RUNT dem, inte i okunskap om
+dem. Ingen ork-kontroll för låsta besök (`MaxEffort` ignoreras helt) - kravet vinner, och
+rotationens befintliga "alltid en hemvist"-fallback löser sedan VEM som faktiskt gör det, precis
+som för ett vanligt besök utan tillåten veckodag.
+
+**Rumsregeln hålls ihop - eller delas medvetet.** `WeeklyPlacementBuilder.SplitByLock` avgör hur
+ett rums (AreaId, VisitKind)-grupp blir till besök: noll eller EXAKT EN distinkt låst veckodag
+bland gruppens uppgifter håller hela gruppen (låsta och olåsta tillsammans) som ETT besök på den
+dagen - rumsregeln gäller. FLER än en distinkt låst dag kan rumsregeln inte hålla ihop längre:
+varje låst uppgift blir sitt eget enuppgiftsbesök på sin egen dag, och eventuella olåsta
+uppgifter i samma rum bildar ett eget, vanligt besök som placeras av den giriga algoritmen som
+vanligt.
+
+**`ApplyWeeklyPlan` hoppar över en låst uppgift explicit**, trots att det (givet ovanstående
+invariant) redan skulle bli en no-op via `HasMeaningfulChange` - en medveten dubbel garanti,
+inte redundans som råkat bli kvar: Björns krav var uttryckligt ("`ApplyWeeklyPlan` får aldrig
+flytta en låst uppgift"), och en explicit spärr håller oavsett om invarianten någon dag bryts av
+en framtida bugg någon annanstans.
+
+**UI:** `TaskOptionsSheet.razor` fick en ny rad "Alltid på" (dold utan `CanManageHousehold` och
+för Daily/"vid behov", se ovan) - *Ingen särskild dag* eller måndag–söndag, samma
+`.level-picker`-fria `<select>`-mönster som "Upprepning". `WeeklyPlanSheet.razor`s förhandsvisning
+markerar ett låst besök lugnt ("· alltid tisdag") i stället för att förklara varför det inte
+flyttas - samma "säg vad appen gör"-princip som resten av PRODUCT.md §8.
+
+**Tester:** `WeeklyPlacementPlannerTests` (låst placeras först och räknas in i kapaciteten, låst
+trots att ingen dag tillåter tyngden, ett låst enda-veckodag-besök tar hela rumsbesöket med sig,
+låsning vinner över ordinarie girig ordning oavsett storlek), `PreviewWeeklyPlanTests` (en låsning
+håller rumsbesöket ihop, flera olika låsningar delar det), `ApplyWeeklyPlanTests` (flyttar aldrig
+en låst uppgift, även i ett scenario som skulle flyttat den om den vore olåst),
+`SetTaskPreferredWeekdayTests` (ingen dubblett/inget hopp, Daily/"vid behov" avvisas, att
+rensa låset rör inte `Recurrence`), samt `TaskDefinitionTests` för domäninvarianten. Minst ett
+E2E (`AlwaysOnWeekdayTests`): sätta en veckodag överlever en reload, och raden visas aldrig för
+en daglig uppgift. Alla nya beteendetest bevisade falla innan respektive rättning fanns.
 
 | Fråga | Varför den väntar |
 |---|---|
