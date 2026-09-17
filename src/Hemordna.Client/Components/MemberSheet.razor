@@ -327,20 +327,45 @@
             // freely editable afterwards) - none depends on the others, so they run concurrently
             // rather than tripling the round trip.
             var roleTask = Api.SetMemberRoleAsync(HouseholdId, Member.Id, role.ToString());
-            var budgetTask = Api.SetWeeklyBudgetAsync(HouseholdId, Member.Id, HouseholdRolePresets.BudgetFor(role));
-            var effortTask = Api.SetWeeklyEffortCeilingAsync(
-                HouseholdId, Member.Id, HouseholdRolePresets.EffortCeilingFor(role));
+            var budget = HouseholdRolePresets.BudgetFor(role);
+            var ceiling = HouseholdRolePresets.EffortCeilingFor(role);
+            var budgetTask = Api.SetWeeklyBudgetAsync(HouseholdId, Member.Id, budget);
+            var effortTask = Api.SetWeeklyEffortCeilingAsync(HouseholdId, Member.Id, ceiling);
             await Task.WhenAll(roleTask, budgetTask, effortTask);
 
             if (await budgetTask && await effortTask)
             {
                 // Both editors below are only ever seeded once from Member (see
-                // OnParametersSet's "??=") so an in-progress hand edit is never clobbered by a
-                // routine re-render - but that means they must be explicitly cleared here, or
-                // they would keep showing the PRE-role values even after the preset's own
-                // budget/ceiling round-trip completes and a fresh Member comes back down.
-                _weekdayForm = null;
-                _effortForm = null;
+                // OnParametersSet's "??="), from an in-progress edit's point of view, so a
+                // routine re-render never clobbers a hand edit that's still in flight - but that
+                // same guard means simply nulling them out here and waiting for a fresh Member to
+                // flow back down through OnChanged -> parent reload -> OnParametersSet is NOT
+                // enough: that path depends on the parent's own re-render happening, and landing,
+                // before this component's next render - not guaranteed, and in practice the
+                // disclosure kept showing the PRE-role values until the sheet was closed and
+                // reopened. Rebuilt directly here instead, from the exact preset just saved, so
+                // the same open sheet is correct the instant this handler returns - no dependency
+                // on parameter-change timing.
+                _weekdayForm = new WeekdayMinutesForm
+                {
+                    Monday = budget.Monday,
+                    Tuesday = budget.Tuesday,
+                    Wednesday = budget.Wednesday,
+                    Thursday = budget.Thursday,
+                    Friday = budget.Friday,
+                    Saturday = budget.Saturday,
+                    Sunday = budget.Sunday
+                };
+                _effortForm = new Dictionary<DayOfWeek, TaskEffort>
+                {
+                    [DayOfWeek.Monday] = ParseEffort(ceiling.Monday),
+                    [DayOfWeek.Tuesday] = ParseEffort(ceiling.Tuesday),
+                    [DayOfWeek.Wednesday] = ParseEffort(ceiling.Wednesday),
+                    [DayOfWeek.Thursday] = ParseEffort(ceiling.Thursday),
+                    [DayOfWeek.Friday] = ParseEffort(ceiling.Friday),
+                    [DayOfWeek.Saturday] = ParseEffort(ceiling.Saturday),
+                    [DayOfWeek.Sunday] = ParseEffort(ceiling.Sunday)
+                };
                 await OnChanged.InvokeAsync();
             }
             else

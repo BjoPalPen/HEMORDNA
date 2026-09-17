@@ -3536,17 +3536,21 @@ gäller kommande veckor, inte redan utlagt arbete.
 kastat vid första anropet. Upptäckt och rättat i samma svep som `PreviewWeeklyPlan`/
 `ApplyWeeklyPlan` las till.
 
-**En andra riktig bugg: `MemberSheet`s rollval uppdaterade inte "Hur mycket orkar personen"-
-och "Anpassa tid per veckodag"-formulären inom SAMMA ark-session.** Båda seedas bara en gång per
-öppning (`??=`, för att aldrig skriva över en pågående handredigering) - men det gällde även
-EFTER att `SetRoleAsync` själv sparat ett nytt preset, så arket kunde visa FÖRE-värden tills det
-stängdes och öppnades igen. Rättat: `SetRoleAsync` nollställer båda formulären innan den anropar
-`OnChanged`, så de byggs om från det färska medlemsobjektet. Redan verifierat via reload-baserade
-E2E-test (`Setting_a_days_effort_ceiling_is_saved_and_survives_a_reload`,
-`Picking_a_role_sets_a_starting_effort_ceiling_that_stays_freely_editable`); **inte** verifierat
-för scenariot "kontrollera SAMMA sessions vy direkt efter rollvalet, utan mellanliggande reload",
-flaggat som en känd, mindre, redan existerande (samma mönster gällde `_weekdayForm` sedan
-tidigare) trubbighet i UI:t, inte en dataförlust.
+**En andra riktig bugg, nu rättad: `MemberSheet`s rollval uppdaterade inte "Hur mycket orkar
+personen"- och "Anpassa tid per veckodag"-formulären inom SAMMA ark-session.** Båda seedas bara
+en gång per öppning (`??=`, för att aldrig skriva över en pågående handredigering). Ett första
+försök nollställde bara båda formulären i `SetRoleAsync` och lät `OnParametersSet` bygga om dem
+när ett färskt medlemsobjekt kom tillbaka via `OnChanged` → förälderns reload → nytt
+`Member`-parametervärde - men det beror på att förälderns re-render hinner landa före den här
+komponentens egen, vilket inte är garanterat. I praktiken visade arket FÖRE-värden tills det
+stängdes och öppnades igen, bekräftat av ett E2E-test utan mellanliggande reload
+(`Picking_a_role_updates_the_effort_disclosure_in_the_same_open_sheet_without_a_reload`), som
+föll innan rättningen. Rättat: `SetRoleAsync` bygger om båda formulären direkt från exakt samma
+preset (`HouseholdRolePresets.BudgetFor`/`EffortCeilingFor`) den just sparade, i stället för att
+nollställa och vänta på att ett nytt `Member` ska komma nedifrån - arket är korrekt direkt när
+handlern returnerar, oberoende av renderingsordning. Verifierat både med det nya testet och de
+befintliga reload-baserade (`Setting_a_days_effort_ceiling_is_saved_and_survives_a_reload`,
+`Picking_a_role_sets_a_starting_effort_ceiling_that_stays_freely_editable`).
 
 | Fråga | Varför den väntar |
 |---|---|
