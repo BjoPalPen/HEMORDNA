@@ -14,7 +14,8 @@ public sealed record PlanCandidate
         string taskName,
         string? areaName = null,
         string? description = null,
-        bool isRoutine = false)
+        bool isRoutine = false,
+        TaskEffort effort = TaskEffort.Medium)
     {
         ArgumentNullException.ThrowIfNull(occurrence);
 
@@ -28,6 +29,7 @@ public sealed record PlanCandidate
         AreaName = areaName;
         Description = description;
         IsRoutine = isRoutine;
+        Effort = effort;
     }
 
     public TaskOccurrence Occurrence { get; }
@@ -55,4 +57,13 @@ public sealed record PlanCandidate
     public TaskPriority Priority => Occurrence.Priority;
 
     public bool CanBeDeferred => Occurrence.CanBeDeferred;
+
+    /// <summary>
+    /// How much this task takes out of whoever does it - read live from the task definition,
+    /// same as <see cref="IsRoutine"/>'s own classification (see <see cref="TaskDefinition.Effort"/>'s
+    /// own remarks: effort is never snapshotted onto the occurrence). Drives
+    /// <see cref="DailyPlanner"/>'s "orkvalet styr dagens tyngd" ceiling check - see
+    /// docs/ARCHITECTURE.md.
+    /// </summary>
+    public TaskEffort Effort { get; }
 }

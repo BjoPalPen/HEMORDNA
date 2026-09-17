@@ -20,6 +20,10 @@ internal sealed class MemberAvailabilityConfiguration : IEntityTypeConfiguration
         builder.Property(availability => availability.Date).IsRequired();
         builder.Property(availability => availability.AvailableMinutes).IsRequired();
 
+        // "Hur är orken idag?" - "Lite". Nullable: no ceiling at all is the ordinary case
+        // ("Lagom"/"Mycket", or no choice made yet) - see MemberAvailability.EffortCeiling.
+        builder.Property(availability => availability.EffortCeiling);
+
         // An override is per member and date - a second one for the same day would make
         // "how much time does this person have today" ambiguous.
         builder.HasIndex(availability => new { availability.MemberId, availability.Date })

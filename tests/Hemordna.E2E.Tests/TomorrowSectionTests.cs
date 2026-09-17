@@ -103,4 +103,74 @@ public class TomorrowSectionTests
         await Assertions.Expect(todayRow.GetByText("I förväg")).ToBeVisibleAsync();
         await Assertions.Expect(page.GetByText("Inget planerat imorgon än.")).ToBeVisibleAsync();
     }
+
+    /// <summary>
+    /// "Mycket föreslår morgondagens uppgifter" - a calm notice, never an automatic fetch. Only
+    /// shows once "Mycket" is chosen and today still has time left; only offers what fits; only
+    /// moves a task once the member presses the EXISTING "Gör idag i stället" action themselves.
+    /// </summary>
+    [Fact]
+    public async Task Mycket_with_time_left_suggests_a_tomorrow_task_that_fits_and_never_moves_it_on_its_own()
+    {
+        var page = await _app.NewPageAsync();
+        var (http, householdId, memberId, today) = await ArrangeAsync(page, _app.ApiUrl, "Ingrid");
+
+        // Mycket: 60 × 1.3 = 78 min. A 10-minute task today leaves 68 min - a 20-minute
+        // tomorrow task fits within that, a 90-minute one does not.
+        var todayTask = await (await http.PostAsJsonAsync(
+            $"/api/households/{householdId}/tasks",
+            new { name = "Diska", estimatedMinutes = 10 })).Content.ReadFromJsonAsync<JsonElement>();
+        await http.PostAsJsonAsync(
+            $"/api/households/{householdId}/tasks/{todayTask.GetProperty("id").GetGuid()}/occurrences",
+            new { date = today, assignToMemberId = memberId });
+
+        var fittingTask = await (await http.PostAsJsonAsync(
+            $"/api/households/{householdId}/tasks",
+            new { name = "Vattna blommorna", estimatedMinutes = 20 })).Content.ReadFromJsonAsync<JsonElement>();
+        await http.PostAsJsonAsync(
+            $"/api/households/{householdId}/tasks/{fittingTask.GetProperty("id").GetGuid()}/occurrences",
+            new { date = today.AddDays(1), assignToMemberId = memberId });
+
+        var tooBigTask = await (await http.PostAsJsonAsync(
+            $"/api/households/{householdId}/tasks",
+            new { name = "Storstada", estimatedMinutes = 90 })).Content.ReadFromJsonAsync<JsonElement>();
+        await http.PostAsJsonAsync(
+            $"/api/households/{householdId}/tasks/{tooBigTask.GetProperty("id").GetGuid()}/occurrences",
+            new { date = today.AddDays(1), assignToMemberId = memberId });
+
+        await page.GotoAsync("/");
+        var energy = page.GetByRole(AriaRole.Group, new() { Name = "Hur är orken idag?" });
+        await Assertions.Expect(energy).ToBeVisibleAsync();
+
+        // Neither task has a room, so both "Diska" and (once brought forward) "Vattna
+        // blommorna" land in "Övrigt" - this is today's own, real, interactive list, not the
+        // suggestion notice or the collapsed "Imorgon" section (both of which also mention these
+        // task names, so scoping to this list is what actually proves "not yet fetched").
+        var todayList = page.GetByRole(AriaRole.List, new() { Name = "Övrigt" });
+        await Assertions.Expect(todayList.GetByText("Diska")).ToBeVisibleAsync();
+
+        // Before choosing Mycket: no suggestion notice at all - nothing is fetched on its own.
+        await Assertions.Expect(page.Locator(".suggested-tomorrow")).Not.ToBeVisibleAsync();
+
+        await energy.GetByRole(AriaRole.Button, new() { Name = "Mycket", Exact = true }).ClickAsync();
+
+        var suggestion = page.Locator(".suggested-tomorrow");
+
+        // The fitting task is suggested; the too-big one never is.
+        await Assertions.Expect(suggestion).ToBeVisibleAsync(new() { Timeout = 10_000 });
+        await Assertions.Expect(suggestion.GetByText("Vattna blommorna")).ToBeVisibleAsync();
+        await Assertions.Expect(suggestion.GetByText("Storstada")).Not.ToBeVisibleAsync();
+
+        // Suggested, not fetched: today's own real list still only has "Diska".
+        await Assertions.Expect(todayList.GetByText("Vattna blommorna")).Not.ToBeVisibleAsync();
+
+        await suggestion.GetByRole(AriaRole.Button, new() { Name = "Gör idag i stället" }).ClickAsync();
+
+        // Only now, on the member's own press, does it land on today's real list, with its own
+        // "I förväg" chip - and the suggestion (now redundant) is gone.
+        var todayRow = todayList.GetByText("Vattna blommorna");
+        await Assertions.Expect(todayRow).ToBeVisibleAsync(new() { Timeout = 10_000 });
+        await Assertions.Expect(page.Locator(".task", new() { HasText = "Vattna blommorna" }).GetByText("I förväg")).ToBeVisibleAsync();
+        await Assertions.Expect(page.Locator(".suggested-tomorrow")).Not.ToBeVisibleAsync();
+    }
 }

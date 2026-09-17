@@ -1,5 +1,6 @@
 using Hemordna.Application.Households;
 using Hemordna.Domain.Households;
+using Hemordna.Domain.Tasks;
 
 namespace Hemordna.Application.Tests.Households;
 
@@ -88,5 +89,34 @@ public class SetMemberAvailabilityTests
             .HandleAsync(Guid.NewGuid(), Guid.NewGuid(), Friday, 5, CancellationToken.None);
 
         Assert.Null(availability);
+    }
+
+    /// <summary>"Hur är orken idag?" - "Lite" records a ceiling alongside the minutes.</summary>
+    [Fact]
+    public async Task A_light_ceiling_is_recorded_alongside_the_minutes()
+    {
+        var (householdId, member) = await ArrangeHouseholdAsync();
+
+        var availability = await CreateUseCase()
+            .HandleAsync(householdId, member.Id, Friday, 12, CancellationToken.None, TaskEffort.Light);
+
+        Assert.NotNull(availability);
+        Assert.Equal(TaskEffort.Light, availability.EffortCeiling);
+    }
+
+    /// <summary>"Lagom ska rensa taket" - choosing "Lagom" after an earlier "Lite" the same day
+    /// must clear the ceiling, not just leave the previous one standing.</summary>
+    [Fact]
+    public async Task Setting_it_again_without_a_ceiling_clears_an_earlier_one()
+    {
+        var (householdId, member) = await ArrangeHouseholdAsync();
+        var useCase = CreateUseCase();
+
+        await useCase.HandleAsync(householdId, member.Id, Friday, 12, CancellationToken.None, TaskEffort.Light);
+        var second = await useCase.HandleAsync(householdId, member.Id, Friday, 30, CancellationToken.None);
+
+        Assert.NotNull(second);
+        Assert.Null(second.EffortCeiling);
+        Assert.Equal(30, second.AvailableMinutes);
     }
 }

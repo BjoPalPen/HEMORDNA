@@ -919,12 +919,17 @@ public sealed class HemordnaApiClient
         return response.IsSuccessStatusCode;
     }
 
-    /// <summary>Sets "less time today" for a member, without changing their weekly budget.</summary>
+    /// <summary>Sets "less time today" for a member, without changing their weekly budget.
+    /// <paramref name="effortCeiling"/> is "Hur är orken idag?"'s ceiling ("Light" for "Lite",
+    /// null for "Lagom"/"Mycket" or no choice) - sent exactly as given, so a caller that must not
+    /// disturb an already-set ceiling (e.g. widening today's minutes for "Extra uppgift") has to
+    /// resend it - see EnergyLevel.EffortCeilingFor and MinDag.razor's own call sites.</summary>
     public async Task<bool> SetAvailabilityAsync(
         Guid householdId,
         Guid memberId,
         DateOnly date,
         int availableMinutes,
+        string? effortCeiling = null,
         CancellationToken cancellationToken = default)
     {
         var request = await AuthorizedAsync(
@@ -932,7 +937,7 @@ public sealed class HemordnaApiClient
             $"api/households/{householdId}/members/{memberId}/availability",
             cancellationToken);
         request.Content = JsonContent.Create(
-            new { date = date.ToString("yyyy-MM-dd"), availableMinutes });
+            new { date = date.ToString("yyyy-MM-dd"), availableMinutes, effortCeiling });
 
         var response = await _http.SendAsync(request, cancellationToken);
         return response.IsSuccessStatusCode;

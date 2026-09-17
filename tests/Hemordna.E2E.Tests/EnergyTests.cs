@@ -27,6 +27,10 @@ public class EnergyTests
                 sunday = minutesPerDay
             });
 
+    /// <summary>Explicitly Light effort - this helper tests the MINUTES multiplier alone, so the
+    /// tasks must survive "Lite"'s own effort ceiling ("orkvalet styr dagens tyngd") rather than
+    /// being excluded by it (a plain, undeclared task defaults to Medium - see TaskDefinition -
+    /// which "Lite" would otherwise filter out regardless of how much time is left).</summary>
     private static async Task ScheduleFourTwentyMinuteTasksAsync(HttpClient http, Guid householdId, Guid memberId)
     {
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
@@ -34,7 +38,8 @@ public class EnergyTests
         for (var i = 1; i <= 4; i++)
         {
             var task = await (await http.PostAsJsonAsync(
-                $"/api/households/{householdId}/tasks", new { name = $"Uppgift {i}", estimatedMinutes = 20 }))
+                $"/api/households/{householdId}/tasks",
+                new { name = $"Uppgift {i}", estimatedMinutes = 20, effort = "Light" }))
                 .Content.ReadFromJsonAsync<JsonElement>();
             await http.PostAsJsonAsync(
                 $"/api/households/{householdId}/tasks/{task.GetProperty("id").GetGuid()}/occurrences",
@@ -162,6 +167,67 @@ public class EnergyTests
         await Assertions.Expect(bEnergy.GetByRole(AriaRole.Button, new() { Name = "Lite", Exact = true })).ToBeVisibleAsync();
         await Assertions.Expect(bEnergy.GetByRole(AriaRole.Button, new() { Name = "Lagom", Exact = true })).ToBeVisibleAsync();
         await Assertions.Expect(bEnergy.GetByRole(AriaRole.Button, new() { Name = "Mycket", Exact = true })).ToBeVisibleAsync();
+    }
+
+    /// <summary>"Orkvalet styr dagens tyngd" - "Lite" keeps a Heavy task off today's list
+    /// entirely (moved to "Flytta till en annan dag", not lost) while a Light task still shows;
+    /// switching to "Lagom" clears the ceiling and brings the Heavy task straight back.</summary>
+    [Fact]
+    public async Task Lite_hides_a_heavy_task_but_not_a_light_one_and_lagom_clears_the_ceiling()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Nils");
+
+        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
+        http.DefaultRequestHeaders.Authorization = new("Bearer", token);
+
+        var me = await (await http.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
+        var householdId = me.GetProperty("householdId").GetGuid();
+        var memberId = me.GetProperty("memberId").GetGuid();
+
+        await GiveFullWeekAsync(http, householdId, memberId, 60);
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+
+        var heavyTask = await (await http.PostAsJsonAsync(
+            $"/api/households/{householdId}/tasks",
+            new { name = "Skrubba badkaret", estimatedMinutes = 20, effort = "Heavy" }))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        await http.PostAsJsonAsync(
+            $"/api/households/{householdId}/tasks/{heavyTask.GetProperty("id").GetGuid()}/occurrences",
+            new { date = today, assignToMemberId = memberId });
+
+        var lightTask = await (await http.PostAsJsonAsync(
+            $"/api/households/{householdId}/tasks",
+            new { name = "Vattna blommorna", estimatedMinutes = 5, effort = "Light" }))
+            .Content.ReadFromJsonAsync<JsonElement>();
+        await http.PostAsJsonAsync(
+            $"/api/households/{householdId}/tasks/{lightTask.GetProperty("id").GetGuid()}/occurrences",
+            new { date = today, assignToMemberId = memberId });
+
+        await page.ReloadAsync();
+
+        var energy = page.GetByRole(AriaRole.Group, new() { Name = "Hur är orken idag?" });
+        await Assertions.Expect(energy).ToBeVisibleAsync();
+        await energy.GetByRole(AriaRole.Button, new() { Name = "Lite", Exact = true }).ClickAsync();
+
+        await Assertions.Expect(page.GetByText("Vattna blommorna")).ToBeVisibleAsync(new() { Timeout = 10_000 });
+        await Assertions.Expect(page.GetByText("Skrubba badkaret")).Not.ToBeVisibleAsync();
+
+        // Left out for its own reason (the ceiling), not lost - still offered in "Flytta till en
+        // annan dag", same as anything else that did not fit today.
+        var moveChip = page.GetByRole(AriaRole.Button, new() { Name = "Flytta till en annan dag" });
+        await moveChip.ClickAsync();
+        var unplannedSheet = page.GetByRole(AriaRole.Dialog, new() { Name = "Flytta till en annan dag" });
+        await Assertions.Expect(unplannedSheet.GetByText("Skrubba badkaret")).ToBeVisibleAsync();
+        await unplannedSheet.GetByRole(AriaRole.Button, new() { Name = "Stäng" }).ClickAsync();
+
+        // "Lagom" - not just more time, an explicit "inget tyngdfilter" - clears the ceiling
+        // "Lite" set, and the heavy task is back.
+        var chosenChip = energy.GetByRole(AriaRole.Button, new() { Name = "Lite", Exact = true });
+        await chosenChip.ClickAsync();
+        await energy.GetByRole(AriaRole.Button, new() { Name = "Lagom", Exact = true }).ClickAsync();
+        await Assertions.Expect(page.GetByText("Skrubba badkaret")).ToBeVisibleAsync(new() { Timeout = 10_000 });
     }
 
     [Fact]

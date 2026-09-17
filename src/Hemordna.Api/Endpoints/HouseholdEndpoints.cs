@@ -748,12 +748,13 @@ internal static class HouseholdEndpoints
         }
 
         var availability = await setAvailability.HandleAsync(
-            householdId, memberId, request.Date.Value, request.AvailableMinutes, cancellationToken);
+            householdId, memberId, request.Date.Value, request.AvailableMinutes, cancellationToken,
+            request.EffortCeiling);
 
         return availability is null
             ? Results.NotFound()
             : Results.Ok(new AvailabilityResponse(
-                availability.MemberId, availability.Date, availability.AvailableMinutes));
+                availability.MemberId, availability.Date, availability.AvailableMinutes, availability.EffortCeiling));
     }
 
     private static async Task<IResult> SetWeeklyBudgetAsync(

@@ -3498,6 +3498,93 @@ Eftersom insnävningen ligger i den delade `EligibleMembers`, gäller den automa
 `RebalanceTaskAssignments` (ombalansera ansvar) - en reassignment kan aldrig hamna på någon vars
 tak den dagen inte tillåter uppgiftens tyngd.
 
+### Beslut: Orkvalet styr dagens tyngd — `IMPLEMENTED`
+
+Bakgrund: "Hur är orken idag?" (se "Beslut: Sju enkla lösningar" ovan) satte bara dagens TID
+(`SetAvailabilityAsync`, multiplikatorerna 0,4/1,0/1,3). Två luckor: (1) "Mycket" gav ofta ingen
+skillnad, eftersom `DailyPlanner` bara väljer uppgifter som redan ska göras idag eller tidigare -
+extra tid blev tom om inget mer väntade; (2) valet påverkade aldrig TYNGD, så "Lite" kunde
+fortfarande ge en tung uppgift.
+
+**Bara "Lite" sätter ett tak; "Lagom"/"Mycket" lägger inget tyngdfilter alls.**
+`MemberAvailability` fick ett nytt nullable fält, `EffortCeiling` (`TaskEffort?`) - den tyngsta
+nivå `DailyPlanner` får planera för den dagen. `SetMemberAvailability.HandleAsync` sätter det
+EXAKT som givet: en anropare som inte vill röra ett redan satt tak måste skicka med det på nytt -
+se klientens egna anrop nedan. "Lagom" (och "Mycket") skickar alltid `null`, vilket därför också
+rensar ett tidigare "Lite"-val samma dag.
+
+**Varför bara "Lite" filtrerar dagens planering.** En medlems vanliga ork per veckodag verkar
+redan vid TILLDELNINGEN (`RotationPicker.EligibleMembers`, se "Beslut: Ork i rotationen" ovan) -
+en Heavy-uppgift hamnar bara hos någon vars `WeeklyEffortCeiling` den dagen tillåter Heavy. Att
+också filtrera "Lagom"/"Mycket" i DAGENS planering skulle strandsätta uppgifter som rotationens
+egen fallback ändå gav personen när ingen annan orkade (se `EligibleMembers`s egen
+fallback-kommentar: "finns ingen valbar kvar, används hela den tidigare poolen igen") - de skulle
+aldrig synas på Idag och aldrig bli gjorda. "Lite" är annorlunda: det är personens EGEN,
+tillfälliga signal just den dagen, oberoende av vad rotationen redan bestämt.
+
+**`DailyPlanner`: filtrerat innan sortering, en egen `UnplannedReason`.** En icke-rutin-kandidat
+vars `Effort` överstiger dagens `EffortCeiling` hamnar direkt i `Unplanned`
+(`UnplannedReason.ExceedsEffortToday`) och går aldrig in i den vanliga urvalsloopen - kan alltså
+varken vinna budgeten eller öppna ett rumskluster. **Rutiner är undantagna** - "överst och alltid
+med" (Björns beslut, se "Beslut: rutiner alltid först") gäller tyngdtaket precis som det redan
+gäller budgeten: en rutin ska aldrig kunna försvinna för att den råkar vara Heavy-märkt.
+Uppskjutna/framtagna uppgifter (`IsBroughtForwardOn`) följer ingen särskild undantagsregel här -
+de filtreras precis som vilken icke-rutin-kandidat som helst; deras EGEN särregel (alltid med,
+även över budgeten) gäller bara tid, inte tyngd. Planeraren förblir en ren, deterministisk
+funktion - `GetDailyPlan` läser `EffortCeiling` från dagens `MemberAvailability`-override (eller
+`null` om ingen finns) och skickar in det i `DailyPlanRequest`.
+
+**`PlanCandidate.Effort` läses live, snapshottas aldrig** - exakt samma mönster som `IsRoutine`
+redan använder (se "Beslut: Tyngd per uppgift": `TaskDefinition.Effort` snapshottas inte på
+`TaskOccurrence`). `PlanCandidateQuery` (Infrastructure) skickar redan `Effort` i sin join för
+`VisitKindClassifier`s skull - candidaten återanvänder samma värde.
+
+**Migration `AddEffortCeilingToMemberAvailability`.** En nullable `integer`-kolumn på
+`MemberAvailabilities` - inget `defaultValueSql` behövs eftersom `null` ("inget tak") redan är
+rätt värde för varje befintlig rad. Verifierat i dev: `ALTER TABLE "MemberAvailabilities" ADD
+"EffortCeiling" integer;`.
+
+**API:** `SetAvailabilityRequest`/`AvailabilityResponse` fick ett tillagt `EffortCeiling`-fält -
+den BEFINTLIGA `PUT .../members/{memberId}/availability`-routen (redan bakom
+`MemberSelfAccessFilter`) utökades, ingen ny endpoint.
+
+**Klienten.** `EnergyLevel.EffortCeilingFor(label)`: `"Light"` för "Lite", annars `null`.
+`MinDag.razor`s `SetEnergyAsync` skickar taket i samma `SetAvailabilityAsync`-anrop som minuterna.
+"Extra uppgift"-flödets egna två anrop (som bara vidgar dagens minuter) skickar också med det
+AKTUELLA taket (`EnergyLevel.EffortCeilingFor(_energyChoice ?? "")`) - annars hade den anropet tyst
+rensat ett redan satt "Lite"-tak, eftersom samma endpoint alltid skriver över båda fälten.
+
+**Observerad konsekvens, flaggad för Björn:** en uppgift utan uttryckligt vald tyngd defaultar
+till `Medium` (`TaskDefinition`s konstruktor), inte `Light`. "Lite" utesluter alltså nu de flesta
+obehandlade uppgifter (allt som inte fått `Light` satt explicit) tills hushållet gått igenom och
+klassificerat dem - en avsedd men direkt märkbar beteendeändring för varje hushåll som redan
+använder "Lite" idag.
+
+### Beslut: Mycket föreslår morgondagens uppgifter — `IMPLEMENTED`
+
+Andra luckan ovan: "Mycket" gav ofta ingen skillnad, eftersom `DailyPlanner` bara väljer bland
+uppgifter som redan ska göras idag eller tidigare. Björns beslut: **föreslå, hämta aldrig
+automatiskt** - samma princip som "Beslut: avbockat räknas av dagens tid": mer arbete är ett val,
+aldrig något som dyker upp av sig självt.
+
+**Ingen ny framtagningslogik.** När "Mycket" är valt och dagens `RemainingMinutes > 0`, filtrerar
+`MinDag.razor`s `SuggestedTomorrowItems` det redan hämtade `TomorrowItems`
+(`docs/ARCHITECTURE.md` "Beslut: Kvarlämnat, Imorgon på Idag, ledig dag och tid i förväg") på
+`EstimatedMinutes <= RemainingMinutes`, och varje förslag bär den REDAN BEFINTLIGA "Gör idag i
+stället"-knappen (`BringForwardAsync`/`BringOccurrenceForwardAsync`) - samma åtgärd
+"Imorgon"-sektionen redan har. Ingen ny server- eller domänändring: allt bygger på data Idag redan
+laddar för sig själv (`_tomorrow`).
+
+**En lugn notis, en siffra som ett dokumenterat undantag.** "Du har N min över idag" - ett
+medvetet undantag från docs/DESIGN.md §6a (som annars aldrig visar en minutsiffra på Idag), samma
+sorts undantag som "Tid i förväg: N min" och "Imorgon"-sektionens "Totalt: N min" redan är: den
+egna, kvarvarande tiden är vad som avgör om ett förslag är rimligt, och siffran är den
+inloggade medlemmens EGEN - aldrig någon annans (`Inga siffror per person` - inga andra medlemmars
+tider visas här eller någon annanstans på Idag).
+
+**Inget visas om inget ryms.** Tomt `SuggestedTomorrowItems` (ingen av morgondagens uppgifter
+ryms, eller inget är valt/kvar) döljer notisen helt - ingen tom ruta, inget "inget att föreslå".
+
 ### Beslut: Placeringsalgoritmen — `IMPLEMENTED`
 
 Löser den ursprungliga skevheten Björn rapporterade: nästa veckas arbete per dag var 128, 120,

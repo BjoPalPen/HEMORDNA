@@ -1,3 +1,5 @@
+using Hemordna.Domain.Tasks;
+
 namespace Hemordna.Application.Planning;
 
 /// <summary>
@@ -15,9 +17,16 @@ namespace Hemordna.Application.Planning;
 /// Outstanding task instances that could be done. Candidates that are already completed or
 /// skipped, or that are scheduled for a later date, are ignored by the planner.
 /// </param>
+/// <param name="EffortCeiling">
+/// "Hur är orken idag?" - "Lite" (<see cref="Hemordna.Domain.Households.MemberAvailability.EffortCeiling"/>).
+/// The heaviest <see cref="TaskEffort"/> a non-routine candidate may have to still be planned
+/// today - <c>null</c> means no ceiling ("Lagom"/"Mycket", or no choice made). A routine is
+/// always exempt - see <see cref="DailyPlanner"/>.
+/// </param>
 public sealed record DailyPlanRequest(
     Guid MemberId,
     DateOnly Date,
     int AvailableMinutes,
     IReadOnlyCollection<PlanCandidate> Candidates,
-    int CompletedMinutes = 0);
+    int CompletedMinutes = 0,
+    TaskEffort? EffortCeiling = null);

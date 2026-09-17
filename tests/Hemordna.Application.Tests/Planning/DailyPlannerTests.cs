@@ -15,6 +15,9 @@ public class DailyPlannerTests
     private DailyPlan PlanWith(int availableMinutes, params PlanCandidate[] candidates)
         => _planner.Plan(new DailyPlanRequest(AnnaId, Friday, availableMinutes, candidates));
 
+    private DailyPlan PlanWith(int availableMinutes, TaskEffort? effortCeiling, params PlanCandidate[] candidates)
+        => _planner.Plan(new DailyPlanRequest(AnnaId, Friday, availableMinutes, candidates, EffortCeiling: effortCeiling));
+
     private static string[] NamesOf(DailyPlan plan)
         => plan.Items.Select(item => item.Candidate.TaskName).ToArray();
 
@@ -453,5 +456,79 @@ public class DailyPlannerTests
 
         Assert.Equal(["Hall", "Imorgondagens uppgift"], NamesOf(plan).OrderBy(name => name).ToArray());
         Assert.Empty(plan.Unplanned);
+    }
+
+    /// <summary>"Orkvalet styr dagens tyngd" - "Lite" (a Light ceiling) keeps a Heavy task off
+    /// today's list entirely, with its own reason rather than "did not fit in time".</summary>
+    [Fact]
+    public void A_light_ceiling_excludes_a_heavy_task()
+    {
+        var plan = PlanWith(
+            60,
+            TaskEffort.Light,
+            PlanCandidateBuilder.Task("Skrubba badkaret").Minutes(20).Effort(TaskEffort.Heavy).Build());
+
+        Assert.True(plan.IsEmpty);
+        var unplanned = Assert.Single(plan.Unplanned);
+        Assert.Equal("Skrubba badkaret", unplanned.Candidate.TaskName);
+        Assert.Equal(UnplannedReason.ExceedsEffortToday, unplanned.Reason);
+    }
+
+    /// <summary>Rutiner är "alltid med" - även en Heavy-märkt rutin (osannolikt i praktiken, men
+    /// inte förbjudet av domänen) undantas från ork-taket, precis som den redan undantas från
+    /// budgeten (se A_routine_is_planned_before_a_task_that_cannot_be_deferred).</summary>
+    [Fact]
+    public void A_light_ceiling_does_not_exclude_a_routine_even_when_it_is_heavy()
+    {
+        var plan = PlanWith(
+            60,
+            TaskEffort.Light,
+            PlanCandidateBuilder.Task("Vädra rummet").Minutes(5).Effort(TaskEffort.Heavy).Routine().Build());
+
+        Assert.Equal("Vädra rummet", Assert.Single(plan.Items).Candidate.TaskName);
+        Assert.Empty(plan.Unplanned);
+    }
+
+    /// <summary>Without a ceiling ("Lagom"/"Mycket", or no choice made), effort never excludes
+    /// anything - only time and the ordinary ordering rules decide.</summary>
+    [Fact]
+    public void With_no_ceiling_a_heavy_task_is_planned_like_any_other()
+    {
+        var plan = PlanWith(
+            60,
+            effortCeiling: null,
+            PlanCandidateBuilder.Task("Skrubba badkaret").Minutes(20).Effort(TaskEffort.Heavy).Build());
+
+        Assert.Equal("Skrubba badkaret", Assert.Single(plan.Items).Candidate.TaskName);
+        Assert.Empty(plan.Unplanned);
+    }
+
+    /// <summary>A Medium task still fits under a Medium ceiling - the ceiling is the HEAVIEST
+    /// level allowed, not an exact match (same semantics as WeeklyEffortCeiling.Allows).</summary>
+    [Fact]
+    public void A_medium_ceiling_still_allows_a_medium_task()
+    {
+        var plan = PlanWith(
+            60,
+            TaskEffort.Medium,
+            PlanCandidateBuilder.Task("Rengor spisen").Minutes(15).Effort(TaskEffort.Medium).Build());
+
+        Assert.Equal("Rengor spisen", Assert.Single(plan.Items).Candidate.TaskName);
+        Assert.Empty(plan.Unplanned);
+    }
+
+    [Fact]
+    public void A_light_ceiling_still_allows_a_light_task_and_a_medium_one_still_excluded_by_it()
+    {
+        var plan = PlanWith(
+            60,
+            TaskEffort.Light,
+            PlanCandidateBuilder.Task("Torka av bänkarna").Minutes(5).Effort(TaskEffort.Light).Build(),
+            PlanCandidateBuilder.Task("Rengor spisen").Minutes(15).Effort(TaskEffort.Medium).Build());
+
+        Assert.Equal(["Torka av bänkarna"], NamesOf(plan));
+        var unplanned = Assert.Single(plan.Unplanned);
+        Assert.Equal("Rengor spisen", unplanned.Candidate.TaskName);
+        Assert.Equal(UnplannedReason.ExceedsEffortToday, unplanned.Reason);
     }
 }

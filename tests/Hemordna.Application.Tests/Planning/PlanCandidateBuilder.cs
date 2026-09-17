@@ -19,6 +19,7 @@ internal sealed class PlanCandidateBuilder
     private DateOnly _scheduledDate = DailyPlannerTests.Friday;
     private string? _areaName;
     private bool _isRoutine;
+    private TaskEffort _effort = TaskEffort.Medium;
 
     public static PlanCandidateBuilder Task(string name) => new() { _name = name };
 
@@ -66,7 +67,14 @@ internal sealed class PlanCandidateBuilder
         return this;
     }
 
-    public PlanCandidate Build() => new(BuildOccurrence(), _name, _areaName, isRoutine: _isRoutine);
+    /// <summary>How heavy this task is - see DailyPlanner's effort-ceiling check.</summary>
+    public PlanCandidateBuilder Effort(TaskEffort effort)
+    {
+        _effort = effort;
+        return this;
+    }
+
+    public PlanCandidate Build() => new(BuildOccurrence(), _name, _areaName, isRoutine: _isRoutine, effort: _effort);
 
     public TaskOccurrence BuildOccurrence()
     {
