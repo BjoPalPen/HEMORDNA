@@ -1,49 +1,40 @@
 # Överlämning
 
-Lägesbild per 2026-09-09, för en ny session. Arbetssättet styrs av
-[../CLAUDE.md](../CLAUDE.md), som gäller före detta. Max 50 rader; äldre lägesbilder ligger i
-[handoff/](handoff/), se CLAUDE.md §17.
+Lägesbild per 2026-09-17. Arbetssätt: [../CLAUDE.md](../CLAUDE.md).
+Äldre lägesbilder bevaras i [handoff/](handoff/). Max 50 rader.
 
 ## Läge
 
-**`main` kör i produktion** med "Kvarlämnat, Imorgon på Idag, ledig dag och tid i förväg" mergad
-och deployad - se ARCHITECTURE.md "Beslut: Kvarlämnat, ..." för varje delmoment. Direkt därefter:
-konsekvent klient-överstyrt "idag" (`fix/client-today-consistency`) - bring-forward, ledig dag och
-tid i förväg tar nu alla en valfri klient-`today`, samma mönster `POST .../complete` redan hade
-men aldrig fick inkopplat vid anropsstället. `rebalance-assignments`/`daily-summary` är medvetet
-kvar på serverns UTC (hushållsomfattande, ska vara konsekvent för alla).
+`main` är deployad till https://app.hemordna.se med kodrelease `2562cee`.
+Kontolåsning, anropsbegränsning, säker e-postkonfiguration, JWT-återkallning vid
+lösenordsbyte och atomiska rollförval är implementerade. Se [SECURITY.md](SECURITY.md).
+Ingen ny datamigration behövdes. Befintliga sessioner behöver logga in igen.
 
-**Produktionsfeedback samma dag, INTE en bugg**: en användare rapporterade samma uppgiftsnamn två
-gånger på Idag. Verifierat mot databasen - två genuint skilda `TaskOccurrence`-rader (en daglig
-uppgifts gårdagsförekomst, ej avklarad, plus dagens nya), båda hos samma medlem. Exakt avsedd
-konsekvens av "kvarlämnat stannar" - innan dess kunde en försenad förekomst tyst byta ägare vid
-ombalansering, vilket dolde just den här hopningen. Öppen, ej byggd UX-idé: ge "Sedan
-tidigare"-raderna ett tydligt datum så det inte läses som en dubblett.
+## Köra och deploya
 
-## Köra
+Uppstart: [../README.md](../README.md). API `5199`, klient `5200`, Postgres `5432`.
+Docker Desktop måste köra för lokal API/E2E. LAN: `--urls "http://*:PORT"`.
+Server: `ssh -i ~/.ssh/hetzner_deploy deploy@62.238.45.45`, checkout `~/hemordna`.
+Deploy: `git pull --ff-only origin main`, sedan
+`docker compose -f docker-compose.prod.yml up -d --build --no-deps hemordna-api`.
+Production kräver Resend-nyckel. Betrott proxynät: `172.19.0.0/16`; verifiera vid nätbyte.
+Browserkontroll: `dotnet run --project scripts/Smoke -- https://app.hemordna.se`.
 
-Fullständig uppstart: [../README.md](../README.md). Portar: API `5199`, klient `5200`, **Postgres
-`5432`** (`docker-compose.yml` i repo-roten, `docker compose up -d db`). **Docker Desktop måste
-köra lokalt** innan E2E-svit eller `dotnet run` mot databasen - annars misslyckas HELA svitens
-`HemordnaAppFixture` med "did not become reachable" (Npgsql-fel i loggen avslöjar det verkliga
-skälet). **LAN-åtkomst:** binda med `--urls "http://*:PORT"`, inte `0.0.0.0`. **Deploy:** `ssh -i
-~/.ssh/hetzner_deploy deploy@62.238.45.45`, `cd ~/hemordna && git pull && docker compose -f
-docker-compose.prod.yml up -d --build` - migrationer körs automatiskt vid API-uppstart.
+## Verifierat
 
-## Fällor som kostat tid
+Build: 0 fel/varningar. Domän: 173/173. Application: 330/330.
+Bred E2E utan guidebildsgenerering: 206/207; enda felet var en väntan på gammal
+rumsskapandebekräftelse. Testet korrigerades och passerade isolerat.
+Slutkontroll på slutlig release: 39/39 säkerhets-, behörighets-, klient- och realtidstester.
+Produktion: HTTPS-health Healthy, 0 containeromstarter, browserkontroll 390/1280 px.
+Proxytest: 58 HTTP 401 och 63 HTTP 429; förfalskad X-Forwarded-For kringgick inte gränsen.
+Testresultat ligger lokalt i gitignorerade `TestResults/`.
 
-`::deep` måste stå FÖRE den del av en selektor utanför komponentens renderträd. Playwrights
-`ClickAsync()` vägrar klicka `aria-disabled="true"` - `ClickAsync(new(){Force=true})`. En full
-E2E-körning som startar strax efter lokal midnatt (positiv UTC-offset) kunde tidigare visa
-spridda, orelaterade fel - löst för de flesta medlemsinitierade endpoints, se ovan.
+## Drift och kvarstående frågor
 
-## Kända brister
-
-Medvetet ej fixat race: att välja en roll skickar två samtidiga PUT (roll + veckobudget). Två
-namngivna E2E-fladdrare under parallell körning (`HushallTests.Changing_a_members_role_…`,
-`HouseholdInviteTests.Joining_with_a_valid_code_…`) - kör isolerat innan en röd körning antas.
-
-## Öppna frågor och nästa steg
-
-Inga öppna frågor eller väntande godkännanden just nu utöver att merga/deploya
-`fix/client-today-consistency`.
+Rollbackimage sparad på servern: `hemordna-api:rollback-e3b4bca`.
+Återställ vid behov genom att tagga den som `hemordna-hemordna-api:latest` och köra
+Compose med `up -d --no-build --no-deps --force-recreate hemordna-api`.
+SignalR-push innehåller bara ändringssignal; data kräver ny REST-auktorisering.
+Dagliga kvarlämnade förekomster kan ge samma uppgiftsnamn flera gånger, avsiktligt.
+Inga väntande releaseåtgärder eller godkännanden.
