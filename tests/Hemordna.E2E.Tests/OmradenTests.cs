@@ -116,7 +116,11 @@ public class OmradenTests
         await OpenNewRoomSheetAsync(page);
         await page.GetByLabel("Rumstyp").SelectOptionAsync(new SelectOptionValue { Label = "Kök" });
         await page.GetByRole(AriaRole.Button, new() { Name = "Skapa", Exact = true }).ClickAsync();
-        await page.GetByText("Skapat, uppskattad tid per rum:").WaitForAsync();
+        // The generic confirmation still describes the first room until this save finishes.
+        await Assertions.Expect(Sheet(page, "Nytt rum").GetByRole(AriaRole.List, new() { Name = "Skapade rum" })
+            .GetByText("Kök", new() { Exact = true })).ToBeVisibleAsync(new() { Timeout = 15_000 });
+        await Assertions.Expect(Sheet(page, "Nytt rum").GetByRole(AriaRole.Button, new() { Name = "Skapa", Exact = true }))
+            .ToBeEnabledAsync(new() { Timeout = 15_000 });
         await CloseSheetAsync(Sheet(page, "Nytt rum"));
 
         // Not just the two rooms' own totals (17 + 28) - a household-wide sum shown once,
