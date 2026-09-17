@@ -131,6 +131,9 @@ public class InstallningarTests
         await page.GetByRole(AriaRole.Button, new() { Name = "Byt lösenord" }).ClickAsync();
         await page.GetByText("Lösenordet är bytt.").WaitForAsync();
 
+        await page.ReloadAsync();
+        await Assertions.Expect(page.GetByRole(AriaRole.Heading, new() { Name = "Byt lösenord" })).ToBeVisibleAsync();
+
         // No sign-out button in the app yet - drop the token directly, the same way the
         // fixture's other tests reach into localStorage to read it (see HushallActivityTests).
         await page.EvaluateAsync("() => localStorage.removeItem('hemordna.token')");

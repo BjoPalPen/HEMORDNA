@@ -13,7 +13,8 @@ internal static class AuthEndpoints
 {
     internal static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder app)
     {
-        var auth = app.MapGroup("/api/auth").WithTags("Auth").AllowAnonymous();
+        var auth = app.MapGroup("/api/auth").WithTags("Auth").AllowAnonymous()
+            .RequireRateLimiting("auth");
 
         auth.MapPost("/register", RegisterAsync)
             .WithName("Register")
@@ -44,8 +45,9 @@ internal static class AuthEndpoints
         app.MapPost("/api/auth/change-password", ChangePasswordAsync)
             .WithName("ChangePassword")
             .RequireAuthorization()
+            .RequireRateLimiting("auth")
             .WithTags("Auth")
-            .Produces(StatusCodes.Status200OK)
+            .Produces<AccessTokenResponse>()
             .ProducesValidationProblem()
             .Produces(StatusCodes.Status401Unauthorized);
 
@@ -94,6 +96,7 @@ internal static class AuthEndpoints
     private static async Task<IResult> LoginAsync(
         LoginRequest request,
         UserManager<HemordnaUser> users,
+        SignInManager<HemordnaUser> signIn,
         JwtTokenIssuer tokens)
     {
         if (string.IsNullOrWhiteSpace(request.Email) || string.IsNullOrWhiteSpace(request.Password))
@@ -105,7 +108,7 @@ internal static class AuthEndpoints
 
         // The same response whether the address is unknown or the password is wrong, so the
         // endpoint cannot be used to find out which e-mail addresses are registered.
-        if (user is null || !await users.CheckPasswordAsync(user, request.Password))
+        if (user is null || !(await signIn.CheckPasswordSignInAsync(user, request.Password, lockoutOnFailure: true)).Succeeded)
         {
             return Results.Unauthorized();
         }
@@ -196,7 +199,8 @@ internal static class AuthEndpoints
     private static async Task<IResult> ChangePasswordAsync(
         ChangePasswordRequest request,
         HttpContext httpContext,
-        UserManager<HemordnaUser> users)
+        UserManager<HemordnaUser> users,
+        JwtTokenIssuer tokens)
     {
         if (httpContext.User.GetUserId() is not { } userId)
         {
@@ -226,7 +230,8 @@ internal static class AuthEndpoints
                     .ToDictionary(group => group.Key, group => group.Select(e => e.Description).ToArray()));
         }
 
-        return Results.Ok();
+        var token = tokens.Issue(user);
+        return Results.Ok(new AccessTokenResponse(token.Token, token.ExpiresAt));
     }
 
     private static async Task<IResult> GetMeAsync(

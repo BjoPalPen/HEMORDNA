@@ -156,7 +156,8 @@ internal static class HouseholdEndpoints
 
         manage.MapPut("/members/{memberId:guid}/role", SetMemberRoleAsync)
             .Produces<HouseholdMemberResponse>()
-            .Produces(StatusCodes.Status404NotFound);
+            .Produces(StatusCodes.Status404NotFound)
+            .ProducesValidationProblem();
 
 
         manage.MapPost("/invite-code/regenerate", RegenerateInviteCodeAsync)
@@ -790,7 +791,18 @@ internal static class HouseholdEndpoints
         SetMemberRole setRole,
         CancellationToken cancellationToken)
     {
-        var member = await setRole.HandleAsync(householdId, memberId, request.Role, cancellationToken);
+        if ((request.WeeklyTimeBudgetMinutes is null) != (request.WeeklyEffortCeiling is null)
+            || (request.Role is { } role && !Enum.IsDefined(role)))
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["Request"] = ["Ange en giltig roll och både veckobudget och orktak för ett rollförval."]
+            });
+        }
+
+        var member = await setRole.HandleAsync(
+            householdId, memberId, request.Role, cancellationToken,
+            request.WeeklyTimeBudgetMinutes?.ToDomain(), request.WeeklyEffortCeiling?.ToDomain());
 
         return member is null ? Results.NotFound() : Results.Ok(ToResponse(member));
     }

@@ -134,7 +134,10 @@ public sealed record AddAreaRequest(string Name);
 public sealed record AddMemberRequest(
     string DisplayName, WeeklyTimeBudgetContract? WeeklyTimeBudgetMinutes, string? Role = null);
 
-public sealed record SetMemberRoleRequest(string? Role);
+public sealed record SetMemberRoleRequest(
+    string? Role,
+    WeeklyTimeBudgetContract? WeeklyTimeBudgetMinutes = null,
+    WeeklyEffortCeilingContract? WeeklyEffortCeiling = null);
 
 /// <summary>Grants or removes a member's ability to manage the household - see docs/ARCHITECTURE.md
 /// "Beslut: Vem får ändra vad".</summary>

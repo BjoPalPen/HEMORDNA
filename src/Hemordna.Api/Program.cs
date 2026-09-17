@@ -16,6 +16,10 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.HttpOverrides;
+using Hemordna.Infrastructure.Identity;
+using System.Threading.RateLimiting;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -26,7 +30,36 @@ builder.Services.AddOpenApi();
 builder.Services.ConfigureHttpJsonOptions(options =>
     options.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
 
-builder.Services.AddInfrastructure(builder.Configuration);
+builder.Services.AddInfrastructure(builder.Configuration, builder.Environment);
+
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    foreach (var network in builder.Configuration.GetSection("ReverseProxy:KnownNetworks").Get<string[]>() ?? [])
+    {
+        options.KnownIPNetworks.Add(System.Net.IPNetwork.Parse(network));
+    }
+});
+
+var authPermitLimit = builder.Configuration.GetValue("AuthRateLimit:PermitLimit", 60);
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.AddPolicy("auth", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+        _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = authPermitLimit,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0
+        }));
+    options.OnRejected = async (context, cancellationToken) =>
+    {
+        context.HttpContext.Response.Headers.RetryAfter = "60";
+        await Results.Problem(statusCode: 429, title: "För många försök. Vänta en minut och försök igen.")
+            .ExecuteAsync(context.HttpContext);
+    };
+});
 
 // TimeProvider rather than a static clock, so use cases stay testable.
 builder.Services.AddSingleton(TimeProvider.System);
@@ -109,6 +142,17 @@ builder.Services
         // uses, so the token travels as a query string parameter on that one path instead.
         options.Events = new JwtBearerEvents
         {
+            OnTokenValidated = async context =>
+            {
+                var userId = context.Principal?.GetUserId();
+                var stamp = context.Principal?.FindFirst("security_stamp")?.Value;
+                var users = context.HttpContext.RequestServices.GetRequiredService<UserManager<HemordnaUser>>();
+                var user = userId is { } id ? await users.FindByIdAsync(id.ToString()) : null;
+                if (user is null || string.IsNullOrEmpty(stamp) || stamp != user.SecurityStamp)
+                {
+                    context.Fail("Access token has been revoked.");
+                }
+            },
             OnMessageReceived = context =>
             {
                 if (context.Request.Path.StartsWithSegments("/hubs")
@@ -191,6 +235,7 @@ if (builder.Configuration.GetValue<bool>("RunMigrationsOnStartup"))
 }
 
 app.UseExceptionHandler();
+app.UseForwardedHeaders();
 
 if (app.Environment.IsDevelopment())
 {
@@ -239,11 +284,14 @@ app.UseStaticFiles(new StaticFileOptions
     }
 });
 
+app.UseRouting();
+
 if (allowedOrigins.Length > 0)
 {
     app.UseCors();
 }
 
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
@@ -252,7 +300,8 @@ app.MapHealthChecks("/health").AllowAnonymous();
 app.MapAuthEndpoints();
 app.MapPasskeyEndpoints();
 app.MapHouseholdEndpoints();
-app.MapHub<HouseholdHub>("/hubs/household").RequireAuthorization();
+app.MapHub<HouseholdHub>("/hubs/household", options => options.CloseOnAuthenticationExpiration = true)
+    .RequireAuthorization();
 
 // SPA fallback for the Blazor client - see the UseStaticFiles comment above. Registered
 // last so it never shadows an API route; only unmatched GET requests fall through to it.

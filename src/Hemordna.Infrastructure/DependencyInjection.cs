@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 
 namespace Hemordna.Infrastructure;
 
@@ -22,7 +23,8 @@ public static class DependencyInjection
 
     public static IServiceCollection AddInfrastructure(
         this IServiceCollection services,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IHostEnvironment environment)
     {
         var connectionString = configuration.GetConnectionString(ConnectionStringName);
 
@@ -56,7 +58,11 @@ public static class DependencyInjection
             {
                 options.User.RequireUniqueEmail = true;
                 options.Password.RequiredLength = 12;
+                options.Lockout.MaxFailedAccessAttempts = 5;
+                options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
+                options.Lockout.AllowedForNewUsers = true;
             })
+            .AddSignInManager()
             .AddRoles<IdentityRole<Guid>>()
             .AddEntityFrameworkStores<HemordnaDbContext>()
             // The password-reset token is one of Identity's "default" token providers - without
@@ -72,8 +78,11 @@ public static class DependencyInjection
 
         if (string.IsNullOrWhiteSpace(resendApiKey))
         {
-            // No Resend account configured (local dev, and the E2E test fixture) - log the
-            // e-mail instead of sending it, via DevEmailOutbox, rather than fail outright.
+            if (!environment.IsDevelopment())
+            {
+                throw new InvalidOperationException("Resend:ApiKey must be configured outside Development.");
+            }
+
             services.AddSingleton<IEmailSender, LoggingEmailSender>();
         }
         else

@@ -324,18 +324,11 @@
 
         try
         {
-            // Three calls describe the same pick from the UI's point of view - the role itself,
-            // and the time budget AND effort ceiling the preset implies for it (both still
-            // freely editable afterwards) - none depends on the others, so they run concurrently
-            // rather than tripling the round trip.
-            var roleTask = Api.SetMemberRoleAsync(HouseholdId, Member.Id, role.ToString());
             var budget = HouseholdRolePresets.BudgetFor(role);
             var ceiling = HouseholdRolePresets.EffortCeilingFor(role);
-            var budgetTask = Api.SetWeeklyBudgetAsync(HouseholdId, Member.Id, budget);
-            var effortTask = Api.SetWeeklyEffortCeilingAsync(HouseholdId, Member.Id, ceiling);
-            await Task.WhenAll(roleTask, budgetTask, effortTask);
 
-            if (await budgetTask && await effortTask)
+            if (await Api.SetMemberRoleAsync(HouseholdId, Member.Id, role.ToString(),
+                weeklyTimeBudget: budget, weeklyEffortCeiling: ceiling))
             {
                 // Both editors below are only ever seeded once from Member (see
                 // OnParametersSet's "??="), from an in-progress edit's point of view, so a

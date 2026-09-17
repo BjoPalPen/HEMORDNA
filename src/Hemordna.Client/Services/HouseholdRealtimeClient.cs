@@ -41,12 +41,10 @@ public sealed class HouseholdRealtimeClient : IAsyncDisposable
                 return;
             }
 
-            // The WebSocket handshake cannot carry an Authorization header, so the token
-            // travels as a query string parameter instead - see Program.cs on the API side.
-            var hubUrl = new Uri(new Uri(_apiBaseAddress), $"hubs/household?access_token={token}");
+            var hubUrl = new Uri(new Uri(_apiBaseAddress), "hubs/household");
 
             _connection = new HubConnectionBuilder()
-                .WithUrl(hubUrl)
+                .WithUrl(hubUrl, options => options.AccessTokenProvider = () => _tokens.GetAsync())
                 .WithAutomaticReconnect()
                 .Build();
 

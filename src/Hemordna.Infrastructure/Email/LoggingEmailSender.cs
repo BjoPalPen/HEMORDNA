@@ -32,9 +32,7 @@ public sealed class LoggingEmailSender : IEmailSender
     public Task SendAsync(string toEmail, string subject, string htmlBody, CancellationToken cancellationToken)
     {
         _outbox.Record(toEmail, htmlBody);
-        _logger.LogInformation(
-            "No Resend API key configured - logging e-mail instead of sending.\nTo: {To}\nSubject: {Subject}\n{Body}",
-            toEmail, subject, htmlBody);
+        _logger.LogInformation("Development e-mail recorded in the local outbox.");
 
         return Task.CompletedTask;
     }

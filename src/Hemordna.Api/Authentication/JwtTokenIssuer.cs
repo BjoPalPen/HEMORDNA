@@ -42,6 +42,7 @@ public sealed class JwtTokenIssuer
             Claims = new Dictionary<string, object>
             {
                 [JwtRegisteredClaimNames.Sub] = user.Id.ToString(),
+                ["security_stamp"] = user.SecurityStamp ?? throw new InvalidOperationException("User has no security stamp."),
                 [JwtRegisteredClaimNames.Email] = user.Email ?? string.Empty,
                 [ClaimTypes.Name] = user.DisplayName
             }

@@ -65,11 +65,13 @@ internal static class PasskeyEndpoints
 
         passkeys.MapPost("/login/options", GetLoginOptionsAsync)
             .WithName("GetPasskeyLoginOptions")
+            .RequireRateLimiting("auth")
             .AllowAnonymous()
             .Produces(StatusCodes.Status200OK);
 
         passkeys.MapPost("/login/verify", VerifyLoginAsync)
             .WithName("VerifyPasskeyLogin")
+            .RequireRateLimiting("auth")
             .AllowAnonymous()
             .Produces<AccessTokenResponse>()
             .Produces(StatusCodes.Status401Unauthorized);

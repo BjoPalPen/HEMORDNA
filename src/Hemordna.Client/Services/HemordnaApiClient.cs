@@ -102,9 +102,19 @@ public sealed class HemordnaApiClient
 
         var response = await _http.SendAsync(request, cancellationToken);
 
-        return response.IsSuccessStatusCode
-            ? []
-            : await ReadProblemMessagesAsync(response, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return await ReadProblemMessagesAsync(response, cancellationToken);
+        }
+
+        var token = await response.Content.ReadFromJsonAsync<AccessTokenResponse>(cancellationToken);
+        if (token is null)
+        {
+            return ["Kunde inte uppdatera inloggningen. Logga in igen."];
+        }
+
+        await _tokens.SetAsync(token.Token);
+        return [];
     }
 
     public async Task<IReadOnlyList<PasskeyResponse>> ListPasskeysAsync(CancellationToken cancellationToken = default)
@@ -595,16 +605,18 @@ public sealed class HemordnaApiClient
             : null;
     }
 
-    /// <summary>Sets or clears a member's role. Independent of their weekly budget - see SetWeeklyBudgetAsync.</summary>
+    /// <summary>Sets a role and optionally its capacity preset in one atomic update.</summary>
     public async Task<bool> SetMemberRoleAsync(
         Guid householdId,
         Guid memberId,
         string? role,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        WeeklyTimeBudgetContract? weeklyTimeBudget = null,
+        WeeklyEffortCeilingContract? weeklyEffortCeiling = null)
     {
         var request = await AuthorizedAsync(
             HttpMethod.Put, $"api/households/{householdId}/members/{memberId}/role", cancellationToken);
-        request.Content = JsonContent.Create(new SetMemberRoleRequest(role));
+        request.Content = JsonContent.Create(new SetMemberRoleRequest(role, weeklyTimeBudget, weeklyEffortCeiling));
 
         var response = await _http.SendAsync(request, cancellationToken);
         return response.IsSuccessStatusCode;

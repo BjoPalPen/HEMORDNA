@@ -54,7 +54,10 @@ public sealed record AreaResponse(Guid Id, string Name, bool IsActive, DateOnly?
 public sealed record AddMemberRequest(
     string? DisplayName, WeeklyTimeBudgetContract? WeeklyTimeBudgetMinutes, HouseholdRole? Role = null);
 
-public sealed record SetMemberRoleRequest(HouseholdRole? Role);
+public sealed record SetMemberRoleRequest(
+    HouseholdRole? Role,
+    WeeklyTimeBudgetContract? WeeklyTimeBudgetMinutes = null,
+    WeeklyEffortCeilingContract? WeeklyEffortCeiling = null);
 
 public sealed record RebalanceScheduleResponse(int ChangedTaskCount);
 

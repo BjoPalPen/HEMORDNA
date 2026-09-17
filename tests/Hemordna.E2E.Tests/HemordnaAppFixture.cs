@@ -43,6 +43,7 @@ public sealed class HemordnaAppFixture : IAsyncLifetime
                 ["ASPNETCORE_URLS"] = ApiBaseUrl,
                 ["ASPNETCORE_ENVIRONMENT"] = "Development",
                 ["Jwt__SigningKey"] = TestSigningKey,
+                ["AuthRateLimit__PermitLimit"] = "10000",
                 ["Cors__AllowedOrigins__0"] = ClientBaseUrl
             },
             path: "/health");

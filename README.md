@@ -7,6 +7,7 @@ Hemmets organisationsapp – en svensk PWA för hushållsplanering.
 
 - Produktbeskrivning: [docs/PRODUCT.md](docs/PRODUCT.md)
 - Arkitektur och beslutsstatus: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
+- Säkerhetsbeteenden och driftkonfiguration: [docs/SECURITY.md](docs/SECURITY.md)
 - Arbetsregler för Claude Code: [CLAUDE.md](CLAUDE.md)
 
 ## Kom igång
