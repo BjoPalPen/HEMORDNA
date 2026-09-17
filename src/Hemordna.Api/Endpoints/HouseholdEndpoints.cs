@@ -1313,7 +1313,8 @@ internal static class HouseholdEndpoints
                 item.Candidate.AreaName,
                 item.Candidate.Description,
                 item.Candidate.CanBeDeferred,
-                item.Candidate.Occurrence.OriginalScheduledDate))],
+                item.Candidate.Occurrence.OriginalScheduledDate,
+                item.Candidate.IsRoutine))],
             [.. day.Completed.Select(done => new CompletedTaskResponse(
                 done.Occurrence.Id,
                 done.Occurrence.TaskDefinitionId,

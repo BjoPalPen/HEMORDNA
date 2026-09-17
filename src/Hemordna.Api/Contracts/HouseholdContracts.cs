@@ -276,6 +276,10 @@ public sealed record CompletedTaskResponse(
     string? AreaName,
     Guid? CompletedByMemberId);
 
+/// <param name="IsRoutine">True for a <c>VisitKind.Routine</c> task (daily, interval 1) - see
+/// <c>PlanCandidate.IsRoutine</c>. Drives "Rutiner", the client's own leading group on Min dag
+/// (Björns beslut: "överst och alltid med"); never affects ordering here, the response already
+/// reflects DailyPlanner's own "rutiner först" placement.</param>
 public sealed record PlannedTaskResponse(
     Guid OccurrenceId,
     Guid TaskDefinitionId,
@@ -286,7 +290,8 @@ public sealed record PlannedTaskResponse(
     string? AreaName,
     string? Description,
     bool CanBeDeferred,
-    DateOnly OriginalScheduledDate);
+    DateOnly OriginalScheduledDate,
+    bool IsRoutine);
 
 public sealed record UnplannedTaskResponse(
     Guid OccurrenceId,

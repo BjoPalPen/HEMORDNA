@@ -21,7 +21,7 @@
         }
         @if (ShowAreaChip && Item.AreaName is { } area)
         {
-            <span class="chip">@area</span>
+            <span class="chip">@(StripFloorFromAreaChip ? RoomFloors.RoomNameOf(area) : area)</span>
         }
         @if (ShowTimeLevel && Item.EstimatedMinutes > 0)
         {
@@ -118,6 +118,15 @@
     /// it is the only thing distinguishing e.g. two different floors' own "Hall".</summary>
     [Parameter]
     public bool ShowAreaChip { get; set; } = true;
+
+    /// <summary>True only for "Rutiner" (MinDag.razor's leading routines group, Björns beslut:
+    /// "överst och alltid med") - the one other group besides "Sedan tidigare" that shows the
+    /// room as a chip because it has no room heading of its own, but unlike "Sedan tidigare" it
+    /// deliberately shows the room's own name WITHOUT the "Våning – " prefix (see
+    /// Support/RoomFloors.RoomNameOf) - a routine's chip is about which room the routine belongs
+    /// to, not about disambiguating two same-named rooms on different floors.</summary>
+    [Parameter]
+    public bool StripFloorFromAreaChip { get; set; }
 
     /// <summary>
     /// A member's own choice (MemberPreference.ShowTimeLevel) - off by default, so someone who

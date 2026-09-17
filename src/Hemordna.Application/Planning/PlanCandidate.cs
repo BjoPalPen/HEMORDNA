@@ -10,7 +10,11 @@ namespace Hemordna.Application.Planning;
 public sealed record PlanCandidate
 {
     public PlanCandidate(
-        TaskOccurrence occurrence, string taskName, string? areaName = null, string? description = null)
+        TaskOccurrence occurrence,
+        string taskName,
+        string? areaName = null,
+        string? description = null,
+        bool isRoutine = false)
     {
         ArgumentNullException.ThrowIfNull(occurrence);
 
@@ -23,6 +27,7 @@ public sealed record PlanCandidate
         TaskName = taskName.Trim();
         AreaName = areaName;
         Description = description;
+        IsRoutine = isRoutine;
     }
 
     public TaskOccurrence Occurrence { get; }
@@ -34,6 +39,16 @@ public sealed record PlanCandidate
     public string? AreaName { get; }
 
     public string? Description { get; }
+
+    /// <summary>
+    /// True when the underlying task definition classifies as <see cref="VisitKind.Routine"/>
+    /// (daily, interval 1) - see <see cref="VisitKindClassifier"/>, not redefined here. Drives
+    /// <see cref="DailyPlanner"/>'s "rutiner först" ordering rule (Björns beslut: "överst och
+    /// alltid med") - a rotation/completion flag the occurrence itself does not carry, so it is
+    /// supplied by whoever builds the candidate (see <c>PlanCandidateQuery</c>, which already
+    /// joins to the task definition for its name/area).
+    /// </summary>
+    public bool IsRoutine { get; }
 
     public int EstimatedMinutes => Occurrence.EstimatedMinutes;
 

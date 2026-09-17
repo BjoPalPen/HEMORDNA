@@ -36,6 +36,8 @@ public sealed record CompletedTaskResponse(
     string? AreaName,
     Guid? CompletedByMemberId);
 
+/// <param name="IsRoutine">True for a daily, interval-1 routine - drives "Rutiner", the leading
+/// group on Min dag (Björns beslut: "överst och alltid med").</param>
 public sealed record PlannedTaskResponse(
     Guid OccurrenceId,
     Guid TaskDefinitionId,
@@ -46,7 +48,8 @@ public sealed record PlannedTaskResponse(
     string? AreaName,
     string? Description,
     bool CanBeDeferred,
-    DateOnly OriginalScheduledDate);
+    DateOnly OriginalScheduledDate,
+    bool IsRoutine);
 
 public sealed record UnplannedTaskResponse(
     Guid OccurrenceId,
