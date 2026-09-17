@@ -31,7 +31,7 @@ public class ApplyWeeklyPlanTests
 
     [Fact]
     public async Task Returns_null_for_an_unknown_household()
-        => Assert.Null(await CreateUseCase().HandleAsync(Guid.NewGuid(), Wednesday, CancellationToken.None));
+        => Assert.Null(await CreateUseCase().HandleAsync(Guid.NewGuid(), Wednesday, null, CancellationToken.None));
 
     /// <summary>
     /// Proves both halves of the "gäller framåt" requirement in one scenario: a task re-anchored
@@ -73,7 +73,7 @@ public class ApplyWeeklyPlanTests
 
         // bigTask var redan på Måndag (planen väljer samma dag igen) - bara underTest, som
         // flyttas från fredag till tisdag, räknas som ändrad.
-        var changedCount = await CreateUseCase().HandleAsync(household.Id, Wednesday, CancellationToken.None);
+        var changedCount = await CreateUseCase().HandleAsync(household.Id, Wednesday, null, CancellationToken.None);
         Assert.Equal(1, changedCount);
 
         var reloadedBig = await _definitions.FindByIdAsync(household.Id, bigTask.Id, CancellationToken.None);
@@ -127,7 +127,7 @@ public class ApplyWeeklyPlanTests
         monthly.SetRecurrence(RecurrenceRule.Monthly(OldFriday));
         _definitions.Seed(monthly);
 
-        await CreateUseCase().HandleAsync(household.Id, Wednesday, CancellationToken.None);
+        await CreateUseCase().HandleAsync(household.Id, Wednesday, null, CancellationToken.None);
 
         var reloaded = await _definitions.FindByIdAsync(household.Id, monthly.Id, CancellationToken.None);
         Assert.NotNull(reloaded!.Recurrence!.MonthlyWeek);
@@ -163,7 +163,7 @@ public class ApplyWeeklyPlanTests
         second.SetRecurrence(RecurrenceRule.MonthlyOnWeekday(OldFriday, WeekOfMonth.First, DayOfWeek.Wednesday));
         _definitions.Seed(second);
 
-        await CreateUseCase().HandleAsync(household.Id, Wednesday, CancellationToken.None);
+        await CreateUseCase().HandleAsync(household.Id, Wednesday, null, CancellationToken.None);
 
         var reloadedFirst = await _definitions.FindByIdAsync(household.Id, first.Id, CancellationToken.None);
         var reloadedSecond = await _definitions.FindByIdAsync(household.Id, second.Id, CancellationToken.None);
@@ -205,7 +205,7 @@ public class ApplyWeeklyPlanTests
         big.SetRecurrence(RecurrenceRule.Weekly(OldFriday, DayOfWeek.Friday));
         _definitions.Seed(big);
 
-        var changedCount = await CreateUseCase().HandleAsync(household.Id, Wednesday, CancellationToken.None);
+        var changedCount = await CreateUseCase().HandleAsync(household.Id, Wednesday, null, CancellationToken.None);
 
         // The big task moved (Friday -> Tuesday, since Monday's 110 remaining minutes, after the
         // locked visit's 10 were counted in first, is now less than every other day's 120); the
@@ -216,5 +216,109 @@ public class ApplyWeeklyPlanTests
         Assert.Equal(DayOfWeek.Monday, reloadedLocked!.Recurrence!.Weekday);
         Assert.Equal(DayOfWeek.Monday, reloadedLocked.PreferredWeekday);
         Assert.Equal(DayOfWeek.Tuesday, reloadedBig!.Recurrence!.Weekday);
+    }
+
+    /// <summary>
+    /// Björns beslut: "ett flyttat besök låses" - proves all three parts of it in one scenario,
+    /// the same way <see cref="Applying_a_plan_never_touches_outstanding_work_and_never_duplicates_or_skips_the_next_occurrence"/>
+    /// does for the ordinary greedy path: (1) every task in the moved visit gets
+    /// TaskDefinition.PreferredWeekday set to the chosen day, (2) already-generated outstanding
+    /// work is untouched, and (3) the next occurrence is neither a duplicate nor skipped - via
+    /// the exact same RecurrenceReanchoring technique already proven for a manual lock.
+    /// </summary>
+    [Fact]
+    public async Task A_moved_visit_locks_every_task_in_it_without_touching_outstanding_work_or_duplicating_the_next_occurrence()
+    {
+        var household = await new CreateHousehold(_households, new FixedTimeProvider(Now))
+            .HandleAsync("Familjen", Guid.NewGuid(), "Anna", CancellationToken.None);
+        var anna = household.Members.Single();
+        anna.ChangeWeeklyTimeBudget(WeeklyTimeBudget.Uniform(120));
+        var bathroom = household.AddArea("Badrum");
+        await _households.UpdateAsync(household, CancellationToken.None);
+
+        var underTest = TaskDefinition.Create(household.Id, "Skrubba handfatet", 20, Now);
+        underTest.AssignToArea(bathroom.Id);
+        underTest.ChangeEffort(TaskEffort.Medium);
+        underTest.SetDefaultResponsibleMember(anna.Id);
+        underTest.SetRecurrence(RecurrenceRule.Weekly(OldFriday, DayOfWeek.Friday));
+        _definitions.Seed(underTest);
+
+        // Redan utlagt, ännu ej klart - en förfallen förekomst från den GAMLA dagen.
+        var outstanding = underTest.ScheduleFor(OldFriday, Now);
+        _occurrences.Seed(outstanding);
+
+        var moves = new Dictionary<Guid, DayOfWeek> { [underTest.Id] = DayOfWeek.Tuesday };
+        var changedCount = await CreateUseCase().HandleAsync(household.Id, Wednesday, moves, CancellationToken.None);
+        Assert.Equal(1, changedCount);
+
+        var reloaded = await _definitions.FindByIdAsync(household.Id, underTest.Id, CancellationToken.None);
+        Assert.Equal(DayOfWeek.Tuesday, reloaded!.Recurrence!.Weekday);
+        Assert.Equal(DayOfWeek.Tuesday, reloaded.PreferredWeekday); // Beslut: ett flyttat besök låses
+
+        // 1) Redan utlagt arbete rörs aldrig.
+        var stillOutstanding = (await _occurrences.ListOutstandingByHouseholdAsync(household.Id, CancellationToken.None))
+            .Single(o => o.TaskDefinitionId == underTest.Id);
+        Assert.Equal(OldFriday, stillOutstanding.ScheduledDate);
+        Assert.Equal(TaskOccurrenceStatus.Planned, stillOutstanding.Status);
+
+        // 2) Framåt: exakt EN ny förekomst på den nya dagen - varken en dubblett eller ett hopp.
+        // Nästa tisdag efter 2026-03-04 är 2026-03-10.
+        var newTuesday = new DateOnly(2026, 3, 10);
+        await CreateGenerator().HandleAsync(household.Id, newTuesday, CancellationToken.None);
+
+        var afterRun = await _occurrences.ListOutstandingByHouseholdAsync(household.Id, CancellationToken.None);
+        var underTestOccurrences = afterRun.Where(o => o.TaskDefinitionId == underTest.Id).ToList();
+        Assert.Equal(2, underTestOccurrences.Count); // den gamla + exakt en ny
+        Assert.Contains(underTestOccurrences, o => o.OriginalScheduledDate == OldFriday);
+        Assert.Contains(underTestOccurrences, o => o.OriginalScheduledDate == newTuesday);
+    }
+
+    /// <summary>Flytt av ett besök som redan var låst till en ANNAN dag byter låset till den nya
+    /// dagen i stället för att skippas som "redan låst" (den ordinarie, olåsta grenens regel).</summary>
+    [Fact]
+    public async Task Moving_an_already_locked_visit_changes_the_lock_to_the_new_day()
+    {
+        var household = await new CreateHousehold(_households, new FixedTimeProvider(Now))
+            .HandleAsync("Familjen", Guid.NewGuid(), "Anna", CancellationToken.None);
+        var anna = household.Members.Single();
+        anna.ChangeWeeklyTimeBudget(WeeklyTimeBudget.Uniform(120));
+        await _households.UpdateAsync(household, CancellationToken.None);
+
+        var locked = TaskDefinition.Create(household.Id, "Släng soporna", 10, Now);
+        locked.SetDefaultResponsibleMember(anna.Id);
+        locked.SetRecurrence(RecurrenceRule.Weekly(OldFriday, DayOfWeek.Monday));
+        locked.SetPreferredWeekday(DayOfWeek.Monday);
+        _definitions.Seed(locked);
+
+        var moves = new Dictionary<Guid, DayOfWeek> { [locked.Id] = DayOfWeek.Thursday };
+        var changedCount = await CreateUseCase().HandleAsync(household.Id, Wednesday, moves, CancellationToken.None);
+
+        Assert.Equal(1, changedCount);
+        var reloaded = await _definitions.FindByIdAsync(household.Id, locked.Id, CancellationToken.None);
+        Assert.Equal(DayOfWeek.Thursday, reloaded!.PreferredWeekday);
+        Assert.Equal(DayOfWeek.Thursday, reloaded.Recurrence!.Weekday);
+    }
+
+    /// <summary>Idempotens: att "flytta" ett besök till dagen det redan är låst till (t.ex. ett
+    /// andra Använd-klick utan mellanliggande ändring) räknas inte som en förändring.</summary>
+    [Fact]
+    public async Task Moving_a_visit_to_the_day_it_is_already_locked_to_does_not_count_as_changed()
+    {
+        var household = await new CreateHousehold(_households, new FixedTimeProvider(Now))
+            .HandleAsync("Familjen", Guid.NewGuid(), "Anna", CancellationToken.None);
+        var anna = household.Members.Single();
+        anna.ChangeWeeklyTimeBudget(WeeklyTimeBudget.Uniform(120));
+        await _households.UpdateAsync(household, CancellationToken.None);
+
+        var locked = TaskDefinition.Create(household.Id, "Släng soporna", 10, Now);
+        locked.SetDefaultResponsibleMember(anna.Id);
+        locked.SetRecurrence(RecurrenceRule.Weekly(OldFriday, DayOfWeek.Monday));
+        locked.SetPreferredWeekday(DayOfWeek.Monday);
+        _definitions.Seed(locked);
+
+        var moves = new Dictionary<Guid, DayOfWeek> { [locked.Id] = DayOfWeek.Monday };
+        var changedCount = await CreateUseCase().HandleAsync(household.Id, Wednesday, moves, CancellationToken.None);
+
+        Assert.Equal(0, changedCount);
     }
 }

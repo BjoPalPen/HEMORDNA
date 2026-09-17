@@ -325,20 +325,40 @@ public sealed record TimeCreditResponse(int Minutes);
 /// numbers: this is a planning surface for DAYS, not a comparison between people - see
 /// docs/ARCHITECTURE.md "Beslut: Placeringsalgoritmen".
 /// </summary>
+/// <param name="VisitKey">Stable identity for this visit within the current preview - see
+/// <c>PlaceableVisit.VisitKey</c>. The client echoes this back when it submits "flytta det här
+/// besöket till en annan dag" (Björns krav, "Planera veckan går att ändra").</param>
 /// <param name="IsLocked">True when this visit is "Alltid på" a fixed weekday (Björns krav) -
-/// see TaskDefinition.PreferredWeekday. The client marks these calmly in the preview instead of
-/// explaining why they never move.</param>
-public sealed record WeeklyPlanVisitResponse(Guid? AreaId, string? AreaName, VisitKind VisitKind, int Minutes, bool IsLocked);
+/// either an existing TaskDefinition.PreferredWeekday, or a move the household member just made
+/// in this same preview (Björns beslut: a move locks too, once "Använd" is used). The client
+/// marks these calmly in the preview instead of explaining why they never move.</param>
+public sealed record WeeklyPlanVisitResponse(
+    Guid VisitKey, Guid? AreaId, string? AreaName, VisitKind VisitKind, int Minutes, bool IsLocked);
 
 public sealed record WeeklyPlanDayResponse(
     DayOfWeek Day, int MinutesBefore, int MinutesAfter, IReadOnlyList<WeeklyPlanVisitResponse> Visits);
 
-public sealed record WeeklyPlanResponse(IReadOnlyList<WeeklyPlanDayResponse> Days);
+/// <param name="EffortWarningDays">Weekdays where a move the household member just made lands on
+/// a day nobody's effort ceiling can actually handle - the move is allowed anyway (a requirement
+/// wins, same as an existing lock), but the client shows a calm notice about it instead of
+/// staying silent - e.g. "Ingen orkar tunga uppgifter på tisdag".</param>
+public sealed record WeeklyPlanResponse(IReadOnlyList<WeeklyPlanDayResponse> Days, IReadOnlyList<DayOfWeek> EffortWarningDays);
+
+/// <summary>One visit the household member moved to a different weekday in the preview - treated
+/// exactly like an existing PreferredWeekday lock by the planner (Björns krav: återanvänd
+/// lås-mekanismen i planeraren, bygg ingen andra).</summary>
+public sealed record WeeklyPlanMoveRequest(Guid VisitKey, DayOfWeek Weekday);
 
 /// <summary><c>Today</c> lets the client name its own local date - see
 /// <c>CompleteOccurrenceRequest</c> for why. The server's own date is used when it is
-/// <c>null</c>.</summary>
-public sealed record ApplyWeeklyPlanRequest(DateOnly? Today);
+/// <c>null</c>. <c>Moves</c> is the household member's own pending edits to the suggestion -
+/// empty or <c>null</c> for the original, unmodified one.</summary>
+public sealed record PreviewWeeklyPlanRequest(DateOnly? Today, IReadOnlyList<WeeklyPlanMoveRequest>? Moves);
 
-/// <summary>How many task definitions actually got a new weekday - see <c>ApplyWeeklyPlan</c>.</summary>
+/// <summary>Same <c>Moves</c> as <see cref="PreviewWeeklyPlanRequest"/> - must be the moves the
+/// previewed plan being applied was actually computed with.</summary>
+public sealed record ApplyWeeklyPlanRequest(DateOnly? Today, IReadOnlyList<WeeklyPlanMoveRequest>? Moves);
+
+/// <summary>How many task definitions actually got a new weekday or lock - see
+/// <c>ApplyWeeklyPlan</c>.</summary>
 public sealed record ApplyWeeklyPlanResponse(int ChangedTaskCount);

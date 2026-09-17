@@ -191,13 +191,19 @@ public sealed record TaskOccurrenceResponse(
     string Status);
 
 /// <summary>"Planera veckan" - one visit's placement, for the preview. No per-person numbers -
-/// see the API's own contract.</summary>
-public sealed record WeeklyPlanVisitResponse(Guid? AreaId, string? AreaName, string VisitKind, int Minutes, bool IsLocked);
+/// see the API's own contract. <c>VisitKey</c> is echoed back when moving this visit to another
+/// day (Björns krav, "Planera veckan går att ändra").</summary>
+public sealed record WeeklyPlanVisitResponse(Guid VisitKey, Guid? AreaId, string? AreaName, string VisitKind, int Minutes, bool IsLocked);
 
 public sealed record WeeklyPlanDayResponse(
     string Day, int MinutesBefore, int MinutesAfter, IReadOnlyList<WeeklyPlanVisitResponse> Visits);
 
-public sealed record WeeklyPlanResponse(IReadOnlyList<WeeklyPlanDayResponse> Days);
+/// <summary><c>EffortWarningDays</c>: weekdays where a move just made lands on a day nobody's
+/// effort ceiling can handle - shown as a calm notice, never blocked.</summary>
+public sealed record WeeklyPlanResponse(IReadOnlyList<WeeklyPlanDayResponse> Days, IReadOnlyList<string> EffortWarningDays);
+
+/// <summary>One visit moved to another weekday - see the API's own contract.</summary>
+public sealed record WeeklyPlanMoveRequest(Guid VisitKey, string Weekday);
 
 public sealed record ApplyWeeklyPlanResponse(int ChangedTaskCount);
 

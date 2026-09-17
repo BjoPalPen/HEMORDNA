@@ -47,4 +47,29 @@ internal static class RecurrenceReanchoring
             && !(newRule.Weekday == current.Weekday
                 && newRule.MonthlyWeek == current.MonthlyWeek
                 && newRule.Interval == current.Interval);
+
+    /// <summary>
+    /// Locks <paramref name="definition"/> to <paramref name="weekday"/> and re-anchors its
+    /// <see cref="TaskDefinition.Recurrence"/> to match, using the exact same "no duplicate, no
+    /// skipped period" technique as everywhere else in this file. Shared by
+    /// <c>SetTaskPreferredWeekday</c> (locking a single task by hand) and <c>ApplyWeeklyPlan</c>
+    /// (Björns beslut: "ett flyttat besök låses" - moving a visit in the weekly plan locks every
+    /// task in it exactly the same way a manual lock does) - one place for the combined
+    /// "set the requirement, then re-anchor if needed" sequence, instead of two copies of it.
+    /// </summary>
+    public static void LockToWeekday(TaskDefinition definition, DateOnly today, DayOfWeek weekday)
+    {
+        // Validates weekday/frequency compatibility - throws before anything else changes.
+        definition.SetPreferredWeekday(weekday);
+
+        if (definition.Recurrence is { } current)
+        {
+            var reanchored = ForWeekday(current, today, weekday, () => current.MonthlyWeek ?? WeekOfMonth.First);
+
+            if (HasMeaningfulChange(reanchored, current))
+            {
+                definition.SetRecurrence(reanchored);
+            }
+        }
+    }
 }

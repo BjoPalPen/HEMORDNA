@@ -29,7 +29,20 @@ public sealed record PlaceableVisit(
     int Minutes,
     TaskEffort RequiredEffort,
     IReadOnlyList<Guid> TaskDefinitionIds,
-    DayOfWeek? LockedWeekday = null);
+    DayOfWeek? LockedWeekday = null)
+{
+    /// <summary>
+    /// Stable identity for this visit across preview calls in the same "Planera veckan" editing
+    /// session - the smallest task definition id it carries. <see cref="WeeklyPlacementBuilder"/>'s
+    /// grouping (by room/visit kind, further split by an existing <see cref="TaskDefinition.PreferredWeekday"/>)
+    /// depends only on the household's own state, never on a pending move - so the same set of
+    /// task ids always regroups into the same visit between one preview call and the next, and
+    /// the key stays stable while the household member is picking a day. Used to let the client
+    /// reference one specific visit when submitting "flytta det här besöket" (Björns krav) -
+    /// see docs/ARCHITECTURE.md "Beslut: redigerbar plan".
+    /// </summary>
+    public Guid VisitKey => TaskDefinitionIds.Count > 0 ? TaskDefinitionIds.Min() : Guid.Empty;
+}
 
 /// <summary>The household's placeable capacity for one weekday - see
 /// docs/ARCHITECTURE.md for how <paramref name="AvailableMinutes"/> and

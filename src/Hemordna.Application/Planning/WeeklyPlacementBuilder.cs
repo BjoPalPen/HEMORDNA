@@ -141,6 +141,29 @@ internal static class WeeklyPlacementBuilder
     }
 
     /// <summary>
+    /// Overlays the household member's own pending moves (Björns krav, "Planera veckan går att
+    /// ändra") on top of an already-built visit list, at exactly the same layer as an existing
+    /// <see cref="TaskDefinition.PreferredWeekday"/> lock: <see cref="PlaceableVisit.LockedWeekday"/>.
+    /// <see cref="WeeklyPlacementPlanner"/> then places a moved visit first, unconditionally, the
+    /// same as any other locked one - no second placement mechanism. A move overrides whatever
+    /// lock a visit already carries; moving an already-locked visit changes the lock to the new
+    /// day (see <c>ApplyWeeklyPlan</c>). Grouping itself (which tasks belong to which visit) is
+    /// never affected - a move only changes WHERE a visit that already exists gets placed.
+    /// </summary>
+    public static IReadOnlyList<PlaceableVisit> ApplyMoves(
+        IReadOnlyList<PlaceableVisit> visits, IReadOnlyDictionary<Guid, DayOfWeek> moves)
+    {
+        if (moves.Count == 0)
+        {
+            return visits;
+        }
+
+        return [.. visits.Select(visit => moves.TryGetValue(visit.VisitKey, out var day)
+            ? visit with { LockedWeekday = day }
+            : visit)];
+    }
+
+    /// <summary>
     /// Weekly and monthly tasks get a weekday placement. Daily tasks (interval 2-3, e.g.
     /// "TwiceWeekly"/"EveryOtherDay" on the client) are spread by their own start date phase
     /// instead - a single weekday choice does not describe a task that lands on a different

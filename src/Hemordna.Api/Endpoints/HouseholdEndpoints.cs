@@ -266,9 +266,11 @@ internal static class HouseholdEndpoints
             .Produces(StatusCodes.Status404NotFound)
             .ProducesValidationProblem();
 
-        // "Planera veckan" - se docs/ARCHITECTURE.md "Beslut: Placeringsalgoritmen". Hushålls-
-        // konfiguration, samma behörighet som rum och uppgifter.
-        manage.MapGet("/weekly-plan", PreviewWeeklyPlanAsync)
+        // "Planera veckan" - se docs/ARCHITECTURE.md "Beslut: Placeringsalgoritmen" och "Beslut:
+        // redigerbar plan". Hushållskonfiguration, samma behörighet som rum och uppgifter. POST,
+        // inte GET, trots att den inte sparar något - den tar emot hushållsmedlemmens egna
+        // pågående flyttar (WeeklyPlanMoveRequest), som inte uttrycks naturligt i en query-sträng.
+        manage.MapPost("/weekly-plan/preview", PreviewWeeklyPlanAsync)
             .Produces<WeeklyPlanResponse>()
             .Produces(StatusCodes.Status404NotFound);
 
@@ -1179,13 +1181,13 @@ internal static class HouseholdEndpoints
 
     private static async Task<IResult> PreviewWeeklyPlanAsync(
         Guid householdId,
-        DateOnly? today,
+        PreviewWeeklyPlanRequest request,
         PreviewWeeklyPlan previewWeeklyPlan,
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        var planDate = today ?? DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
-        var result = await previewWeeklyPlan.HandleAsync(householdId, planDate, cancellationToken);
+        var planDate = request.Today ?? DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        var result = await previewWeeklyPlan.HandleAsync(householdId, planDate, ToMoves(request.Moves), cancellationToken);
 
         return result is null ? Results.NotFound() : Results.Ok(ToResponse(result));
     }
@@ -1198,7 +1200,7 @@ internal static class HouseholdEndpoints
         CancellationToken cancellationToken)
     {
         var planDate = request.Today ?? DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
-        var changedCount = await applyWeeklyPlan.HandleAsync(householdId, planDate, cancellationToken);
+        var changedCount = await applyWeeklyPlan.HandleAsync(householdId, planDate, ToMoves(request.Moves), cancellationToken);
 
         return changedCount is null ? Results.NotFound() : Results.Ok(new ApplyWeeklyPlanResponse(changedCount.Value));
     }
@@ -1211,20 +1213,29 @@ internal static class HouseholdEndpoints
         DayOfWeek.Friday, DayOfWeek.Saturday, DayOfWeek.Sunday
     ];
 
-    private static WeeklyPlanResponse ToResponse(WeeklyPlacementResult result)
+    private static readonly IReadOnlyDictionary<Guid, DayOfWeek> NoMoves = new Dictionary<Guid, DayOfWeek>();
+
+    private static IReadOnlyDictionary<Guid, DayOfWeek> ToMoves(IReadOnlyList<WeeklyPlanMoveRequest>? moves)
+        => moves is { Count: > 0 }
+            ? moves.ToDictionary(move => move.VisitKey, move => move.Weekday)
+            : NoMoves;
+
+    private static WeeklyPlanResponse ToResponse(WeeklyPlanPreviewResult preview)
         => new(
             [.. WeekOrder.Select(day => new WeeklyPlanDayResponse(
                 day,
-                result.MinutesBeforeByDay.GetValueOrDefault(day),
-                result.MinutesAfterByDay.GetValueOrDefault(day),
-                [.. result.PlacedVisits
+                preview.Placement.MinutesBeforeByDay.GetValueOrDefault(day),
+                preview.Placement.MinutesAfterByDay.GetValueOrDefault(day),
+                [.. preview.Placement.PlacedVisits
                     .Where(placement => placement.Day == day)
                     .Select(placement => new WeeklyPlanVisitResponse(
+                        placement.Visit.VisitKey,
                         placement.Visit.AreaId,
                         placement.Visit.AreaName,
                         placement.Visit.VisitKind,
                         placement.Visit.Minutes,
-                        placement.Visit.LockedWeekday is not null))]))]);
+                        placement.Visit.LockedWeekday is not null))]))],
+            preview.EffortWarningDays);
 
     private static HouseholdResponse ToResponse(Household household)
         => new(
