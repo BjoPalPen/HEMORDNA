@@ -2996,6 +2996,23 @@ granskad - kontroller man inte får använda visas inte alls, aldrig gråmarkera
 med en förklarande text om vem de är till för. Se "Hushållsöversikt" i `docs/DESIGN.md`
 för var det landar i UI:t.
 
+**Uppföljning: "Egen ork" fick samma tredje regel som pausen.** `PUT
+.../effort-ceiling` låg från start bakom `HouseholdManageFilter`, med en kommentar om att
+"en medlem sätter sin EGEN ork" var ett senare produktbeslut. Björn tog det beslutet: precis
+som pausen är ens egen ork inte hushållskonfiguration - det är något var och en vet bäst om
+sig själv, medan att sätta NÅGON ANNANS ork fortfarande kräver flaggan. Endpointen flyttade
+från `manage`-gruppen till `scoped` med sitt eget `MemberSelfOrManageFilter`, exakt samma
+mönster som `pause`. Den **veckovisa tidsbudgeten** (`PUT .../weekly-budget`) rördes
+INTE - den är fortfarande hushållskonfiguration, satt av den som sköter hushållet, inte en
+personlig känsla av ork. `MemberSheet.razor` speglar det: ork-disclosuren flyttade ut ur
+blocket `@if (Session.CanManageHousehold)` till samma villkor som pausen
+(`MemberSheet.IsSelfOrCanManageHousehold` - döpt om från `CanPauseThisMember` eftersom
+den nu gäller båda), medan rollval, anpassad tid, veckodagsbudget och "Ta bort medlem"
+förblir kvar bakom flaggan. Verifierat med tre nya E2E-test i `MemberAccessControlTests`
+(egen ork utan flagga → OK, någon annans utan flagga → 403, någon annans med flagga → OK) -
+det första av dem föll (403 i stället för OK) mot den gamla `HouseholdManageFilter`, vilket
+bevisar att filterbytet var nödvändigt.
+
 ### Beslut: Användarguider under /hjalp — `IMPLEMENTED`
 
 Björn ville ha HTML-guider "på det sätt vi gjort det i BowlingPlatform, med bilder och

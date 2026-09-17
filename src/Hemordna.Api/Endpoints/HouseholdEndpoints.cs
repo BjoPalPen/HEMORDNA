@@ -149,14 +149,6 @@ internal static class HouseholdEndpoints
             .Produces<HouseholdMemberResponse>()
             .Produces(StatusCodes.Status404NotFound);
 
-        // Same authorization as weekly-budget above - see docs/ARCHITECTURE.md "Beslut: Ork per
-        // person och veckodag". Note for a later product decision, not built here: Björn may
-        // want a member to set their OWN ceiling - that would need its own filter, the way
-        // MemberSelfAccessFilter does for availability/preferences.
-        manage.MapPut("/members/{memberId:guid}/effort-ceiling", SetWeeklyEffortCeilingAsync)
-            .Produces<HouseholdMemberResponse>()
-            .Produces(StatusCodes.Status404NotFound)
-            .ProducesValidationProblem();
 
         manage.MapPost("/invite-code/regenerate", RegenerateInviteCodeAsync)
             .Produces<HouseholdResponse>()
@@ -177,6 +169,17 @@ internal static class HouseholdEndpoints
             .Produces<HouseholdMemberResponse>()
             .Produces(StatusCodes.Status403Forbidden)
             .Produces(StatusCodes.Status404NotFound);
+
+        // Same rule as pause above, not weekly-budget: your own ork always, anyone else's only
+        // with the flag - see docs/ARCHITECTURE.md "Beslut: Vem får ändra vad". The weekly TIME
+        // BUDGET stays household configuration (still on `manage` above) - only the effort
+        // ceiling moved.
+        scoped.MapPut("/members/{memberId:guid}/effort-ceiling", SetWeeklyEffortCeilingAsync)
+            .AddEndpointFilter<MemberSelfOrManageFilter>()
+            .Produces<HouseholdMemberResponse>()
+            .Produces(StatusCodes.Status403Forbidden)
+            .Produces(StatusCodes.Status404NotFound)
+            .ProducesValidationProblem();
 
         selfOnly.MapGet("/preferences", GetPreferenceAsync)
             .Produces<PreferenceResponse>()

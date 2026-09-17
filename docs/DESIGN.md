@@ -459,6 +459,12 @@ text som förklarar vad de inte får - appen ställer bara inte frågan. Paus-ko
 har kryssrutan. Att pausa någon påverkar vad hushållets schema ger dem, så den är varken
 lika privat som visningsvalen eller lika gemensam som rum och uppgifter - se
 ARCHITECTURE.md "Beslut: Vem får ändra vad" för de tre reglerna och varför de skiljs åt.
+"Hur mycket orkar personen per veckodag" flyttade in under samma regel (Björns
+uppföljningsbeslut): var och en vet bäst hur mycket de själva orkar en viss veckodag, så
+disclosuren syns i ditt eget ark utan kryssrutan, och i någon annans bara med den - samma
+`MemberSheet.IsSelfOrCanManageHousehold` som paus-kontrollen använder. Rollval, "Anpassad
+tid", veckodagsbudgeten och "Ta bort medlem" ligger kvar bakom kryssrutan ensam - den
+VECKOVISA TIDSBUDGETEN är fortfarande hushållskonfiguration, inte en personlig känsla.
 
 "Bjud in" (`BottomSheet`) slår ihop två funktioner bakom en enda ingång: hushållets
 inbjudningskod (åtta tecken, versaler, inga förväxlingsbara siffror/bokstäver) med en "Dela
@@ -554,13 +560,19 @@ valet aldrig är en gissning om vad ett nivåord som "Lite tid" faktiskt sparas 
 
 ### 6a2. Ork per veckodag: samma nivåord, en rad per dag
 
-`MemberSheet.razor` har en ny disclosure "Hur mycket orkar personen per veckodag", direkt ovanför
-"Anpassa tid per veckodag" och byggd på samma sätt: sju rader (en per veckodag), men i stället för
-ett sifferfält en `.level-picker` med `EffortLevel.All` (Lätt/Mellan/Tung) - taket för den dagen,
-dvs. den tyngsta nivå personen tar sig an. Ett rollval (samma `.level-picker` som redan väljer
+`MemberSheet.razor` har en disclosure "Hur mycket orkar personen per veckodag", byggd som
+"Anpassa tid per veckodag": sju rader (en per veckodag), men i stället för ett sifferfält en
+`.level-picker` med `EffortLevel.All` (Lätt/Mellan/Tung) - taket för den dagen, dvs. den
+tyngsta nivå personen tar sig an. Ett rollval (samma `.level-picker` som redan väljer
 tidsbudgetens preset) sätter både tid och ork-tak i ett svep; kryssrutorna nedanför är alltid
 fritt redigerbara efteråt, oavsett vilken väg som satte startvärdet. Se docs/ARCHITECTURE.md
 "Beslut: Ork per person och veckodag".
+
+Disclosuren ligger INTE i samma block som rollvalet och "Anpassa tid per veckodag" (de
+kräver kryssrutan) - den flyttade till blocket den delar med paus-kontrollen
+(`IsSelfOrCanManageHousehold`, se "Kan ändra hushållet" ovan), eftersom Björns
+uppföljningsbeslut gör den egna orken till något var och en sätter själv. Den VECKOVISA
+TIDSBUDGETEN rördes inte - "Anpassa tid per veckodag" är fortfarande hushållskonfiguration.
 
 ### 6a1. Tyngd: tre ord, aldrig en siffra
 

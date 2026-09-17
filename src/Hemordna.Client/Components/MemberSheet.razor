@@ -39,45 +39,6 @@
         </details>
 
         <details class="more-options">
-            <summary>Hur mycket orkar personen per veckodag</summary>
-            <p class="muted small">
-                Det tyngsta uppgifter personen tar på sig den dagen - en vardagskväll kanske bara
-                lätta uppgifter, helgen även de tunga. Sätts per roll ovan, men går alltid att
-                ändra per dag här.
-            </p>
-
-            @if (_effortForm is { } effortForm)
-            {
-                @foreach (var (day, label) in WeekdayLabels)
-                {
-                    <div class="field" role="group" aria-label="@($"Ork {label}")">
-                        <span aria-hidden="true">@label</span>
-                        <div class="level-picker">
-                            @foreach (var level in EffortLevel.All)
-                            {
-                                <button type="button"
-                                        class="@(effortForm[day] == level.Effort ? "btn btn-primary" : "btn btn-secondary")"
-                                        disabled="@_effortBusy"
-                                        @onclick="() => effortForm[day] = level.Effort">
-                                    @level.Label
-                                </button>
-                            }
-                        </div>
-                    </div>
-                }
-            }
-
-            @if (_effortMessage is { } effortMessage)
-            {
-                <div class="notice notice-problem" role="alert">@effortMessage</div>
-            }
-
-            <button type="button" class="btn btn-secondary btn-block" disabled="@_effortBusy" @onclick="SaveEffortCeilingAsync">
-                @(_effortBusy ? "Sparar..." : "Spara")
-            </button>
-        </details>
-
-        <details class="more-options">
             <summary>Anpassa tid per veckodag</summary>
             <p class="muted small">
                 Sätt ett eget antal minuter för varje dag - till exempel mer tid på helgen, eller en
@@ -148,8 +109,47 @@
         <hr class="member-sheet-divider" />
     }
 
-    @if (CanPauseThisMember)
+    @if (IsSelfOrCanManageHousehold)
     {
+        <details class="more-options">
+            <summary>Hur mycket orkar personen per veckodag</summary>
+            <p class="muted small">
+                Det tyngsta uppgifter personen tar på sig den dagen - en vardagskväll kanske bara
+                lätta uppgifter, helgen även de tunga. Sätts per roll, men går alltid att ändra per
+                dag här.
+            </p>
+
+            @if (_effortForm is { } effortForm)
+            {
+                @foreach (var (day, label) in WeekdayLabels)
+                {
+                    <div class="field" role="group" aria-label="@($"Ork {label}")">
+                        <span aria-hidden="true">@label</span>
+                        <div class="level-picker">
+                            @foreach (var level in EffortLevel.All)
+                            {
+                                <button type="button"
+                                        class="@(effortForm[day] == level.Effort ? "btn btn-primary" : "btn btn-secondary")"
+                                        disabled="@_effortBusy"
+                                        @onclick="() => effortForm[day] = level.Effort">
+                                    @level.Label
+                                </button>
+                            }
+                        </div>
+                    </div>
+                }
+            }
+
+            @if (_effortMessage is { } effortMessage)
+            {
+                <div class="notice notice-problem" role="alert">@effortMessage</div>
+            }
+
+            <button type="button" class="btn btn-secondary btn-block" disabled="@_effortBusy" @onclick="SaveEffortCeilingAsync">
+                @(_effortBusy ? "Sparar..." : "Spara")
+            </button>
+        </details>
+
         <label class="field">
             <span>Pausa till och med</span>
             <input type="date" @bind="_pauseUntilInput" />
@@ -256,8 +256,10 @@
     private static readonly System.Globalization.CultureInfo SwedishCulture = new("sv-SE");
 
     /// <summary>Your own, always - anyone else's only with the flag. Mirrors the server's own
-    /// MemberSelfOrManageFilter, so the UI never offers a button the API would answer 403 to.</summary>
-    private bool CanPauseThisMember
+    /// MemberSelfOrManageFilter, so the UI never offers a control the API would answer 403 to.
+    /// Gates both the ork-disclosure and the pause controls - see docs/ARCHITECTURE.md "Beslut:
+    /// Vem får ändra vad".</summary>
+    private bool IsSelfOrCanManageHousehold
         => Member.Id == Session.Me?.MemberId || Session.CanManageHousehold;
 
     private DateOnly Today => DateOnly.FromDateTime(TimeProvider.GetLocalNow().DateTime);
