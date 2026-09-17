@@ -24,4 +24,17 @@ public static class EnergyLevel
     /// the looser "avrundat till närmaste 5" prose - see the report for this part.</summary>
     public static int MinutesFor(int normalMinutes, double multiplier)
         => (int)Math.Round(normalMinutes * multiplier);
+
+    /// <summary>
+    /// "Orkvalet styr dagens tyngd" - only "Lite" sets a ceiling on today's tasks ("Lite" →
+    /// bara lätta uppgifter idag); "Lagom" and "Mycket" leave it <c>null</c> ("inget
+    /// tyngdfilter"), which also clears any ceiling an earlier "Lite" the same day set. Only
+    /// "Lite" filters: the person's usual capacity per weekday already gates heavy work at
+    /// ASSIGNMENT time (<c>RotationPicker</c>) - filtering it again here, for Lagom/Mycket too,
+    /// would strand whatever the rotation fell back to them for, since it would never be shown
+    /// and so never get done. See docs/ARCHITECTURE.md "Beslut: orkvalet styr dagens tyngd".
+    /// The string travels over the wire as the server's own <c>TaskEffort</c> name - see
+    /// ApiContracts.cs's header for why enum-shaped fields are plain strings here.
+    /// </summary>
+    public static string? EffortCeilingFor(string label) => label == "Lite" ? "Light" : null;
 }

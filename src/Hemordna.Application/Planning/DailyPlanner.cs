@@ -1,3 +1,5 @@
+using Hemordna.Domain.Tasks;
+
 namespace Hemordna.Application.Planning;
 
 /// <summary>
@@ -19,6 +21,13 @@ namespace Hemordna.Application.Planning;
 /// to do it today already happened elsewhere, so it always lands in <c>Items</c>, even past the
 /// budget - see docs/ARCHITECTURE.md "Beslut: Kvarlämnat, Imorgon på Idag, ledig dag och tid i
 /// förväg".
+/// </para>
+/// <para>
+/// <b>Effort ceiling ("Hur är orken idag?" - "Lite"), applied before ordering.</b> A non-routine
+/// candidate heavier than <see cref="DailyPlanRequest.EffortCeiling"/> is diverted straight to
+/// <c>Unplanned</c> (<see cref="UnplannedReason.ExceedsEffortToday"/>) and never enters the
+/// picking loop below at all - see <see cref="ExceedsEffortCeiling"/> and docs/ARCHITECTURE.md
+/// "Beslut: orkvalet styr dagens tyngd".
 /// </para>
 /// <para>
 /// <b>Ordering rules</b>, applied in this order:
@@ -75,9 +84,30 @@ public sealed class DailyPlanner
 
         var date = request.Date;
 
-        var remaining = request.Candidates.Where(candidate => IsEligible(candidate, date)).ToList();
-        var items = new List<PlannedTask>(remaining.Count);
+        var eligible = request.Candidates.Where(candidate => IsEligible(candidate, date)).ToList();
+        var items = new List<PlannedTask>(eligible.Count);
         var unplanned = new List<UnplannedTask>();
+
+        // "Orkvalet styr dagens tyngd" ("Lite"): a candidate heavier than today's ceiling never
+        // enters the picking loop below - it cannot win the budget, cannot open a room cluster,
+        // and is reported with its own reason rather than being silently dropped or mixed in
+        // with "did not fit in time". A routine is always exempt - "överst och alltid med" - see
+        // docs/ARCHITECTURE.md "Beslut: orkvalet styr dagens tyngd" for why only "Lite" ever sets
+        // a ceiling at all (Lagom/Mycket leave it null): the person's usual capacity per weekday
+        // already gates HEAVY work at assignment time (RotationPicker.EligibleMembers), so
+        // filtering it again here would strand whatever the rotation fell back to them for.
+        var remaining = new List<PlanCandidate>(eligible.Count);
+
+        foreach (var candidate in eligible)
+        {
+            if (ExceedsEffortCeiling(candidate, request.EffortCeiling))
+            {
+                unplanned.Add(new UnplannedTask(candidate, UnplannedReason.ExceedsEffortToday));
+                continue;
+            }
+
+            remaining.Add(candidate);
+        }
         // What is already ticked off today has used today's time. Without this, every
         // completion freed time, and since Idag re-fetches the plan after each one the planner
         // refilled the day: "4 kvar", two ticked off, "5 kvar" - the day never ended. See
@@ -129,6 +159,13 @@ public sealed class DailyPlanner
 
     private static bool IsInAnAlreadyChosenCluster(PlanCandidate candidate, HashSet<string> chosenClusters)
         => TaskCluster.KeyFor(candidate.AreaName) is { } key && chosenClusters.Contains(key);
+
+    /// <summary>True when today's ceiling rules this candidate out - never for a routine
+    /// ("överst och alltid med" outranks the ceiling too, same trade-off as rule 1's own
+    /// remarks), and never when there is no ceiling at all (<paramref name="ceiling"/> is
+    /// <c>null</c> - "Lagom"/"Mycket", or no choice made yet).</summary>
+    private static bool ExceedsEffortCeiling(PlanCandidate candidate, TaskEffort? ceiling)
+        => ceiling is { } max && !candidate.IsRoutine && candidate.Effort > max;
 
     /// <summary>
     /// A candidate counts for today only if it still needs doing and is not scheduled for a

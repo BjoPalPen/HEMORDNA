@@ -62,6 +62,10 @@ public sealed class GetDailyPlan
 
         var availableMinutes = member.AvailableMinutesOn(date, availabilityOverride);
 
+        // "Hur är orken idag?" - "Lite" sets a ceiling alongside the minutes; "Lagom"/"Mycket"
+        // (or no choice at all, or no override for this date) leave it null - no tyngdfilter.
+        var effortCeiling = availabilityOverride?.EffortCeiling;
+
         var candidates =
             await _candidates.FindOutstandingForMemberAsync(householdId, memberId, date, cancellationToken);
 
@@ -75,7 +79,8 @@ public sealed class GetDailyPlan
             .Where(candidate => !candidate.Occurrence.AddedAsExtra)
             .Sum(candidate => candidate.EstimatedMinutes);
 
-        var plan = _planner.Plan(new DailyPlanRequest(memberId, date, availableMinutes, candidates, completedMinutes));
+        var plan = _planner.Plan(
+            new DailyPlanRequest(memberId, date, availableMinutes, candidates, completedMinutes, effortCeiling));
 
         var isDayOff = await _daysOff.FindAsync(householdId, memberId, date, cancellationToken) is not null;
 

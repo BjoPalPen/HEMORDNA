@@ -87,6 +87,7 @@ internal sealed class PlanCandidateQuery : IPlanCandidateQuery
             row.Name,
             row.AreaName,
             row.Description,
-            isRoutine: VisitKindClassifier.Of(row.Recurrence, row.Effort) == VisitKind.Routine))];
+            isRoutine: VisitKindClassifier.Of(row.Recurrence, row.Effort) == VisitKind.Routine,
+            effort: row.Effort))];
     }
 }

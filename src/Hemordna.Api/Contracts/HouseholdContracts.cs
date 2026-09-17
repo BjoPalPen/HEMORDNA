@@ -249,11 +249,14 @@ public sealed record TaskOccurrenceResponse(
     Guid? AssignedMemberId,
     TaskOccurrenceStatus Status);
 
-public sealed record SetAvailabilityRequest(DateOnly? Date, int AvailableMinutes);
+/// <summary>"Hur är orken idag?" - "Lite" sends <c>EffortCeiling</c> alongside the minutes;
+/// "Lagom"/"Mycket" leave it <c>null</c>, which clears any ceiling an earlier "Lite" the same
+/// day set - see <c>SetMemberAvailability</c>.</summary>
+public sealed record SetAvailabilityRequest(DateOnly? Date, int AvailableMinutes, TaskEffort? EffortCeiling = null);
 
 public sealed record DeferOccurrenceRequest(DateOnly? Date);
 
-public sealed record AvailabilityResponse(Guid MemberId, DateOnly Date, int AvailableMinutes);
+public sealed record AvailabilityResponse(Guid MemberId, DateOnly Date, int AvailableMinutes, TaskEffort? EffortCeiling);
 
 /// <summary>One member's day, as "Min dag" renders it.</summary>
 public sealed record DailyPlanResponse(

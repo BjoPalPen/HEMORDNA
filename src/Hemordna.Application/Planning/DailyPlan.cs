@@ -7,7 +7,13 @@ public enum UnplannedReason
     NoTimeAvailable = 0,
 
     /// <summary>The task is longer than the time left after the tasks above it.</summary>
-    ExceedsRemainingTime = 1
+    ExceedsRemainingTime = 1,
+
+    /// <summary>
+    /// Today's effort ceiling ("Hur är orken idag?" - "Lite") is lower than this task's own
+    /// effort. Never applied to a routine - see <see cref="DailyPlanner"/>.
+    /// </summary>
+    ExceedsEffortToday = 2
 }
 
 /// <summary>A task that fits in today's plan, in the order it is meant to be done.</summary>

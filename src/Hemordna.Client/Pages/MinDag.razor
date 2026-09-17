@@ -937,7 +937,9 @@ else
     /// anything it calls) - PRODUCT.md §5: less time today must never disturb the norm. "Lagom"
     /// (multiplier 1.0) still goes through this same call, which is what lets it explicitly
     /// restore the normal value after an earlier "Lite" chosen the same day, rather than needing
-    /// its own special case.</summary>
+    /// its own special case. Also sends today's effort ceiling (EnergyLevel.EffortCeilingFor) in
+    /// the same call - "Lite" sets one, "Lagom"/"Mycket" clear whatever "Lite" set earlier the
+    /// same day ("orkvalet styr dagens tyngd" - see docs/ARCHITECTURE.md).</summary>
     private async Task SetEnergyAsync((string Label, double Multiplier) level)
     {
         if (Session.Me is not { HouseholdId: { } householdId, MemberId: { } memberId }
@@ -952,8 +954,9 @@ else
         try
         {
             var minutes = EnergyLevel.MinutesFor(normalMinutes, level.Multiplier);
+            var effortCeiling = EnergyLevel.EffortCeilingFor(level.Label);
 
-            if (!await Api.SetAvailabilityAsync(householdId, memberId, Today, minutes))
+            if (!await Api.SetAvailabilityAsync(householdId, memberId, Today, minutes, effortCeiling))
             {
                 _energyChoice = null;
                 _energyMessage = "Kunde inte spara. Försök igen.";
@@ -1948,9 +1951,12 @@ else
 
             // Same widening as picking an existing task (see ScheduleForTodayAsync) - the
             // planner never invents time it was not told about, so this is what makes the extra
-            // task actually land on today's list.
+            // task actually land on today's list. Resends today's own effort ceiling (if any) -
+            // this call always overwrites both fields server-side, so leaving it out would
+            // silently clear an earlier "Lite" choice the moment an extra task is added.
             await Api.SetAvailabilityAsync(
-                householdId, MemberId, Today, (_day?.AvailableMinutes ?? 0) + _extraForm.EstimatedMinutes);
+                householdId, MemberId, Today, (_day?.AvailableMinutes ?? 0) + _extraForm.EstimatedMinutes,
+                EnergyLevel.EffortCeilingFor(_energyChoice ?? ""));
 
             _extraForm.Name = string.Empty;
             _extraForm.EstimatedMinutes = 0;
@@ -1974,7 +1980,8 @@ else
     /// exactly what it takes. The planner never invents time it was not told about (a non-
     /// deferrable task that does not fit is still reported as unplanned, not forced in - see
     /// DailyPlanner), so this is what makes an "extra" task actually land on today's list
-    /// instead of silently sliding to "till en annan dag".</summary>
+    /// instead of silently sliding to "till en annan dag". Resends today's own effort ceiling -
+    /// see AddExtraTaskAsync's own remarks for why.</summary>
     private async Task<bool> ScheduleForTodayAsync(Guid householdId, Guid memberId, Guid taskId, int estimatedMinutes)
     {
         if (!await Api.ScheduleOccurrenceAsync(householdId, taskId, Today, memberId))
@@ -1982,7 +1989,9 @@ else
             return false;
         }
 
-        await Api.SetAvailabilityAsync(householdId, memberId, Today, (_day?.AvailableMinutes ?? 0) + estimatedMinutes);
+        await Api.SetAvailabilityAsync(
+            householdId, memberId, Today, (_day?.AvailableMinutes ?? 0) + estimatedMinutes,
+            EnergyLevel.EffortCeilingFor(_energyChoice ?? ""));
         return true;
     }
 }

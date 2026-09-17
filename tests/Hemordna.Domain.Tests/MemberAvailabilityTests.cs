@@ -1,5 +1,6 @@
 using Hemordna.Domain.Common;
 using Hemordna.Domain.Households;
+using Hemordna.Domain.Tasks;
 
 namespace Hemordna.Domain.Tests;
 
@@ -87,5 +88,48 @@ public class MemberAvailabilityTests
 
         var availability = MemberAvailability.Create(member.HouseholdId, member.Id, Friday, 10);
         Assert.Throws<ArgumentOutOfRangeException>(() => availability.ChangeAvailableMinutes(-1));
+    }
+
+    [Fact]
+    public void No_effort_ceiling_is_set_by_default()
+    {
+        var member = CreateMember();
+        var availability = MemberAvailability.Create(member.HouseholdId, member.Id, Friday, 10);
+
+        Assert.Null(availability.EffortCeiling);
+    }
+
+    [Fact]
+    public void An_effort_ceiling_can_be_set_on_creation()
+    {
+        var member = CreateMember();
+        var availability = MemberAvailability.Create(member.HouseholdId, member.Id, Friday, 10, TaskEffort.Light);
+
+        Assert.Equal(TaskEffort.Light, availability.EffortCeiling);
+    }
+
+    [Fact]
+    public void The_effort_ceiling_can_be_changed_or_cleared_afterwards()
+    {
+        var member = CreateMember();
+        var availability = MemberAvailability.Create(member.HouseholdId, member.Id, Friday, 10, TaskEffort.Light);
+
+        availability.ChangeEffortCeiling(null);
+        Assert.Null(availability.EffortCeiling);
+
+        availability.ChangeEffortCeiling(TaskEffort.Heavy);
+        Assert.Equal(TaskEffort.Heavy, availability.EffortCeiling);
+    }
+
+    [Fact]
+    public void An_undefined_effort_ceiling_is_rejected()
+    {
+        var member = CreateMember();
+
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => MemberAvailability.Create(member.HouseholdId, member.Id, Friday, 10, (TaskEffort)99));
+
+        var availability = MemberAvailability.Create(member.HouseholdId, member.Id, Friday, 10);
+        Assert.Throws<ArgumentOutOfRangeException>(() => availability.ChangeEffortCeiling((TaskEffort)99));
     }
 }
