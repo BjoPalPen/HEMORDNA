@@ -31,11 +31,14 @@ internal sealed class TaskOccurrenceRepository : ITaskOccurrenceRepository
     public Task<DateOnly?> FindMostRecentOriginalDateAsync(
         Guid householdId,
         Guid taskDefinitionId,
+        DateOnly throughDate,
         CancellationToken cancellationToken)
         => _dbContext.TaskOccurrences
             .AsNoTracking()
             .Where(occurrence => occurrence.HouseholdId == householdId
-                && occurrence.TaskDefinitionId == taskDefinitionId)
+                && occurrence.TaskDefinitionId == taskDefinitionId
+                && occurrence.OriginalScheduledDate <= throughDate
+                && occurrence.OriginalScheduledDate <= DateOnly.FromDateTime(occurrence.CreatedAt.UtcDateTime))
             .OrderByDescending(occurrence => occurrence.OriginalScheduledDate)
             .Select(occurrence => (DateOnly?)occurrence.OriginalScheduledDate)
             .FirstOrDefaultAsync(cancellationToken);
@@ -63,7 +66,7 @@ internal sealed class TaskOccurrenceRepository : ITaskOccurrenceRepository
                 && occurrence.TaskDefinitionId == taskDefinitionId
                 && occurrence.Status == TaskOccurrenceStatus.Planned, cancellationToken);
 
-    public Task<bool> HasOutstandingOnDateAsync(
+    public Task<bool> HasCoveredSlotOnDateAsync(
         Guid householdId,
         Guid taskDefinitionId,
         DateOnly date,
@@ -72,8 +75,9 @@ internal sealed class TaskOccurrenceRepository : ITaskOccurrenceRepository
             .AsNoTracking()
             .AnyAsync(occurrence => occurrence.HouseholdId == householdId
                 && occurrence.TaskDefinitionId == taskDefinitionId
-                && occurrence.Status == TaskOccurrenceStatus.Planned
-                && occurrence.ScheduledDate == date, cancellationToken);
+                && (occurrence.OriginalScheduledDate == date
+                    || (occurrence.Status == TaskOccurrenceStatus.Planned && occurrence.ScheduledDate == date)),
+                cancellationToken);
 
     public async Task<IReadOnlyList<TaskOccurrence>> ListOutstandingOnOrBeforeAsync(
         Guid householdId,

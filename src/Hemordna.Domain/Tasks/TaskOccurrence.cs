@@ -87,6 +87,7 @@ public sealed class TaskOccurrence
         TaskDefinition definition, DateOnly date, DateTimeOffset createdAt, bool addedAsExtra = false)
     {
         ArgumentNullException.ThrowIfNull(definition);
+        SchedulingDate.Validate(date, DateOnly.FromDateTime(createdAt.UtcDateTime));
 
         var occurrence = new TaskOccurrence(
             Guid.NewGuid(),
@@ -151,6 +152,7 @@ public sealed class TaskOccurrence
     /// </summary>
     public void DeferTo(DateOnly newDate)
     {
+        SchedulingDate.ValidateCalendar(newDate);
         EnsureOutstanding("deferred");
 
         if (!CanBeDeferred)
@@ -178,6 +180,7 @@ public sealed class TaskOccurrence
     /// </summary>
     public void ReanchorTo(DateOnly newDate)
     {
+        SchedulingDate.ValidateCalendar(newDate);
         EnsureOutstanding("rescheduled");
 
         if (!CanBeDeferred)
@@ -205,6 +208,7 @@ public sealed class TaskOccurrence
     /// </summary>
     public void BringForwardTo(DateOnly today)
     {
+        SchedulingDate.ValidateCalendar(today);
         EnsureOutstanding("brought forward");
 
         if (today >= ScheduledDate)

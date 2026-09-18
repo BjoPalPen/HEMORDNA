@@ -102,5 +102,5 @@ public sealed class MemberTimeCredit
     /// fact.
     /// </summary>
     public static int BalanceOf(IEnumerable<MemberTimeCredit> entries, int cap)
-        => Math.Clamp(entries.Sum(entry => entry.Minutes), 0, cap);
+        => (int)Math.Clamp(entries.Sum(entry => (long)entry.Minutes), 0L, (long)cap);
 }

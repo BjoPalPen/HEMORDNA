@@ -34,3 +34,30 @@ Efter deploy: `dotnet run --project scripts/Smoke -- https://app.hemordna.se`.
 Kontrollen läser health och provar klientens inloggning med en okänd adress på mobil
 och desktop. Inga konton eller hushåll skapas. Kräver installerad Playwright Chromium
 (samma version som E2E-testerna).
+
+## Planeringsgränser och befintliga felvärden
+
+IMPLEMENTED: Uppgiftslängd är 0–1 440 minuter. Noll är fortsatt ett avsiktligt
+val; taket motsvarar ett helt dygns arbete och gäller både skapande och ändring.
+Tidskrediternas netto summeras som long, begränsas till medlemmens befintliga tak
+och konverteras därefter till int. Äldre extrema kreditposter behöver inte ändras
+för att dagsplaneringen ska fungera.
+
+Nya occurrences och begärda planeringsdatum får ligga högst fem kalenderår efter
+den uttryckligen tillförda referensdagen. Domänen läser ingen systemklocka.
+Kalendergränserna lämnar utrymme för 60 dagars bakåtblick och fortsatt generering.
+Flytt av redan sparat arbete kontrollerar kalendergränserna, men inte åldern på
+uppgiften: gammalt kvarlämnat arbete måste fortfarande kunna flyttas till nutid.
+
+En occurrence som bokades efter sin skapandedag får inte flytta markören för
+återkommande generering. Redan täckta originaldatum räknas i alla statusar;
+en fortfarande planerad uppgift som flyttats till datumet täcker också den platsen.
+Det bevarar framtidsbokningar utan att hoppa över mellanliggande uppgifter eller
+återskapa slutförda/hoppade bokningar. Redan täckta datum förbrukar inte gränsen
+på 366 nya eller pausade platser per körning; genomsökningen har också ett eget tak.
+
+Ingen schemamigration eller automatisk radering/omskrivning av historik behövs.
+Äldre maxdatum ignoreras som genereringsmarkörer och blockerar inte dagens planer.
+Om sådana poster ska korrigeras i databasen: säkerhetskopiera först, identifiera dem
+per hushåll och bekräfta avsett datum med hushållet. Samma försiktighet gäller äldre
+orimliga uppgiftslängder; ändring av en definition skriver inte om dess snapshots.

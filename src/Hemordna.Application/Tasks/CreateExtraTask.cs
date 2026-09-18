@@ -76,9 +76,8 @@ public sealed class CreateExtraTask
         // own day, never assigned to someone else on their behalf.
         definition.SetDefaultResponsibleMember(memberId);
 
-        await _definitions.AddAsync(definition, cancellationToken);
-
         var occurrence = definition.ScheduleFor(today, _timeProvider.GetUtcNow());
+        await _definitions.AddAsync(definition, cancellationToken);
         await _occurrences.AddAsync(occurrence, cancellationToken);
 
         await _notifier.NotifyOccurrencesChangedAsync(householdId, cancellationToken);

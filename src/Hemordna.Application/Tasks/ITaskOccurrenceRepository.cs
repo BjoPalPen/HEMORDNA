@@ -16,12 +16,15 @@ public interface ITaskOccurrenceRepository
 
     /// <summary>
     /// The <see cref="TaskOccurrence.OriginalScheduledDate"/> of the most recently scheduled
-    /// occurrence for this definition, or null if none exist yet. Used to find where automatic
+    /// occurrence on or before throughDate that was not booked ahead of its creation day, or null.
+    /// Future manual bookings
+    /// must not advance the generation cursor past slots still owed today. Used to find where automatic
     /// recurrence generation left off, regardless of status or later deferrals.
     /// </summary>
     Task<DateOnly?> FindMostRecentOriginalDateAsync(
         Guid householdId,
         Guid taskDefinitionId,
+        DateOnly throughDate,
         CancellationToken cancellationToken);
 
     /// <summary>
@@ -41,14 +44,11 @@ public interface ITaskOccurrenceRepository
         CancellationToken cancellationToken);
 
     /// <summary>
-    /// Whether this definition already has an outstanding occurrence currently sitting ON
-    /// <paramref name="date"/> - regardless of what date it was originally generated for. Used
-    /// to guard calendar-recurrence generation against creating a second occurrence for a slot
-    /// an existing one has already been moved onto (e.g. by <c>RebalanceSchedule</c>, or a
-    /// household member manually deferring it there) - see
-    /// <see cref="Hemordna.Application.Tasks.EnsureOccurrencesGenerated"/>.
+    /// Whether an occurrence already represents this original slot (any status), or an
+    /// outstanding occurrence has been moved onto it. Completed/skipped future bookings
+    /// must not be generated again when they become due.
     /// </summary>
-    Task<bool> HasOutstandingOnDateAsync(
+    Task<bool> HasCoveredSlotOnDateAsync(
         Guid householdId,
         Guid taskDefinitionId,
         DateOnly date,

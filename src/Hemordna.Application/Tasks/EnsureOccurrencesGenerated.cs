@@ -18,6 +18,7 @@ public sealed class EnsureOccurrencesGenerated
     /// call. A household that opens the app after months away should not get a runaway backlog.
     /// </summary>
     private const int MaxCatchUpPerDefinition = 366;
+    private const int MaxVisitedSlots = 20_000;
 
     /// <summary>
     /// How far back days off and time credit are read for this run - see docs/ARCHITECTURE.md
@@ -59,6 +60,7 @@ public sealed class EnsureOccurrencesGenerated
 
     public async Task HandleAsync(Guid householdId, DateOnly today, CancellationToken cancellationToken)
     {
+        SchedulingDate.Validate(today, DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime));
         var household = await _households.FindByIdAsync(householdId, cancellationToken);
 
         if (household is null)
@@ -130,7 +132,7 @@ public sealed class EnsureOccurrencesGenerated
         CancellationToken cancellationToken)
     {
         var lastDate = await _occurrences.FindMostRecentOriginalDateAsync(
-            household.Id, definition.Id, cancellationToken);
+            household.Id, definition.Id, today, cancellationToken);
 
         // Never a slot from before the task existed. A monthly "first week of the month" rule
         // created on the 17th anchors to the 1st - without this floor, generation caught up that
@@ -143,24 +145,31 @@ public sealed class EnsureOccurrencesGenerated
         // Counts skipped-for-pause slots too, not just generated ones - otherwise a household
         // paused for longer than this bound would never advance past the pause window at all.
         var iterations = 0;
+        var visitedSlots = 0;
 
-        while (next <= today && iterations < MaxCatchUpPerDefinition)
+        while (next <= today && iterations < MaxCatchUpPerDefinition && visitedSlots < MaxVisitedSlots)
         {
-            if (!IsSkippedForPause(household, definition, next)
-                // An occurrence that already sits on this exact date - typically one moved there
-                // by RebalanceSchedule re-anchoring the definition's recurrence after it already
-                // had an outstanding occurrence - already covers this slot. Without this check,
-                // the cursor above (based on the OLD occurrence's immutable
-                // OriginalScheduledDate, not where it was moved to) would not know that, and
-                // this would generate a second, genuinely duplicate occurrence for the same date.
-                && !await _occurrences.HasOutstandingOnDateAsync(household.Id, definition.Id, next, cancellationToken))
+            var paused = IsSkippedForPause(household, definition, next);
+            var covered = await _occurrences.HasCoveredSlotOnDateAsync(household.Id, definition.Id, next, cancellationToken);
+            if (!paused && !covered)
             {
                 await ScheduleGeneratedOccurrenceAsync(
                     household, definition, next, today, assignedMinutesByMember, assignedMinutesByDate, roomClaimsByDate,
                     daysOff, creditMinutes, cancellationToken);
             }
 
-            iterations++;
+            // Existing booked/generated slots must not prevent catch-up from reaching a gap.
+            // Paused slots still consume the catch-up allowance, as before.
+            if (paused || !covered)
+            {
+                iterations++;
+            }
+            visitedSlots++;
+            if (next >= today)
+            {
+                break;
+            }
+
             next = recurrence.NextOnOrAfter(next.AddDays(1));
         }
     }

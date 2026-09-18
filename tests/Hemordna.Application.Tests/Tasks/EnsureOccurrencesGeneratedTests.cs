@@ -41,7 +41,7 @@ public class EnsureOccurrencesGeneratedTests
 
         await CreateUseCase().HandleAsync(householdId, Monday, CancellationToken.None);
 
-        var lastDate = await _occurrences.FindMostRecentOriginalDateAsync(householdId, definition.Id, CancellationToken.None);
+        var lastDate = await _occurrences.LatestScheduledOriginalDateAsync(householdId, definition.Id, CancellationToken.None);
         Assert.Equal(Monday, lastDate);
     }
 
@@ -56,7 +56,7 @@ public class EnsureOccurrencesGeneratedTests
         // Today is Monday; the rule is not due until Friday.
         await CreateUseCase().HandleAsync(householdId, Monday, CancellationToken.None);
 
-        var lastDate = await _occurrences.FindMostRecentOriginalDateAsync(householdId, definition.Id, CancellationToken.None);
+        var lastDate = await _occurrences.LatestScheduledOriginalDateAsync(householdId, definition.Id, CancellationToken.None);
         Assert.Null(lastDate);
     }
 
@@ -71,7 +71,7 @@ public class EnsureOccurrencesGeneratedTests
         // Three days have passed with nobody opening the app.
         await CreateUseCase().HandleAsync(householdId, Monday.AddDays(3), CancellationToken.None);
 
-        var lastDate = await _occurrences.FindMostRecentOriginalDateAsync(householdId, definition.Id, CancellationToken.None);
+        var lastDate = await _occurrences.LatestScheduledOriginalDateAsync(householdId, definition.Id, CancellationToken.None);
         Assert.Equal(Monday.AddDays(3), lastDate);
         Assert.Equal(4, _occurrences.AddCallCount);
     }
@@ -356,7 +356,7 @@ public class EnsureOccurrencesGeneratedTests
 
         // Only Wednesday - Monday and Tuesday were skipped for good, not queued up as a backlog.
         Assert.Equal(1, _occurrences.AddCallCount);
-        var lastDate = await _occurrences.FindMostRecentOriginalDateAsync(householdId, definition.Id, CancellationToken.None);
+        var lastDate = await _occurrences.LatestScheduledOriginalDateAsync(householdId, definition.Id, CancellationToken.None);
         Assert.Equal(Monday.AddDays(3), lastDate);
     }
 
@@ -383,7 +383,7 @@ public class EnsureOccurrencesGeneratedTests
 
         // Only Wednesday - Monday and Tuesday were skipped for good, not queued up as a backlog.
         Assert.Equal(1, _occurrences.AddCallCount);
-        var lastDate = await _occurrences.FindMostRecentOriginalDateAsync(household.Id, definition.Id, CancellationToken.None);
+        var lastDate = await _occurrences.LatestScheduledOriginalDateAsync(household.Id, definition.Id, CancellationToken.None);
         Assert.Equal(Monday.AddDays(3), lastDate);
     }
 

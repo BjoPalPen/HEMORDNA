@@ -21,6 +21,20 @@ namespace Hemordna.Domain.Tasks;
 /// </remarks>
 public sealed class TaskDefinition
 {
+    /// <summary>A single household task can represent at most one full day of work.</summary>
+    public const int MaxEstimatedMinutes = 24 * 60;
+
+    private static int ValidateEstimatedMinutes(int minutes)
+    {
+        if (minutes < 0 || minutes > MaxEstimatedMinutes)
+        {
+            throw new ArgumentOutOfRangeException(nameof(minutes), minutes,
+                $"Estimated minutes must be between 0 and {MaxEstimatedMinutes}.");
+        }
+
+        return minutes;
+    }
+
     private TaskDefinition(
         Guid id,
         Guid householdId,
@@ -51,7 +65,7 @@ public sealed class TaskDefinition
     /// <summary>The area this work belongs to, if any. Not every task belongs to a room.</summary>
     public Guid? AreaId { get; private set; }
 
-    /// <summary>Expected duration in minutes. Always greater than zero - the planner budgets on it.</summary>
+    /// <summary>Expected duration in minutes, from zero to MaxEstimatedMinutes. Zero is a deliberate choice.</summary>
     public int EstimatedMinutes { get; private set; }
 
     public TaskPriority Priority { get; private set; }
@@ -109,7 +123,7 @@ public sealed class TaskDefinition
         DateTimeOffset createdAt)
     {
         Guard.AgainstEmpty(householdId, nameof(householdId));
-        Guard.AgainstNegative(estimatedMinutes, nameof(estimatedMinutes));
+        ValidateEstimatedMinutes(estimatedMinutes);
 
         return new TaskDefinition(
             Guid.NewGuid(),
@@ -125,7 +139,7 @@ public sealed class TaskDefinition
         => Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
 
     public void ChangeEstimatedMinutes(int estimatedMinutes)
-        => EstimatedMinutes = Guard.AgainstNegative(estimatedMinutes, nameof(estimatedMinutes));
+        => EstimatedMinutes = ValidateEstimatedMinutes(estimatedMinutes);
 
     public void ChangePriority(TaskPriority priority)
     {

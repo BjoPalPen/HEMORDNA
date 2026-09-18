@@ -42,12 +42,21 @@ internal sealed class InMemoryTaskOccurrenceRepository : ITaskOccurrenceReposito
     }
 
     public Task<DateOnly?> FindMostRecentOriginalDateAsync(
+        Guid householdId, Guid taskDefinitionId, DateOnly throughDate, CancellationToken cancellationToken)
+        => Task.FromResult(_occurrences
+            .Where(o => o.HouseholdId == householdId && o.TaskDefinitionId == taskDefinitionId
+                && o.OriginalScheduledDate <= throughDate
+                && o.OriginalScheduledDate <= DateOnly.FromDateTime(o.CreatedAt.UtcDateTime))
+            .Select(o => (DateOnly?)o.OriginalScheduledDate)
+            .OrderDescending()
+            .FirstOrDefault());
+
+    internal Task<DateOnly?> LatestScheduledOriginalDateAsync(
         Guid householdId, Guid taskDefinitionId, CancellationToken cancellationToken)
         => Task.FromResult(_occurrences
             .Where(o => o.HouseholdId == householdId && o.TaskDefinitionId == taskDefinitionId)
             .Select(o => (DateOnly?)o.OriginalScheduledDate)
-            .OrderDescending()
-            .FirstOrDefault());
+            .OrderDescending().FirstOrDefault());
 
     public Task<DateTimeOffset?> FindMostRecentCompletedAtAsync(
         Guid householdId, Guid taskDefinitionId, CancellationToken cancellationToken)
@@ -63,11 +72,12 @@ internal sealed class InMemoryTaskOccurrenceRepository : ITaskOccurrenceReposito
         => Task.FromResult(_occurrences.Any(o => o.HouseholdId == householdId
             && o.TaskDefinitionId == taskDefinitionId && o.Status == TaskOccurrenceStatus.Planned));
 
-    public Task<bool> HasOutstandingOnDateAsync(
+    public Task<bool> HasCoveredSlotOnDateAsync(
         Guid householdId, Guid taskDefinitionId, DateOnly date, CancellationToken cancellationToken)
         => Task.FromResult(_occurrences.Any(o => o.HouseholdId == householdId
-            && o.TaskDefinitionId == taskDefinitionId && o.Status == TaskOccurrenceStatus.Planned
-            && o.ScheduledDate == date));
+            && o.TaskDefinitionId == taskDefinitionId
+            && (o.OriginalScheduledDate == date
+                || (o.Status == TaskOccurrenceStatus.Planned && o.ScheduledDate == date))));
 
     public Task<IReadOnlyList<TaskOccurrence>> ListOutstandingOnOrBeforeAsync(
         Guid householdId, Guid taskDefinitionId, DateOnly onOrBefore, CancellationToken cancellationToken)
