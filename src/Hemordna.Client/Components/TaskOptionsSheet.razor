@@ -297,9 +297,12 @@
         _ => "Ingen"
     };
 
-    /// <summary>Only a Weekly or Monthly task has a single weekday to lock to - see
-    /// TaskDefinition's own remarks. Daily and "vid behov" never show the row at all.</summary>
-    private bool HasWeekdayToChoose => Task.Recurrence?.Frequency is "Weekly" or "Monthly";
+    /// <summary>Only a Weekly or Monthly task with Interval 1 has a single weekday to lock to -
+    /// see TaskDefinition's own remarks. Daily, "vid behov", and a SPARSE Weekly/Monthly rule
+    /// (e.g. "every 12 months") never show the row at all - see
+    /// <see cref="RecurrenceRhythm.IsWeeklyRhythm"/> and docs/ARCHITECTURE.md "Beslut: Glesa
+    /// regler lämnas i fred".</summary>
+    private bool HasWeekdayToChoose => RecurrenceRhythm.IsWeeklyRhythm(Task.Recurrence);
 
     private string PreferredWeekdaySummary
         => WeekdayOptions.FirstOrDefault(option => option.Day.ToString() == Task.PreferredWeekday).Label
