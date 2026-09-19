@@ -121,6 +121,11 @@ internal static class WeeklyPlacementBuilder
         var spentByDay = definitions
             .Where(definition => definition.IsActive
                 && definition.Recurrence is { Weekday: { } }
+                // Guards against a rule that was re-anchored to a weekday BEFORE this change
+                // shipped and so happens to still carry one despite being sparse (Interval > 1) -
+                // see docs/ARCHITECTURE.md "Beslut: Glesa regler lämnas i fred". No migration
+                // rewrites those; this filter just stops charging them against a day here.
+                && definition.Recurrence.IsWeeklyRhythm
                 && VisitKindClassifier.Of(definition) != VisitKind.Routine)
             .GroupBy(definition => definition.Recurrence!.Weekday!.Value)
             .ToDictionary(group => group.Key, group => group.Sum(definition => definition.EstimatedMinutes));
@@ -164,16 +169,15 @@ internal static class WeeklyPlacementBuilder
     }
 
     /// <summary>
-    /// Weekly and monthly tasks get a weekday placement. Daily tasks (interval 2-3, e.g.
-    /// "TwiceWeekly"/"EveryOtherDay" on the client) are spread by their own start date phase
-    /// instead - a single weekday choice does not describe a task that lands on a different
+    /// Weekly and monthly tasks with Interval 1 get a weekday placement. Daily tasks (interval
+    /// 2-3, e.g. "TwiceWeekly"/"EveryOtherDay" on the client) are spread by their own start date
+    /// phase instead - a single weekday choice does not describe a task that lands on a different
     /// weekday every cycle. "Vid behov" (no <see cref="RecurrenceRule"/> at all) is never placed.
-    /// See docs/ARCHITECTURE.md "Beslut: Placeringsalgoritmen" for the full reasoning.
+    /// Nor is a SPARSE Weekly/Monthly rule (Interval &gt; 1, e.g. "every 12 months") - its own
+    /// StartDate carries WHICH month or phase is meant, which re-anchoring to a weekday would
+    /// destroy; see <see cref="RecurrenceRule.IsWeeklyRhythm"/> and docs/ARCHITECTURE.md "Beslut:
+    /// Glesa regler lämnas i fred". See "Beslut: Placeringsalgoritmen" for the rest of the
+    /// reasoning.
     /// </summary>
-    private static bool IsPlaceableCadence(RecurrenceRule? recurrence) => recurrence?.Frequency switch
-    {
-        RecurrenceFrequency.Weekly => true,
-        RecurrenceFrequency.Monthly => true,
-        _ => false
-    };
+    private static bool IsPlaceableCadence(RecurrenceRule? recurrence) => recurrence?.IsWeeklyRhythm == true;
 }

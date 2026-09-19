@@ -321,4 +321,45 @@ public class ApplyWeeklyPlanTests
 
         Assert.Equal(0, changedCount);
     }
+
+    /// <summary>
+    /// A sparse rule (Interval > 1) is never placed, so "Använd" must never re-anchor it either -
+    /// its own StartDate carries WHICH month/phase is meant, and re-anchoring to "today" would
+    /// destroy that. See docs/ARCHITECTURE.md "Beslut: Glesa regler lämnas i fred". The weekly
+    /// task's own placement is the control: if the sparse task were (wrongly) treated as
+    /// placeable it would also compete for a weekday and get reanchored, making changedCount 2
+    /// instead of 1.
+    /// </summary>
+    [Fact]
+    public async Task Applying_a_plan_leaves_a_sparse_monthly_task_untouched_and_uncounted()
+    {
+        var sparseNow = new DateTimeOffset(2026, 9, 19, 8, 0, 0, TimeSpan.Zero);
+        var today = new DateOnly(2026, 9, 19);
+        var oldAnchor = new DateOnly(2026, 8, 28);
+
+        var household = await new CreateHousehold(_households, new FixedTimeProvider(sparseNow))
+            .HandleAsync("Familjen", Guid.NewGuid(), "Anna", CancellationToken.None);
+        var anna = household.Members.Single();
+        anna.ChangeWeeklyTimeBudget(WeeklyTimeBudget.Uniform(120));
+        await _households.UpdateAsync(household, CancellationToken.None);
+
+        var weekly = TaskDefinition.Create(household.Id, "Dammsug golvet", 20, sparseNow);
+        weekly.SetDefaultResponsibleMember(anna.Id);
+        weekly.SetRecurrence(RecurrenceRule.Weekly(oldAnchor, DayOfWeek.Friday));
+        _definitions.Seed(weekly);
+
+        var sparseAnchor = new DateOnly(2027, 5, 1);
+        var sparseRule = RecurrenceRule.Monthly(sparseAnchor, everyNMonths: 12);
+        var sparse = TaskDefinition.Create(household.Id, "Rensa altanmöbler", 60, sparseNow);
+        sparse.SetDefaultResponsibleMember(anna.Id);
+        sparse.SetRecurrence(sparseRule);
+        _definitions.Seed(sparse);
+
+        var changedCount = await CreateUseCase().HandleAsync(household.Id, today, null, CancellationToken.None);
+        Assert.Equal(1, changedCount);
+
+        var reloadedSparse = await _definitions.FindByIdAsync(household.Id, sparse.Id, CancellationToken.None);
+        Assert.Equal(sparseRule, reloadedSparse!.Recurrence);
+        Assert.Null(reloadedSparse.PreferredWeekday);
+    }
 }

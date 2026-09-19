@@ -11,10 +11,16 @@ public class CreateTaskDefinitionTests
 {
     private static readonly DateTimeOffset Now = new(2026, 3, 2, 8, 0, 0, TimeSpan.Zero);
 
+    // "Altan 1 · Sommarställa, varje månad × 12" - today is 2026-09-19, the rule is anchored on
+    // 2027-05-01. See docs/ARCHITECTURE.md "Beslut: Glesa regler lämnas i fred".
+    private static readonly DateTimeOffset SparseNow = new(2026, 9, 19, 8, 0, 0, TimeSpan.Zero);
+
     private readonly InMemoryHouseholdRepository _households = new();
     private readonly InMemoryTaskDefinitionRepository _definitions = new();
 
     private CreateTaskDefinition CreateUseCase() => new(_households, _definitions, new FixedTimeProvider(Now));
+
+    private CreateTaskDefinition CreateUseCaseAt(DateTimeOffset now) => new(_households, _definitions, new FixedTimeProvider(now));
 
     private async Task<Guid> ArrangeHouseholdAsync()
     {
@@ -170,5 +176,48 @@ public class CreateTaskDefinitionTests
 
         Assert.NotNull(definition!.Recurrence!.Weekday);
         Assert.Equal(WeekOfMonth.First, definition.Recurrence.MonthlyWeek);
+    }
+
+    /// <summary>
+    /// "Altan 1 · Sommarställa, varje månad × 12" created in September must not become a
+    /// September task forever - a sparse rule (Interval > 1) carries WHICH month is meant in its
+    /// own StartDate, and AutoPlaceWeekday must leave that alone. See docs/ARCHITECTURE.md
+    /// "Beslut: Glesa regler lämnas i fred".
+    /// </summary>
+    [Fact]
+    public async Task AutoPlaceWeekday_leaves_a_sparse_monthly_recurrence_untouched()
+    {
+        var householdId = await ArrangeHouseholdAsync();
+        var anchor = new DateOnly(2027, 5, 1);
+        var sparse = RecurrenceRule.Monthly(anchor, everyNMonths: 12);
+
+        var definition = await CreateUseCaseAt(SparseNow).HandleAsync(
+            householdId,
+            new NewTaskDefinition("Sommarställa altanmöblerna", 30, Recurrence: sparse, AutoPlaceWeekday: true),
+            CancellationToken.None);
+
+        Assert.Equal(RecurrenceFrequency.Monthly, definition!.Recurrence!.Frequency);
+        Assert.Equal(12, definition.Recurrence.Interval);
+        Assert.Equal(anchor, definition.Recurrence.StartDate);
+        Assert.Null(definition.Recurrence.Weekday);
+        Assert.Null(definition.Recurrence.MonthlyWeek);
+    }
+
+    /// <summary>Control: the exact same shape but Interval 1 must still be auto-placed as before -
+    /// proves the sparse exclusion above did not disable the feature for the ordinary case.</summary>
+    [Fact]
+    public async Task AutoPlaceWeekday_still_places_an_ordinary_monthly_recurrence()
+    {
+        var householdId = await ArrangeHouseholdAsync();
+        var anchor = new DateOnly(2027, 5, 1);
+        var ordinary = RecurrenceRule.Monthly(anchor, everyNMonths: 1);
+
+        var definition = await CreateUseCaseAt(SparseNow).HandleAsync(
+            householdId,
+            new NewTaskDefinition("Byt vattenfilter", 10, Recurrence: ordinary, AutoPlaceWeekday: true),
+            CancellationToken.None);
+
+        Assert.NotNull(definition!.Recurrence!.Weekday);
+        Assert.NotNull(definition.Recurrence.MonthlyWeek);
     }
 }

@@ -174,10 +174,12 @@ public sealed class TaskDefinition
 
     /// <summary>
     /// Locks this task to a weekday, or clears the lock with <c>null</c>. Only a Weekly or
-    /// Monthly <see cref="Recurrence"/> has a single weekday to lock to - rejected for a Daily
-    /// or "as needed" task. Clearing is always allowed. Does not, by itself, move the task's
-    /// current <see cref="Recurrence"/> to the new day - see the use case that calls this
-    /// (<c>SetTaskPreferredWeekday</c>) for the actual re-anchoring.
+    /// Monthly <see cref="Recurrence"/> with Interval 1 (<see cref="RecurrenceRule.IsWeeklyRhythm"/>)
+    /// has a single weekday to lock to without destroying what the rule means - rejected for a
+    /// Daily task, an "as needed" task, and a SPARSE Weekly/Monthly one (e.g. "every 12 months";
+    /// see docs/ARCHITECTURE.md "Beslut: Glesa regler lämnas i fred"). Clearing is always allowed.
+    /// Does not, by itself, move the task's current <see cref="Recurrence"/> to the new day - see
+    /// the use case that calls this (<c>SetTaskPreferredWeekday</c>) for the actual re-anchoring.
     /// </summary>
     public void SetPreferredWeekday(DayOfWeek? weekday)
     {
@@ -192,10 +194,10 @@ public sealed class TaskDefinition
             throw new ArgumentOutOfRangeException(nameof(weekday), weekday, "Not a valid weekday.");
         }
 
-        if (Recurrence is not { Frequency: RecurrenceFrequency.Weekly or RecurrenceFrequency.Monthly })
+        if (Recurrence is not { IsWeeklyRhythm: true })
         {
             throw new DomainException(
-                $"Task definition '{Name}' has no weekly or monthly recurrence to lock to a weekday.");
+                $"Task definition '{Name}' must recur weekly or monthly (interval 1) to lock to a weekday.");
         }
 
         PreferredWeekday = day;

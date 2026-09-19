@@ -22,19 +22,32 @@ internal static class RecurrenceReanchoring
 {
     /// <summary>
     /// The re-anchored rule for <paramref name="weekday"/>, or <c>null</c> when
-    /// <paramref name="current"/> is neither Weekly nor Monthly (nothing to re-anchor).
-    /// <paramref name="monthlyWeek"/> is only evaluated for a Monthly rule - callers that derive
-    /// it from something stateful (e.g. a rotation counter shared across many tasks) can rely on
-    /// it never running for a Weekly one.
+    /// <paramref name="current"/> is not <see cref="RecurrenceRule.IsWeeklyRhythm"/> - either it
+    /// is neither Weekly nor Monthly, or it is a SPARSE one (Interval &gt; 1). This is the single
+    /// chokepoint both re-anchoring callers (<c>ApplyWeeklyPlan</c> and
+    /// <c>SetTaskPreferredWeekday</c>, via <see cref="LockToWeekday"/>) go through - by the time a
+    /// rule reaches here the callers above should already have refused a sparse one, but the
+    /// contract says so regardless, since re-anchoring a sparse rule to <paramref name="today"/>
+    /// would silently discard which month/phase its own StartDate meant; see
+    /// docs/ARCHITECTURE.md "Beslut: Glesa regler lämnas i fred". <paramref name="monthlyWeek"/> is
+    /// only evaluated for a Monthly rule - callers that derive it from something stateful (e.g. a
+    /// rotation counter shared across many tasks) can rely on it never running for a Weekly one.
     /// </summary>
     public static RecurrenceRule? ForWeekday(
         RecurrenceRule current, DateOnly today, DayOfWeek weekday, Func<WeekOfMonth> monthlyWeek)
-        => current.Frequency switch
+    {
+        if (!current.IsWeeklyRhythm)
+        {
+            return null;
+        }
+
+        return current.Frequency switch
         {
             RecurrenceFrequency.Weekly => RecurrenceRule.Weekly(today, weekday, current.Interval),
             RecurrenceFrequency.Monthly => RecurrenceRule.MonthlyOnWeekday(today, monthlyWeek(), weekday, current.Interval),
             _ => null
         };
+    }
 
     /// <summary>
     /// True when <paramref name="newRule"/> actually differs from <paramref name="current"/> in
