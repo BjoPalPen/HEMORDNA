@@ -306,6 +306,16 @@ html[data-calm][data-backdrop] body::before {
     display: none;
 }
 
+/* Inställningar's own small preview of the stored backdrop photo. Reads the exact same
+   --backdrop-image object URL the layer above already applied, rather than a separate IndexedDB
+   read, so there is only ever one source of truth for what is actually on screen. Decorative
+   only (see aria-hidden on the element itself) - the buttons next to it carry the real meaning. */
+.backdrop-preview {
+    height: 72px;
+    border-radius: var(--radius-sm);
+    background: var(--backdrop-image) center / cover no-repeat;
+}
+
 /* ---------- Surfaces ---------- */
 
 .card {

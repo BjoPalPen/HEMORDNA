@@ -39,4 +39,15 @@ internal static class Backdrop
         await using var module = await js.InvokeAsync<IJSObjectReference>("import", "./js/backdrop.js");
         await module.InvokeVoidAsync("clear");
     }
+
+    /// <summary>
+    /// Opens the native file picker for the given hidden <c>&lt;input type="file"&gt;</c> -
+    /// Blazor has no built-in way to click an element from C#, so Inställningar's own styled
+    /// "Välj bild" button calls this instead of the real, hidden input.
+    /// </summary>
+    public static async Task ClickFileInputAsync(IJSRuntime js, ElementReference input)
+    {
+        await using var module = await js.InvokeAsync<IJSObjectReference>("import", "./js/backdrop.js");
+        await module.InvokeVoidAsync("click", input);
+    }
 }

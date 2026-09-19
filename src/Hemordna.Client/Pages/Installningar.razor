@@ -118,6 +118,36 @@ else
                 <span>@option.Label</span>
             </label>
         }
+
+        <h3>Bakgrundsbild</h3>
+
+        @if (_hasBackdrop)
+        {
+            <div class="backdrop-preview" aria-hidden="true"></div>
+        }
+
+        <input @ref="_backdropInput" type="file" accept="image/*" id="backdrop-file" hidden
+               @onchange="SetBackdropAsync" />
+
+        <div class="list-item-actions">
+            <button type="button" class="btn btn-secondary" disabled="@_backdropBusy" @onclick="PickBackdropAsync">
+                @(_backdropBusy ? "Sparar…" : "Välj bild")
+            </button>
+
+            @if (_hasBackdrop)
+            {
+                <button type="button" class="btn btn-link" disabled="@_backdropBusy" @onclick="ClearBackdropAsync">
+                    Ta bort bild
+                </button>
+            }
+        </div>
+
+        <p class="muted small">Bilden sparas bara på den här enheten.</p>
+
+        @if (_backdropError is { } backdropError)
+        {
+            <div class="notice notice-problem" role="alert">@backdropError</div>
+        }
     </div>
 
     <div class="card">
@@ -279,6 +309,11 @@ else
     private string _theme = "system";
     private bool _calmScreen;
 
+    private ElementReference _backdropInput;
+    private bool _hasBackdrop;
+    private bool _backdropBusy;
+    private string? _backdropError;
+
     private readonly PasswordForm _passwordForm = new();
     private List<string> _passwordMessages = [];
     private bool _passwordBusy;
@@ -297,6 +332,7 @@ else
         await LoadAsync();
         _theme = await Theme.GetAsync(JS);
         _calmScreen = await CalmScreen.GetAsync(JS);
+        _hasBackdrop = await Backdrop.GetAsync(JS);
 
         // Never let a failure here (a flaky network call, an unsupported browser quirk) break
         // the rest of the page - this whole block used to run unguarded and could silently take
@@ -375,6 +411,55 @@ else
     {
         _calmScreen = (bool)e.Value!;
         await CalmScreen.SetAsync(JS, _calmScreen);
+    }
+
+    private Task PickBackdropAsync() => Backdrop.ClickFileInputAsync(JS, _backdropInput);
+
+    /// <summary>Applies immediately, like the theme radios above - no "Spara" button for this
+    /// choice either. Downscaling a large phone photo can take a second or two, hence the busy
+    /// flag disabling both buttons meanwhile.</summary>
+    private async Task SetBackdropAsync()
+    {
+        _backdropBusy = true;
+        _backdropError = null;
+
+        try
+        {
+            await Backdrop.SetFromInputAsync(JS, _backdropInput);
+            _hasBackdrop = true;
+        }
+        catch (JSException ex)
+        {
+            _backdropError = string.IsNullOrWhiteSpace(ex.Message)
+                ? "Bilden gick inte att sparas på den här enheten."
+                : ex.Message;
+        }
+        finally
+        {
+            _backdropBusy = false;
+        }
+    }
+
+    private async Task ClearBackdropAsync()
+    {
+        _backdropBusy = true;
+        _backdropError = null;
+
+        try
+        {
+            await Backdrop.ClearAsync(JS);
+            _hasBackdrop = false;
+        }
+        catch (JSException ex)
+        {
+            _backdropError = string.IsNullOrWhiteSpace(ex.Message)
+                ? "Bilden gick inte att sparas på den här enheten."
+                : ex.Message;
+        }
+        finally
+        {
+            _backdropBusy = false;
+        }
     }
 
     /// <summary>

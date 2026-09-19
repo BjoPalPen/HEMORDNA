@@ -217,3 +217,11 @@ function unapply() {
     document.documentElement.style.removeProperty('--backdrop-image');
     document.documentElement.removeAttribute('data-backdrop');
 }
+
+// Installningar keeps the real <input type="file"> hidden and triggers it from its own styled
+// "Välj bild" button - Blazor has no built-in way to click an element from C#, and no generic
+// helper for that exists yet anywhere in wwwroot/js, so this one lives next to the feature that
+// actually needs it rather than as a new standalone file.
+export function click(element) {
+    element?.click();
+}
