@@ -5,8 +5,8 @@ Lägesbild per 2026-09-19. Arbetssätt: [../CLAUDE.md](../CLAUDE.md).
 
 ## Läge
 
-`main` är pushad och kodrelease `a92e12f` deployad till https://app.hemordna.se.
-Tre releaser i samma deploy (PR #11–#13), ingen schema- eller datamigration:
+`main` är pushad och kodrelease `3a8677c` deployad till https://app.hemordna.se.
+Fyra releaser (PR #11–#14), ingen schema- eller datamigration:
 
 - Glesa regler lämnas i fred: `RecurrenceRule.IsWeeklyRhythm` (Weekly/Monthly med
   intervall 1) grindar auto-placering, Planera veckan, "Använd" och veckodagslåsning.
@@ -14,6 +14,8 @@ Tre releaser i samma deploy (PR #11–#13), ingen schema- eller datamigration:
   Nytt fält "Första gången" för glesa regler i båda formulären. Se ARCHITECTURE.md
   "Beslut: Glesa regler lämnas i fred". Regler som omankrats före releasen repareras inte.
 - Bakgrundsbild per enhet (IndexedDB, nedskalad i webbläsaren, Lugnare skärm vinner).
+  PR #14: lagret är ett riktigt element `.app-backdrop` i `.app-shell` (isolation: isolate) –
+  `body::before` med negativt z-index målades inte alls i iOS Safari. Bekräftas på iPhone.
 - Uppgiftsikoner 24→32 px i listan och `--icon-contrast` 1,25 ljust / 1,15 mörkt.
 
 ## Köra och deploya
@@ -45,4 +47,5 @@ Servern rapporterar "System restart required" och 46 väntande paketuppdateringa
 Bakgrundens wash (`--backdrop-wash` 0,55/0,60) och ikonernas skärpa bedöms på riktig telefon;
 nästa steg för ikonerna är i så fall SVG-filernas linjetjocklek, inte mer CSS.
 Mulberry Symbols (CC BY-SA) kräver synlig attribution – finns idag bara i `icons/tasks/NOTICE.txt`.
-Deploy från Claude Code kräver en Bash-regel för ssh till deploy-kontot i `settings.local.json`.
+Deploy från Claude Code: auto-läget blockerar ssh till servern; lämna auto (Shift+Tab) och
+godkänn kommandot, eller lägg en Bash-regel för deploy-kontot i `settings.local.json`.
