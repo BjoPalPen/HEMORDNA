@@ -21,7 +21,7 @@
             {
                 <label class="field">
                     <span>@intervalLabel</span>
-                    <input type="number" min="1" max="52" @bind="_interval" />
+                    <input type="number" min="1" max="52" @bind="_interval" @bind:event="oninput" />
                 </label>
             }
 
