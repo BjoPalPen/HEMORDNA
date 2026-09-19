@@ -59,7 +59,7 @@ public class InstallningarTests
     }
 
     private static Task<string> BodyBeforeDisplayAsync(IPage page)
-        => page.EvaluateAsync<string>("() => getComputedStyle(document.body, '::before').display");
+        => page.EvaluateAsync<string>("() => getComputedStyle(document.querySelector('.app-backdrop')).display");
 
     /// <summary>
     /// "Inställningar sparas när de ändras. Ingen Spara-knapp, ingen blandning av direkt och
