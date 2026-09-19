@@ -853,4 +853,28 @@ public class EnsureOccurrencesGeneratedTests
         var generated = Assert.Single(await _occurrences.ListOutstandingByHouseholdAsync(householdId, CancellationToken.None));
         Assert.Equal(new DateOnly(2026, 4, 7), generated.ScheduledDate);
     }
+
+    /// <summary>
+    /// "Altan 1 · Sommarställa, varje månad × 12" anchored on its real "Första gången" date - a
+    /// sparse rule's StartDate is exactly the slot the household chose, not just a phase marker,
+    /// so nothing should be generated before it and exactly one occurrence should land on it. See
+    /// docs/ARCHITECTURE.md "Beslut: Glesa regler lämnas i fred".
+    /// </summary>
+    [Fact]
+    public async Task A_sparse_monthly_task_generates_no_occurrence_before_its_first_date_and_exactly_one_on_it()
+    {
+        var householdId = await ArrangeHouseholdAsync();
+        var firstDate = new DateOnly(2027, 5, 1);
+        var definition = TaskDefinition.Create(householdId, "Sommarställa altanmöblerna", 30, Now);
+        definition.SetRecurrence(RecurrenceRule.Monthly(firstDate, everyNMonths: 12));
+        _definitions.Seed(definition);
+
+        await CreateUseCase().HandleAsync(householdId, new DateOnly(2026, 9, 19), CancellationToken.None);
+        Assert.Empty(await _occurrences.ListOutstandingByHouseholdAsync(householdId, CancellationToken.None));
+
+        await CreateUseCase().HandleAsync(householdId, firstDate, CancellationToken.None);
+
+        var generated = Assert.Single(await _occurrences.ListOutstandingByHouseholdAsync(householdId, CancellationToken.None));
+        Assert.Equal(firstDate, generated.ScheduledDate);
+    }
 }

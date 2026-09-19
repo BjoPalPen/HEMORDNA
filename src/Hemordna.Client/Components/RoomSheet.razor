@@ -229,7 +229,7 @@
 
             @if (Session.CanManageHousehold)
             {
-                <button type="button" class="chip-action room-sheet-add" @onclick="() => _showAddTaskSheet = true">
+                <button type="button" class="chip-action room-sheet-add" @onclick="() => { _addForm.FirstDate = Today; _showAddTaskSheet = true; }">
                     <Icon Name="plus" Size="18" />
                     Lägg till uppgift
                 </button>
@@ -288,6 +288,14 @@
             <label class="field">
                 <span>@addIntervalLabel</span>
                 <input type="number" min="1" max="52" @bind="_addForm.Interval" />
+            </label>
+        }
+
+        @if (ShowFirstDate(_addForm.Recurrence, _addForm.Interval))
+        {
+            <label class="field">
+                <span>Första gången</span>
+                <input type="date" id="add-task-first-date" @bind="_addForm.FirstDate" />
             </label>
         }
 
@@ -378,6 +386,12 @@
         public int EstimatedMinutes { get; set; } = 15;
         public string Recurrence { get; set; } = string.Empty;
         public int Interval { get; set; } = 1;
+
+        /// <summary>Only used when <see cref="ShowFirstDate"/> is true - a sparse rule's own
+        /// StartDate carries WHICH month/phase is meant (see docs/ARCHITECTURE.md "Beslut: Glesa
+        /// regler lämnas i fred"), so it needs a real date instead of always defaulting to today.</summary>
+        public DateOnly FirstDate { get; set; }
+
         public bool RequiresAdult { get; set; }
         public TaskEffort Effort { get; set; } = TaskEffort.Medium;
     }
@@ -453,6 +467,14 @@
         "Monthly" => "Hur många månader mellan varje gång?",
         _ => null
     };
+
+    /// <summary>Only a SPARSE Weekly/Monthly rule (Interval &gt; 1) needs its own explicit first
+    /// date - its own StartDate carries WHICH month/phase is meant, which today's date cannot.
+    /// Interval 1, Daily, "vid behov" and "Ingen" keep today's date as before (see
+    /// <see cref="BuildRecurrence"/>'s own "today" parameter). See docs/ARCHITECTURE.md "Beslut:
+    /// Glesa regler lämnas i fred".</summary>
+    private static bool ShowFirstDate(string recurrenceOption, int interval)
+        => recurrenceOption is "Weekly" or "Monthly" && interval > 1;
 
     private RecurrenceRuleContract? BuildRecurrence(string recurrenceOption, DateOnly today, int interval)
     {
@@ -667,7 +689,8 @@
 
         try
         {
-            var recurrence = BuildRecurrence(_addForm.Recurrence, Today, _addForm.Interval);
+            var startDate = ShowFirstDate(_addForm.Recurrence, _addForm.Interval) ? _addForm.FirstDate : Today;
+            var recurrence = BuildRecurrence(_addForm.Recurrence, startDate, _addForm.Interval);
             var staleAfterDays = _addForm.Recurrence == "AsNeeded" ? RoomTemplateTask.AsNeededDefaultDays : (int?)null;
 
             var request = new CreateTaskRequest(
@@ -697,6 +720,7 @@
             _addForm.EstimatedMinutes = 30;
             _addForm.Recurrence = string.Empty;
             _addForm.Interval = 1;
+            _addForm.FirstDate = default;
             _addForm.RequiresAdult = false;
             _addForm.Effort = TaskEffort.Medium;
             _showAddTaskSheet = false;
