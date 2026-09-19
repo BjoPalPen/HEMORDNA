@@ -91,6 +91,13 @@
     --glass-edge: rgba(255, 255, 255, .55);
     --shadow-float: 0 6px 20px rgba(34, 40, 46, .16);
 
+    /* Bakgrundsbild (Support/Backdrop.cs) - the translucent wash painted over a person's own
+       photo so text sitting directly over it (outside the opaque --surface cards, which already
+       read fine against anything) stays legible. Same colour family as --kalk, not derived from
+       it via color-mix(), to match how --glass above is defined per theme rather than computed -
+       exact alpha to be checked against a real photo in Commit 3's screenshot review. */
+    --backdrop-wash: rgba(245, 243, 238, .55);
+
     color-scheme: light;
 
     --space-1: 4px;
@@ -147,6 +154,8 @@
         --glass-edge: rgba(255, 255, 255, .08);
         --shadow-float: 0 6px 20px rgba(0, 0, 0, .5);
 
+        --backdrop-wash: rgba(28, 32, 36, .6);
+
         color-scheme: dark;
     }
 }
@@ -174,6 +183,8 @@
     --glass: rgba(28, 34, 38, .78);
     --glass-edge: rgba(255, 255, 255, .08);
     --shadow-float: 0 6px 20px rgba(0, 0, 0, .5);
+
+    --backdrop-wash: rgba(28, 32, 36, .6);
 
     color-scheme: dark;
 }
@@ -268,6 +279,31 @@ html[data-calm] * {
     animation-iteration-count: 1 !important;
     transition-duration: 0.001ms !important;
     scroll-behavior: auto !important;
+}
+
+/* Bakgrundsbild (Inställningar, Support/Backdrop.cs) - a per-device photo behind every card,
+   same family as data-theme/data-calm above: chosen once from this device's own files, applied
+   by wwwroot/js/backdrop.js, and never synced to the household or the server. A single fixed
+   layer behind everything (z-index: -1) - --backdrop-image is set by JS as an object URL, and
+   the flat --backdrop-wash gradient layered on top of it (a tint, not a hard block colour) keeps
+   text that sits directly over the photo - outside the opaque .card surfaces, which already read
+   fine against anything underneath - legible. Only rendered once JS has actually applied an
+   image (html[data-backdrop] present); the plain --kalk body background underneath means nothing
+   shows wrong before then, and the fade-in as the photo loads is deliberate, not a bug - see
+   backdrop.js.
+   "Lugnare skärm" wins outright: a personal photo behind the content is exactly the kind of
+   visual noise that setting exists to remove, so html[data-calm] drops the whole layer, with no
+   fade-out transition (data-calm already disables transitions app-wide above). */
+html[data-backdrop] body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background: linear-gradient(var(--backdrop-wash), var(--backdrop-wash)), var(--backdrop-image) center / cover no-repeat;
+}
+
+html[data-calm][data-backdrop] body::before {
+    display: none;
 }
 
 /* ---------- Surfaces ---------- */

@@ -25,6 +25,17 @@
                     document.documentElement.setAttribute('data-calm', '');
                 }
             } catch (e) {}
+
+            // Bakgrundsbild (Support/Backdrop.cs, wwwroot/js/backdrop.js) - unlike theme/calm
+            // above, reading the photo out of IndexedDB is inherently async, so it cannot be
+            // applied before app.css loads without blocking first paint. Best effort instead:
+            // kick off the read now and apply as soon as it resolves, so the photo shows up as
+            // early as possible rather than waiting for Blazor itself to boot. The plain --kalk
+            // body background stays visible underneath until then, so nothing flashes wrong.
+            // Keep the database/store/key names here in sync with backdrop.js if they change.
+            import('./js/backdrop.js').then(function (module) {
+                return module.apply();
+            }).catch(function () {});
         })();
     </script>
     <link rel="preload" id="webassembly" />

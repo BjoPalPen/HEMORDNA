@@ -75,6 +75,23 @@
     }
 }
 
+/* Bakgrundsbild (app.css, Support/Backdrop.cs) - the strips' own background above is an OPAQUE
+   var(--kalk) for their first 35%, built for a page that is just a solid colour. Against a
+   backdrop photo that opaque stretch would blot out a hard rectangle of the image right where
+   the strip is meant to blend gently into the content underneath instead. Swap the flat colour
+   for --glass - already translucent, the same token the nav pill uses against this exact
+   background (NavMenu.razor.css) - so the strip still frosts/blurs the photo instead of hiding
+   it outright. Written before the "Lugnare skärm" block below, at equal selector specificity, so
+   calm screen - which wants its own plain solid strip back, and removes the whole backdrop layer
+   besides - still wins when both attributes are set. */
+html[data-backdrop] .app-topfade {
+    background: linear-gradient(var(--glass) 35%, transparent);
+}
+
+html[data-backdrop] .app-botfade {
+    background: linear-gradient(to top, var(--glass) 35%, transparent);
+}
+
 /* "Lugnare skärm" (app.css, Support/CalmScreen.cs) - the blurred, fading-out edge is exactly
    the kind of "genomskinlig effekt" that setting promises to remove: a plain solid strip with a
    real, visible edge instead, rather than a blend into the content underneath. */
