@@ -114,6 +114,14 @@
     --font-display: "Familjen Grotesk", "Segoe UI", system-ui, sans-serif;
     --font-body: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     --font-family: var(--font-body);
+
+    /* Task icons (Mulberry Symbols, see wwwroot/icons/tasks/NOTICE.txt) are drawn for ~3cm on
+       paper with 14-21 unit lines on an 850-unit canvas - at the list's small on-screen size
+       they read as faint. .task-icon/.focus-icon below push flat contrast; the light-mode value
+       is the one actually checked against a phone screenshot (see git history for this comment's
+       commit), the dark-mode override two-way-pattern below is its own separate check, not a
+       guess derived from this one. */
+    --icon-contrast: 1.25;
 }
 
 /* Mörkt läge - ritat, inte inverterat (docs/DESIGN.md §2/§10). Applied two ways: automatically
@@ -156,6 +164,11 @@
 
         --backdrop-wash: rgba(28, 32, 36, .6);
 
+        /* The icons' grey fills read darker against this surface than against the light one -
+           less punch needed here, checked against a phone screenshot the same way as the light
+           value above (see git history for this comment's commit). */
+        --icon-contrast: 1.15;
+
         color-scheme: dark;
     }
 }
@@ -185,6 +198,10 @@
     --shadow-float: 0 6px 20px rgba(0, 0, 0, .5);
 
     --backdrop-wash: rgba(28, 32, 36, .6);
+
+    /* Same reasoning as the prefers-color-scheme block above - kept in sync since a forced
+       dark theme (Support/Theme.cs) uses this selector, not the OS media query. */
+    --icon-contrast: 1.15;
 
     color-scheme: dark;
 }
@@ -256,6 +273,21 @@ a {
     stroke-linecap: round;
     stroke-linejoin: round;
     flex-shrink: 0;
+}
+
+/* Task icons (Mulberry Symbols, wwwroot/icons/tasks/) shown at 32px in the list
+   (TaskListItem.razor/MinDag.razor's .task-icon) and 48px on the focus card
+   (MinDag.razor's .focus-icon) - a flat contrast boost, not a colour change, to compensate for
+   thin lines drawn for a much larger print size (see NOTICE.txt for the source set). --icon-
+   contrast is themed two ways below (prefers-color-scheme and data-theme="dark"), same pattern
+   the rest of this file uses, since the grey fills read darker on the dark surface than the
+   light one. Deliberately NOT covered by html[data-calm] * above - that rule only ever disables
+   motion (animation-/transition-duration, scroll-behavior), never filter, so a calm screen
+   keeps this contrast; it is neither motion nor blur, so there is nothing for "Lugnare skärm"
+   to remove here. */
+.task-icon,
+.focus-icon {
+    filter: contrast(var(--icon-contrast));
 }
 
 @media (prefers-reduced-motion: reduce) {
