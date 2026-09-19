@@ -1,6 +1,11 @@
 .app-shell {
     display: flex;
     min-height: 100vh;
+    /* Own stacking context so .app-backdrop (app.css) can sit at z-index -1 BELOW the shell's
+       content but ABOVE the body background. A negative z-index directly under the root
+       stacking context is what iOS Safari paints behind the page instead - see app.css. */
+    position: relative;
+    isolation: isolate;
 }
 
 /* Desktop default: content centered under the rail, never a full-width page next to a

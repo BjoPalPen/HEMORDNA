@@ -316,25 +316,34 @@ html[data-calm] * {
 /* Bakgrundsbild (Inställningar, Support/Backdrop.cs) - a per-device photo behind every card,
    same family as data-theme/data-calm above: chosen once from this device's own files, applied
    by wwwroot/js/backdrop.js, and never synced to the household or the server. A single fixed
-   layer behind everything (z-index: -1) - --backdrop-image is set by JS as an object URL, and
-   the flat --backdrop-wash gradient layered on top of it (a tint, not a hard block colour) keeps
-   text that sits directly over the photo - outside the opaque .card surfaces, which already read
+   layer behind everything - --backdrop-image is set by JS as an object URL, and the flat
+   --backdrop-wash gradient layered on top of it (a tint, not a hard block colour) keeps text
+   that sits directly over the photo - outside the opaque .card surfaces, which already read
    fine against anything underneath - legible. Only rendered once JS has actually applied an
    image (html[data-backdrop] present); the plain --kalk body background underneath means nothing
    shows wrong before then, and the fade-in as the photo loads is deliberate, not a bug - see
    backdrop.js.
+   The layer is a REAL element (.app-backdrop, first child of .app-shell in MainLayout.razor),
+   not a body::before pseudo-element: iOS Safari paints a fixed, negative-z-index pseudo-element
+   under the root stacking context BEHIND the body background, so it was invisible on iPhone
+   while Chromium showed it. Inside .app-shell's own stacking context (isolation: isolate, see
+   MainLayout.razor.css) z-index -1 means "below the shell's content, above the body" in every
+   engine.
    "Lugnare skärm" wins outright: a personal photo behind the content is exactly the kind of
    visual noise that setting exists to remove, so html[data-calm] drops the whole layer, with no
    fade-out transition (data-calm already disables transitions app-wide above). */
-html[data-backdrop] body::before {
-    content: "";
+.app-backdrop {
     position: fixed;
     inset: 0;
     z-index: -1;
+    pointer-events: none;
+}
+
+html[data-backdrop] .app-backdrop {
     background: linear-gradient(var(--backdrop-wash), var(--backdrop-wash)), var(--backdrop-image) center / cover no-repeat;
 }
 
-html[data-calm][data-backdrop] body::before {
+html[data-calm][data-backdrop] .app-backdrop {
     display: none;
 }
 
