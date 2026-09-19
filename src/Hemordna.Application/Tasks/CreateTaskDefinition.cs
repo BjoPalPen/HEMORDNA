@@ -58,8 +58,7 @@ public sealed class CreateTaskDefinition
         // gamla naiva "nästa veckodag i tur"-spridningen (roomSpreadIndex i Rum.razor/
         // RoomSheet.razor) - se docs/ARCHITECTURE.md "Beslut: Placeringsalgoritmen". Bara de nya
         // besöken placeras; inget befintligt flyttas.
-        if (request.AutoPlaceWeekday
-            && recurrence is { Frequency: RecurrenceFrequency.Weekly or RecurrenceFrequency.Monthly })
+        if (request.AutoPlaceWeekday && recurrence is { IsWeeklyRhythm: true })
         {
             var today = DateOnly.FromDateTime(now.UtcDateTime);
             var existing = await _definitions.ListByHouseholdAsync(householdId, cancellationToken);
@@ -103,11 +102,14 @@ public sealed class CreateTaskDefinition
 
 /// <summary>The fields a new task definition is created from.</summary>
 /// <param name="AutoPlaceWeekday">
-/// When true and <see cref="Recurrence"/> is Weekly or Monthly, the server chooses the actual
-/// weekday (and, for Monthly, the week of the month) itself via the same placement algorithm
-/// "Planera veckan" uses - <see cref="Recurrence"/>'s own <c>StartDate</c>/<c>Weekday</c>/
-/// <c>MonthlyWeek</c> are ignored in that case; only its <c>Frequency</c>/<c>Interval</c> matter.
-/// See docs/ARCHITECTURE.md "Beslut: Placeringsalgoritmen".
+/// When true and <see cref="Recurrence"/>.<see cref="RecurrenceRule.IsWeeklyRhythm"/> is true, the
+/// server chooses the actual weekday (and, for Monthly, the week of the month) itself via the
+/// same placement algorithm "Planera veckan" uses - <see cref="Recurrence"/>'s own
+/// <c>StartDate</c>/<c>Weekday</c>/<c>MonthlyWeek</c> are ignored in that case; only its
+/// <c>Frequency</c>/<c>Interval</c> matter. A sparse rule (Interval &gt; 1) is left completely
+/// untouched instead - its own <c>StartDate</c> carries WHICH month or phase is meant, and this
+/// machinery cannot express that without destroying it. See docs/ARCHITECTURE.md "Beslut:
+/// Placeringsalgoritmen" and "Beslut: Glesa regler lämnas i fred".
 /// </param>
 public sealed record NewTaskDefinition(
     string Name,

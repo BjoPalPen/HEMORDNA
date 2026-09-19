@@ -147,4 +147,26 @@ public class SetTaskPreferredWeekdayTests
         Assert.Equal(DayOfWeek.Friday, result!.PreferredWeekday);
         Assert.Equal(DayOfWeek.Friday, result.Recurrence!.Weekday);
     }
+
+    /// <summary>
+    /// A sparse rule (Interval > 1) has no single weekday-of-month to lock to without destroying
+    /// which month/phase its own StartDate means - rejected the same way a Daily or "as needed"
+    /// task already is. See docs/ARCHITECTURE.md "Beslut: Glesa regler lämnas i fred".
+    /// </summary>
+    [Fact]
+    public async Task Rejects_locking_a_sparse_monthly_task()
+    {
+        var householdId = await ArrangeHouseholdAsync();
+        var sparseRule = RecurrenceRule.Monthly(new DateOnly(2027, 5, 1), everyNMonths: 12);
+        var task = TaskDefinition.Create(householdId, "Rensa altanmöbler", 60, Now);
+        task.SetRecurrence(sparseRule);
+        _definitions.Seed(task);
+
+        await Assert.ThrowsAsync<DomainException>(() => CreateUseCase().HandleAsync(
+            householdId, task.Id, DayOfWeek.Tuesday, Wednesday, CancellationToken.None));
+
+        var reloaded = await _definitions.FindByIdAsync(householdId, task.Id, CancellationToken.None);
+        Assert.Equal(sparseRule, reloaded!.Recurrence);
+        Assert.Null(reloaded.PreferredWeekday);
+    }
 }

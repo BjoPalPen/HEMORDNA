@@ -183,4 +183,40 @@ public class PreviewWeeklyPlanTests
         Assert.Equal(DayOfWeek.Tuesday, placement.Day);
         Assert.Contains(DayOfWeek.Tuesday, result.EffortWarningDays);
     }
+
+    /// <summary>
+    /// A sparse rule (Interval > 1) must never appear as a visit in the plan, and must never
+    /// compete for a weekday's capacity either - proven here by an ordinary task landing on the
+    /// exact same day, with the exact same minutes, whether or not the sparse task exists. See
+    /// docs/ARCHITECTURE.md "Beslut: Glesa regler lämnas i fred".
+    /// </summary>
+    [Fact]
+    public async Task A_sparse_monthly_task_is_excluded_from_the_plan_and_does_not_affect_another_visits_placement()
+    {
+        var (household, anna, bathroomId) = await ArrangeHouseholdAsync();
+
+        var ordinary = TaskDefinition.Create(household.Id, "Torka golvet", 15, Now);
+        ordinary.AssignToArea(bathroomId);
+        ordinary.SetDefaultResponsibleMember(anna.Id);
+        ordinary.SetRecurrence(RecurrenceRule.Weekly(OldFriday, DayOfWeek.Monday));
+        _definitions.Seed(ordinary);
+
+        var baseline = await CreateUseCase().HandleAsync(household.Id, Wednesday, null, CancellationToken.None);
+        var baselinePlacement = Assert.Single(baseline!.Placement.PlacedVisits);
+
+        // A big, heavy, unrelated ("Övrigt") sparse task - if it were (wrongly) treated as
+        // placeable it would claim capacity on some day and could push the ordinary task
+        // elsewhere.
+        var sparse = TaskDefinition.Create(household.Id, "Rensa altanmöbler", 500, Now);
+        sparse.ChangeEffort(TaskEffort.Heavy);
+        sparse.SetDefaultResponsibleMember(anna.Id);
+        sparse.SetRecurrence(RecurrenceRule.Monthly(new DateOnly(2027, 5, 1), everyNMonths: 12));
+        _definitions.Seed(sparse);
+
+        var withSparse = await CreateUseCase().HandleAsync(household.Id, Wednesday, null, CancellationToken.None);
+        var placementWithSparse = Assert.Single(withSparse!.Placement.PlacedVisits);
+
+        Assert.Equal(baselinePlacement.Day, placementWithSparse.Day);
+        Assert.Equal(baselinePlacement.Visit.Minutes, placementWithSparse.Visit.Minutes);
+    }
 }

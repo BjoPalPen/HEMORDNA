@@ -95,4 +95,36 @@ public class RecurrenceRuleTests
     [InlineData(-1)]
     public void Rejects_a_non_positive_interval(int interval)
         => Assert.Throws<ArgumentOutOfRangeException>(() => RecurrenceRule.Daily(Monday, interval));
+
+    [Fact]
+    public void IsWeeklyRhythm_is_true_for_weekly_with_interval_one()
+        => Assert.True(RecurrenceRule.Weekly(Monday, DayOfWeek.Thursday, everyNWeeks: 1).IsWeeklyRhythm);
+
+    [Fact]
+    public void IsWeeklyRhythm_is_true_for_monthly_same_day_with_interval_one()
+        => Assert.True(RecurrenceRule.Monthly(Monday, everyNMonths: 1).IsWeeklyRhythm);
+
+    [Fact]
+    public void IsWeeklyRhythm_is_true_for_monthly_on_weekday_with_interval_one()
+        => Assert.True(RecurrenceRule.MonthlyOnWeekday(Monday, WeekOfMonth.Third, DayOfWeek.Tuesday, everyNMonths: 1).IsWeeklyRhythm);
+
+    [Fact]
+    public void IsWeeklyRhythm_is_false_for_weekly_every_two_weeks()
+        => Assert.False(RecurrenceRule.Weekly(Monday, DayOfWeek.Thursday, everyNWeeks: 2).IsWeeklyRhythm);
+
+    [Fact]
+    public void IsWeeklyRhythm_is_false_for_monthly_every_two_months()
+        => Assert.False(RecurrenceRule.Monthly(Monday, everyNMonths: 2).IsWeeklyRhythm);
+
+    [Fact]
+    public void IsWeeklyRhythm_is_false_for_monthly_every_twelve_months()
+        => Assert.False(RecurrenceRule.Monthly(Monday, everyNMonths: 12).IsWeeklyRhythm);
+
+    [Fact]
+    public void IsWeeklyRhythm_is_false_for_daily_with_interval_one()
+        => Assert.False(RecurrenceRule.Daily(Monday, everyNDays: 1).IsWeeklyRhythm);
+
+    [Fact]
+    public void IsWeeklyRhythm_is_false_for_daily_every_three_days()
+        => Assert.False(RecurrenceRule.Daily(Monday, everyNDays: 3).IsWeeklyRhythm);
 }

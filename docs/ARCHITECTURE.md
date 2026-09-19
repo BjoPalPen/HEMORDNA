@@ -3624,6 +3624,8 @@ uppgift med intervall 2-3 placeras INTE av algoritmen** - en syssla som sker "va
 byter veckodag varje cykel, så ett enda veckodagsval beskriver den inte meningsfullt. Den sprids
 i stället genom sin egen startdatumsfas, exakt som `RoomTemplateTask.ToScheduling`s
 `spreadIndex` redan gjorde - en medveten, dokumenterad avgränsning, inte en lucka som glömts.
+**En gles Weekly/Monthly-regel (`Interval > 1`, t.ex. "var 12:e månad") placeras inte heller** -
+se "Beslut: Glesa regler lämnas i fred" längre ned.
 
 **`TaskDefinition.PreferredWeekday` är inte längre dött.** Se "Beslut: Alltid på en viss
 veckodag" längre ned i det här dokumentet för hur fältet kopplades in, och varför det blev en
@@ -3716,7 +3718,9 @@ arbete.
 har ingen enskild veckodag begreppet ens ger mening för. `TaskDefinition.SetPreferredWeekday`
 avvisar (kastar `DomainException`, 409) ett veckodagsval när `Recurrence` inte är Weekly eller
 Monthly. Klienten (`TaskOptionsSheet.HasWeekdayToChoose`) visar inte ens raden "Alltid på" i det
-fallet - samma "döljs, nekas inte"-princip som resten av UI:t.
+fallet - samma "döljs, nekas inte"-princip som resten av UI:t. **En gles Weekly/Monthly-regel
+(`Interval > 1`) avvisas på exakt samma sätt** - se "Beslut: Glesa regler lämnas i fred" längre
+ned för varför.
 
 **Invariant: `PreferredWeekday`, när satt, matchar alltid `Recurrence.Weekday`.** En stale lås som
 pekar på en dag uppgiften inte längre faktiskt ligger på hade varit värre än inget lås alls -
@@ -3833,6 +3837,80 @@ en flytt till samma dag som ett befintligt lås räknas inte som en ändring). M
 (`WeeklyPlanTests.Moving_a_visit_in_the_sheet_and_using_the_plan_locks_it_to_the_chosen_day`):
 flytta ett besök i arket, använd, öppna igen efter en riktig reload och se att det ligger kvar
 låst. Alla nya beteendetest bevisade falla innan respektive rättning fanns.
+
+### Beslut: Glesa regler lämnas i fred — `IMPLEMENTED`
+
+**Bakgrund.** Tre skrivvägar bestämde om en uppgift skulle få en veckodag: skapande
+(`CreateTaskDefinition` bakom `AutoPlaceWeekday`), "Använd" i Planera veckan
+(`ApplyWeeklyPlan`), och manuell låsning (`SetTaskPreferredWeekday`). Alla tre läste bara
+`RecurrenceRule.Frequency` och ankrade om regeln från `today` via `RecurrenceRule.Weekly`/
+`.MonthlyOnWeekday` (samma "gäller framåt"-teknik som "Beslut: Placeringsalgoritmen" ovan
+beskriver). Det maskineriet uttrycker en regel som (veckodag, vecka-i-månaden) - förlustfritt
+för `Interval == 1`. För `Interval > 1` bor innebörden - VILKEN månad eller fas som avses - i
+`StartDate`, och omankringen förstörde den utan att någon bad om det. Konkret: en uppgift skapad
+"var 12:e månad" i september blev en septemberuppgift för alltid, med inget datumfält i
+gränssnittet för att ens säga "maj". Symptomen bevisades först med fyra röda tester (Commit 2,
+innan rättningen): `AutoPlaceWeekday_leaves_a_sparse_monthly_recurrence_untouched`,
+`Applying_a_plan_leaves_a_sparse_monthly_task_untouched_and_uncounted`,
+`A_sparse_monthly_task_is_excluded_from_the_plan_and_does_not_affect_another_visits_placement`
+och `Rejects_locking_a_sparse_monthly_task`.
+
+**`RecurrenceRule.IsWeeklyRhythm`** (Domain, härledd egenskap, aldrig lagrad - samma anda som
+`VisitKindClassifier`): `Frequency is Weekly or Monthly && Interval == 1`. **Varför gränsen är
+exakt intervall 1, inte ett tröskelvärde:** det följer av vad omankringen till (veckodag,
+vecka-i-månaden) kan uttrycka utan förlust. En avsiktlig konsekvens: "varannan vecka" (Weekly,
+Interval 2) står också utanför veckoplanen, trots att den känns "nästan varje vecka" - regeln är
+inte "hur ofta", den är "kan en veckodag beskriva hela regeln".
+
+**Vad som grindas på `IsWeeklyRhythm` i stället för `Frequency`:**
+
+1. `CreateTaskDefinition` - `AutoPlaceWeekday` rör bara en regel med `IsWeeklyRhythm: true`; en
+   gles regel behåller precis den `RecurrenceRule` klienten skickade in, orörd.
+2. `WeeklyPlacementBuilder.IsPlaceableCadence` - en gles regel tas aldrig med i Planera veckans
+   besökslista alls, varken förhandsvisning eller "Använd".
+3. `WeeklyPlacementBuilder.RemainingCapacity` - en gles regel som (från innan den här ändringen)
+   råkar bära en `Weekday` räknas inte längre av mot den dagens kapacitet vid placering av EN NY
+   uppgift.
+4. `TaskDefinition.SetPreferredWeekday` - avvisar (`DomainException`) att låsa en gles regel till
+   en veckodag, exakt som den redan avvisade Daily/"vid behov".
+5. `RecurrenceReanchoring.ForWeekday` - chokepointen både `ApplyWeeklyPlan` och
+   `SetTaskPreferredWeekday` går igenom för den faktiska omankringen - returnerar `null` för en
+   gles regel, så kontraktet håller även om något ovanför skulle glömma grinda.
+
+**Klientspegel:** `Hemordna.Client.Support.RecurrenceRhythm.IsWeeklyRhythm` - klienten får inte
+referera `Hemordna.Domain` (§2), så samma logik hålls som en liten, handhållen kopia mot
+`RecurrenceRuleContract`, precis samma mönster som `EffortLevel`s `TaskEffort`-kopia av domänens
+egen enum. `TaskOptionsSheet.HasWeekdayToChoose` använder den för att dölja "Alltid på en viss
+veckodag" för en gles regel.
+
+**"Första gången"-fältet.** Innan den här ändringen fanns inget sätt att ge en gles regel ett
+eget startdatum - `RoomSheet`s "Lägg till uppgift" och `TaskOptionsSheet`s "Upprepning" satte
+alltid `StartDate = today`. Ett datumfält, identiskt i båda formulären, visas nu bara när
+frekvensen är Weekly/Monthly OCH intervallet är större än 1 - förifyllt med dagens datum vid
+skapande, med uppgiftens EGNA nuvarande `StartDate` vid redigering av en redan gles uppgift (så
+att "Spara" utan ändring inte tyst skriver över ett korrekt datum med idag). Bulk-flödet
+("Ändra frekvens för hela rummet") rör medvetet inte detta - det sätter samma frekvens på många
+uppgifter i ett rum på en gång och är inte tänkt för säsongsarbete.
+
+**Vad som medvetet INTE gjordes:**
+
+- **Ingen migration.** En regel som redan ankrats om till en veckodag INNAN den här ändringen
+  behåller den veckodagen - ursprungsmånaden är för alltid borta för den, och kan inte räddas i
+  efterhand. Gäller framåt, precis som all annan planeringsregel i det här dokumentet.
+  `WeeklyPlacementBuilder.RemainingCapacity` har en egen liten skyddsklausul för exakt detta
+  fall (se punkt 3 ovan).
+- **Ingen ny `VisitKind`.** En gles uppgift ska ut ur veckoplanen helt, inte in i en egen
+  kategori i den - en ny `VisitKind` hade spritt sig in i rumsregeln, rotationen och
+  repository-nyckeln (`GetMemberIdsByAreaAndVisitKindOnDateAsync`) för ett behov som bara är
+  "exkludera", inte "klassificera annorlunda".
+- **`RecurrenceReanchoring.HasMeaningfulChange` patchades inte** för att också väga in
+  `StartDate`. Kommentaren där har rätt för `Interval == 1` (ett normaliserat `StartDate` skiljer
+  sig nästan alltid från förra körningens utan att något meningsfullt ändrats) - lösningen är i
+  stället att en gles regel aldrig når fram till att bli jämförd där, se `ForWeekday` ovan.
+
+**Känd begränsning:** en regel som redan hann ankras om till en veckodag innan den här ändringen
+fanns repareras inte automatiskt - hushållet behöver skapa om den uppgiften för att ge den ett
+riktigt datum.
 
 | Fråga | Varför den väntar |
 |---|---|

@@ -21,7 +21,15 @@
             {
                 <label class="field">
                     <span>@intervalLabel</span>
-                    <input type="number" min="1" max="52" @bind="_interval" />
+                    <input type="number" min="1" max="52" @bind="_interval" @bind:event="oninput" />
+                </label>
+            }
+
+            @if (ShowFirstDate(_recurrenceOption, _interval))
+            {
+                <label class="field">
+                    <span>Första gången</span>
+                    <input type="date" id="task-options-first-date" @bind="_firstDate" />
                 </label>
             }
 
@@ -264,6 +272,10 @@
     private View _view;
     private string _recurrenceOption = string.Empty;
     private int _interval = 1;
+
+    /// <summary>Only used when <see cref="ShowFirstDate"/> is true - see AddTaskForm.FirstDate's
+    /// own remarks in RoomSheet.razor for why a sparse rule needs this.</summary>
+    private DateOnly _firstDate;
     private string _assignmentMemberId = string.Empty;
     private int _estimatedMinutes = TimeLevel.All[0].Minutes;
     private string _roomAreaId = string.Empty;
@@ -297,9 +309,12 @@
         _ => "Ingen"
     };
 
-    /// <summary>Only a Weekly or Monthly task has a single weekday to lock to - see
-    /// TaskDefinition's own remarks. Daily and "vid behov" never show the row at all.</summary>
-    private bool HasWeekdayToChoose => Task.Recurrence?.Frequency is "Weekly" or "Monthly";
+    /// <summary>Only a Weekly or Monthly task with Interval 1 has a single weekday to lock to -
+    /// see TaskDefinition's own remarks. Daily, "vid behov", and a SPARSE Weekly/Monthly rule
+    /// (e.g. "every 12 months") never show the row at all - see
+    /// <see cref="RecurrenceRhythm.IsWeeklyRhythm"/> and docs/ARCHITECTURE.md "Beslut: Glesa
+    /// regler lämnas i fred".</summary>
+    private bool HasWeekdayToChoose => RecurrenceRhythm.IsWeeklyRhythm(Task.Recurrence);
 
     private string PreferredWeekdaySummary
         => WeekdayOptions.FirstOrDefault(option => option.Day.ToString() == Task.PreferredWeekday).Label
@@ -325,6 +340,13 @@
         _message = null;
         _recurrenceOption = RecurrenceOptionFor(Task);
         _interval = Task.Recurrence?.Interval ?? 1;
+        // A task that is ALREADY sparse keeps showing its real StartDate here instead of today -
+        // otherwise opening (without changing anything) and hitting "Spara" would silently
+        // overwrite a correct date with today's. See docs/ARCHITECTURE.md "Beslut: Glesa regler
+        // lämnas i fred".
+        _firstDate = ShowFirstDate(_recurrenceOption, _interval) && Task.Recurrence is { } currentRecurrence
+            ? currentRecurrence.StartDate
+            : DateOnly.FromDateTime(DateTime.UtcNow);
         _assignmentMemberId = Task.DefaultResponsibleMemberId?.ToString() ?? string.Empty;
         _estimatedMinutes = TimeLevel.ClosestMinutes(Task.EstimatedMinutes);
         _roomAreaId = Task.AreaId?.ToString() ?? string.Empty;
@@ -351,6 +373,14 @@
         "Monthly" => "Hur många månader mellan varje gång?",
         _ => null
     };
+
+    /// <summary>Only a SPARSE Weekly/Monthly rule (Interval &gt; 1) needs its own explicit first
+    /// date - its own StartDate carries WHICH month/phase is meant, which today's date cannot.
+    /// Interval 1, Daily, "vid behov" and "Ingen" keep today's date as before (see
+    /// <see cref="BuildRecurrence"/>'s own "today" parameter). See docs/ARCHITECTURE.md "Beslut:
+    /// Glesa regler lämnas i fred".</summary>
+    private static bool ShowFirstDate(string recurrenceOption, int interval)
+        => recurrenceOption is "Weekly" or "Monthly" && interval > 1;
 
     private static string RecurrenceOptionFor(TaskDefinitionResponse task) => task switch
     {
@@ -381,7 +411,7 @@
 
         try
         {
-            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            var today = ShowFirstDate(_recurrenceOption, _interval) ? _firstDate : DateOnly.FromDateTime(DateTime.UtcNow);
             var recurrence = BuildRecurrence(_recurrenceOption, today, _interval);
             var staleAfterDays = _recurrenceOption == "AsNeeded" ? RoomTemplateTask.AsNeededDefaultDays : (int?)null;
 

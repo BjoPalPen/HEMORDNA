@@ -165,4 +165,35 @@ public class TaskFrequencyTests
             await Assertions.Expect(room.GetByRole(AriaRole.Button, new() { Name = name })).ToContainTextAsync("varje månad");
         }
     }
+
+    /// <summary>
+    /// "Altan 1 · Sommarställa, varje månad × 12" - a sparse rule (interval &gt; 1) gets a real
+    /// "Första gången" date instead of always freezing on the day it happened to be created. See
+    /// docs/ARCHITECTURE.md "Beslut: Glesa regler lämnas i fred".
+    /// </summary>
+    [Fact]
+    public async Task Choosing_a_sparse_monthly_interval_shows_a_first_date_field_that_is_saved_and_shown_back()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Siri");
+
+        var room = await CreateAndOpenBlankRoomAsync(page, "Altan");
+
+        await room.GetByRole(AriaRole.Button, new() { Name = "Lägg till uppgift" }).ClickAsync();
+        var addSheet = Sheet(page, "Lägg till uppgift i Altan");
+        await addSheet.GetByLabel("Namn").FillAsync("Sommarställa altanmöblerna");
+        await addSheet.GetByLabel("Upprepning").SelectOptionAsync("Monthly");
+        await addSheet.GetByLabel("Hur många månader mellan varje gång?").FillAsync("12");
+        await addSheet.GetByLabel("Första gången").FillAsync("2027-05-01");
+        await addSheet.GetByRole(AriaRole.Button, new() { Name = "Lägg till uppgift" }).ClickAsync();
+
+        var taskRow = room.GetByRole(AriaRole.Button, new() { Name = "Sommarställa altanmöblerna" });
+        await Assertions.Expect(taskRow).ToContainTextAsync("var 12:e månad");
+
+        // Reopening the edit form shows the first date that was actually saved, not today's date.
+        await taskRow.ClickAsync();
+        var taskSheet = Sheet(page, "Sommarställa altanmöblerna");
+        await taskSheet.GetByRole(AriaRole.Button, new() { Name = "Upprepning" }).ClickAsync();
+        await Assertions.Expect(taskSheet.GetByLabel("Första gången")).ToHaveValueAsync("2027-05-01");
+    }
 }
