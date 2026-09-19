@@ -63,6 +63,17 @@ public sealed class RecurrenceRule : IEquatable<RecurrenceRule>
     /// <summary>Set only for a "nth weekday of month" rule. Null means "same day-of-month as StartDate".</summary>
     public WeekOfMonth? MonthlyWeek { get; }
 
+    /// <summary>
+    /// True when this rule's whole meaning fits in (weekday, week-of-month), so
+    /// re-anchoring it to a new weekday loses nothing. For Interval > 1 the
+    /// StartDate carries WHICH month or phase is meant - the weekday machinery
+    /// (placement, "Använd", manual lock) must then leave the rule alone. See
+    /// docs/ARCHITECTURE.md "Beslut: Glesa regler lämnas i fred".
+    /// </summary>
+    public bool IsWeeklyRhythm
+        => Frequency is RecurrenceFrequency.Weekly or RecurrenceFrequency.Monthly
+           && Interval == 1;
+
     public static RecurrenceRule Daily(DateOnly startDate, int everyNDays = 1)
         => new(RecurrenceFrequency.Daily, Guard.AgainstNonPositive(everyNDays, nameof(everyNDays)), startDate, null, null);
 
