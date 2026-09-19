@@ -2483,6 +2483,74 @@ permanent test
 
 ---
 
+### Beslut: Bakgrundsbild per enhet — `IMPLEMENTED`
+
+Ett rent trivselbehov: Björn vill kunna välja ett eget foto som bakgrund bakom uppgiftskorten.
+Björns eget beslut, uttryckligt från början: **per enhet, aldrig via servern** - bilden lämnar
+aldrig enheten den valdes på, den följer inte med till andra enheter och inte till andra
+hushållsmedlemmar. Samma nivå av inställning som temat (steg 5 ovan) och "Lugnare skärm" (B8
+ovan) redan ligger på, inte en tredje sorts mekanism.
+
+- **Varför per enhet, inte `MemberPreference`**: exakt samma resonemang som `Support/Theme.cs`/
+  `Support/CalmScreen.cs` - vilken bakgrund som känns rätt är en egenskap hos SKÄRMEN någon
+  sitter framför, inte hos personen som råkar vara inloggad där just då. Utöver det resonemanget:
+  uppladdning, serverlagring och storleksgränser för användarbilder undveks helt medvetet - ingen
+  ny Api-yta, inget nytt fält i `Hemordna.Domain`, ingen `Household`-omfattad lagringskvot att
+  senare behöva hantera. Konsekvensen är känd och accepterad: bilden följer inte med mellan en
+  persons egna enheter, och en annan hushållsmedlem ser aldrig samma bakgrund - samma avvägning
+  temat och "Lugnare skärm" redan gör för sina egna val.
+- **IndexedDB, inte `localStorage`**: `localStorage`s ~5 MB-kvot (delad med ALLT annat i den,
+  inklusive token och andra per-enhet-val) räcker inte till ett riktigt mobilfoto - rutinmässigt
+  3-10 MB, mot temats/"Lugnare skärm"s enda ord. `wwwroot/js/backdrop.js` skalar därför ner till
+  max 1600 px på längsta sidan och kodar om som JPEG (kvalitet 0.82) INNAN lagring, och sparar
+  resultatet som en Blob i en egen IndexedDB-databas (`hemordna`, store `backdrop`, en enda
+  nyckel). `createImageBitmap(file, { imageOrientation: 'from-image' })` bakar in
+  EXIF-rotationen från mobilkameror korrekt redan vid avkodningen; webbläsare utan det stödet
+  faller tillbaka på ett vanligt `<img>` + canvas, som redan själva tillämpar EXIF-rotation utan
+  någon egen rotationsmatris.
+- **Applicering**: `Support/Backdrop.cs` speglar `Theme`/`CalmScreen`s egen form
+  (`SetFromInputAsync`/`GetAsync`/`ClearAsync`, alla tunna JS-interop-anrop mot samma modul).
+  `apply()` i `backdrop.js` sätter CSS-variabeln `--backdrop-image` (en `url(...)` mot en
+  object-URL, återkallad vid byte/rensning) och attributet `data-backdrop` på `<html>`. `app.css`
+  målar ett fast `body::before`-lager bakom allt innehåll (`z-index: -1`) med en tonad
+  `--backdrop-wash` - egen ljus/mörk tokenpar, samma tvåvägsmönster som färgpaletten i övrigt -
+  lagd ovanpå bilden, så marginaltext utanför de redan ogenomskinliga `.card`-ytorna förblir
+  läsbar. `.app-topfade`/`.app-botfade` (`MainLayout.razor.css`) bytte sin första 35 % från ett
+  HELT OPAKT `var(--kalk)` till `--glass` (samma token som den flytande nav-pillen redan
+  använder) när `data-backdrop` är satt - de var solida band byggda för en enfärgad grund, och
+  hade annars klippt ut ett hårt, fyrkantigt hål ur fotot rakt vid mobilens topp/botten i stället
+  för att tona mjukt in i det.
+- **`index.html`-bootstrapen är asynkron för bilden**, till skillnad från temat/"Lugnare skärm"
+  ovan som körs synkront innan `app.css` laddas. En IndexedDB-läsning kan inte vara synkron -
+  bilden tonar därför in strax efter första målningen i stället för att redan synas vid den. Den
+  vanliga `--kalk`-bakgrunden ligger kvar under tiden, så ingenting blinkar FEL, bara lite sent -
+  en medveten avvägning, inte ett känt fel.
+- **"Lugnare skärm" vinner utan undantag**: `html[data-calm]` döljer hela lagret
+  (`body::before { display: none }`), samma "en persons foto bakom allt är exakt den sortens
+  visuella brus den inställningen finns för att ta bort"-resonemang som redan styr
+  `.app-topfade`/`.app-botfade`/nav-pillen under `data-calm` (B8 ovan). Fokusläget
+  (`IsFocusMode`) särbehandlas medvetet INTE här - "Lugnare skärm" är den enda avsedda vägen till
+  en helt ren skärm, precis som för motion-/genomskinlighetseffekterna.
+- **Medvetet inte byggt**: synk mellan enheter eller mellan hushållsmedlemmar (se ovan), inbyggda
+  bilder eller mönster att välja bland - bara ett eget foto eller ingen bakgrund alls - och ingen
+  bakgrund per hushållsmedlem.
+- **Testat**: `tests/Hemordna.E2E.Tests/InstallningarTests.cs`,
+  `Uploading_a_backdrop_image_applies_it_immediately_and_survives_a_reload` (en canvas-genererad
+  PNG, ritad direkt i sidan - ingen binärfil i repot - vald via det dolda `#backdrop-file`-fältet;
+  `data-backdrop`/`.backdrop-preview` finns direkt efteråt och FORTFARANDE efter en
+  `page.ReloadAsync()`, vilket bevisar både IndexedDB-skrivningen och `index.html`s egen tidiga
+  återapplicering, inte bara den momentana object-URL:en från valet) och
+  `Calm_screen_hides_the_backdrop_and_removing_the_image_clears_it` ("Lugnare skärm" döljer och
+  återställer lagret via `getComputedStyle(document.body, '::before').display`, och "Ta bort
+  bild" rensar både applicering och lagring).
+- **Öppen justering**: `--backdrop-wash`s styrka (0.55 ljust, 0.60 mörkt) sattes utifrån
+  designtokens för läsbarhet, inte mätt mot riktiga foton i produktion. En medveten startpunkt,
+  inte ett känt fel - kan visa sig för kraftig (döljer för mycket av bilden) eller för svag (för
+  lite kontrast för marginaltext) när riktiga hushållsfoton används i praktiken, och får då
+  justeras utan att det räknas som en bugg i denna revision.
+
+---
+
 ### Beslut: Kvarlämnat, Imorgon på Idag, ledig dag och tid i förväg — `IMPLEMENTED`
 
 Fem löften styr denna revision, i samma anda som "Beslut: Ångra och stabil lista" ovan var styrd
