@@ -47,5 +47,4 @@ Servern rapporterar "System restart required" och 46 väntande paketuppdateringa
 Bakgrundens wash (`--backdrop-wash` 0,55/0,60) och ikonernas skärpa bedöms på riktig telefon;
 nästa steg för ikonerna är i så fall SVG-filernas linjetjocklek, inte mer CSS.
 Mulberry Symbols (CC BY-SA) kräver synlig attribution – finns idag bara i `icons/tasks/NOTICE.txt`.
-Deploy från Claude Code: auto-läget blockerar ssh till servern; lämna auto (Shift+Tab) och
-godkänn kommandot, eller lägg en Bash-regel för deploy-kontot i `settings.local.json`.
+Deploy från Claude Code: auto-läget blockerar ssh – lämna auto (Shift+Tab) och godkänn kommandot.
