@@ -197,7 +197,7 @@
     --glass-edge: rgba(255, 255, 255, .08);
     --shadow-float: 0 6px 20px rgba(0, 0, 0, .5);
 
-    --backdrop-wash: rgba(28, 32, 36, .6);
+    --backdrop-wash: rgba(28, 32, 36, .68);
 
     /* Same reasoning as the prefers-color-scheme block above - kept in sync since a forced
        dark theme (Support/Theme.cs) uses this selector, not the OS media query. */
