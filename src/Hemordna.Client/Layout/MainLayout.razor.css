@@ -1,10 +1,13 @@
 .app-shell {
     display: flex;
     min-height: 100vh;
-    /* Own stacking context so .app-backdrop (app.css) can sit at z-index -1 BELOW the shell's
-       content but ABOVE the body background. A negative z-index directly under the root
-       stacking context is what iOS Safari paints behind the page instead - see app.css. */
+    /* The whole shell sits at z-index 1 above .app-backdrop (a preceding sibling at z-index 0,
+       see MainLayout.razor and app.css). isolation: isolate keeps everything inside the shell
+       stacking exactly as before - sheets, nav pill, fades and page headers keep their own
+       z-index relationships, since the shell was already their stacking context. No negative
+       z-index anywhere: WebKit has painted those behind the page - see app.css. */
     position: relative;
+    z-index: 1;
     isolation: isolate;
 }
 

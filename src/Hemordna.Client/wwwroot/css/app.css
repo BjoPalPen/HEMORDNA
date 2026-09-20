@@ -323,19 +323,29 @@ html[data-calm] * {
    image (html[data-backdrop] present); the plain --kalk body background underneath means nothing
    shows wrong before then, and the fade-in as the photo loads is deliberate, not a bug - see
    backdrop.js.
-   The layer is a REAL element (.app-backdrop, first child of .app-shell in MainLayout.razor),
-   not a body::before pseudo-element: iOS Safari paints a fixed, negative-z-index pseudo-element
-   under the root stacking context BEHIND the body background, so it was invisible on iPhone
-   while Chromium showed it. Inside .app-shell's own stacking context (isolation: isolate, see
-   MainLayout.razor.css) z-index -1 means "below the shell's content, above the body" in every
-   engine.
+   The layer is a REAL element (.app-backdrop, a sibling placed BEFORE .app-shell in
+   MainLayout.razor), not a body::before pseudo-element, and it never uses a negative z-index:
+   iOS Safari painted both a fixed negative-z-index pseudo-element under the root and, in the
+   first attempt at a fix, a negative-z-index child inside the shell, behind the page - while
+   Chromium showed both. Now the layer sits at z-index 0 and the whole shell at 1 (see
+   MainLayout.razor.css), with explicit top/right/bottom/left instead of the `inset` shorthand
+   Safari only learned in 14.1.
    "Lugnare skärm" wins outright: a personal photo behind the content is exactly the kind of
    visual noise that setting exists to remove, so html[data-calm] drops the whole layer, with no
    fade-out transition (data-calm already disables transitions app-wide above). */
 .app-backdrop {
     position: fixed;
-    inset: 0;
-    z-index: -1;
+    /* Four explicit sides rather than the `inset` shorthand: Safari only understands `inset`
+       from 14.1, and an ignored `inset` leaves a fixed element at 0x0 - invisible, silently. */
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    /* A preceding sibling of .app-shell at z-index 0, with the shell itself at 1 (see
+       MainLayout.razor.css) - never a negative z-index, which WebKit has painted behind the page
+       in more than one configuration; "layer 0 under content at 1" is the arrangement every
+       engine agrees on, and nothing inside the shell changes its stacking. */
+    z-index: 0;
     pointer-events: none;
 }
 
