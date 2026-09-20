@@ -14,9 +14,8 @@ Sex releaser (PR #11–#16), ingen schema- eller datamigration:
   Nytt fält "Första gången" för glesa regler i båda formulären. Se ARCHITECTURE.md
   "Beslut: Glesa regler lämnas i fred". Regler som omankrats före releasen repareras inte.
 - Bakgrundsbild per enhet (IndexedDB, nedskalad i webbläsaren, Lugnare skärm vinner).
-  PR #14–#15: lagret `.app-backdrop` är syskon före `.app-shell` på z-index 0, skalet på 1 –
-  negativt z-index målades inte i iOS Safari 27 fast Chromium visade det. Bekräftat på iPhone.
-  PR #16: med bild får `.muted` full bläckfärg + halo (`text-shadow` i `--kalk`), wash .62/.68.
+  PR #14–#15: `.app-backdrop` är syskon före `.app-shell` (z-index 0/1) – negativt z-index
+  målades inte i iOS 27. Bekräftat på iPhone. PR #16: `.muted` får bläckfärg + halo, wash .62/.68.
 - Uppgiftsikoner 24→32 px i listan och `--icon-contrast` 1,25 ljust / 1,15 mörkt.
 
 ## Köra och deploya
