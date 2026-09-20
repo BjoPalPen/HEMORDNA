@@ -5,8 +5,8 @@ Lägesbild per 2026-09-19. Arbetssätt: [../CLAUDE.md](../CLAUDE.md).
 
 ## Läge
 
-`main` är pushad och kodrelease `3a8677c` deployad till https://app.hemordna.se.
-Fyra releaser (PR #11–#14), ingen schema- eller datamigration:
+`main` är pushad och kodrelease `fb4780f` deployad till https://app.hemordna.se.
+Fem releaser (PR #11–#15), ingen schema- eller datamigration:
 
 - Glesa regler lämnas i fred: `RecurrenceRule.IsWeeklyRhythm` (Weekly/Monthly med
   intervall 1) grindar auto-placering, Planera veckan, "Använd" och veckodagslåsning.
@@ -14,8 +14,8 @@ Fyra releaser (PR #11–#14), ingen schema- eller datamigration:
   Nytt fält "Första gången" för glesa regler i båda formulären. Se ARCHITECTURE.md
   "Beslut: Glesa regler lämnas i fred". Regler som omankrats före releasen repareras inte.
 - Bakgrundsbild per enhet (IndexedDB, nedskalad i webbläsaren, Lugnare skärm vinner).
-  PR #14: lagret är ett riktigt element `.app-backdrop` i `.app-shell` (isolation: isolate) –
-  `body::before` med negativt z-index målades inte alls i iOS Safari. Bekräftas på iPhone.
+  PR #14–#15: lagret `.app-backdrop` är syskon före `.app-shell` på z-index 0, skalet på 1 –
+  negativt z-index målades inte i iOS Safari 27 fast Chromium visade det. Bekräftas på iPhone.
 - Uppgiftsikoner 24→32 px i listan och `--icon-contrast` 1,25 ljust / 1,15 mörkt.
 
 ## Köra och deploya
