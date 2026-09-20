@@ -96,7 +96,7 @@
        read fine against anything) stays legible. Same colour family as --kalk, not derived from
        it via color-mix(), to match how --glass above is defined per theme rather than computed -
        exact alpha to be checked against a real photo in Commit 3's screenshot review. */
-    --backdrop-wash: rgba(245, 243, 238, .55);
+    --backdrop-wash: rgba(245, 243, 238, .62);
 
     color-scheme: light;
 
@@ -162,7 +162,7 @@
         --glass-edge: rgba(255, 255, 255, .08);
         --shadow-float: 0 6px 20px rgba(0, 0, 0, .5);
 
-        --backdrop-wash: rgba(28, 32, 36, .6);
+        --backdrop-wash: rgba(28, 32, 36, .68);
 
         /* The icons' grey fills read darker against this surface than against the light one -
            less punch needed here, checked against a phone screenshot the same way as the light
@@ -355,6 +355,26 @@ html[data-backdrop] .app-backdrop {
 
 html[data-calm][data-backdrop] .app-backdrop {
     display: none;
+}
+
+/* Läsbarhet ovanpå fotot. The muted text tone (--sot-soft, used by .muted and the eyebrows) was
+   chosen against the flat --kalk ground; over a bright, busy photo it all but disappears - the
+   iPhone screenshot that prompted this showed the date, "0 av 12 klara" and "Hur är orken idag?"
+   barely readable while the heading was fine. Two token-level moves, both only while a photo is
+   applied: muted text takes the full ink colour (--sot resolves per theme, so one rule covers
+   light and dark), and every piece of text in the content gets a soft halo in the ground
+   colour - invisible on the opaque cards, whose surface is near the ground tone, but a clean
+   edge for text sitting straight on the photo. The photo itself is left sharp on purpose: a
+   blur would hide faces. */
+/* html:root[...] (0,2,1) outranks the dark-theme blocks' :root[data-theme="dark"] and
+   :root:not([data-theme="light"]) (0,2,0), which redefine --sot-soft - plain html[data-backdrop]
+   would only have won in light mode. */
+html:root[data-backdrop] {
+    --sot-soft: var(--sot);
+}
+
+html[data-backdrop] .app-main {
+    text-shadow: 0 0 2px var(--kalk), 0 0 10px var(--kalk);
 }
 
 /* Inställningar's own small preview of the stored backdrop photo. Reads the exact same
