@@ -9,19 +9,14 @@ Lägesbild per 2026-09-21. Arbetssätt: [../CLAUDE.md](../CLAUDE.md).
 Åtta releaser totalt (PR #11–#18) sedan `4f913ce`, ingen schema- eller datamigration.
 De två senaste idag:
 
-- **Rengör ugnen** (Kök, 15 min, Tung) och **Byta sängkläder** (Sovrum, 8 min, Mellan)
-  tillagda i `RoomTemplates.cs` – saknades helt trots att ugn var namngiven i
-  ARCHITECTURE.md:s tyngdriktlinje. Tider satta mot appens egna Tunga uppgifter, inte
-  städbranschens (se `internetresearch`-artefakten – de källorna var antingen optimerade
-  för betald personal eller marknadsföring som vill få manuell städning att låta jobbig).
-  Två hårdkodade E2E-summor i `OmradenTests.cs` uppdaterade. **Känd konsekvens, ej byggd:**
-  Kök har nu sin första Tunga uppgift och splittras i två besök av Planera veckan – se
-  `storstad-som-tillagg`-artefakten för det öppna beslutet (alternativ B rekommenderas).
-- **Dagliga rutiner slutar bygga på sig själva.** En Routine-uppgift (daglig, intervall 1)
-  har en slot per kalenderdag, så N obockade dagar gav N permanenta kort. Nu skippas
-  äldre missade dagar tyst när en nyare genereras – bara den senaste stannar utestående.
-  Scoped strikt till Interval 1; Weekly/Monthly behåller "kvarlämnat stannar" oförändrat
-  (regressionstest finns). `EnsureOccurrencesGenerated.GenerateOnScheduleAsync`.
+- **Rengör ugnen** (Kök, Tung) + **Byta sängkläder** (Sovrum, Mellan) i `RoomTemplates.cs`.
+  Tider mot appens egna Tunga uppgifter, ej städbranschens (se `internetresearch`-artefakten).
+  Kök har nu sin första Tunga uppgift → splittras i två besök av Planera veckan, se
+  `storstad-som-tillagg`-artefakten (alt. B rekommenderas, ej byggt).
+- **Dagliga rutiner slutar bygga på sig själva.** Routine (daglig, intervall 1) hade en
+  slot per dag → N obockade dagar gav N permanenta kort. Nu skippas äldre missade dagar
+  tyst; bara senaste stannar. Scoped till Interval 1, Weekly/Monthly oförändrat.
+  `EnsureOccurrencesGenerated.GenerateOnScheduleAsync`.
 
 ## Köra och deploya
 
@@ -32,8 +27,8 @@ Deploy: `git pull --ff-only origin main`, sedan
 `docker compose -f docker-compose.prod.yml up -d --build --no-deps hemordna-api`.
 Production kräver Resend-nyckel. Betrott proxynät: `172.19.0.0/16`; verifiera vid nätbyte.
 Browserkontroll: `dotnet run --project scripts/Smoke -- https://app.hemordna.se`.
-Auto-läget har både blockerat OCH tillåtit ssh mot servern i olika sessioner denna
-vecka – inkonsekvent, räkna med att behöva lämna auto (Shift+Tab) om det nekas.
+Auto-läget har både blockerat och tillåtit ssh denna vecka – inkonsekvent, lämna auto
+(Shift+Tab) om det nekas.
 
 ## Verifierat
 
