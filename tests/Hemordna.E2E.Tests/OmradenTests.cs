@@ -123,13 +123,13 @@ public class OmradenTests
             .ToBeEnabledAsync(new() { Timeout = 15_000 });
         await CloseSheetAsync(Sheet(page, "Nytt rum"));
 
-        // Not just the two rooms' own totals (17 + 28) - a household-wide sum shown once,
+        // Not just the two rooms' own totals (17 + 43) - a household-wide sum shown once,
         // above the room grid, so the answer to "how much time is this whole setup?" does not
         // require adding up every room by hand. This total is a flat sum (TotalMinutes),
         // unlike each RoomTile's own "min/v" figure (frequency-weighted, TaskWorkload). Lives
         // behind "Visa tid" now (docs/ARCHITECTURE.md §B5).
         await page.GetByText("Visa tid").ClickAsync();
-        await Assertions.Expect(page.GetByText("Totalt: 12 uppgifter · 45 min")).ToBeVisibleAsync();
+        await Assertions.Expect(page.GetByText("Totalt: 13 uppgifter · 60 min")).ToBeVisibleAsync();
     }
 
     [Fact]
@@ -151,11 +151,11 @@ public class OmradenTests
         await page.GetByLabel("Vems Sovrum 3").WaitForAsync();
         await page.GetByRole(AriaRole.Button, new() { Name = "Skapa", Exact = true }).ClickAsync();
 
-        // Bedroom template: 2+1+5+3+3+5+5+10 = 34 minutes, repeated for each of the three rooms.
+        // Bedroom template: 2+1+8+5+3+3+5+5+10 = 42 minutes, repeated for each of the three rooms.
         var summary = page.Locator(".notice", new() { HasText = "Skapat, uppskattad tid per rum" });
         await Assertions.Expect(summary.Locator(".list-item", new() { HasText = "Sovrum 1" }))
-            .ToContainTextAsync("34 min");
-        await Assertions.Expect(summary).ToContainTextAsync("Totalt: 102 min");
+            .ToContainTextAsync("42 min");
+        await Assertions.Expect(summary).ToContainTextAsync("Totalt: 126 min");
         await CloseSheetAsync(Sheet(page, "Nytt rum"));
 
         await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Sovrum 1" })).ToBeVisibleAsync();
