@@ -1,22 +1,27 @@
 # Överlämning
 
-Lägesbild per 2026-09-19. Arbetssätt: [../CLAUDE.md](../CLAUDE.md).
+Lägesbild per 2026-09-21. Arbetssätt: [../CLAUDE.md](../CLAUDE.md).
 Äldre lägesbilder bevaras i [handoff/](handoff/). Max 50 rader.
 
 ## Läge
 
-`main` är pushad och kodrelease `7433a05` deployad till https://app.hemordna.se.
-Sex releaser (PR #11–#16), ingen schema- eller datamigration:
+`main` är pushad och kodrelease `55690a6` deployad till https://app.hemordna.se.
+Åtta releaser totalt (PR #11–#18) sedan `4f913ce`, ingen schema- eller datamigration.
+De två senaste idag:
 
-- Glesa regler lämnas i fred: `RecurrenceRule.IsWeeklyRhythm` (Weekly/Monthly med
-  intervall 1) grindar auto-placering, Planera veckan, "Använd" och veckodagslåsning.
-  Regler med intervall > 1 ankras aldrig om och belastar inte veckokapaciteten.
-  Nytt fält "Första gången" för glesa regler i båda formulären. Se ARCHITECTURE.md
-  "Beslut: Glesa regler lämnas i fred". Regler som omankrats före releasen repareras inte.
-- Bakgrundsbild per enhet (IndexedDB, nedskalad i webbläsaren, Lugnare skärm vinner).
-  PR #14–#15: `.app-backdrop` är syskon före `.app-shell` (z-index 0/1) – negativt z-index
-  målades inte i iOS 27. Bekräftat på iPhone. PR #16: `.muted` får bläckfärg + halo, wash .62/.68.
-- Uppgiftsikoner 24→32 px i listan och `--icon-contrast` 1,25 ljust / 1,15 mörkt.
+- **Rengör ugnen** (Kök, 15 min, Tung) och **Byta sängkläder** (Sovrum, 8 min, Mellan)
+  tillagda i `RoomTemplates.cs` – saknades helt trots att ugn var namngiven i
+  ARCHITECTURE.md:s tyngdriktlinje. Tider satta mot appens egna Tunga uppgifter, inte
+  städbranschens (se `internetresearch`-artefakten – de källorna var antingen optimerade
+  för betald personal eller marknadsföring som vill få manuell städning att låta jobbig).
+  Två hårdkodade E2E-summor i `OmradenTests.cs` uppdaterade. **Känd konsekvens, ej byggd:**
+  Kök har nu sin första Tunga uppgift och splittras i två besök av Planera veckan – se
+  `storstad-som-tillagg`-artefakten för det öppna beslutet (alternativ B rekommenderas).
+- **Dagliga rutiner slutar bygga på sig själva.** En Routine-uppgift (daglig, intervall 1)
+  har en slot per kalenderdag, så N obockade dagar gav N permanenta kort. Nu skippas
+  äldre missade dagar tyst när en nyare genereras – bara den senaste stannar utestående.
+  Scoped strikt till Interval 1; Weekly/Monthly behåller "kvarlämnat stannar" oförändrat
+  (regressionstest finns). `EnsureOccurrencesGenerated.GenerateOnScheduleAsync`.
 
 ## Köra och deploya
 
@@ -27,24 +32,20 @@ Deploy: `git pull --ff-only origin main`, sedan
 `docker compose -f docker-compose.prod.yml up -d --build --no-deps hemordna-api`.
 Production kräver Resend-nyckel. Betrott proxynät: `172.19.0.0/16`; verifiera vid nätbyte.
 Browserkontroll: `dotnet run --project scripts/Smoke -- https://app.hemordna.se`.
-Ny klient i produktion syns på `GET /js/backdrop.js` → 200 (saknas i äldre build).
+Auto-läget har både blockerat OCH tillåtit ssh mot servern i olika sessioner denna
+vecka – inkonsekvent, räkna med att behöva lämna auto (Shift+Tab) om det nekas.
 
 ## Verifierat
 
-Slutlig build: 0 fel/varningar. Domän: 188/188. Application: 346/346.
-Full E2E-körning på PR #11: 207/210. Två fel i TaskFrequencyTests var deterministiska
-(intervallfältet band på change, inte input) och rättades i `985b202`; ett taltest var en
-laddningstimeout som passerade isolerat. Riktad E2E efter rättning: 7/7.
-PR #12: InstallningarTests 6/6, Speech 2/2, AlwaysOnWeekday 2/2. PR #13: MinDag 10/10.
-Produktion: HTTPS-health Healthy, `hemordna-api` Up utan omstart, browserkontroll 390/1280 px.
-Testresultat och skärmbilder ligger lokalt i gitignorerade `TestResults/`.
+Build 0 fel/varningar. Domän 188/188. Application 349/349 (346 + 3 nya för
+rutinfixen). `OmradenTests` 19/19 efter mallilläggen (2 summor uppdaterade).
+Produktion: HTTPS-health Healthy, `hemordna-api` Up utan omstart, smoke PASS 390/1280 px.
 
 ## Drift och kvarstående frågor
 
-Ingen rollback-tagg togs före denna release – tagga `hemordna-hemordna-api:latest` som
-`rollback-before-<sha>` innan nästa deploy. Återställ vid behov som i handoff/2026-09-18.md.
-Servern rapporterar "System restart required" och 46 väntande paketuppdateringar.
-Bakgrundens wash (`--backdrop-wash` 0,55/0,60) och ikonernas skärpa bedöms på riktig telefon;
-nästa steg för ikonerna är i så fall SVG-filernas linjetjocklek, inte mer CSS.
-Mulberry Symbols (CC BY-SA) kräver synlig attribution – finns idag bara i `icons/tasks/NOTICE.txt`.
-Deploy från Claude Code: auto-läget blockerar ssh – lämna auto (Shift+Tab) och godkänn kommandot.
+Ingen rollback-tagg togs före dessa releaser – tagga `hemordna-hemordna-api:latest` som
+`rollback-before-<sha>` innan nästa deploy. Servern rapporterade "System restart
+required" och 46 uppdateringar i går; ovverifierat idag.
+Tre öppna beslut, alla som artefakter i sessionen: storstäd-som-tillägg (alt. B
+rekommenderas), etiketten "Tid i förväg" (uppskjuten), Mulberry-attribution (bara i
+NOTICE.txt, ej synlig för användaren).
