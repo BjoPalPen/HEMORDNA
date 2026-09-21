@@ -3408,11 +3408,13 @@ redan är.
 | Kök | Diska eller töm diskmaskinen | Lätt |
 | Kök | Torka av bänkarna | Lätt |
 | Kök | Rengör spisen | Mellan |
+| Kök | Rengör ugnen | Tung |
 | Kök | Töm soptunnan | Lätt |
 | Kök | Dammsug golvet | Mellan |
 | Kök | Torka golvet | Mellan |
 | Sovrum | Bädda sängen | Lätt |
 | Sovrum | Vädra rummet | Lätt |
+| Sovrum | Byta sängkläder | Mellan |
 | Sovrum | Dammsug golvet | Mellan |
 | Sovrum | Torka golvet | Mellan |
 | Sovrum | Damma ytor | Lätt |

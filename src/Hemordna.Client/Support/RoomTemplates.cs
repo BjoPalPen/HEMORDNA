@@ -145,6 +145,13 @@ public static class RoomTemplates
             new("Diska eller töm diskmaskinen", 8, TaskFrequency.Daily, Effort: TaskEffort.Light),
             new("Torka av bänkarna", 3, TaskFrequency.Daily, Effort: TaskEffort.Light),
             new("Rengör spisen", 5, TaskFrequency.Weekly, Effort: TaskEffort.Medium),
+            // 15 min, not the 30-60 min a cleaning company quotes for a full degreasing pass -
+            // that figure is priced for stripped-down racks and oven-cleaner chemicals, not the
+            // baking-soda-and-a-cloth pass most households actually do. Kept in line with the
+            // app's own other Heavy tasks (Skrubba dusch eller badkar 8 min, Tvätta fönster 10
+            // min) instead - see docs/ARCHITECTURE.md "Klassificering av mallarnas uppgifter",
+            // where "rengöra ugn" was already named as a Heavy example with no template task.
+            new("Rengör ugnen", 15, TaskFrequency.Monthly, Effort: TaskEffort.Heavy),
             new("Töm soptunnan", 2, TaskFrequency.Weekly, Effort: TaskEffort.Light),
             new("Dammsug golvet", 5, TaskFrequency.Weekly, Effort: TaskEffort.Medium),
             new("Torka golvet", 5, TaskFrequency.Weekly, Effort: TaskEffort.Medium)
@@ -156,6 +163,9 @@ public static class RoomTemplates
             // habit rather than something to be reminded of occasionally, so it keeps a token,
             // near-zero estimate rather than 0 and repeats daily alongside making the bed.
             new("Vädra rummet", 1, TaskFrequency.Daily, Effort: TaskEffort.Light),
+            // 8 min for one person's own bed - not the 15 min sometimes quoted online, which
+            // bundles a king-size bed, several pillows AND the bathroom's towels into one pass.
+            new("Byta sängkläder", 8, TaskFrequency.Weekly, Effort: TaskEffort.Medium),
             new("Dammsug golvet", 5, TaskFrequency.TwiceWeekly, Effort: TaskEffort.Medium),
             new("Torka golvet", 3, TaskFrequency.Weekly, Effort: TaskEffort.Medium),
             new("Damma ytor", 3, TaskFrequency.AsNeeded, Effort: TaskEffort.Light),
