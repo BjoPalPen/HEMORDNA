@@ -41,8 +41,12 @@ internal static class WeeklyPlacementBuilder
             .Where(definition => definition.IsActive
                 && IsPlaceableCadence(definition.Recurrence)
                 && VisitKindClassifier.Of(definition) != VisitKind.Routine)
-            .GroupBy(definition => (definition.AreaId, Kind: VisitKindClassifier.Of(definition)))
-            .SelectMany(group => group.Key.AreaId is null
+            // Alternativ B (Björns beslut): ett rums icke-Routine-uppgifter hör alla till SAMMA
+            // besök, oavsett om de var för sig skulle klassas som RegularClean eller DeepClean -
+            // filtret ovan har redan uteslutit Routine helt, så det finns ingen ytterligare
+            // dimension kvar att gruppera på. Se docs/ARCHITECTURE.md "Beslut: rumsregeln per besök".
+            .GroupBy(definition => definition.AreaId)
+            .SelectMany(group => group.Key is null
                 // "Övrigt" has no room to hold a visit together - each task is its own visit,
                 // locked to its own PreferredWeekday if it has one.
                 ? group.Select(definition => (Tasks: (IReadOnlyList<TaskDefinition>)[definition], LockedWeekday: definition.PreferredWeekday))
@@ -50,7 +54,10 @@ internal static class WeeklyPlacementBuilder
             .Select(entry => new PlaceableVisit(
                 entry.Tasks[0].AreaId,
                 entry.Tasks[0].AreaId is { } areaId ? household.Areas.FirstOrDefault(area => area.Id == areaId)?.Name : null,
-                VisitKindClassifier.Of(entry.Tasks[0]),
+                // Allt som når hit är redan garanterat inte-Routine (filtrerat ovan), och under
+                // alternativ B finns ingen meningsfull DeepClean-distinktion kvar att bära vidare -
+                // ett sammanslaget besök är bara ett vanligt städ (etikettbeslutet).
+                VisitKind.RegularClean,
                 entry.Tasks.Sum(definition => definition.EstimatedMinutes),
                 entry.Tasks.Max(definition => definition.Effort),
                 [.. entry.Tasks.Select(definition => definition.Id)],

@@ -99,7 +99,7 @@ internal sealed class TaskOccurrenceRepository : ITaskOccurrenceRepository
                 && occurrence.Status == TaskOccurrenceStatus.Planned)
             .ToListAsync(cancellationToken);
 
-    public async Task<IReadOnlyDictionary<(Guid AreaId, VisitKind Kind), IReadOnlyCollection<Guid>>> GetMemberIdsByAreaAndVisitKindOnDateAsync(
+    public async Task<IReadOnlyDictionary<(Guid AreaId, bool IsRoutine), IReadOnlyCollection<Guid>>> GetMemberIdsByAreaOnDateAsync(
         Guid householdId,
         DateOnly date,
         CancellationToken cancellationToken)
@@ -124,13 +124,16 @@ internal sealed class TaskOccurrenceRepository : ITaskOccurrenceRepository
             .Where(row => row.AreaId != null)
             .ToListAsync(cancellationToken);
 
+        // Samma härledningsmönster som PlanCandidateQuery's egen isRoutine-beräkning. Alternativ B
+        // (Björns beslut): RegularClean och DeepClean är samma anspråk, samma besök - nyckeln
+        // skiljer nu bara Routine från allt annat, se ITaskOccurrenceRepository.
         return rows
             .Select(row => (
                 AreaId: row.AreaId!.Value,
-                Kind: VisitKindClassifier.Of(row.Recurrence, row.Effort),
+                IsRoutine: VisitKindClassifier.Of(row.Recurrence, row.Effort) == VisitKind.Routine,
                 MemberId: row.AssignedMemberId!.Value))
-            .Where(row => row.Kind != VisitKind.Routine)
-            .GroupBy(row => (row.AreaId, row.Kind))
+            .Where(row => !row.IsRoutine)
+            .GroupBy(row => (row.AreaId, row.IsRoutine))
             .ToDictionary(
                 group => group.Key,
                 group => (IReadOnlyCollection<Guid>)[.. group.Select(row => row.MemberId).Distinct()]);

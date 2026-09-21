@@ -90,12 +90,12 @@ internal sealed class InMemoryTaskOccurrenceRepository : ITaskOccurrenceReposito
         => Task.FromResult<IReadOnlyList<TaskOccurrence>>([.. _occurrences.Where(o =>
             o.HouseholdId == householdId && o.Status == TaskOccurrenceStatus.Planned)]);
 
-    public Task<IReadOnlyDictionary<(Guid AreaId, VisitKind Kind), IReadOnlyCollection<Guid>>> GetMemberIdsByAreaAndVisitKindOnDateAsync(
+    public Task<IReadOnlyDictionary<(Guid AreaId, bool IsRoutine), IReadOnlyCollection<Guid>>> GetMemberIdsByAreaOnDateAsync(
         Guid householdId,
         DateOnly date,
         CancellationToken cancellationToken)
     {
-        var byAreaAndKind = _occurrences
+        var byAreaAndIsRoutine = _occurrences
             .Where(o => o.HouseholdId == householdId
                 && o.ScheduledDate == date
                 && o.AssignedMemberId is not null
@@ -106,14 +106,14 @@ internal sealed class InMemoryTaskOccurrenceRepository : ITaskOccurrenceReposito
                 o.AssignedMemberId))
             .Select(row => (
                 AreaId: row.Claim.AreaId,
-                Kind: VisitKindClassifier.Of(row.Claim.Definition),
+                IsRoutine: VisitKindClassifier.Of(row.Claim.Definition) == VisitKind.Routine,
                 MemberId: row.AssignedMemberId!.Value))
-            .Where(row => row.Kind != VisitKind.Routine)
-            .GroupBy(row => (row.AreaId, row.Kind))
+            .Where(row => !row.IsRoutine)
+            .GroupBy(row => (row.AreaId, row.IsRoutine))
             .ToDictionary(
                 group => group.Key,
                 group => (IReadOnlyCollection<Guid>)[.. group.Select(row => row.MemberId).Distinct()]);
 
-        return Task.FromResult<IReadOnlyDictionary<(Guid AreaId, VisitKind Kind), IReadOnlyCollection<Guid>>>(byAreaAndKind);
+        return Task.FromResult<IReadOnlyDictionary<(Guid AreaId, bool IsRoutine), IReadOnlyCollection<Guid>>>(byAreaAndIsRoutine);
     }
 }
