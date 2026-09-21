@@ -92,6 +92,70 @@ public class EnsureOccurrencesGeneratedTests
     }
 
     [Fact]
+    public async Task A_routine_tasks_missed_days_pile_up_no_more_than_the_latest_one()
+    {
+        var householdId = await ArrangeHouseholdAsync();
+        var definition = TaskDefinition.Create(householdId, "Bädda sängen", 2, Now);
+        definition.SetRecurrence(RecurrenceRule.Daily(Monday));
+        _definitions.Seed(definition);
+
+        // Three days pass with nobody opening the app - a Routine task has one slot per
+        // calendar day, so this misses Monday, Tuesday and Wednesday before Thursday's own
+        // slot is generated.
+        await CreateUseCase().HandleAsync(householdId, Monday.AddDays(3), CancellationToken.None);
+
+        // All four days still got their own occurrence - catch-up itself is unchanged.
+        Assert.Equal(4, _occurrences.AddCallCount);
+
+        // But only the latest (Thursday's) is still outstanding - Monday/Tuesday/Wednesday
+        // were silently skipped rather than piling up as permanent cards.
+        var outstanding = await _occurrences.ListOutstandingOnOrBeforeAsync(
+            householdId, definition.Id, DateOnly.MaxValue, CancellationToken.None);
+        var outstandingOccurrence = Assert.Single(outstanding);
+        Assert.Equal(Monday.AddDays(3), outstandingOccurrence.OriginalScheduledDate);
+    }
+
+    [Fact]
+    public async Task A_routine_tasks_yesterday_occurrence_is_skipped_when_todays_is_generated_in_a_later_call()
+    {
+        var householdId = await ArrangeHouseholdAsync();
+        var definition = TaskDefinition.Create(householdId, "Bädda sängen", 2, Now);
+        definition.SetRecurrence(RecurrenceRule.Daily(Monday));
+        _definitions.Seed(definition);
+
+        // Same scenario as the production report (docs/handoff/2026-09-09-3.md): the app is
+        // opened every day, but the task itself is never checked off - two SEPARATE calls,
+        // not one catch-up batch.
+        await CreateUseCase().HandleAsync(householdId, Monday, CancellationToken.None);
+        await CreateUseCase().HandleAsync(householdId, Monday.AddDays(1), CancellationToken.None);
+
+        var outstanding = await _occurrences.ListOutstandingOnOrBeforeAsync(
+            householdId, definition.Id, DateOnly.MaxValue, CancellationToken.None);
+        var outstandingOccurrence = Assert.Single(outstanding);
+        Assert.Equal(Monday.AddDays(1), outstandingOccurrence.OriginalScheduledDate);
+    }
+
+    [Fact]
+    public async Task A_weekly_tasks_missed_occurrence_still_stays_outstanding_unlike_a_routine_ones()
+    {
+        var householdId = await ArrangeHouseholdAsync();
+        var definition = TaskDefinition.Create(householdId, "Dammsug golvet", 15, Now);
+        // Monday is 2026-03-02; the next Monday slot after that is 2026-03-09.
+        definition.SetRecurrence(RecurrenceRule.Weekly(Monday, DayOfWeek.Monday));
+        _definitions.Seed(definition);
+
+        await CreateUseCase().HandleAsync(householdId, Monday, CancellationToken.None);
+
+        // A second missed weekly slot, a week later - "kvarlämnat stannar" must still hold:
+        // BOTH occurrences stay outstanding, the fix above is scoped to Routine only.
+        await CreateUseCase().HandleAsync(householdId, Monday.AddDays(7), CancellationToken.None);
+
+        var outstanding = await _occurrences.ListOutstandingOnOrBeforeAsync(
+            householdId, definition.Id, DateOnly.MaxValue, CancellationToken.None);
+        Assert.Equal(2, outstanding.Count);
+    }
+
+    [Fact]
     public async Task Ignores_a_definition_without_a_recurrence_rule()
     {
         var householdId = await ArrangeHouseholdAsync();
