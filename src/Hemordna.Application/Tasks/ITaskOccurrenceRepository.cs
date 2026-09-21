@@ -66,16 +66,23 @@ public interface ITaskOccurrenceRepository
         CancellationToken cancellationToken);
 
     /// <summary>
-    /// Who already has work in each room on this date, keyed by (area id, <see cref="VisitKind"/>)
-    /// - what <see cref="RotationPicker"/> needs to keep one room's work for one VISIT with one
+    /// Who already has work in each room on this date, keyed by (area id, <c>IsRoutine</c>) -
+    /// what <see cref="RotationPicker"/> needs to keep one room's work for one VISIT with one
     /// person - see docs/ARCHITECTURE.md "Beslut: rumsregeln per besök".
     /// </summary>
     /// <remarks>
+    /// The key's <c>IsRoutine</c> only ever separates <see cref="VisitKind.Routine"/> from
+    /// everything else (alternativ B, Björns beslut: RegularClean and DeepClean are the same
+    /// claim, the same visit, now - there is no longer a meaningful three-way distinction to
+    /// key by). In practice a caller only ever looks up a non-Routine key: see the
+    /// <see cref="VisitKind.Routine"/> remark below.
+    /// <para>
     /// Counts <see cref="TaskOccurrenceStatus.Completed"/> as well as
     /// <see cref="TaskOccurrenceStatus.Planned"/>, and that is the whole point: a household
     /// member who finished the small WC at 09:34 has still claimed that room for the day, so
     /// the last floor task must not go to someone else at 14:00. Looking only at what is still
     /// outstanding would miss exactly the case this exists for.
+    /// </para>
     /// <para>
     /// <see cref="TaskOccurrenceStatus.Skipped"/> is deliberately not counted - "not needed this
     /// time" is not a claim on the room, and nobody went there.
@@ -87,7 +94,7 @@ public interface ITaskOccurrenceRepository
     /// must not even look one up for a <see cref="VisitKind.Routine"/> task.
     /// </para>
     /// </remarks>
-    Task<IReadOnlyDictionary<(Guid AreaId, VisitKind Kind), IReadOnlyCollection<Guid>>> GetMemberIdsByAreaAndVisitKindOnDateAsync(
+    Task<IReadOnlyDictionary<(Guid AreaId, bool IsRoutine), IReadOnlyCollection<Guid>>> GetMemberIdsByAreaOnDateAsync(
         Guid householdId,
         DateOnly date,
         CancellationToken cancellationToken);

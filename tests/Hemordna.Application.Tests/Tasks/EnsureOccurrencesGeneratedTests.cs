@@ -787,11 +787,13 @@ public class EnsureOccurrencesGeneratedTests
         Assert.Equal(helena.Id, generated.AssignedMemberId);
     }
 
-    /// <summary>Ett badrums veckostäd (RegularClean) och storstäd (DeepClean) samma dag är två
-    /// olika BESÖK - anspråket gäller per (rum, besökstyp), inte bara per rum, så de kan hamna
-    /// hos olika personer. Se docs/ARCHITECTURE.md "Beslut: rumsregeln per besök".</summary>
+    /// <summary>Ett badrums veckostäd (RegularClean) och storstäd (DeepClean) samma dag är numera
+    /// SAMMA besök - alternativ B (Björns beslut): anspråket gäller bara per rum, inte per
+    /// (rum, besökstyp) längre, så en tung uppgift i ett rum någon redan är i går till samma
+    /// person, precis som en lätt uppgift skulle. Se docs/ARCHITECTURE.md "Beslut: rumsregeln per
+    /// besök".</summary>
     [Fact]
-    public async Task A_weekly_clean_and_a_deep_clean_in_the_same_room_can_go_to_different_people()
+    public async Task A_regular_and_a_deep_task_in_the_same_room_on_the_same_day_go_to_the_same_person()
     {
         var household = await new CreateHousehold(_households, new FixedTimeProvider(Now))
             .HandleAsync("Familjen", Guid.NewGuid(), "Bjorn", CancellationToken.None);
@@ -811,12 +813,13 @@ public class EnsureOccurrencesGeneratedTests
         done.Complete(bjorn.Id, Now);
         _occurrences.Seed(done);
 
-        // Björn har dessutom mycket annat arbete, så tidsbalansen pekar mot Helena för nästa pick.
+        // Björn har dessutom mycket annat arbete, så tidsbalansen ensam skulle peka mot Helena.
         await _assignments.AddAsync(
             TaskAssignment.Create(household.Id, Guid.NewGuid(), bjorn.Id, Monday.AddDays(-1), Now, 300),
             CancellationToken.None);
 
-        // Samma badrum, samma dag - men storstäd (Heavy => DeepClean), en ANNAN besökstyp.
+        // Samma badrum, samma dag - storstäd (Heavy => DeepClean under gamla regeln), men nu
+        // samma BESÖK som veckostädet ovan.
         var deepClean = TaskDefinition.Create(household.Id, "Skrubba dusch eller badkar", 20, Now);
         deepClean.AssignToArea(bathroom.Id);
         deepClean.ChangeEffort(TaskEffort.Heavy);
@@ -830,9 +833,58 @@ public class EnsureOccurrencesGeneratedTests
         var generated = (await _occurrences.ListOutstandingByHouseholdAsync(household.Id, CancellationToken.None))
             .Single(o => o.TaskDefinitionId == deepClean.Id);
 
-        // Hade RegularClean-anspråket bundit DeepClean också hade Björn fått den trots sin
-        // tunga belastning. I stället avgör tidsbalansen fritt, eftersom det är ett annat besök.
-        Assert.Equal(helena.Id, generated.AssignedMemberId);
+        // Rumsanspråket vinner nu över tidsbalansen: Björn är redan i rummet idag, så han får
+        // den tunga uppgiften också, trots sin tunga belastning i övrigt.
+        Assert.Equal(bjorn.Id, generated.AssignedMemberId);
+        Assert.NotEqual(helena.Id, generated.AssignedMemberId);
+    }
+
+    /// <summary>Rumsanspråket kan aldrig kringgå ork-taket: ork-filtreringen i
+    /// RotationPicker.EligibleMembers körs FÖRE rumsanspråket läses (se PickNext), så en person
+    /// redan "i rummet" via en lätt uppgift men vars WeeklyEffortCeiling inte når en tung uppgifts
+    /// krav hoppas ändå över - den tunga uppgiften går till någon annan ork-godkänd person. Se
+    /// docs/ARCHITECTURE.md "Beslut: Ork i rotationen" och "Beslut: rumsregeln per besök".</summary>
+    [Fact]
+    public async Task The_room_claim_never_overrides_the_effort_ceiling()
+    {
+        var household = await new CreateHousehold(_households, new FixedTimeProvider(Now))
+            .HandleAsync("Familjen", Guid.NewGuid(), "Anna", CancellationToken.None);
+        var anna = household.Members.Single();
+        // Anna har gott om tid (tidsbalansen skulle annars kunna peka mot henne), men bara Lätt
+        // ork på måndagar - för lite för en Heavy-uppgift.
+        anna.ChangeWeeklyTimeBudget(WeeklyTimeBudget.Uniform(120));
+        anna.ChangeWeeklyEffortCeiling(WeeklyEffortCeiling.Uniform(TaskEffort.Light));
+        var bjorn = household.AddMember("Bjorn", WeeklyTimeBudget.Uniform(120), Now.AddMinutes(1));
+        var bathroom = household.AddArea("Badrum");
+        await _households.UpdateAsync(household, CancellationToken.None);
+
+        // Anna har redan gjort en lätt uppgift i badrummet idag - och är klar.
+        var wipe = TaskDefinition.Create(household.Id, "Torka speglar", 5, Now);
+        wipe.AssignToArea(bathroom.Id);
+        _definitions.Seed(wipe);
+        _occurrences.SeedArea(wipe, bathroom.Id);
+        var done = wipe.ScheduleFor(Monday, Now);
+        done.AssignTo(anna.Id);
+        done.Complete(anna.Id, Now);
+        _occurrences.Seed(done);
+
+        // Samma badrum, samma dag - en Heavy-uppgift. Anna är redan i rummet, men klarar inte
+        // ork-taket - Björn ska få den i stället.
+        var deepClean = TaskDefinition.Create(household.Id, "Skrubba dusch eller badkar", 20, Now);
+        deepClean.AssignToArea(bathroom.Id);
+        deepClean.ChangeEffort(TaskEffort.Heavy);
+        deepClean.SetRotatingResponsibility(true);
+        deepClean.SetRecurrence(RecurrenceRule.Weekly(Monday, DayOfWeek.Monday));
+        _definitions.Seed(deepClean);
+        _occurrences.SeedArea(deepClean, bathroom.Id);
+
+        await CreateUseCase().HandleAsync(household.Id, Monday, CancellationToken.None);
+
+        var generated = (await _occurrences.ListOutstandingByHouseholdAsync(household.Id, CancellationToken.None))
+            .Single(o => o.TaskDefinitionId == deepClean.Id);
+
+        Assert.Equal(bjorn.Id, generated.AssignedMemberId);
+        Assert.NotEqual(anna.Id, generated.AssignedMemberId);
     }
 
     /// <summary>En medlem vars tak den dagen är lägre än uppgiftens tyngd är inte valbar - se

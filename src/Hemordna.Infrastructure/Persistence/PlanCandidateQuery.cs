@@ -79,7 +79,7 @@ internal sealed class PlanCandidateQuery : IPlanCandidateQuery
             .ToListAsync(cancellationToken);
 
         // VisitKindClassifier is not translatable to SQL (Recurrence is a JSON column behind a
-        // value converter, see TaskOccurrenceRepository's own GetMemberIdsByAreaAndVisitKindOnDateAsync)
+        // value converter, see TaskOccurrenceRepository's own GetMemberIdsByAreaOnDateAsync)
         // - applied here, after the rows are materialized, same as there. "Rutiner först" (Björns
         // beslut) reuses this classification rather than a second "is this a routine" check.
         return [.. rows.Select(row => new PlanCandidate(

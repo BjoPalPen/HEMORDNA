@@ -63,25 +63,6 @@ public class WeeklyPlacementPlannerTests
     }
 
     [Fact]
-    public void Heavier_visits_are_placed_before_lighter_ones_regardless_of_size()
-    {
-        // A small DeepClean should still be placed (and therefore "claim" the best day) before a
-        // much bigger RegularClean - see docs/ARCHITECTURE.md "tyngst först".
-        var heavy = Visit(10, VisitKind.DeepClean, TaskEffort.Heavy);
-        var big = Visit(60, VisitKind.RegularClean, TaskEffort.Medium);
-
-        var result = _planner.Plan(new WeeklyPlacementRequest(UniformCapacity(100), [big, heavy]));
-
-        // Since capacity is uniform, the heavy visit (placed first) claims Monday; the big
-        // regular visit, placed second, sees Monday now has less room than the rest and lands
-        // on Tuesday instead (still tied among Tue..Sun, so Monday's successor wins).
-        var heavyPlacement = result.PlacedVisits.Single(p => p.Visit == heavy);
-        var bigPlacement = result.PlacedVisits.Single(p => p.Visit == big);
-        Assert.Equal(DayOfWeek.Monday, heavyPlacement.Day);
-        Assert.Equal(DayOfWeek.Tuesday, bigPlacement.Day);
-    }
-
-    [Fact]
     public void Among_equally_heavy_visits_the_biggest_one_is_placed_first()
     {
         var small = Visit(10);

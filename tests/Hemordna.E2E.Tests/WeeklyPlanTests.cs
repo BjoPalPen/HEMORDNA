@@ -91,10 +91,11 @@ public class WeeklyPlanTests
         var planSheet = Sheet(page, "Planera veckan");
         await planSheet.WaitForAsync();
 
-        // Visar förslag: båda rummens besök syns i förslaget, med besökstyp och minuter.
+        // Visar förslag: båda rummens besök syns i förslaget, med minuter. Etiketten "Storstäd"
+        // visas inte längre - alternativ B (Björns beslut) slår ihop RegularClean och DeepClean
+        // till samma vanliga "Städ"-besök, se docs/ARCHITECTURE.md "Beslut: rumsregeln per besök".
         await Assertions.Expect(planSheet.GetByText("Badrum")).ToBeVisibleAsync();
         await Assertions.Expect(planSheet.GetByText("Kök")).ToBeVisibleAsync();
-        await Assertions.Expect(planSheet.GetByText("Storstäd")).ToBeVisibleAsync();
         await Assertions.Expect(planSheet.GetByText("40 min", new() { Exact = false })).ToBeVisibleAsync();
 
         var applyButton = planSheet.GetByRole(AriaRole.Button, new() { Name = "Använd" });

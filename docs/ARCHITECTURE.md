@@ -3524,6 +3524,10 @@ klassificera rader som kommer direkt från en SQL-join (`Recurrence`/`Effort`-ko
 kunna konstruera en full `TaskDefinition` (dess konstruktor är privat). `Of(TaskDefinition)` är en
 tunn wrapper ovanpå samma logik, så det finns bara EN regel att hålla i synk.
 
+**Uppdatering:** `VisitKind` härleds fortfarande exakt så här och används fortfarande för
+Routine-undantaget, men är inte längre grupperingsnyckel för RegularClean/DeepClean - se "Beslut:
+Storstäd som tillägg" nedan.
+
 ### Beslut: rumsregeln per besök — `IMPLEMENTED`
 
 **Detta ändrar "ett rum, en person, en dag" (ovan) på ett sätt som är värt att vara tydlig om:**
@@ -3551,6 +3555,62 @@ ens grupperas - dessa uppgifter ska aldrig kunna binda ett annat besök i samma 
 **Gäller båda vägarna in i schemat:** både `EnsureOccurrencesGenerated` (automatisk generering)
 och `ScheduleTaskOccurrence` (manuell schemaläggning) härleder `VisitKind` och slår upp/binder på
 samma sätt.
+
+**Uppdatering:** RegularClean/DeepClean-distinktionen för själva rumsanspråket som beskrivs ovan
+(grupperingsnyckeln `(AreaId, VisitKind)`) är ersatt av `(AreaId, IsRoutine)` - se "Beslut:
+Storstäd som tillägg" nedan.
+
+### Beslut: Storstäd som tillägg — `IMPLEMENTED`
+
+Bakgrund: rumsregeln (ovan) grupperade rumsanspråket på `(AreaId, VisitKind)`. Det gjorde att ett
+rums Tunga uppgift(er) alltid blev ett eget, disjunkt besök ("Storstäd") skilt från rummets
+vanliga städ - samma dag i samma rum kunde hamna hos två olika personer för bara ett par minuters
+extra jobb. Upptäckt och analyserad i en tidigare research-artefakt i sessionen ("Storstäd som
+tillägg"); det som gjorde problemet konkret i stället för hypotetiskt var en riktig uppgift,
+"Rengör ugnen", tillagd i köket samma vecka - en Heavy-uppgift som annars skulle fått ett eget
+besök skilt från kökets vanliga städ.
+
+**Björns beslut: alternativ B.** Grupperingsnyckeln är nu bara `(AreaId, IsRoutine)` - inte längre
+`(AreaId, VisitKind)`. En `Routine`-uppgift binder fortfarande aldrig rummet, oförändrat (se
+"Beslut: rumsregeln per besök" ovan). `RegularClean` och `DeepClean` är nu SAMMA besök, samma
+anspråk, samma placering.
+
+**Etikettbeslutet.** "Storstäd" försvinner helt ur UI - ersätts INTE av "Tungt". Ett sammanslaget
+besök är bara ett vanligt "Städ". `PlaceableVisit.VisitKind` sätts alltid till `RegularClean` för
+ett besök som `WeeklyPlacementBuilder` bygger; `VisitKindClassifier` i Domain är oförändrad och
+används fortsatt, bara för Routine-undantaget.
+
+**Vad som ändrades:**
+- `WeeklyPlacementBuilder.Build` grupperar rummets placerbara uppgifter bara på `AreaId` (Routine
+  redan uteslutet av filtret ovanför).
+- `ITaskOccurrenceRepository.GetMemberIdsByAreaAndVisitKindOnDateAsync` döpt om till
+  `GetMemberIdsByAreaOnDateAsync`, nyckeln `(AreaId, VisitKind)` → `(AreaId, IsRoutine)` - samma
+  härledningsmönster som `PlanCandidateQuery` redan använder.
+- Båda genereringsflödena, `EnsureOccurrencesGenerated` och `ScheduleTaskOccurrence`, följer samma
+  nya nyckel vid uppslag och bindning av rumsanspråk.
+- `WeeklyPlacementPlanner`s giriga ordning har inte längre ett DeepClean-först-steg -
+  störst-i-minuter-först är nu hela regeln (se "Beslut: Placeringsalgoritmen" nedan).
+
+**Vad som verifierades men INTE ändrades:** ork-taket (`RotationPicker.EligibleMembers`, se
+"Beslut: Ork i rotationen" nedan). Ett nytt test (`The_room_claim_never_overrides_the_effort_ceiling`)
+bevisar att rumsanspråket aldrig kan kringgå det - ork-filtreringen körs FÖRE rumsanspråket ens
+läses i `PickNext`.
+
+**Testtäckning.** `A_weekly_clean_and_a_deep_clean_in_the_same_room_can_go_to_different_people` -
+som testade den gamla, nu borttagna regeln - ersatt av
+`A_regular_and_a_deep_task_in_the_same_room_on_the_same_day_go_to_the_same_person`. Nytt:
+`The_room_claim_never_overrides_the_effort_ceiling` (se ovan).
+`WeeklyPlacementPlannerTests.Heavier_visits_are_placed_before_lighter_ones_regardless_of_size`
+togs bort (testade DeepClean-först-ordningen); störst-först i allmänhet täcks redan av
+`Among_equally_heavy_visits_the_biggest_one_is_placed_first`. Ett E2E-test
+(`WeeklyPlanTests.Previewing_the_week_shows_a_suggestion_and_using_it_changes_upcoming_placement`)
+asserterade på etiketten "Storstäd" - assertionen togs bort, testets egentliga syfte (spridning
+över veckodagar) kvarstår.
+
+**Känd konsekvens, inte löst här:** en gles (`Interval > 1`) Heavy-uppgift särbehandlas inte
+annorlunda av sammanslagningen - den kan fortfarande dra in mycket tid i ett enda sammanslaget
+besök tillsammans med rummets övriga arbete. Inget nytt problem (samma gällde redan för en stor
+RegularClean-uppgift), men värt att notera att alternativ B inte adresserar det.
 
 ### Beslut: Ork i rotationen — `IMPLEMENTED`
 
@@ -3685,6 +3745,10 @@ veckodag + en lista `PlaceableVisit`) och returnerar var varje besök hamnar.
    planeringen.
 5. **Överdrag tillåtet.** En veckodags återstående minuter får bli negativa - det här är ett
    planeringshjälpmedel, inte en hård kapacitetsspärr.
+
+**Uppdatering:** "tyngst först" (`DeepClean` före `RegularClean`) i punkt 4 ovan gäller inte
+längre - se "Beslut: Storstäd som tillägg" ovan; ordningen är numera ren
+störst-i-minuter-först, utan specialbehandling av `VisitKind`.
 
 **Omfattning - vad som placeras och inte.** Weekly och Monthly placeras på en veckodag (Monthly
 via `RecurrenceRule.MonthlyOnWeekday`, med `WeekOfMonth` valt i tur och ordning när flera
