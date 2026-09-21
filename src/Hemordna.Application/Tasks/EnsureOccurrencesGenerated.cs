@@ -172,6 +172,27 @@ public sealed class EnsureOccurrencesGenerated
 
             next = recurrence.NextOnOrAfter(next.AddDays(1));
         }
+
+        // Routine (daglig, intervall 1) är den enda kadensen där "kvarlämnat stannar" annars
+        // betyder att OBOCKAD BLIR FLER KORT VARJE DAG - varje kalenderdag är sin egen slot, så
+        // N missade dagar ger N permanent kvarstående rader tills var och en bockas av eller
+        // skippas för hand. Weekly/Monthly/glesa uppgifter berörs INTE av detta - där är nästa
+        // slot dagar eller veckor bort, så kvarlämnat stannar precis som avsett (se
+        // docs/ARCHITECTURE.md "Beslut: Kvarlämnat, Imorgon på Idag, ledig dag och tid i
+        // förväg"). Bara den SENASTE missade dagens rad ska påminna om - äldre missade dagar
+        // hoppas tyst över, samma mönster som UpdateTaskFrequency redan använder för en ändrad
+        // regels gamla utestående förekomster.
+        if (recurrence is { Frequency: RecurrenceFrequency.Daily, Interval: 1 })
+        {
+            var stale = await _occurrences.ListOutstandingOnOrBeforeAsync(
+                household.Id, definition.Id, today.AddDays(-1), cancellationToken);
+
+            foreach (var occurrence in stale)
+            {
+                occurrence.Skip();
+                await _occurrences.UpdateAsync(occurrence, cancellationToken);
+            }
+        }
     }
 
     /// <summary>
