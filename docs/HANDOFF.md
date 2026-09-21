@@ -1,22 +1,22 @@
 # Överlämning
 
-Lägesbild per 2026-09-21. Arbetssätt: [../CLAUDE.md](../CLAUDE.md).
+Lägesbild per 2026-09-21 (kväll). Arbetssätt: [../CLAUDE.md](../CLAUDE.md).
 Äldre lägesbilder bevaras i [handoff/](handoff/). Max 50 rader.
 
 ## Läge
 
-`main` är pushad och kodrelease `55690a6` deployad till https://app.hemordna.se.
-Åtta releaser totalt (PR #11–#18) sedan `4f913ce`, ingen schema- eller datamigration.
+`main` är pushad och kodrelease `7ed77c2` deployad till https://app.hemordna.se.
+Tio releaser totalt (PR #11–#20) sedan `4f913ce`, ingen schema- eller datamigration.
 De två senaste idag:
 
-- **Rengör ugnen** (Kök, Tung) + **Byta sängkläder** (Sovrum, Mellan) i `RoomTemplates.cs`.
-  Tider mot appens egna Tunga uppgifter, ej städbranschens (se `internetresearch`-artefakten).
-  Kök har nu sin första Tunga uppgift → splittras i två besök av Planera veckan, se
-  `storstad-som-tillagg`-artefakten (alt. B rekommenderas, ej byggt).
-- **Dagliga rutiner slutar bygga på sig själva.** Routine (daglig, intervall 1) hade en
-  slot per dag → N obockade dagar gav N permanenta kort. Nu skippas äldre missade dagar
-  tyst; bara senaste stannar. Scoped till Interval 1, Weekly/Monthly oförändrat.
-  `EnsureOccurrencesGenerated.GenerateOnScheduleAsync`.
+- **Storstäd är nu ett tillägg på reguljär städning** (alt. B, klar – `storstad-som-tillagg`-
+  artefaktens rekommendation genomförd). Rumsanspråket grupperar bara på `(AreaId, IsRoutine)`,
+  inte längre `VisitKind` – ett rums lätta och tunga uppgifter är samma besök, samma dag, samma
+  person. Etiketten "Storstäd" är borttagen helt (inte "Tungt" – bara "Städ").
+  `WeeklyPlacementPlanner`s "tyngst först" är också borta, störst-i-minuter-först är hela regeln.
+  Ork-taket bevisat opåverkat. Se ARCHITECTURE.md "Beslut: Storstäd som tillägg".
+- **Mulberry-attribution synlig för användaren** – ett kort längst ned i Inställningar (källa +
+  CC BY-SA-licens), fanns tidigare bara i `icons/tasks/NOTICE.txt`.
 
 ## Köra och deploya
 
@@ -32,15 +32,18 @@ Auto-läget har både blockerat och tillåtit ssh denna vecka – inkonsekvent, 
 
 ## Verifierat
 
-Build 0 fel/varningar. Domän 188/188. Application 349/349 (346 + 3 nya för
-rutinfixen). `OmradenTests` 19/19 efter mallilläggen (2 summor uppdaterade).
-Produktion: HTTPS-health Healthy, `hemordna-api` Up utan omstart, smoke PASS 390/1280 px.
+Build 0 fel/varningar. Application 349/349 (ett test bytt ut, ett borttaget, två nya –
+se PR #20). `WeeklyPlanTests.Previewing_the_week...` grönt isolerat efter en stale
+"Storstäd"-assertion rättades i samma PR. Produktion: HTTPS-health Healthy,
+`hemordna-api` Up utan omstart, smoke PASS 390/1280 px.
 
 ## Drift och kvarstående frågor
 
 Ingen rollback-tagg togs före dessa releaser – tagga `hemordna-hemordna-api:latest` som
-`rollback-before-<sha>` innan nästa deploy. Servern rapporterade "System restart
-required" och 46 uppdateringar i går; ovverifierat idag.
-Tre öppna beslut, alla som artefakter i sessionen: storstäd-som-tillägg (alt. B
-rekommenderas), etiketten "Tid i förväg" (uppskjuten), Mulberry-attribution (bara i
-NOTICE.txt, ej synlig för användaren).
+`rollback-before-<sha>` innan nästa deploy.
+Två kända, orelaterade E2E-flakes kvarstår outredda: `SkarmbilderTests.Capture_the_seven_
+enkla_losningar_screens`, `EnergyTests.Choosing_a_level...` – bekräftat inget med
+storstäd/VisitKind att göra.
+Två öppna beslut kvar, som artefakter: etiketten "Tid i förväg" (uppskjuten på Vecka-sidan),
+och om en gles (Interval > 1) Heavy-uppgift kan dra in för mycket tid i ett enda sammanslaget
+besök – inget nytt problem, men inte särbehandlat.
