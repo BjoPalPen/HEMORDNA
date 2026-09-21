@@ -75,9 +75,11 @@ public sealed record WeeklyPlacementResult(
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Greedy, not optimal.</b> Visits are placed one at a time, heaviest first
-/// (<see cref="VisitKind.DeepClean"/> before <see cref="VisitKind.RegularClean"/>), then by
-/// largest total minutes. Each visit goes to the ALLOWED weekday (one whose
+/// <b>Greedy, not optimal.</b> Visits are placed one at a time, largest total minutes first - no
+/// special treatment of <see cref="VisitKind"/> any more (alternativ B, Björns beslut: a room's
+/// RegularClean and DeepClean tasks are already merged into one visit by
+/// <see cref="WeeklyPlacementBuilder"/>, so there is nothing left to distinguish here). Each
+/// visit goes to the ALLOWED weekday (one whose
 /// <see cref="WeekdayCapacity.MaxEffort"/> is at least the visit's
 /// <see cref="PlaceableVisit.RequiredEffort"/>) with the most minutes still remaining after
 /// everything placed before it. A tie is broken by weekday, Monday first - stable and
@@ -147,8 +149,7 @@ public sealed class WeeklyPlacementPlanner
 
         var orderedVisits = request.Visits
             .Where(visit => visit.LockedWeekday is null)
-            .OrderByDescending(visit => visit.VisitKind == VisitKind.DeepClean)
-            .ThenByDescending(visit => visit.Minutes)
+            .OrderByDescending(visit => visit.Minutes)
             .ThenBy(visit => visit.TaskDefinitionIds.Count > 0 ? visit.TaskDefinitionIds.Min() : Guid.Empty)
             .ToList();
 
