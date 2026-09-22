@@ -262,15 +262,17 @@ public class DailyPlannerTests
     [Fact]
     public void Two_different_rooms_on_the_same_floor_cluster_together()
     {
-        // "Övre plan – Sovrum 1" and "Övre plan – Hall" are different rooms but the same floor
-        // (see TaskCluster) - the hall task clusters with the already-open floor even though it
-        // is a different room from the one that opened it, and even though it is longer than
-        // the ground-floor kitchen task competing for the same slot.
+        // "Sovrum 1" and "Hall" are different rooms but share a floor - set directly via
+        // Area.Floor now (see TaskCluster), never parsed out of the room's name any more, which
+        // is exactly what lets "Hall" also exist unprefixed on a different floor without
+        // colliding. The hall task clusters with the already-open floor even though it is a
+        // different room from the one that opened it, and even though it is longer than the
+        // ground-floor kitchen task competing for the same slot.
         var plan = PlanWith(
             30,
-            PlanCandidateBuilder.Task("Vädra").Minutes(3).InArea("Övre plan – Sovrum 1").Build(),
-            PlanCandidateBuilder.Task("Dammsug hallen").Minutes(10).InArea("Övre plan – Hall").Build(),
-            PlanCandidateBuilder.Task("Diska").Minutes(5).InArea("Entré plan – Kök").Build());
+            PlanCandidateBuilder.Task("Vädra").Minutes(3).InArea("Sovrum 1").OnFloor("Övre plan").Build(),
+            PlanCandidateBuilder.Task("Dammsug hallen").Minutes(10).InArea("Hall").OnFloor("Övre plan").Build(),
+            PlanCandidateBuilder.Task("Diska").Minutes(5).InArea("Kök").OnFloor("Entré plan").Build());
 
         Assert.Equal(["Vädra", "Dammsug hallen", "Diska"], NamesOf(plan));
     }

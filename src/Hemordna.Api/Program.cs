@@ -95,6 +95,7 @@ builder.Services.AddScoped<SetMemberWeeklyEffortCeiling>();
 builder.Services.AddScoped<PreviewWeeklyPlan>();
 builder.Services.AddScoped<ApplyWeeklyPlan>();
 builder.Services.AddScoped<RenameArea>();
+builder.Services.AddScoped<SetAreaFloor>();
 builder.Services.AddScoped<RebalanceSchedule>();
 builder.Services.AddScoped<RebalanceTaskAssignments>();
 builder.Services.AddScoped<RefreshRolePresetBudgets>();

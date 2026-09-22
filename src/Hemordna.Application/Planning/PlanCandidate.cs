@@ -15,7 +15,8 @@ public sealed record PlanCandidate
         string? areaName = null,
         string? description = null,
         bool isRoutine = false,
-        TaskEffort effort = TaskEffort.Medium)
+        TaskEffort effort = TaskEffort.Medium,
+        string? floor = null)
     {
         ArgumentNullException.ThrowIfNull(occurrence);
 
@@ -30,6 +31,7 @@ public sealed record PlanCandidate
         Description = description;
         IsRoutine = isRoutine;
         Effort = effort;
+        Floor = floor;
     }
 
     public TaskOccurrence Occurrence { get; }
@@ -39,6 +41,11 @@ public sealed record PlanCandidate
     /// <summary>The area this work belongs to, when it has one - drives DailyPlanner's room/
     /// floor clustering tie-break (see <see cref="TaskCluster"/>) in addition to display.</summary>
     public string? AreaName { get; }
+
+    /// <summary>The area's own <c>Area.Floor</c>, when it has one and has an area at all - read
+    /// straight from the area, never parsed out of <see cref="AreaName"/>. See
+    /// <see cref="TaskCluster"/> for how this drives clustering.</summary>
+    public string? Floor { get; }
 
     public string? Description { get; }
 

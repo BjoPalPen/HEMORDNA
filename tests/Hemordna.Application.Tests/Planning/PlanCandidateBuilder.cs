@@ -18,6 +18,7 @@ internal sealed class PlanCandidateBuilder
     private bool _canBeDeferred = true;
     private DateOnly _scheduledDate = DailyPlannerTests.Friday;
     private string? _areaName;
+    private string? _floor;
     private bool _isRoutine;
     private TaskEffort _effort = TaskEffort.Medium;
 
@@ -59,6 +60,14 @@ internal sealed class PlanCandidateBuilder
         return this;
     }
 
+    /// <summary>The area's own Floor - read directly by TaskCluster, never parsed out of the
+    /// area name any more.</summary>
+    public PlanCandidateBuilder OnFloor(string? floor)
+    {
+        _floor = floor;
+        return this;
+    }
+
     /// <summary>Marks this candidate as a <see cref="VisitKind.Routine"/> - see
     /// DailyPlanner's "rutiner först" ordering rule.</summary>
     public PlanCandidateBuilder Routine()
@@ -74,7 +83,8 @@ internal sealed class PlanCandidateBuilder
         return this;
     }
 
-    public PlanCandidate Build() => new(BuildOccurrence(), _name, _areaName, isRoutine: _isRoutine, effort: _effort);
+    public PlanCandidate Build()
+        => new(BuildOccurrence(), _name, _areaName, isRoutine: _isRoutine, effort: _effort, floor: _floor);
 
     public TaskOccurrence BuildOccurrence()
     {
