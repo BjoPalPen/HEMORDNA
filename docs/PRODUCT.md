@@ -30,6 +30,10 @@ Appen antar **inte** att arbete måste fördelas lika. Ett hushåll där en pers
 fungera lika bra som ett där arbetet delas jämnt. Hemordna beskriver vad hushållet kommit
 överens om – den föreskriver inte en fördelning.
 
+Hemordna ska fungera som ett stödverktyg för personer med NPF-diagnos. Det styr
+**mekanismerna** – förvarning i stället för påminnelse i sista stund, ångerbara handlingar,
+förutsägbar ordning, en sak i taget – men aldrig **orden** i gränssnittet. Se §7.
+
 ---
 
 ## 3. Kärnprincip
@@ -205,9 +209,43 @@ En occurrence ska kunna: slutföras, skjutas upp, hoppas över, omfördelas, mar
 
 Byggs inte nu, och läggs inte till "för framtiden":
 
-betalningar, avancerad auth, AI, avancerad kalender, shoppinglista, gamification, streaks,
-avancerad statistik, dokumenthantering, social funktion, GPS, full offline conflict
-resolution, avancerat adminsystem.
+betalningar, avancerad auth, AI, shoppinglista, gamification, streaks, avancerad statistik,
+dokumenthantering, social funktion, GPS, full offline conflict resolution, avancerat
+adminsystem.
 
 Poäng och streaks är dessutom aktivt oönskade i MVP – de drar mot den skuldbeläggning som
 §8 utesluter.
+
+Påminnelser om egna tider ingår sedan 2026-09-22 – se §11. Det som fortsatt inte byggs är
+kalenderapparaten runt dem: månadsrutnät, inbjudningar och deltagare, delning utåt, bilagor,
+mötesserier med undantag, import från Google eller Outlook.
+
+---
+
+## 11. Påminnelser
+
+En **påminnelse** är en egen tid som en medlem vill bli påmind om: ett läkarbesök, ett möte,
+en tid hos tandläkaren. Den har en titel, ett datum, ett valfritt klockslag och en valfri
+plats. Den är inte hushållsarbete och räknas aldrig in i någons tidsbudget.
+
+Hemordna bygger detta trots att en telefon redan har en kalender, av två skäl som ingen
+kalenderapp kan matcha:
+
+- Appen öppnas ändå varje dag. En tid som ligger överst på Min dag syns utan att någon notis
+  behöver fungera.
+- En tid kan påverka vad som planeras in den dagen. Hemordna kan erbjuda en lugnare dag när
+  förmiddagen går åt till vårdcentralen. Erbjuda – aldrig göra det självmant.
+
+Reglerna:
+
+- **Privat.** En påminnelse tillhör den medlem som skapat den och syns inte för hushållet –
+  inte i hushållsvyn, inte i Vecka för andra, aldrig i "Senaste händelser". Titel och plats
+  loggas aldrig någonstans.
+- **Förvarningen är hela poängen.** En notis som kommer fem minuter i förväg hjälper ingen som
+  är tidsblind. Förvalet är kvällen innan plus en timme före, inte vid tiden.
+- **Titeln visas i notisen.** Ett medvetet beslut: utan den är notisen värdelös. Den kan
+  därmed synas på en låst skärm.
+- **En passerad tid blir tyst.** Den lämnar dagen utan markering, utan färg, utan räkneverk.
+  §8 gäller utan undantag – Hemordna säger aldrig att någon missat något.
+- **Återkommande tider ingår inte.** De drar mot mötesserier och undantag, och
+  recurrence-motorn får inte byggas ut i förväg (§9).
