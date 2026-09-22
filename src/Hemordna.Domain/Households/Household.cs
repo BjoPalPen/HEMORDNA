@@ -106,20 +106,65 @@ public sealed class Household
         return member;
     }
 
-    /// <summary>Adds an area. Names must be unique within the household.</summary>
-    public Area AddArea(string name)
+    /// <summary>
+    /// Adds an area. Names must be unique within the household <em>per floor</em> - two areas
+    /// named "Hall" are only a conflict when they also share the same floor (including both
+    /// having no floor at all). See docs/ARCHITECTURE.md "Två olika rum med samma namn på olika
+    /// våningar".
+    /// </summary>
+    public Area AddArea(string name, string? floor = null)
     {
         var trimmed = Guard.AgainstNullOrWhiteSpace(name, nameof(name));
+        var normalizedFloor = NormalizeFloor(floor);
 
-        if (_areas.Any(a => string.Equals(a.Name, trimmed, StringComparison.OrdinalIgnoreCase)))
-        {
-            throw new DomainException($"An area named '{trimmed}' already exists in this household.");
-        }
+        ThrowIfAreaNameTaken(normalizedFloor, trimmed);
 
-        var area = Area.Create(Id, trimmed);
+        var area = Area.Create(Id, trimmed, normalizedFloor);
         _areas.Add(area);
         return area;
     }
+
+    /// <summary>
+    /// Moves an existing area to a (possibly different) floor, or clears its floor when
+    /// <paramref name="floor"/> is blank. Blocked when another area already holds that name on
+    /// the target floor - the same uniqueness rule as <see cref="AddArea"/>.
+    /// </summary>
+    /// <exception cref="DomainException">No such area, or the name is already taken on that floor.</exception>
+    public Area SetAreaFloor(Guid areaId, string? floor)
+    {
+        var area = _areas.FirstOrDefault(a => a.Id == areaId)
+            ?? throw new DomainException($"No area '{areaId}' in this household.");
+
+        var normalizedFloor = NormalizeFloor(floor);
+
+        ThrowIfAreaNameTaken(normalizedFloor, area.Name, excluding: area);
+
+        area.SetFloor(normalizedFloor);
+        return area;
+    }
+
+    /// <summary>Throws when another area (other than <paramref name="excluding"/>) already has <paramref name="name"/> on <paramref name="floor"/>.</summary>
+    private void ThrowIfAreaNameTaken(string? floor, string name, Area? excluding = null)
+    {
+        var conflict = _areas.Any(a =>
+            a != excluding
+            && string.Equals(a.Floor, floor, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(a.Name, name, StringComparison.OrdinalIgnoreCase));
+
+        if (!conflict)
+        {
+            return;
+        }
+
+        var message = floor is null
+            ? $"An area named '{name}' already exists in this household."
+            : $"An area named '{name}' already exists on floor '{floor}' in this household.";
+
+        throw new DomainException(message);
+    }
+
+    private static string? NormalizeFloor(string? floor)
+        => string.IsNullOrWhiteSpace(floor) ? null : floor.Trim();
 
     /// <summary>
     /// Removes every area. Unlike <see cref="Area.Deactivate"/> - used for a single room a
