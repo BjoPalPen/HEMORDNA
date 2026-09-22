@@ -132,6 +132,26 @@ public sealed class Reminder
     /// </summary>
     public void Cancel() => Status = ReminderStatus.Cancelled;
 
+    /// <summary>
+    /// Takes back a cancellation, returning the reminder to <see cref="ReminderStatus.Upcoming"/>.
+    /// Throws <see cref="DomainException"/> if the reminder is not cancelled - there is nothing to
+    /// restore. Unlike <see cref="TaskOccurrence.Reopen"/>, there is deliberately no time window
+    /// here: <c>Reopen</c>'s 15 minutes exist because a completed occurrence is shared household
+    /// history that nobody should be able to quietly rewrite days later. A reminder is private to
+    /// its owner - nobody else is affected by restoring one, so a member who notices two days
+    /// later that an appointment was cancelled by mistake should still get it back. How long
+    /// "Undo" is offered in practice is a client-side decision, not a domain one.
+    /// </summary>
+    public void Restore()
+    {
+        if (Status != ReminderStatus.Cancelled)
+        {
+            throw new DomainException("Only a cancelled reminder can be restored.");
+        }
+
+        Status = ReminderStatus.Upcoming;
+    }
+
     private void EnsureNotCancelled(string action)
     {
         if (Status == ReminderStatus.Cancelled)

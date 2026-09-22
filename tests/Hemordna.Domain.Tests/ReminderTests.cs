@@ -260,4 +260,60 @@ public class ReminderTests
 
         Assert.Throws<DomainException>(() => reminder.MoveTo(Friday.AddDays(1), null));
     }
+
+    [Fact]
+    public void Restore_sets_a_cancelled_reminder_back_to_upcoming()
+    {
+        var reminder = CreateReminder();
+        reminder.Cancel();
+
+        reminder.Restore();
+
+        Assert.Equal(ReminderStatus.Upcoming, reminder.Status);
+    }
+
+    [Fact]
+    public void Restore_on_a_reminder_that_is_not_cancelled_throws()
+    {
+        var reminder = CreateReminder();
+
+        Assert.Throws<DomainException>(() => reminder.Restore());
+    }
+
+    [Fact]
+    public void A_restored_reminder_can_have_its_title_changed_again()
+    {
+        var reminder = CreateReminder();
+        reminder.Cancel();
+        reminder.Restore();
+
+        reminder.ChangeTitle("Nytt namn");
+
+        Assert.Equal("Nytt namn", reminder.Title);
+    }
+
+    [Fact]
+    public void A_restored_reminder_can_have_its_location_changed_again()
+    {
+        var reminder = CreateReminder();
+        reminder.Cancel();
+        reminder.Restore();
+
+        reminder.ChangeLocation("Ny plats");
+
+        Assert.Equal("Ny plats", reminder.Location);
+    }
+
+    [Fact]
+    public void A_restored_reminder_can_be_moved_again()
+    {
+        var reminder = CreateReminder();
+        reminder.Cancel();
+        reminder.Restore();
+
+        reminder.MoveTo(Friday.AddDays(1), new TimeOnly(10, 0));
+
+        Assert.Equal(Friday.AddDays(1), reminder.Date);
+        Assert.Equal(new TimeOnly(10, 0), reminder.TimeOfDay);
+    }
 }
