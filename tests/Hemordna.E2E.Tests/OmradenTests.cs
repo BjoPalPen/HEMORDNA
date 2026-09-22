@@ -593,4 +593,79 @@ public class OmradenTests
 
         await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Övrigt" })).ToBeVisibleAsync();
     }
+
+    /// <summary>The owner picker in the creation wizard (RoomOwnerPicker.razor, formerly
+    /// BedroomOwnerPicker.razor and hardcoded to the Sovrum template) now shows for every room
+    /// template, not just Sovrum - same assertion shape as
+    /// Assigning_a_bedroom_to_a_member_gives_them_sole_responsibility, but for Kök.</summary>
+    [Fact]
+    public async Task Assigning_a_kitchen_to_a_member_at_creation_gives_them_sole_responsibility()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Nora");
+
+        // A member to own the kitchen - everything else defaults to shared/rotating.
+        await page.GotoAsync("/hushall");
+        await HushallHelper.AddMemberWithoutAccountAsync(page, "Filip", "Barn eller ungdom");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Filip" }).WaitForAsync();
+
+        await page.GotoAsync("/rum");
+        await OpenNewRoomSheetAsync(page);
+        await page.GetByLabel("Rumstyp").SelectOptionAsync(new SelectOptionValue { Label = "Kök" });
+        // Owner picker's per-instance label lowercases the template's own label for a single
+        // instance ("Vems kök"), same convention the bedroom picker already used ("Vems sovrum").
+        await page.GetByLabel("Vems kök").SelectOptionAsync(new SelectOptionValue { Label = "Filip" });
+        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa", Exact = true }).ClickAsync();
+        await page.GetByText("Skapat, uppskattad tid per rum:").WaitForAsync();
+        await CloseSheetAsync(Sheet(page, "Nytt rum"));
+
+        await OpenRoomAsync(page, "Kök");
+        var room = Sheet(page, "Kök");
+        var stoveRow = room.GetByRole(AriaRole.Button, new() { Name = "Rengör spisen" });
+        await Assertions.Expect(stoveRow).ToContainTextAsync("Filip");
+        await Assertions.Expect(stoveRow).Not.ToContainTextAsync("roterar");
+    }
+
+    /// <summary>The after-creation counterpart: RoomSheet's own "Rummets meny" can now set one
+    /// owner for every task in an existing room at once (SaveOwnerAsync), the same batch pattern
+    /// "Ändra frekvens för hela rummet" already used for frequency - see
+    /// docs/ARCHITECTURE.md "Beslut: ett rum, en person, en dag".</summary>
+    [Fact]
+    public async Task Setting_an_owner_for_a_whole_room_from_its_menu_updates_every_task()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Sixten");
+
+        await page.GotoAsync("/hushall");
+        await HushallHelper.AddMemberWithoutAccountAsync(page, "Wilma", "Barn eller ungdom");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Wilma" }).WaitForAsync();
+
+        await page.GotoAsync("/rum");
+        await OpenNewRoomSheetAsync(page);
+        await page.GetByLabel("Rumstyp").SelectOptionAsync(new SelectOptionValue { Label = "Hall" });
+        await page.GetByRole(AriaRole.Button, new() { Name = "Skapa", Exact = true }).ClickAsync();
+        await page.GetByText("Skapat, uppskattad tid per rum:").WaitForAsync();
+        await CloseSheetAsync(Sheet(page, "Nytt rum"));
+
+        await OpenRoomAsync(page, "Hall");
+        var room = Sheet(page, "Hall");
+        var shoesRow = room.GetByRole(AriaRole.Button, new() { Name = "Ställ i ordning skorna" });
+        await Assertions.Expect(shoesRow).ToContainTextAsync("roterar");
+
+        await room.GetByRole(AriaRole.Button, new() { Name = "Rummets meny" }).ClickAsync();
+        await room.GetByRole(AriaRole.Button, new() { Name = "Sätt utförare för hela rummet" }).ClickAsync();
+        await room.GetByLabel("Utförare för hela Hall").SelectOptionAsync(new SelectOptionValue { Label = "Wilma" });
+        await room.GetByRole(AriaRole.Button, new() { Name = "Spara för alla 4 uppgifter" }).ClickAsync();
+        await room.GetByText("Uppdaterade 4 uppgifter.").WaitForAsync();
+
+        // The owner view (like BulkFrequency) stays open after saving - back to the task list
+        // to see every row reflect the new owner, not just the one open when the menu was used.
+        await room.GetByRole(AriaRole.Button, new() { Name = "Till uppgifterna" }).ClickAsync();
+        await Assertions.Expect(shoesRow).ToContainTextAsync("Wilma");
+        await Assertions.Expect(shoesRow).Not.ToContainTextAsync("roterar");
+        await Assertions.Expect(room.GetByRole(AriaRole.Button, new() { Name = "Dammsug eller sopa golvet" }))
+            .ToContainTextAsync("Wilma");
+        await Assertions.Expect(room.GetByRole(AriaRole.Button, new() { Name = "Släng gammal post och reklam" }))
+            .ToContainTextAsync("Wilma");
+    }
 }
