@@ -3384,6 +3384,18 @@ av allt.
 gäller framåt. Att flytta om dagens redan utlagda arbete hade gett någon mer att göra än de
 räknat med, mitt på dagen.
 
+**2026-09-22, generaliserat:** att ge ett helt rum en permanent ägare (`TaskDefinition.
+DefaultResponsibleMemberId` + `HasRotatingResponsibility`) fanns tidigare bara som en picker
+hårdkodad till rumsmallen Sovrum, och bara vid rumsskapandet. Björn: *"varför kan jag inte
+sätta en utförare för ett helt rum efteråt, utan måste gå in på varje uppgift för sig?"*
+Nu gäller båda delarna för alla rumstyper: skaparflödets picker (`Rum.razor`, numera
+`RoomOwnerPicker.razor`) tar rumsmallens egen etikett som parameter i stället för att anta
+"Sovrum", och `RoomSheet`s rumsmeny har fått en egen "Sätt utförare för hela rummet" som
+skriver samma tilldelning på varje uppgift i rummet i efterhand (samma batch-mönster som
+"Ändra frekvens för hela rummet", `SaveOwnerAsync` mot `SaveBulkFrequencyAsync`). Rör precis
+som förut bara `TaskDefinition` - redan utlagda `TaskOccurrence`r är orörda, samma framåtgående
+princip som ovan.
+
 ### Beslut: avbockat räknas av dagens tid — `IMPLEMENTED`
 
 Björn, 2026-09-16: *"När jag börjar bocka av uppgifter så verkar de bli flera, det kan stå 4

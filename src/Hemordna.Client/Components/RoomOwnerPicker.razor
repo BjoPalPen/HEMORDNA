@@ -9,9 +9,9 @@
     {
         var instance = i;
         <div class="floor-owner-row">
-            <span>@(Count > 1 ? $"Sovrum {instance}" : "Sovrum")</span>
+            <span>@(Count > 1 ? $"{RoomLabel} {instance}" : RoomLabel)</span>
             <select value="@OwnerMemberId.GetValueOrDefault(instance, string.Empty)"
-                    aria-label="@($"Vems {(Count > 1 ? $"Sovrum {instance}" : "sovrum")}")"
+                    aria-label="@($"Vems {(Count > 1 ? $"{RoomLabel} {instance}" : LowerFirst(RoomLabel))}")"
                     @onchange="e => SetOwner(instance, (string)e.Value!)">
                 <option value="">Delat ansvar</option>
                 @foreach (var member in Members)
@@ -33,5 +33,15 @@
     [Parameter, EditorRequired]
     public IReadOnlyList<HouseholdMemberResponse> Members { get; set; } = [];
 
+    /// <summary>The room template's own label (e.g. "Sovrum", "Kök") - this component was
+    /// originally bedroom-only (hence its old name, BedroomOwnerPicker) but the same "one
+    /// permanent owner instead of rotation" choice applies to every room type, so the label is
+    /// now supplied by the caller instead of hardcoded.</summary>
+    [Parameter, EditorRequired]
+    public string RoomLabel { get; set; } = string.Empty;
+
     private void SetOwner(int instance, string memberId) => OwnerMemberId[instance] = memberId;
+
+    private static string LowerFirst(string text)
+        => text.Length == 0 ? text : char.ToLowerInvariant(text[0]) + text[1..];
 }

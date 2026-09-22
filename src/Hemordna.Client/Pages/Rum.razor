@@ -165,12 +165,10 @@ else
                     }
                 </div>
 
-                @if (chosenTemplate.Key == "Bedroom")
-                {
-                    <BedroomOwnerPicker Count="@Math.Clamp(row.Count, 1, 20)"
-                                         OwnerMemberId="row.InstanceOwnerMemberId"
-                                         Members="@_members" />
-                }
+                <RoomOwnerPicker Count="@Math.Clamp(row.Count, 1, 20)"
+                                  OwnerMemberId="row.InstanceOwnerMemberId"
+                                  Members="@_members"
+                                  RoomLabel="@chosenTemplate.Label" />
             }
         }
 
@@ -241,7 +239,7 @@ else
         /// <summary>Whether each template task (by name) is included - true unless unchecked.</summary>
         public Dictionary<string, bool> TaskIncluded { get; } = [];
 
-        /// <summary>1-based bedroom instance number -> owner member id. Empty means shared/rotating.</summary>
+        /// <summary>1-based room instance number -> owner member id. Empty means shared/rotating.</summary>
         public Dictionary<int, string> InstanceOwnerMemberId { get; } = [];
     }
 
@@ -466,7 +464,6 @@ else
                 var template = RoomTemplates.All.First(t => t.Key == row.TemplateKey);
                 var selectedTasks = template.Tasks.Where(t => row.TaskIncluded.GetValueOrDefault(t.Name, true)).ToList();
                 var count = Math.Clamp(row.Count, 1, 20);
-                var isBedroom = template.Key == "Bedroom";
 
                 for (var i = 1; i <= count; i++)
                 {
@@ -484,8 +481,7 @@ else
                         continue;
                     }
 
-                    Guid? ownerId = isBedroom
-                        && row.InstanceOwnerMemberId.TryGetValue(i, out var ownerText)
+                    Guid? ownerId = row.InstanceOwnerMemberId.TryGetValue(i, out var ownerText)
                         && !string.IsNullOrEmpty(ownerText)
                             ? Guid.Parse(ownerText)
                             : null;

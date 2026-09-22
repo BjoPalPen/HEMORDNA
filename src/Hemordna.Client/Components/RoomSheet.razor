@@ -84,6 +84,35 @@
             <button type="button" class="btn btn-link" @onclick="() => _roomView = RoomView.Tasks">Till uppgifterna</button>
             break;
 
+        case RoomView.Owner:
+            <p class="muted small">
+                Sätter samma utförare på alla @VisibleTasks.Count uppgifter i @Label på en gång -
+                detta skriver över varje uppgifts egen tilldelning, även de som sedan tidigare
+                har en annan person eller är enskilt satta till roterande.
+            </p>
+
+            <label class="field">
+                <span>Utförare för hela @Label</span>
+                <select @bind="_ownerMemberId">
+                    <option value="">Roterar</option>
+                    @foreach (var member in Members)
+                    {
+                        <option value="@member.Id">@member.DisplayName</option>
+                    }
+                </select>
+            </label>
+
+            @if (_message is { } ownerMessage)
+            {
+                <div class="notice" role="status">@ownerMessage</div>
+            }
+
+            <button type="button" class="btn btn-primary btn-block" disabled="@_busy" @onclick="SaveOwnerAsync">
+                @(_busy ? "Sparar..." : $"Spara för alla {VisibleTasks.Count} uppgifter")
+            </button>
+            <button type="button" class="btn btn-link" @onclick="() => _roomView = RoomView.Tasks">Till uppgifterna</button>
+            break;
+
         case RoomView.BulkFrequency:
             <p class="muted small">
                 Sätter samma upprepning på alla @VisibleTasks.Count uppgifter i @Label på en gång.
@@ -134,6 +163,11 @@
                             <li class="list-item list-item-flush">
                                 <button type="button" class="task-options-row" @onclick="() => { _roomView = RoomView.BulkFrequency; _showMenu = false; }">
                                     Ändra frekvens för hela rummet
+                                </button>
+                            </li>
+                            <li class="list-item list-item-flush">
+                                <button type="button" class="task-options-row" @onclick="() => { OpenOwnerView(); _showMenu = false; }">
+                                    Sätt utförare för hela rummet
                                 </button>
                             </li>
                             <li class="list-item list-item-flush">
@@ -363,7 +397,7 @@
 }
 
 @code {
-    private enum RoomView { Tasks, Rename, Floor, BulkFrequency, Pause }
+    private enum RoomView { Tasks, Rename, Floor, BulkFrequency, Pause, Owner }
 
     [Parameter, EditorRequired]
     public Guid HouseholdId { get; set; }
@@ -400,6 +434,7 @@
     private string _floorInput = string.Empty;
     private string _bulkRecurrence = string.Empty;
     private int _bulkInterval = 1;
+    private string _ownerMemberId = string.Empty;
     private DateOnly? _pauseUntilInput;
     private string? _message;
     private bool _busy;
@@ -557,6 +592,23 @@
     {
         _openTask = task;
         _showTaskOptions = true;
+    }
+
+    /// <summary>Opens the "Sätt utförare för hela rummet" view, preselecting the select only when
+    /// every visible task already shares the exact same owner (rotating counts as one shared
+    /// "owner", null) - a genuinely mixed room is left on "Roterar" rather than guessing a single
+    /// owner into the field, since defaulting to any one member's name here would silently imply
+    /// that saving without touching the field is a no-op, when it would actually flatten the
+    /// room onto that member.</summary>
+    private void OpenOwnerView()
+    {
+        var tasks = VisibleTasks;
+        var firstOwner = tasks.Count > 0 ? tasks[0].DefaultResponsibleMemberId : null;
+        var allSameOwner = tasks.All(t => t.DefaultResponsibleMemberId == firstOwner);
+
+        _ownerMemberId = allSameOwner && firstOwner is { } owner ? owner.ToString() : string.Empty;
+        _message = null;
+        _roomView = RoomView.Owner;
     }
 
     private async Task SaveRenameAsync()
@@ -729,6 +781,49 @@
                 var recurrence = BuildRecurrence(_bulkRecurrence, Today.AddDays(index), _bulkInterval);
 
                 if (await Api.UpdateTaskFrequencyAsync(HouseholdId, task.Id, recurrence, staleAfterDays) is null)
+                {
+                    failedCount++;
+                }
+            }
+
+            _message = failedCount == 0
+                ? $"Uppdaterade {tasks.Count} uppgifter."
+                : $"{tasks.Count - failedCount} av {tasks.Count} uppgifter uppdaterades - försök igen för resten.";
+
+            await OnChanged.InvokeAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _message = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>
+    /// Applies one chosen owner to every visible task in this room at once - the batch
+    /// counterpart to TaskOptionsSheet's own per-task SaveAssignmentAsync, same pattern as
+    /// SaveBulkFrequencyAsync above but calling UpdateTaskAssignmentAsync instead. Only ever
+    /// mutates each TaskDefinition's own DefaultResponsibleMemberId/HasRotatingResponsibility -
+    /// already-planned TaskOccurrences are untouched, same forward-only semantics the per-task
+    /// endpoint already has (see docs/ARCHITECTURE.md "Beslut: ett rum, en person, en dag").
+    /// </summary>
+    private async Task SaveOwnerAsync()
+    {
+        _busy = true;
+        _message = null;
+
+        try
+        {
+            var memberId = string.IsNullOrEmpty(_ownerMemberId) ? (Guid?)null : Guid.Parse(_ownerMemberId);
+            var tasks = VisibleTasks;
+            var failedCount = 0;
+
+            foreach (var task in tasks)
+            {
+                if (await Api.UpdateTaskAssignmentAsync(HouseholdId, task.Id, memberId) is null)
                 {
                     failedCount++;
                 }
