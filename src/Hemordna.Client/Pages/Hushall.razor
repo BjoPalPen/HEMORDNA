@@ -437,7 +437,12 @@ else
 
     private List<HouseholdMemberResponse> ActiveMembers => _household?.Members.Where(m => m.IsActive).ToList() ?? [];
 
-    private int FloorCount => RoomFloors.CountDistinct(_household?.Areas.Where(a => a.IsActive) ?? []);
+    private int FloorCount
+        => (_household?.Areas.Where(a => a.IsActive) ?? [])
+            .Select(a => a.Floor)
+            .Where(floor => floor is not null)
+            .Distinct()
+            .Count();
 
     private sealed record TodayRing(int CompletedCount, int TotalCount)
     {

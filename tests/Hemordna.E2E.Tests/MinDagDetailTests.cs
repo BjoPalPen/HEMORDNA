@@ -117,11 +117,12 @@ public class MinDagDetailTests
     [Fact]
     public async Task Two_same_named_rooms_on_different_floors_stay_apart_under_their_own_headings()
     {
-        // Real report: two different rooms both named "Hall" (one per floor) both showed just
-        // "Hall" in "Sedan tidigare" once the chip there was stripped to match the grouped
-        // list's shorter room heading - but "Sedan tidigare" has no floor heading (or any
-        // heading) of its own, so stripping the prefix there throws away the only thing telling
-        // the two rows apart.
+        // Real report: two different rooms both named "Hall" (one per floor). Disambiguation
+        // happens at the FLOOR/ROOM HEADING level (Beslut: hela dagen i rumsordning), never a
+        // per-row chip - so the room grouping itself must keep the two "Hall" rooms apart by
+        // (AreaName, Floor) together, not by name alone, or their tasks would silently merge
+        // into one room group under one heading. Floor is its own field on the area (see
+        // Area.Floor), not baked into its name.
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Freja");
 
@@ -138,10 +139,10 @@ public class MinDagDetailTests
             $"/api/households/{householdId}/members/{memberId}/availability",
             new { date = today, availableMinutes = 60 });
 
-        async Task ScheduleYesterdaysOverdueTaskAsync(string areaName, string taskName)
+        async Task ScheduleYesterdaysOverdueTaskAsync(string floor, string areaName, string taskName)
         {
             var area = await (await http.PostAsJsonAsync(
-                $"/api/households/{householdId}/areas", new { name = areaName }))
+                $"/api/households/{householdId}/areas", new { name = areaName, floor }))
                 .Content.ReadFromJsonAsync<JsonElement>();
             var task = await (await http.PostAsJsonAsync(
                 $"/api/households/{householdId}/tasks",
@@ -152,8 +153,8 @@ public class MinDagDetailTests
                 new { date = today.AddDays(-1), assignToMemberId = memberId });
         }
 
-        await ScheduleYesterdaysOverdueTaskAsync("Övre plan – Hall", "Torka trappsteg");
-        await ScheduleYesterdaysOverdueTaskAsync("Entré plan – Hall", "Dammsug hallen");
+        await ScheduleYesterdaysOverdueTaskAsync("Övre plan", "Hall", "Torka trappsteg");
+        await ScheduleYesterdaysOverdueTaskAsync("Entré plan", "Hall", "Dammsug hallen");
 
         await page.ReloadAsync();
 

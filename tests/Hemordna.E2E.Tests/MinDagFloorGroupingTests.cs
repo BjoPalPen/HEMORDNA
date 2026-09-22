@@ -31,10 +31,10 @@ public class MinDagFloorGroupingTests
         await http.PutAsJsonAsync($"/api/households/{householdId}/members/{memberId}/availability",
             new { date = today, availableMinutes = 120 });
 
-        async Task SeedAsync(string areaName, string taskName)
+        async Task SeedAsync(string floor, string areaName, string taskName)
         {
             var area = await (await http.PostAsJsonAsync($"/api/households/{householdId}/areas",
-                new { name = areaName })).Content.ReadFromJsonAsync<JsonElement>();
+                new { name = areaName, floor })).Content.ReadFromJsonAsync<JsonElement>();
             var task = await (await http.PostAsJsonAsync($"/api/households/{householdId}/tasks",
                 new { name = taskName, estimatedMinutes = 10, areaId = area.GetProperty("id").GetGuid() }))
                 .Content.ReadFromJsonAsync<JsonElement>();
@@ -43,11 +43,14 @@ public class MinDagFloorGroupingTests
         }
 
         // Interleaved on purpose - Entré/Övre/Entré/Övre - so a pass here proves the floors
-        // actually cluster, rather than just happening to already be adjacent by luck.
-        await SeedAsync("Entré plan – Kök", "Diska");
-        await SeedAsync("Övre plan – Sovrum 1", "Vädra rummet");
-        await SeedAsync("Entré plan – Hall", "Torka trappsteg");
-        await SeedAsync("Övre plan – Hall", "Dammsug golvet");
+        // actually cluster, rather than just happening to already be adjacent by luck. Floor is
+        // its own field now (see Area.Floor), not baked into the area's name - the two "Hall"
+        // rooms below share a name but are on different floors, which is exactly the case
+        // Household.AddArea's (Floor, Name) uniqueness rule exists to allow.
+        await SeedAsync("Entré plan", "Kök", "Diska");
+        await SeedAsync("Övre plan", "Sovrum 1", "Vädra rummet");
+        await SeedAsync("Entré plan", "Hall", "Torka trappsteg");
+        await SeedAsync("Övre plan", "Hall", "Dammsug golvet");
 
         await page.GotoAsync("/");
         await page.Locator("h1", new() { HasText = "Björn" }).WaitForAsync();
