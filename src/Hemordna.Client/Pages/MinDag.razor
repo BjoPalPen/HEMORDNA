@@ -139,9 +139,21 @@ else
                                 <span class="task-note muted small">@location</span>
                             }
                         </span>
+                        <button type="button" class="btn btn-link" @onclick="() => OpenEditReminderSheet(reminder)">
+                            Ändra
+                        </button>
+                        <button type="button" class="btn btn-link" disabled="@(_reminderCancelBusy == reminder.Id)"
+                                @onclick="() => CancelReminderRowAsync(reminder)">
+                            Avboka
+                        </button>
                     </li>
                 }
             </ul>
+        }
+
+        @if (_reminderUndo is not null)
+        {
+            @ReminderUndoBar
         }
 
         @if (IsFocusMode)
@@ -450,6 +462,9 @@ else
             <button type="button" class="chip-action" @onclick="OpenExtraTaskSheetAsync">
                 Extra uppgift
             </button>
+            <button type="button" class="chip-action" @onclick="OpenNewReminderSheet">
+                Ny påminnelse
+            </button>
             <button type="button" class="chip-action" @onclick="() => OpenDayOffSheet(Today)">
                 @(_day.IsDayOff ? "Ledig idag" : "Ta ledigt idag")
             </button>
@@ -611,6 +626,39 @@ else
                 @NewExtraTaskForm
             }
         </BottomSheet>
+
+        <BottomSheet Title="@(_reminderForm.Id is null ? "Ny påminnelse" : "Ändra påminnelse")" @bind-IsOpen="_showReminderSheet">
+            <EditForm Model="_reminderForm" OnValidSubmit="SaveReminderAsync">
+                <label class="field">
+                    <span>Titel</span>
+                    <InputText @bind-Value="_reminderForm.Title" placeholder="Till exempel Läkarbesök" />
+                </label>
+
+                <label class="field">
+                    <span>Datum</span>
+                    <input type="date" @bind="_reminderForm.Date" />
+                </label>
+
+                <label class="field">
+                    <span>Klockslag</span>
+                    <input type="time" @bind="_reminderForm.TimeOfDay" />
+                </label>
+
+                <label class="field">
+                    <span>Plats</span>
+                    <InputText @bind-Value="_reminderForm.Location" placeholder="Till exempel Vårdcentralen" />
+                </label>
+
+                @if (_reminderMessage is { } reminderMessage)
+                {
+                    <div class="notice notice-problem" role="alert">@reminderMessage</div>
+                }
+
+                <button type="submit" class="btn btn-primary" disabled="@_reminderBusy">
+                    @(_reminderBusy ? "Sparar..." : "Spara")
+                </button>
+            </EditForm>
+        </BottomSheet>
     }
 }
 
@@ -621,6 +669,30 @@ else
     /// loaded alongside _day in LoadDayAsync so a reload never shows one without the other.
     /// Already excludes anything cancelled - see IReminderRepository.ListForMemberInRangeAsync.</summary>
     private IReadOnlyList<ReminderResponse> _reminders = [];
+
+    private bool _showReminderSheet;
+    private readonly ReminderForm _reminderForm = new();
+    private bool _reminderBusy;
+    private string? _reminderMessage;
+    private Guid? _reminderCancelBusy;
+
+    /// <summary>"Ångra" after cancelling a reminder - same 8s offer as completing a task (see
+    /// _undo/ShowUndo). A reminder's own Reminder.Restore() has no time window at all (it is
+    /// private, so nobody else's history is at stake) - how long the OFFER itself stays on
+    /// screen is this page's own decision, kept identical to the existing pattern so the app
+    /// feels consistent rather than inventing a second one.</summary>
+    private (Guid ReminderId, string Title)? _reminderUndo;
+    private bool _reminderUndoBusy;
+    private CancellationTokenSource? _reminderUndoCts;
+
+    private sealed class ReminderForm
+    {
+        public Guid? Id { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public string Location { get; set; } = string.Empty;
+        public DateOnly? Date { get; set; }
+        public TimeOnly? TimeOfDay { get; set; }
+    }
 
     /// <summary>"Jag ser min morgondag på Idag" - tomorrow's own plan, shown read-only in its
     /// own collapsed section (see the "Imorgon" details below). Loaded alongside _day so it is
@@ -1233,6 +1305,14 @@ else
         <button type="button" class="btn btn-link" disabled="@_undoBusy" @onclick="UndoAsync">Ångra</button>
     </div>;
 
+    /// <summary>Same "brief window to take it back" shown after cancelling a reminder - see
+    /// _reminderUndo's own remarks for why the window's LENGTH matches UndoBar's while the
+    /// domain rule behind it (Reminder.Restore) does not.</summary>
+    private RenderFragment ReminderUndoBar => @<div class="undo-bar" role="status">
+        <span>Avbokat: @_reminderUndo!.Value.Title</span>
+        <button type="button" class="btn btn-link" disabled="@_reminderUndoBusy" @onclick="UndoReminderCancelAsync">Ångra</button>
+    </div>;
+
     private RenderFragment CalmState => @<div class="calm-state">
         @if (_day is { Items.Count: 0, Completed.Count: > 0 })
         {
@@ -1402,7 +1482,7 @@ else
     }
 
     private bool IsInteractionBusy()
-        => _showUnplannedSheet || _showExtraTaskSheet || _showDayOffSheet
+        => _showUnplannedSheet || _showExtraTaskSheet || _showDayOffSheet || _showReminderSheet
             || (_lastInteraction is { } last && TimeProvider.GetUtcNow() - last < TimeSpan.FromSeconds(2));
 
     private async Task RetryRemoteChangeAfterDelayAsync(CancellationToken cancellationToken)
@@ -1552,6 +1632,8 @@ else
         Realtime.OccurrencesChanged -= OnOccurrencesChanged;
         _undoCts?.Cancel();
         _undoCts?.Dispose();
+        _reminderUndoCts?.Cancel();
+        _reminderUndoCts?.Dispose();
         _remoteNoteCts?.Cancel();
         _remoteNoteCts?.Dispose();
         _remoteRetryCts?.Cancel();
@@ -2100,5 +2182,169 @@ else
             householdId, memberId, Today, (_day?.AvailableMinutes ?? 0) + estimatedMinutes,
             EnergyLevel.EffortCeilingFor(_energyChoice ?? ""));
         return true;
+    }
+
+    /// <summary>Opens "Ny påminnelse" with an empty form, today's own date pre-filled - the
+    /// common case is booking something for today or a day close to it.</summary>
+    private void OpenNewReminderSheet()
+    {
+        _reminderForm.Id = null;
+        _reminderForm.Title = string.Empty;
+        _reminderForm.Location = string.Empty;
+        _reminderForm.Date = Today;
+        _reminderForm.TimeOfDay = null;
+        _reminderMessage = null;
+        _showReminderSheet = true;
+    }
+
+    /// <summary>Opens the same sheet pre-filled with an existing reminder's own fields - see
+    /// SaveReminderAsync for how the form decides between creating and changing one.</summary>
+    private void OpenEditReminderSheet(ReminderResponse reminder)
+    {
+        _reminderForm.Id = reminder.Id;
+        _reminderForm.Title = reminder.Title;
+        _reminderForm.Location = reminder.Location ?? string.Empty;
+        _reminderForm.Date = reminder.Date;
+        _reminderForm.TimeOfDay = reminder.TimeOfDay;
+        _reminderMessage = null;
+        _showReminderSheet = true;
+    }
+
+    /// <summary>
+    /// Creates a new reminder, or - when _reminderForm.Id is set (OpenEditReminderSheet) -
+    /// changes an existing one. There is no single combined "update" endpoint (see
+    /// HemordnaApiClient's own Reminder methods), so an edit goes through title/location/move in
+    /// turn; each is itself idempotent-safe to repeat, so stopping partway on a failure never
+    /// leaves the reminder in a state a retry could not still fix.
+    /// </summary>
+    private async Task SaveReminderAsync()
+    {
+        if (Session.Me is not { HouseholdId: { } householdId }
+            || _reminderForm.Date is not { } date
+            || string.IsNullOrWhiteSpace(_reminderForm.Title))
+        {
+            return;
+        }
+
+        _reminderBusy = true;
+        _reminderMessage = null;
+
+        try
+        {
+            var location = string.IsNullOrWhiteSpace(_reminderForm.Location) ? null : _reminderForm.Location.Trim();
+
+            if (_reminderForm.Id is { } reminderId)
+            {
+                var titled = await Api.ChangeReminderTitleAsync(householdId, reminderId, _reminderForm.Title);
+                var located = titled is null ? null : await Api.ChangeReminderLocationAsync(householdId, reminderId, location);
+                var moved = located is null ? null : await Api.MoveReminderAsync(householdId, reminderId, date, _reminderForm.TimeOfDay);
+
+                if (moved is null)
+                {
+                    _reminderMessage = "Det gick inte att spara. Försök igen.";
+                    return;
+                }
+            }
+            else
+            {
+                var created = await Api.CreateReminderAsync(householdId, _reminderForm.Title, location, date, _reminderForm.TimeOfDay);
+
+                if (created is null)
+                {
+                    _reminderMessage = "Det gick inte att lägga till påminnelsen. Försök igen.";
+                    return;
+                }
+            }
+
+            _showReminderSheet = false;
+            await LoadDayAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _reminderMessage = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _reminderBusy = false;
+        }
+    }
+
+    /// <summary>Cancels one of today's reminders and offers "Ångra" - see _reminderUndo's own
+    /// remarks. A cancelled reminder stops matching GetOwnReminders' date range (it is excluded
+    /// server-side - see IReminderRepository.ListForMemberInRangeAsync), so LoadDayAsync alone
+    /// is what makes the row actually disappear.</summary>
+    private async Task CancelReminderRowAsync(ReminderResponse reminder)
+    {
+        if (Session.Me is not { HouseholdId: { } householdId })
+        {
+            return;
+        }
+
+        _reminderCancelBusy = reminder.Id;
+
+        try
+        {
+            if (await Api.CancelReminderAsync(householdId, reminder.Id) is not null)
+            {
+                ShowReminderUndo(reminder.Id, reminder.Title);
+                await LoadDayAsync();
+            }
+        }
+        finally
+        {
+            _reminderCancelBusy = null;
+        }
+    }
+
+    private void ShowReminderUndo(Guid reminderId, string title)
+    {
+        _reminderUndoCts?.Cancel();
+        _reminderUndoCts?.Dispose();
+        _reminderUndoCts = new CancellationTokenSource();
+        _reminderUndo = (reminderId, title);
+
+        _ = HideReminderUndoAfterDelayAsync(_reminderUndoCts.Token);
+    }
+
+    private async Task HideReminderUndoAfterDelayAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(8), cancellationToken);
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+
+        _reminderUndo = null;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>"Ångra" - Reminder.Restore() itself has no time window (see _reminderUndo's own
+    /// remarks), so this only ever fails if the offer's local 8s window has already run out and
+    /// _reminderUndo is gone, or a genuine network problem - never a domain rule rejecting it.</summary>
+    private async Task UndoReminderCancelAsync()
+    {
+        if (_reminderUndo is not { ReminderId: var reminderId } || Session.Me is not { HouseholdId: { } householdId })
+        {
+            return;
+        }
+
+        _reminderUndoCts?.Cancel();
+        _reminderUndo = null;
+        _reminderUndoBusy = true;
+
+        try
+        {
+            if (await Api.RestoreReminderAsync(householdId, reminderId) is not null)
+            {
+                await LoadDayAsync();
+            }
+        }
+        finally
+        {
+            _reminderUndoBusy = false;
+        }
     }
 }
