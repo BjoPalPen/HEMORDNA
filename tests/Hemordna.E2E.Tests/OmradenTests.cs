@@ -236,8 +236,14 @@ public class OmradenTests
         await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Tvättstuga" })).Not.ToBeVisibleAsync();
     }
 
+    /// <summary>
+    /// Updated for the Floor rollout (was Naming_a_floor_prefixes_each_of_its_rooms, asserting
+    /// the OPPOSITE of what is now correct): a room's own name never carries the floor prefix
+    /// any more - Area.Floor is a real, separate field, set alongside the name instead of baked
+    /// into it. See Household.AddArea/Area.Floor.
+    /// </summary>
     [Fact]
-    public async Task Naming_a_floor_prefixes_each_of_its_rooms()
+    public async Task Naming_a_floor_creates_the_room_under_it_without_prefixing_its_name()
     {
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Fredrik");
@@ -251,7 +257,11 @@ public class OmradenTests
         await page.GetByText("Skapat, uppskattad tid per rum:").WaitForAsync();
         await CloseSheetAsync(Sheet(page, "Nytt rum"));
 
-        await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Våning 1 – Kök" })).ToBeVisibleAsync();
+        // The tile's accessible name is all of its text (name, count, badge - see OpenRoomAsync's
+        // own remarks), so this matches "Kök" as a substring, same as every other room-tile
+        // assertion in this file.
+        await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Kök" })).ToBeVisibleAsync();
+        await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Våning 1 – Kök" })).Not.ToBeVisibleAsync();
     }
 
     [Fact]
@@ -554,12 +564,14 @@ public class OmradenTests
 
     /// <summary>Real bug (2026-09-10): "Övrigt" was only ever rendered while
     /// <c>_selectedFloor is null</c>, but a household where EVERY room happens to have a floor
-    /// prefix never gets a null-valued "Annat" tab to click back to null with - Rum.razor's own
-    /// Floors getter only includes null when at least one area lacks the prefix. "Övrigt" became
+    /// never gets a null-valued "Annat" tab to click back to null with - Rum.razor's own Floors
+    /// getter only includes null when at least one area lacks a floor. "Övrigt" became
     /// permanently unreachable the moment a floor tab was selected, contradicting DESIGN.md's own
-    /// "alltid synligt".</summary>
+    /// "alltid synligt". Updated for the Floor rollout to set Floor as its own field via the API
+    /// instead of baking it into the name - a name containing " – " no longer means anything to
+    /// Rum.razor's floor tabs, which now read Area.Floor directly.</summary>
     [Fact]
-    public async Task Ovrigt_stays_reachable_even_when_every_room_has_a_floor_prefix()
+    public async Task Ovrigt_stays_reachable_even_when_every_room_has_a_floor()
     {
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Björn");
@@ -571,10 +583,10 @@ public class OmradenTests
         var me = await (await http.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
         var householdId = me.GetProperty("householdId").GetGuid();
 
-        // Two floors, every single room floor-prefixed - no room ever falls into "Annat", so
+        // Two floors, every single room has a Floor set - no room ever falls into "Annat", so
         // Floors never contains a null entry and the tab bar never offers one to click.
-        await http.PostAsJsonAsync($"/api/households/{householdId}/areas", new { name = "Övre plan – Kök" });
-        await http.PostAsJsonAsync($"/api/households/{householdId}/areas", new { name = "Källar plan – Tvättstuga" });
+        await http.PostAsJsonAsync($"/api/households/{householdId}/areas", new { name = "Kök", floor = "Övre plan" });
+        await http.PostAsJsonAsync($"/api/households/{householdId}/areas", new { name = "Tvättstuga", floor = "Källar plan" });
 
         await page.GotoAsync("/rum");
         await page.GetByRole(AriaRole.Tab, new() { Name = "Övre plan" }).ClickAsync();

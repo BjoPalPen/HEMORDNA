@@ -502,6 +502,25 @@ public sealed class HemordnaApiClient
             : null;
     }
 
+    /// <summary>Moves an area to a (possibly different) floor, or clears it when
+    /// <paramref name="floor"/> is null - see Domain's Household.SetAreaFloor.</summary>
+    public async Task<AreaResponse?> SetAreaFloorAsync(
+        Guid householdId,
+        Guid areaId,
+        string? floor,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Put, $"api/households/{householdId}/areas/{areaId}/floor", cancellationToken);
+        request.Content = JsonContent.Create(new SetAreaFloorRequest(floor));
+
+        var response = await _http.SendAsync(request, cancellationToken);
+
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<AreaResponse>(cancellationToken)
+            : null;
+    }
+
     /// <summary>
     /// Re-anchors already-created recurring tasks so they spread across the week instead of
     /// clustering on whichever day they were created - see RebalanceSchedule.
@@ -576,10 +595,11 @@ public sealed class HemordnaApiClient
     public async Task<AreaResponse?> AddAreaAsync(
         Guid householdId,
         string name,
+        string? floor = null,
         CancellationToken cancellationToken = default)
     {
         var request = await AuthorizedAsync(HttpMethod.Post, $"api/households/{householdId}/areas", cancellationToken);
-        request.Content = JsonContent.Create(new AddAreaRequest(name));
+        request.Content = JsonContent.Create(new AddAreaRequest(name, floor));
 
         var response = await _http.SendAsync(request, cancellationToken);
 

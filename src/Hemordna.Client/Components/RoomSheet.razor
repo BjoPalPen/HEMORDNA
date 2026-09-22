@@ -23,6 +23,33 @@
             <button type="button" class="btn btn-link" @onclick="() => _roomView = RoomView.Tasks">Avbryt</button>
             break;
 
+        case RoomView.Floor:
+            <p class="muted small">
+                Lämna tomt för att ta bort rummet från alla våningsindelningar.
+            </p>
+
+            <label class="field">
+                <span>Våning</span>
+                <InputText @bind-Value="_floorInput" list="room-sheet-floor-suggestions" placeholder="Till exempel Våning 1" />
+                <datalist id="room-sheet-floor-suggestions">
+                    @foreach (var floor in ExistingFloors)
+                    {
+                        <option value="@floor"></option>
+                    }
+                </datalist>
+            </label>
+
+            @if (_message is { } floorMessage)
+            {
+                <div class="notice notice-problem" role="alert">@floorMessage</div>
+            }
+
+            <button type="button" class="btn btn-primary btn-block" disabled="@_busy" @onclick="SaveFloorAsync">
+                @(_busy ? "Sparar..." : "Spara")
+            </button>
+            <button type="button" class="btn btn-link" @onclick="() => _roomView = RoomView.Tasks">Avbryt</button>
+            break;
+
         case RoomView.Pause:
             <p class="muted small">
                 Inga nya uppgifter skapas för @Label medan rummet är pausat - bra vid renovering
@@ -112,6 +139,11 @@
                             <li class="list-item list-item-flush">
                                 <button type="button" class="task-options-row" @onclick="() => { _renameName = Label; _roomView = RoomView.Rename; _showMenu = false; }">
                                     Byt namn
+                                </button>
+                            </li>
+                            <li class="list-item list-item-flush">
+                                <button type="button" class="task-options-row" @onclick="() => { _floorInput = CurrentArea?.Floor ?? string.Empty; _roomView = RoomView.Floor; _showMenu = false; }">
+                                    Flytta till våning
                                 </button>
                             </li>
                             <li class="list-item list-item-flush">
@@ -331,7 +363,7 @@
 }
 
 @code {
-    private enum RoomView { Tasks, Rename, BulkFrequency, Pause }
+    private enum RoomView { Tasks, Rename, Floor, BulkFrequency, Pause }
 
     [Parameter, EditorRequired]
     public Guid HouseholdId { get; set; }
@@ -365,6 +397,7 @@
     private RoomView _roomView;
     private bool _showMenu;
     private string _renameName = string.Empty;
+    private string _floorInput = string.Empty;
     private string _bulkRecurrence = string.Empty;
     private int _bulkInterval = 1;
     private DateOnly? _pauseUntilInput;
@@ -374,6 +407,12 @@
     private static readonly System.Globalization.CultureInfo SwedishCulture = new("sv-SE");
 
     private AreaResponse? CurrentArea => AreaId is { } id ? Areas.FirstOrDefault(a => a.Id == id) : null;
+
+    /// <summary>Existing floor names across the household's rooms, for the "Flytta till våning"
+    /// form's suggestion list - same source Rum.razor already loaded, no extra call needed. A
+    /// household member can still type a brand-new one, this only saves retyping an existing
+    /// one.</summary>
+    private IEnumerable<string> ExistingFloors => Areas.Select(a => a.Floor).OfType<string>().Distinct();
 
     private TaskDefinitionResponse? _openTask;
     private bool _showTaskOptions;
@@ -533,6 +572,41 @@
         try
         {
             if (await Api.RenameAreaAsync(HouseholdId, areaId, _renameName.Trim()) is null)
+            {
+                _message = "Det gick inte att spara. Försök igen.";
+                return;
+            }
+
+            _roomView = RoomView.Tasks;
+            await OnChanged.InvokeAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _message = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task SaveFloorAsync()
+    {
+        if (AreaId is not { } areaId)
+        {
+            return;
+        }
+
+        _busy = true;
+        _message = null;
+
+        try
+        {
+            // An empty field means "no floor" - Household.SetAreaFloor/Area.SetFloor already
+            // treat a blank string the same as null.
+            var floor = _floorInput.Trim();
+
+            if (await Api.SetAreaFloorAsync(HouseholdId, areaId, floor.Length > 0 ? floor : null) is null)
             {
                 _message = "Det gick inte att spara. Försök igen.";
                 return;

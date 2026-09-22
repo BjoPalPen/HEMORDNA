@@ -26,6 +26,12 @@ public static class RoomFloors
         return separatorIndex > 0 ? areaName[(separatorIndex + 3)..] : areaName;
     }
 
+    /// <summary>
+    /// Reads the real <c>Area.Floor</c> field directly rather than parsing it out of the name -
+    /// unlike <see cref="FloorOf"/>/<see cref="RoomNameOf"/> below, which stay on the old
+    /// name-parsing convention for now (still relied on by MinDag.razor/TaskListItem.razor's own
+    /// grouping - see Commit 4 in the Floor rollout).
+    /// </summary>
     public static int CountDistinct(IEnumerable<AreaResponse> areas)
-        => areas.Select(area => FloorOf(area.Name)).Where(floor => floor is not null).Distinct().Count();
+        => areas.Select(area => area.Floor).Where(floor => floor is not null).Distinct().Count();
 }
