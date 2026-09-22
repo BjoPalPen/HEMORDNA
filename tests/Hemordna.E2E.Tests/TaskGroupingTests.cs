@@ -86,9 +86,10 @@ public class TaskGroupingTests
         Assert.True(vacuumIndex >= 0 && mopIndex >= 0 && vacuumIndex < mopIndex);
     }
 
-    private static async Task<Guid> CreateAreaAsync(HttpClient http, Guid householdId, string name)
+    private static async Task<Guid> CreateAreaAsync(
+        HttpClient http, Guid householdId, string name, string? floor = null)
     {
-        var area = await (await http.PostAsJsonAsync($"/api/households/{householdId}/areas", new { name }))
+        var area = await (await http.PostAsJsonAsync($"/api/households/{householdId}/areas", new { name, floor }))
             .Content.ReadFromJsonAsync<JsonElement>();
         return area.GetProperty("id").GetGuid();
     }
@@ -195,8 +196,8 @@ public class TaskGroupingTests
     /// <summary>
     /// Björns beslut: "överst och alltid med" - en rutin (daglig, intervall 1) hamnar i en egen
     /// grupp överst, oavsett rum, före resten av dagen i vånings-/rumsordning. Chippen på
-    /// rutinraden visar rummet UTAN våningsprefix (rummet är "Övre plan – Badrum") eftersom
-    /// gruppen saknar en egen rumsrubrik - se docs/ARCHITECTURE.md.
+    /// rutinraden visar rummet UTAN våningen (rummet heter "Badrum" och ligger på "Övre plan")
+    /// eftersom gruppen saknar en egen rumsrubrik - se docs/ARCHITECTURE.md.
     /// </summary>
     [Fact]
     public async Task Routines_are_grouped_first_regardless_of_room_and_the_rest_follows_in_room_order()
@@ -217,7 +218,7 @@ public class TaskGroupingTests
             $"/api/households/{householdId}/members/{memberId}/availability",
             new { date = today, availableMinutes = 60 });
 
-        var bathroomId = await CreateAreaAsync(http, householdId, "Övre plan – Badrum");
+        var bathroomId = await CreateAreaAsync(http, householdId, "Badrum", floor: "Övre plan");
         var kitchenId = await CreateAreaAsync(http, householdId, "Kök");
 
         await CreateRoutineTaskAsync(http, householdId, "Vadra rummet", bathroomId, today);
