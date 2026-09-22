@@ -21,7 +21,7 @@
         }
         @if (ShowAreaChip && Item.AreaName is { } area)
         {
-            <span class="chip">@(StripFloorFromAreaChip ? RoomFloors.RoomNameOf(area) : area)</span>
+            <span class="chip">@area</span>
         }
         @if (ShowTimeLevel && Item.EstimatedMinutes > 0)
         {
@@ -113,20 +113,15 @@
 
     /// <summary>False inside a group that already carries its own room heading (see
     /// MinDag.razor's RoomGroups), so the room is not named twice on the same row. Still true
-    /// for "Sedan tidigare", the one place this row appears without any room OR floor heading
-    /// above it - the chip there shows the full area name, "Våning – " prefix included, since
-    /// it is the only thing distinguishing e.g. two different floors' own "Hall".</summary>
+    /// for "Rutiner" (MinDag.razor's leading routines group, Björns beslut: "överst och alltid
+    /// med") - the one group with no room heading of its own, so the chip is what names the
+    /// room there. Two different rooms sharing a name on different floors are told apart by the
+    /// FLOOR HEADING above their own room group, never by this chip - see
+    /// docs/ARCHITECTURE.md "Beslut: hela dagen i rumsordning" and Area.Floor; a room's own
+    /// name (<see cref="PlannedTaskResponse.AreaName"/>) carries no floor prefix to show or
+    /// strip here any more.</summary>
     [Parameter]
     public bool ShowAreaChip { get; set; } = true;
-
-    /// <summary>True only for "Rutiner" (MinDag.razor's leading routines group, Björns beslut:
-    /// "överst och alltid med") - the one other group besides "Sedan tidigare" that shows the
-    /// room as a chip because it has no room heading of its own, but unlike "Sedan tidigare" it
-    /// deliberately shows the room's own name WITHOUT the "Våning – " prefix (see
-    /// Support/RoomFloors.RoomNameOf) - a routine's chip is about which room the routine belongs
-    /// to, not about disambiguating two same-named rooms on different floors.</summary>
-    [Parameter]
-    public bool StripFloorFromAreaChip { get; set; }
 
     /// <summary>
     /// A member's own choice (MemberPreference.ShowTimeLevel) - off by default, so someone who

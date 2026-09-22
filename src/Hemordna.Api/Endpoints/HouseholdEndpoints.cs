@@ -74,6 +74,11 @@ internal static class HouseholdEndpoints
             .Produces(StatusCodes.Status404NotFound)
             .ProducesValidationProblem();
 
+        manage.MapPut("/areas/{areaId:guid}/floor", SetAreaFloorAsync)
+            .Produces<AreaResponse>()
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status409Conflict);
+
         manage.MapPut("/areas/{areaId:guid}/pause", PauseAreaAsync)
             .Produces<AreaResponse>()
             .Produces(StatusCodes.Status404NotFound);
@@ -425,7 +430,7 @@ internal static class HouseholdEndpoints
             });
         }
 
-        var area = await addArea.HandleAsync(householdId, request.Name, cancellationToken);
+        var area = await addArea.HandleAsync(householdId, request.Name, cancellationToken, request.Floor);
 
         return area is null
             ? Results.NotFound()
@@ -459,6 +464,18 @@ internal static class HouseholdEndpoints
         }
 
         var area = await renameArea.HandleAsync(householdId, areaId, request.Name, cancellationToken);
+
+        return area is null ? Results.NotFound() : Results.Ok(ToResponse(area));
+    }
+
+    private static async Task<IResult> SetAreaFloorAsync(
+        Guid householdId,
+        Guid areaId,
+        SetAreaFloorRequest request,
+        SetAreaFloor setAreaFloor,
+        CancellationToken cancellationToken)
+    {
+        var area = await setAreaFloor.HandleAsync(householdId, areaId, request.Floor, cancellationToken);
 
         return area is null ? Results.NotFound() : Results.Ok(ToResponse(area));
     }
@@ -1272,7 +1289,7 @@ internal static class HouseholdEndpoints
             HasAccount: member.UserId is not null,
             WeeklyEffortCeilingContract.From(member.WeeklyEffortCeiling));
 
-    private static AreaResponse ToResponse(Area area) => new(area.Id, area.Name, area.IsActive, area.PausedUntil);
+    private static AreaResponse ToResponse(Area area) => new(area.Id, area.Name, area.IsActive, area.PausedUntil, area.Floor);
 
     private static TaskDefinitionResponse ToResponse(TaskDefinition definition)
         => new(
@@ -1327,14 +1344,16 @@ internal static class HouseholdEndpoints
                 item.Candidate.Description,
                 item.Candidate.CanBeDeferred,
                 item.Candidate.Occurrence.OriginalScheduledDate,
-                item.Candidate.IsRoutine))],
+                item.Candidate.IsRoutine,
+                item.Candidate.Floor))],
             [.. day.Completed.Select(done => new CompletedTaskResponse(
                 done.Occurrence.Id,
                 done.Occurrence.TaskDefinitionId,
                 done.TaskName,
                 done.EstimatedMinutes,
                 done.AreaName,
-                done.Occurrence.CompletedByMemberId))],
+                done.Occurrence.CompletedByMemberId,
+                done.Floor))],
             [.. plan.Unplanned.Select(task => new UnplannedTaskResponse(
                 task.Candidate.Occurrence.Id,
                 task.Candidate.Occurrence.TaskDefinitionId,
@@ -1343,7 +1362,8 @@ internal static class HouseholdEndpoints
                 task.Candidate.Priority,
                 task.Candidate.CanBeDeferred,
                 task.Reason,
-                task.Candidate.AreaName))],
+                task.Candidate.AreaName,
+                task.Candidate.Floor))],
             day.IsDayOff);
     }
 }

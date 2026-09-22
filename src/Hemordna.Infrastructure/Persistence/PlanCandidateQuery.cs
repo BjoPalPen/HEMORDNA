@@ -74,7 +74,8 @@ internal sealed class PlanCandidateQuery : IPlanCandidateQuery
                     joined.row.Description,
                     joined.row.Recurrence,
                     joined.row.Effort,
-                    AreaName = area != null ? area.Name : null
+                    AreaName = area != null ? area.Name : null,
+                    Floor = area != null ? area.Floor : null
                 })
             .ToListAsync(cancellationToken);
 
@@ -88,6 +89,7 @@ internal sealed class PlanCandidateQuery : IPlanCandidateQuery
             row.AreaName,
             row.Description,
             isRoutine: VisitKindClassifier.Of(row.Recurrence, row.Effort) == VisitKind.Routine,
-            effort: row.Effort))];
+            effort: row.Effort,
+            floor: row.Floor))];
     }
 }

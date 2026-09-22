@@ -49,7 +49,7 @@ public sealed record CreateExtraTaskRequest(
 /// <summary>Pauses through and including <c>Until</c>, or resumes immediately when it is <c>null</c>.</summary>
 public sealed record PauseRequest(DateOnly? Until);
 
-public sealed record AreaResponse(Guid Id, string Name, bool IsActive, DateOnly? PausedUntil);
+public sealed record AreaResponse(Guid Id, string Name, bool IsActive, DateOnly? PausedUntil, string? Floor);
 
 public sealed record AddMemberRequest(
     string? DisplayName, WeeklyTimeBudgetContract? WeeklyTimeBudgetMinutes, HouseholdRole? Role = null);
@@ -67,9 +67,13 @@ public sealed record RebalanceAssignmentsResponse(int ChangedOccurrenceCount);
 /// <summary>How many members' budgets were refreshed to the current role preset - see <c>RefreshRolePresetBudgets</c>.</summary>
 public sealed record RefreshRoleBudgetsResponse(int UpdatedMemberCount);
 
-public sealed record AddAreaRequest(string? Name);
+public sealed record AddAreaRequest(string? Name, string? Floor = null);
 
 public sealed record RenameAreaRequest(string? Name);
+
+/// <summary>Moves an area to a (possibly different) floor, or clears it when <c>Floor</c> is
+/// null - see <c>Household.SetAreaFloor</c>.</summary>
+public sealed record SetAreaFloorRequest(string? Floor);
 
 /// <summary>
 /// Minutes per weekday, spelled out. The domain stores these in an array; naming the days in
@@ -280,7 +284,8 @@ public sealed record CompletedTaskResponse(
     string Name,
     int EstimatedMinutes,
     string? AreaName,
-    Guid? CompletedByMemberId);
+    Guid? CompletedByMemberId,
+    string? Floor);
 
 /// <param name="IsRoutine">True for a <c>VisitKind.Routine</c> task (daily, interval 1) - see
 /// <c>PlanCandidate.IsRoutine</c>. Drives "Rutiner", the client's own leading group on Min dag
@@ -297,7 +302,8 @@ public sealed record PlannedTaskResponse(
     string? Description,
     bool CanBeDeferred,
     DateOnly OriginalScheduledDate,
-    bool IsRoutine);
+    bool IsRoutine,
+    string? Floor);
 
 public sealed record UnplannedTaskResponse(
     Guid OccurrenceId,
@@ -307,7 +313,8 @@ public sealed record UnplannedTaskResponse(
     TaskPriority Priority,
     bool CanBeDeferred,
     UnplannedReason Reason,
-    string? AreaName);
+    string? AreaName,
+    string? Floor);
 
 /// <summary><c>Today</c> lets the client name its own local date - see
 /// <c>CompleteOccurrenceRequest</c> for why. Used both as the validity-window reference for the

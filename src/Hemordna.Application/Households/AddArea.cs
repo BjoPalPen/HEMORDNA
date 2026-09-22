@@ -10,7 +10,8 @@ public sealed class AddArea
     public AddArea(IHouseholdRepository households) => _households = households;
 
     /// <summary>Adds the area, or returns <c>null</c> when the household does not exist.</summary>
-    public async Task<Area?> HandleAsync(Guid householdId, string name, CancellationToken cancellationToken)
+    public async Task<Area?> HandleAsync(
+        Guid householdId, string name, CancellationToken cancellationToken, string? floor = null)
     {
         var household = await _households.FindByIdAsync(householdId, cancellationToken);
 
@@ -19,7 +20,7 @@ public sealed class AddArea
             return null;
         }
 
-        var area = household.AddArea(name);
+        var area = household.AddArea(name, floor);
 
         await _households.UpdateAsync(household, cancellationToken);
 

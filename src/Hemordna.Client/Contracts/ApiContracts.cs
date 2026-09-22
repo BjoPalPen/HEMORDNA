@@ -34,7 +34,8 @@ public sealed record CompletedTaskResponse(
     string Name,
     int EstimatedMinutes,
     string? AreaName,
-    Guid? CompletedByMemberId);
+    Guid? CompletedByMemberId,
+    string? Floor);
 
 /// <param name="IsRoutine">True for a daily, interval-1 routine - drives "Rutiner", the leading
 /// group on Min dag (Björns beslut: "överst och alltid med").</param>
@@ -49,7 +50,8 @@ public sealed record PlannedTaskResponse(
     string? Description,
     bool CanBeDeferred,
     DateOnly OriginalScheduledDate,
-    bool IsRoutine);
+    bool IsRoutine,
+    string? Floor);
 
 public sealed record UnplannedTaskResponse(
     Guid OccurrenceId,
@@ -59,7 +61,8 @@ public sealed record UnplannedTaskResponse(
     string Priority,
     bool CanBeDeferred,
     string Reason,
-    string? AreaName);
+    string? AreaName,
+    string? Floor);
 
 public sealed record HouseholdResponse(
     Guid Id,
@@ -98,7 +101,7 @@ public sealed record WeeklyEffortCeilingContract(
 /// <summary>Pauses through and including <c>Until</c>, or resumes immediately when it is <c>null</c>.</summary>
 public sealed record PauseRequest(DateOnly? Until);
 
-public sealed record AreaResponse(Guid Id, string Name, bool IsActive, DateOnly? PausedUntil);
+public sealed record AreaResponse(Guid Id, string Name, bool IsActive, DateOnly? PausedUntil, string? Floor);
 
 /// <summary>Minutes per weekday. Mirrors the API's contract - see it for the domain mapping.</summary>
 public sealed record WeeklyTimeBudgetContract(
@@ -129,7 +132,11 @@ public sealed record MemberDayOffResponse(DateOnly Date);
 /// GetMemberTimeCredit.</summary>
 public sealed record TimeCreditResponse(int Minutes);
 
-public sealed record AddAreaRequest(string Name);
+public sealed record AddAreaRequest(string Name, string? Floor = null);
+
+/// <summary>Moves an area to a (possibly different) floor, or clears it when <c>Floor</c> is
+/// null - mirrors the API's own <c>SetAreaFloorRequest</c>.</summary>
+public sealed record SetAreaFloorRequest(string? Floor);
 
 public sealed record AddMemberRequest(
     string DisplayName, WeeklyTimeBudgetContract? WeeklyTimeBudgetMinutes, string? Role = null);

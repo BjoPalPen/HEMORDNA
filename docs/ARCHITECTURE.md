@@ -763,14 +763,18 @@ våning.
   dagen. Ren mjuk preferens - kan aldrig lyfta en kandidat förbi något mer förfallet eller
   högre prioriterat, och den allra första uppgiften för dagen påverkas aldrig (inget är valt än
   att dela kluster med).
-- **`Planning.TaskCluster.KeyFor(areaName)`** (ny, `internal`): samma rum om `areaName` saknar
-  "Våning – "-prefix, annars våningen. Medvetet duplicerar samma tolkning av
-  "Våning – "-namnkonventionen som klientens `Support.RoomFloors.FloorOf` redan gör - server
-  och klient är separata projekt (Application refererar aldrig Client), så samma lilla, sköra
-  namnkonvention-parsning finns nu på båda ställena. `DailyPlanner` själv förblir formellt
-  "rumsblint" i sin egen kod (den känner bara `TaskCluster`s nyckel, aldrig "Våning – "-strängen
-  själv) - dokumentationsmässigt en nyansering, inte en motsägelse: den ordnar fortfarande inga
-  regler efter ett rums NAMN, bara efter om två kandidaters nycklar råkar vara lika.
+- **`Planning.TaskCluster.KeyFor(areaName, floor)`** (ny, `internal`): samma rum om `areaName`
+  saknar en våning, annars våningen. Ursprungligen (fram till "Beslut: Riktigt Floor-fält på
+  Area" längre ner) härledde detta våningen genom att klippa "Våning – "-prefixet ur
+  `areaName` - ett medvetet dubblerat tolkning av samma namnkonvention klientens dåvarande
+  `Support.RoomFloors.FloorOf` redan gjorde, eftersom server och klient är separata projekt
+  (Application refererar aldrig Client), så samma lilla, sköra namnkonvention-parsning fanns
+  en gång på båda ställena. Läser numera `floor` direkt som ett eget fält, ingen strängparsning
+  kvar - se det beslutet för hela bytet, inklusive den dolda gruppering-på-namn-buggen det
+  avslöjade i `MinDag.razor`. `DailyPlanner` själv förblir formellt "rumsblint" i sin egen kod
+  (den känner bara `TaskCluster`s nyckel, aldrig rummets namn eller våning direkt) -
+  dokumentationsmässigt en nyansering, inte en motsägelse: den ordnar fortfarande inga regler
+  efter ett rums NAMN, bara efter om två kandidaters nycklar råkar vara lika.
   En kandidat utan rum alls har ingen klusternyckel och matchar aldrig något - två "Övrigt"-
   uppgifter klustras inte bara för att båda saknar rum.
 - **Algoritmen ändrades från engångssortering till iterativt urval**, eftersom regel 5 är den
@@ -804,6 +808,72 @@ våningar (två "Hall") blev då omöjliga att skilja åt där. `TaskListItem`s 
 det kontext som saknar all annan disambiguering, är den fulla strängen alltid rätt val där.
 Ny regressionstest, `MinDagDetailTests
 .An_overdue_rooms_chip_keeps_its_floor_prefix_to_tell_two_same_named_rooms_apart`.
+
+---
+
+### Beslut: Riktigt Floor-fält på Area — `IMPLEMENTED`
+
+Björn rapporterade två separata problem med samma rotorsak: gick inte att flytta ett rum
+mellan "våningar", och gick inte att återanvända ett redan använt våningsnamn när han lade
+till ett nytt rum. Orsaken var att "Våning" aldrig var ett fält i domänen - bara en
+namnkonvention (se "Beslut: rums-/våningsklustring i urvalet" ovan): ett rums fulla namn var
+en sträng som "Våning 1 – Kök", och allt som "visste om våningar" (klientens dåvarande
+`Support/RoomFloors.cs`, serverns `Planning/TaskCluster.cs`) härledde det genom att klippa
+strängen vid separatorn " – ".
+
+**Beslutet: ett riktigt `string? Floor`-fält på `Area`, oberoende av `Name`.** `Area.Rename`
+rör aldrig `Floor`, och den nya `Area.SetFloor`/`Household.SetAreaFloor` rör aldrig `Name` -
+de två fälten kan därför inte längre råka förstöra varandra. Ett namnbyte kan inte längre av
+misstag knuffa ett rum ur sin våningsgruppering (den gamla, dokumenterade begränsningen från
+Steg 3, se nedan), och att flytta ett rum till en annan våning rör aldrig dess namn.
+
+**Unikhetsfixen.** `Household.AddArea`s kontroll av dubblerade rumsnamn var
+hushållsomfattande (`Name` ensamt) - det fungerade bara för att våningen redan låg inbakad i
+namnet ("Våning 1 – Hall" och "Våning 2 – Hall" var olika strängar). Så fort `Name` blev bara
+"Hall" hade den kontrollen plötsligt förbjudit två likadant namngivna rum på olika våningar -
+något som redan är avsiktligt och stödtestat (två olika rum med samma namn på olika våningar
+är ett accepterat, önskat fall). Kontrollen är nu scopead till `(Floor, Name)` tillsammans,
+båda case-insensitive: två områden är bara en konflikt om de delar BÅDE våning (inklusive
+båda `null`) OCH namn. `Household.SetAreaFloor` (ny) använder samma kontroll när ett
+befintligt rum flyttas till en annan våning.
+
+**Migreringen packar upp befintliga rum automatiskt.** `AddFloorToArea`-migreringen läser ut
+"Våning 1" ur varje befintligt `Area.Name` som innehåller " – " (mellanslag + EN DASH U+2013 +
+mellanslag, samma tecken `RoomFloors.cs` matchade) till det nya `Floor`-fältet, och byter
+`Name` till bara delen efter separatorn - gamla rum ser efteråt exakt likadana ut som om de
+skapats med det nya fältet från början. Detta påverkar riktiga rader i produktionsdatabasen
+vid nästa deploy, så SQL:en verifierades manuellt mot en riktig Postgres-instans (isolerad
+testdatabas, seedad med `'Våning 1 – Kök'` och `'Hall'`, migrerad, raderna lästes tillbaka)
+INNAN den kördes mot någon delad databas. `Down()` droppar bara kolumnen - att åter-sammanfoga
+`Floor`+`Name` vid en rollback vore rimligt men görs medvetet inte; en dokumenterad, avsiktlig
+begränsning, inte ett missat fall.
+
+**Två nya UI-flöden.** "Nytt rum"-formuläret föreslår befintliga våningsnamn via en native
+HTML `<datalist>` (inget nytt Blazor-bibliotek) - fortfarande fritext, så ett helt nytt
+våningsnamn går lika bra. `RoomSheet` fick en ny "Flytta till våning"-åtgärd, samma
+textfält+datalist-mönster, förifylld med rummets nuvarande `Floor`; en tom sträng sparas som
+"ingen våning" (`SetFloor(null)`).
+
+**Dold bugg hittad och fixad i `MinDag.razor`:** `RoomGroups` grupperade uppgifter på
+`AreaName` ensamt, vilket bara var säkert så länge det gamla prefixade namnet var unikt per
+rum. Så fort två rum kan dela namn på olika våningar (hela poängen med den här ändringen)
+hade gruppering på namn ensamt tyst slagit ihop två olika rums uppgifter till EN rumsgrupp
+under EN rubrik, och tappat våningsskillnaden helt. Fixat till att gruppera på
+`(AreaName, Floor)` tillsammans (samma sak för "Extra uppgift"-listans egen gruppering, som nu
+grupperar på `AreaId` i stället för ett namn - tillgängligt där, till skillnad från på
+`PlannedTaskResponse`). Ingen chip behövde ändras för att fixa detta - disambigueringen sker
+redan på rubriknivå (våning + rum, se "Beslut: hela dagen i rumsordning" nedan), inte på en
+rad.
+
+`TaskListItem`/`MinDag.razor` läser nu `Floor` direkt överallt - `Support/RoomFloors.cs` är
+borttagen (`FloorOf`/`RoomNameOf` hade inga fler anropsställen kvar; dess sista medlem,
+`CountDistinct`, var en enda LINQ-rad utan egen logik och ligger nu inline i `Hushall.razor`).
+
+`WeeklyPlanVisitResponse` ("Planera veckan") fick MEDVETET inget `Floor`-fält - den grupperar
+redan på `TaskDefinition.AreaId` (en riktig FK), aldrig på strängparsning av rumsnamnet, så
+den hade inget korrekthetsproblem den här ändringen behövde fixa. Om förhandsgranskningen
+också bör VISA vilken våning ett besök ligger på är en separat produktfråga, utanför vad som
+faktiskt efterfrågades (flytta rum mellan våningar, återanvända våningsnamn vid skapande).
 
 ---
 
@@ -1164,13 +1234,10 @@ från "ingen ändring i Domain/Application/Infrastructure/Api" - avgränsad till
   request-kropp - samma mönster `UpdateTaskFrequencyAsync` redan använde, inga nya
   record-kontrakt behövda klientsidan).
 
-**"Våning" är fortfarande bara en namnkonvention, inte ett domänfält.** Segmentkontrollen
-(DESIGN.md §6) härleder våningarna genom att dela rumnamn på " – " (samma separator
-`CreateFloorAsync` redan skrev in) - `Rum.razor.FloorOf`. Ett medvetet, dokumenterat
-antagande: att lägga till ett riktigt `Floor`-fält hade varit ytterligare Api/Domain-arbete,
-och bara "Byt namn" (nytt i detta steg) kan nu få ett rum att tappa sin våningsgruppering av
-misstag genom att skriva över prefixet - det rummet hamnar då i "Annat" i stället för att
-försvinna eller krascha något.
+**"Våning" var vid det här steget fortfarande bara en namnkonvention, inte ett domänfält** -
+ett medvetet, dokumenterat antagande då (segmentkontrollen delade rumnamn på " – "), som
+senare visade sig göra "Byt namn" kunna knuffa ett rum ur sin våningsgruppering av misstag.
+Sedan åtgärdat med ett riktigt `Area.Floor`-fält - se "Beslut: Riktigt Floor-fält på Area".
 
 **"N idag"/"Nästa: veckodag" på varje `RoomTile` läser den inloggade medlemmens egen dag, inte
 hela hushållets.** Ingen endpoint svarar på "vem i hushållet har vad idag, per rum" - att

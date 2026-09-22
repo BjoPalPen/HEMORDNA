@@ -21,6 +21,9 @@ internal sealed class AreaConfiguration : IEntityTypeConfiguration<Area>
             .IsRequired()
             .HasMaxLength(100);
 
+        // Nullable - see Area.Floor for what null means.
+        builder.Property(area => area.Floor).HasMaxLength(100);
+
         builder.Property(area => area.IsActive).IsRequired();
 
         // Nullable - see Area.PausedUntil for what null means.

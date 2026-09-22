@@ -139,7 +139,7 @@ public sealed class DailyPlanner
                 items.Add(new PlannedTask(next, next.Occurrence.IsOverdueOn(date)));
                 remainingMinutes -= next.EstimatedMinutes;
 
-                if (TaskCluster.KeyFor(next.AreaName) is { } chosenKey)
+                if (TaskCluster.KeyFor(next.AreaName, next.Floor) is { } chosenKey)
                 {
                     chosenClusters.Add(chosenKey);
                 }
@@ -158,7 +158,7 @@ public sealed class DailyPlanner
     }
 
     private static bool IsInAnAlreadyChosenCluster(PlanCandidate candidate, HashSet<string> chosenClusters)
-        => TaskCluster.KeyFor(candidate.AreaName) is { } key && chosenClusters.Contains(key);
+        => TaskCluster.KeyFor(candidate.AreaName, candidate.Floor) is { } key && chosenClusters.Contains(key);
 
     /// <summary>True when today's ceiling rules this candidate out - never for a routine
     /// ("överst och alltid med" outranks the ceiling too, same trade-off as rule 1's own

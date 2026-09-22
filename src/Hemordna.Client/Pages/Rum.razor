@@ -125,7 +125,13 @@ else
     <EditForm Model="_floorForm" OnValidSubmit="CreateFloorAsync">
         <label class="field">
             <span>Våning (valfritt)</span>
-            <InputText @bind-Value="_floorForm.FloorName" placeholder="Till exempel Våning 1" />
+            <InputText @bind-Value="_floorForm.FloorName" list="floor-suggestions" placeholder="Till exempel Våning 1" />
+            <datalist id="floor-suggestions">
+                @foreach (var floor in ExistingFloors)
+                {
+                    <option value="@floor"></option>
+                }
+            </datalist>
         </label>
 
         @foreach (var row in _floorForm.Rooms)
@@ -300,13 +306,17 @@ else
     {
         get
         {
-            var groups = (_areas ?? []).Select(area => RoomFloors.FloorOf(area.Name)).Distinct().ToList();
+            var groups = (_areas ?? []).Select(area => area.Floor).Distinct().ToList();
             return groups.Count > 1 ? groups : [];
         }
     }
 
     private IEnumerable<AreaResponse> VisibleAreas
-        => Floors.Count == 0 ? (_areas ?? []) : (_areas ?? []).Where(a => RoomFloors.FloorOf(a.Name) == _selectedFloor);
+        => Floors.Count == 0 ? (_areas ?? []) : (_areas ?? []).Where(a => a.Floor == _selectedFloor);
+
+    /// <summary>Existing floor names, for the "Nytt rum" form's suggestion list - a household
+    /// member can still type a brand-new one, this only saves retyping an existing one.</summary>
+    private IEnumerable<string> ExistingFloors => (_areas ?? []).Select(a => a.Floor).OfType<string>().Distinct();
 
     private void OpenRoom(Guid? areaId, string label)
     {
@@ -448,7 +458,8 @@ else
 
         try
         {
-            var floor = _floorForm.FloorName.Trim();
+            var floorText = _floorForm.FloorName.Trim();
+            var floor = floorText.Length > 0 ? floorText : null;
 
             foreach (var row in rows)
             {
@@ -461,15 +472,12 @@ else
                 {
                     // A single instance of a room type keeps just its type as the name; more
                     // than one gets numbered so "3 sovrum" does not collide as three "Sovrum".
-                    var name = (floor.Length > 0, count > 1) switch
-                    {
-                        (true, true) => $"{floor} – {template.Label} {i}",
-                        (true, false) => $"{floor} – {template.Label}",
-                        (false, true) => $"{template.Label} {i}",
-                        (false, false) => template.Label
-                    };
+                    // The floor is never folded into the name any more - it travels as its own
+                    // field (see Area.Floor), so the same room name can exist again on a
+                    // different floor and a room can later move floors without a rename.
+                    var name = count > 1 ? $"{template.Label} {i}" : template.Label;
 
-                    var area = await Api.AddAreaAsync(householdId, name);
+                    var area = await Api.AddAreaAsync(householdId, name, floor);
 
                     if (area is null)
                     {

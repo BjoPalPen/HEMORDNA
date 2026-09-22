@@ -68,6 +68,66 @@ public class HouseholdTests
     }
 
     [Fact]
+    public void AddArea_allows_the_same_name_on_different_floors()
+    {
+        // The old household-wide uniqueness check would have rejected this - two rooms named
+        // "Hall" on different floors is an intentional, already-supported case (see
+        // docs/ARCHITECTURE.md "Två olika rum med samma namn på olika våningar").
+        var household = Household.Create("Familjen", CreatedAt);
+
+        var first = household.AddArea("Hall", floor: "Våning 1");
+        var second = household.AddArea("Hall", floor: "Våning 2");
+
+        Assert.Equal("Våning 1", first.Floor);
+        Assert.Equal("Våning 2", second.Floor);
+        Assert.Equal(2, household.Areas.Count);
+    }
+
+    [Fact]
+    public void AddArea_rejects_a_duplicate_name_on_the_same_floor_including_no_floor()
+    {
+        var household = Household.Create("Familjen", CreatedAt);
+        household.AddArea("Hall");
+
+        Assert.Throws<DomainException>(() => household.AddArea("HALL"));
+    }
+
+    [Fact]
+    public void SetAreaFloor_moves_an_area_to_a_new_floor()
+    {
+        var household = Household.Create("Familjen", CreatedAt);
+        var area = household.AddArea("Kok", floor: "Våning 1");
+
+        household.SetAreaFloor(area.Id, "Våning 2");
+
+        Assert.Equal("Våning 2", area.Floor);
+    }
+
+    [Fact]
+    public void SetAreaFloor_rejects_moving_into_a_floor_where_the_name_is_already_taken()
+    {
+        var household = Household.Create("Familjen", CreatedAt);
+        household.AddArea("Hall", floor: "Våning 2");
+        var area = household.AddArea("Hall", floor: "Våning 1");
+
+        Assert.Throws<DomainException>(() => household.SetAreaFloor(area.Id, "Våning 2"));
+        Assert.Equal("Våning 1", area.Floor);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData(null)]
+    public void AddArea_stores_a_blank_floor_as_null(string? floor)
+    {
+        var household = Household.Create("Familjen", CreatedAt);
+
+        var area = household.AddArea("Hall", floor: floor);
+
+        Assert.Null(area.Floor);
+    }
+
+    [Fact]
     public void A_new_area_is_not_paused()
     {
         var household = Household.Create("Familjen", CreatedAt);

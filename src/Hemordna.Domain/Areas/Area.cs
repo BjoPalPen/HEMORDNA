@@ -8,11 +8,12 @@ namespace Hemordna.Domain.Areas;
 /// </summary>
 public sealed class Area
 {
-    private Area(Guid id, Guid householdId, string name)
+    private Area(Guid id, Guid householdId, string name, string? floor)
     {
         Id = id;
         HouseholdId = householdId;
         Name = name;
+        Floor = floor;
         IsActive = true;
     }
 
@@ -22,6 +23,14 @@ public sealed class Area
     public Guid HouseholdId { get; private set; }
 
     public string Name { get; private set; }
+
+    /// <summary>
+    /// The grouping this area belongs to, e.g. "Våning 1" - a household's own free-text label,
+    /// not a fixed set of storeys. <c>null</c> means no grouping. Independent of <see cref="Name"/>:
+    /// renaming an area never touches its floor, and moving an area to a different floor (see
+    /// <see cref="SetFloor"/>) never touches its name.
+    /// </summary>
+    public string? Floor { get; private set; }
 
     public bool IsActive { get; private set; }
 
@@ -33,14 +42,24 @@ public sealed class Area
     /// </summary>
     public DateOnly? PausedUntil { get; private set; }
 
-    internal static Area Create(Guid householdId, string name)
+    internal static Area Create(Guid householdId, string name, string? floor = null)
     {
         Guard.AgainstEmpty(householdId, nameof(householdId));
 
-        return new Area(Guid.NewGuid(), householdId, Guard.AgainstNullOrWhiteSpace(name, nameof(name)));
+        return new Area(
+            Guid.NewGuid(),
+            householdId,
+            Guard.AgainstNullOrWhiteSpace(name, nameof(name)),
+            NormalizeFloor(floor));
     }
 
     public void Rename(string name) => Name = Guard.AgainstNullOrWhiteSpace(name, nameof(name));
+
+    /// <summary>Moves this area to a (possibly different) floor, or clears its floor when <paramref name="floor"/> is blank.</summary>
+    public void SetFloor(string? floor) => Floor = NormalizeFloor(floor);
+
+    private static string? NormalizeFloor(string? floor)
+        => string.IsNullOrWhiteSpace(floor) ? null : floor.Trim();
 
     public void Deactivate() => IsActive = false;
 

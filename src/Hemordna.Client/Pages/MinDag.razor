@@ -237,7 +237,7 @@ else
                             }
                             else
                             {
-                                <TaskListItem Item="row.Item" Today="Today" ShowIcon="ShowIcons" ShowAreaChip="true" StripFloorFromAreaChip="true" ShowTimeLevel="_showTimeLevel"
+                                <TaskListItem Item="row.Item" Today="Today" ShowIcon="ShowIcons" ShowAreaChip="true" ShowTimeLevel="_showTimeLevel"
                                               IsBusy="_busyOccurrence == row.Item.OccurrenceId"
                                               IsExpanded="_expandedOccurrence == row.Item.OccurrenceId"
                                               IsStartHere="row.Item.OccurrenceId == StartHereOccurrenceId"
@@ -677,7 +677,7 @@ else
     /// touched, this is purely a client-side rendering concern layered on top of it.</summary>
     private sealed record TaskRow(PlannedTaskResponse Item, bool IsRemotelyCompleted);
 
-    private sealed record TaskGroup(string? AreaName, IReadOnlyList<TaskRow> Items);
+    private sealed record TaskGroup(string? AreaName, string? Floor, IReadOnlyList<TaskRow> Items);
 
     private sealed record FloorGroup(string? Floor, IReadOnlyList<TaskGroup> Rooms);
 
@@ -762,23 +762,28 @@ else
     private List<TaskGroup> RoomGroups
         => (_day?.Items.Where(item => !item.IsRoutine) ?? [])
             .Select(ToRow)
-            .GroupBy(row => row.Item.AreaName)
+            // Grouped by (AreaName, Floor) together, not the name alone - two rooms can now
+            // legitimately share a name as long as they are on different floors (see
+            // Household.AddArea's own uniqueness rule), and grouping by name alone would merge
+            // their tasks into one room group, silently dropping the floor distinction.
+            .GroupBy(row => (row.Item.AreaName, row.Item.Floor))
             .Select(group => new TaskGroup(
-                group.Key,
+                group.Key.AreaName,
+                group.Key.Floor,
                 [.. group.OrderByDescending(row => row.Item.IsOverdue)]))
             .OrderBy(group => RoomOrderOf(group.AreaName))
             .ToList();
 
     /// <summary>
-    /// RoomGroups clustered by floor (see Support/RoomFloors) - same-floor rooms hold together
-    /// so the day never sends anyone up and down the stairs. A floor's position follows its
-    /// first room in the household's own order, so floors read the same way every day. A
-    /// household with no "Våning – " naming at all collapses to one floor-less cluster, so a
-    /// single-floor home sees no heading added.
+    /// RoomGroups clustered by floor (see Area.Floor) - same-floor rooms hold together so the
+    /// day never sends anyone up and down the stairs. A floor's position follows its first room
+    /// in the household's own order, so floors read the same way every day. A household with no
+    /// floors set at all collapses to one floor-less cluster, so a single-floor home sees no
+    /// heading added.
     /// </summary>
     private List<FloorGroup> FloorGroups
         => RoomGroups
-            .GroupBy(group => group.AreaName is { } areaName ? RoomFloors.FloorOf(areaName) : null)
+            .GroupBy(group => group.Floor)
             .Select(group => new FloorGroup(group.Key, [.. group]))
             .OrderBy(group => group.Rooms.Min(room => RoomOrderOf(room.AreaName)))
             .ToList();
@@ -821,8 +826,7 @@ else
     /// nullability the compiler already knows about is respected instead of silenced.</summary>
     private int SuggestedTomorrowRemainingMinutes => _day?.RemainingMinutes ?? 0;
 
-    private static string RoomHeadingName(TaskGroup group)
-        => group.AreaName is { } areaName ? RoomFloors.RoomNameOf(areaName) : "Övrigt";
+    private static string RoomHeadingName(TaskGroup group) => group.AreaName ?? "Övrigt";
 
     /// <summary>How many rows in a group are still genuinely outstanding - a remotely-completed
     /// row stays in the list (see ReconcileRemoteChangeAsync) but must not count toward "N
@@ -1901,34 +1905,39 @@ else
         _extraTaskCandidates = [.. (await tasksTask).Where(task => !idsAlreadyToday.Contains(task.Id))];
     }
 
-    private string? AreaNameFor(Guid? areaId)
-        => areaId is { } id ? _household?.Areas.FirstOrDefault(area => area.Id == id)?.Name : null;
+    private AreaResponse? AreaFor(Guid? areaId)
+        => areaId is { } id ? _household?.Areas.FirstOrDefault(area => area.Id == id) : null;
 
     private static string TimeLabelFor(int minutes)
         => TimeLevel.All.First(level => level.Minutes == TimeLevel.ClosestMinutes(minutes)).Label;
 
-    private sealed record ExtraTaskGroup(string? AreaName, IReadOnlyList<TaskDefinitionResponse> Items);
+    private sealed record ExtraTaskGroup(string? AreaName, string? Floor, IReadOnlyList<TaskDefinitionResponse> Items);
 
     private sealed record ExtraTaskFloorGroup(string? Floor, IReadOnlyList<ExtraTaskGroup> Rooms);
 
     /// <summary>Same room/floor grouping as RoomGroups/FloorGroups (see those for the full
     /// reasoning) applied to the "Extra uppgift" pick list instead of today's own plan -
     /// product feedback that a flat list of every candidate task got long and hard to scan
-    /// once a household had more than a handful.</summary>
+    /// once a household had more than a handful. Grouped by AreaId itself (available here,
+    /// unlike PlannedTaskResponse) rather than by name, so two rooms sharing a name on
+    /// different floors are never merged into one group.</summary>
     private List<ExtraTaskGroup> ExtraTaskRoomGroups
         => _extraTaskCandidates
-            .GroupBy(task => AreaNameFor(task.AreaId))
-            .Select(group => new ExtraTaskGroup(group.Key, [.. group]))
+            .GroupBy(task => task.AreaId)
+            .Select(group =>
+            {
+                var area = AreaFor(group.Key);
+                return new ExtraTaskGroup(area?.Name, area?.Floor, [.. group]);
+            })
             .ToList();
 
     private List<ExtraTaskFloorGroup> ExtraTaskFloorGroups
         => ExtraTaskRoomGroups
-            .GroupBy(group => group.AreaName is { } areaName ? RoomFloors.FloorOf(areaName) : null)
+            .GroupBy(group => group.Floor)
             .Select(group => new ExtraTaskFloorGroup(group.Key, [.. group]))
             .ToList();
 
-    private static string ExtraTaskRoomHeadingName(ExtraTaskGroup group)
-        => group.AreaName is { } areaName ? RoomFloors.RoomNameOf(areaName) : "Övrigt";
+    private static string ExtraTaskRoomHeadingName(ExtraTaskGroup group) => group.AreaName ?? "Övrigt";
 
     /// <summary>Picking an existing task needs none of AddExtraTaskAsync's own creation step -
     /// just schedule the occurrence it already has everything else for.</summary>
