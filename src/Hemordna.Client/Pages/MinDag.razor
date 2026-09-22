@@ -118,6 +118,32 @@ else
     }
     else
     {
+        @* "Påminnelser" (docs/PRODUCT.md §11) - egen grupp överst, före "Rutiner", oavsett
+           presentationsläge (så den syns i fokusläget också, utan att någonsin BLI en
+           fokusuppgift - se FocusOrder, som aldrig läser _reminders). Bara namn och klockslag/
+           plats, aldrig kryssruta eller minutsiffra - en påminnelse är inte hushållsarbete och
+           påverkar varken "N av M klara" eller någon tidssumma. En passerad tid ligger kvar
+           osynligt oförändrad hela dagen (ingen egen "passerad"-logik här - datummodellen sköter
+           det: den slutar dyka upp i _reminders först nästa dag). *@
+        @if (TodaysReminders.Count > 0)
+        {
+            @GroupHeading("Påminnelser", TodaysReminders.Count, showKvar: false)
+            <ul class="task-list" aria-label="Påminnelser">
+                @foreach (var reminder in TodaysReminders)
+                {
+                    <li class="task">
+                        <span class="task-name">
+                            @ReminderLabel(reminder)
+                            @if (reminder.Location is { } location)
+                            {
+                                <span class="task-note muted small">@location</span>
+                            }
+                        </span>
+                    </li>
+                }
+            </ul>
+        }
+
         @if (IsFocusMode)
         {
             @if (FocusTask is { } focusTask)
@@ -591,6 +617,11 @@ else
 @code {
     private DailyPlanResponse? _day;
 
+    /// <summary>Today's own reminders (docs/PRODUCT.md §11) - private to the signed-in member,
+    /// loaded alongside _day in LoadDayAsync so a reload never shows one without the other.
+    /// Already excludes anything cancelled - see IReminderRepository.ListForMemberInRangeAsync.</summary>
+    private IReadOnlyList<ReminderResponse> _reminders = [];
+
     /// <summary>"Jag ser min morgondag på Idag" - tomorrow's own plan, shown read-only in its
     /// own collapsed section (see the "Imorgon" details below). Loaded alongside _day so it is
     /// never stale relative to it - see LoadDayAsync.</summary>
@@ -825,6 +856,20 @@ else
     /// separate property (rather than <c>_day!.RemainingMinutes</c> in the markup) so the
     /// nullability the compiler already knows about is respected instead of silenced.</summary>
     private int SuggestedTomorrowRemainingMinutes => _day?.RemainingMinutes ?? 0;
+
+    /// <summary>Today's own upcoming reminders (docs/PRODUCT.md §11), an all-day one (no
+    /// TimeOfDay) first, then the rest by time of day - never part of FocusOrder, so a reminder
+    /// can never become the focus card's own task (see docs/PRODUCT.md §11, "aldrig en
+    /// fokusuppgift").</summary>
+    private List<ReminderResponse> TodaysReminders
+        => [.. _reminders.OrderBy(reminder => reminder.TimeOfDay.HasValue).ThenBy(reminder => reminder.TimeOfDay)];
+
+    /// <summary>"14:00 · Läkarbesök", or just the title for an all-day reminder - see
+    /// docs/PRODUCT.md §11.</summary>
+    private string ReminderLabel(ReminderResponse reminder)
+        => reminder.TimeOfDay is { } time
+            ? $"{time.ToString("HH:mm", SwedishCulture)} · {reminder.Title}"
+            : reminder.Title;
 
     private static string RoomHeadingName(TaskGroup group) => group.AreaName ?? "Övrigt";
 
@@ -1570,6 +1615,7 @@ else
 
         _day = await Api.GetDailyPlanAsync(householdId, memberId, Today);
         _tomorrow = await Api.GetDailyPlanAsync(householdId, memberId, Today.AddDays(1));
+        _reminders = await Api.GetOwnRemindersAsync(householdId, Today, Today);
         _focusOffset = 0;
         _startedOccurrenceId = await StartedTask.GetAsync(JS, Today);
         _energyChoice = await EnergyChoice.GetAsync(JS, Today);
