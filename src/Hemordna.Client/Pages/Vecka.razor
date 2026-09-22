@@ -74,6 +74,30 @@ else
         }
     </ul>
 
+    @* Egna påminnelser (docs/PRODUCT.md §11) - bara den inloggade medlemmens egna, på sina egna
+       dagar i den egna veckan. Privat: aldrig i hushållsrutnätet ovan (som visar alla aktiva
+       medlemmar) och aldrig i "Se någon annans dag" (LoadPeekDayAsync hämtar bara GetDailyPlanAsync,
+       som aldrig har innehållit påminnelser). *@
+    @if (_weekReminders.Count > 0)
+    {
+        <h2 class="vecka-section-heading">Dina påminnelser den här veckan</h2>
+        <ul class="list" aria-label="Dina påminnelser den här veckan">
+            @foreach (var day in WeekDays)
+            {
+                @foreach (var reminder in RemindersOn(day))
+                {
+                    <li class="list-item">
+                        <span class="list-name">@ReminderRowLabel(day, reminder)</span>
+                        @if (reminder.Location is { } location)
+                        {
+                            <span class="list-meta muted small">@location</span>
+                        }
+                    </li>
+                }
+            }
+        </ul>
+    }
+
     <details class="more-options">
         <summary>Vill du fördela om dagarna?</summary>
         <p class="muted small">
@@ -186,6 +210,10 @@ else
     /// way to ask for anyone else's, so this is never shown next to another member's name.</summary>
     private int? _timeCreditMinutes;
 
+    /// <summary>This member's own upcoming reminders due this week (docs/PRODUCT.md §11) -
+    /// private, never anyone else's; see LoadAsync.</summary>
+    private IReadOnlyList<ReminderResponse> _weekReminders = [];
+
     private IReadOnlyList<HouseholdMemberResponse>? _householdMembers;
     private Guid _peekMemberId;
     private int _peekDayOffset;
@@ -220,6 +248,25 @@ else
         }
 
         _timeCreditMinutes = (await Api.GetTimeCreditAsync(householdId, Today))?.Minutes;
+
+        var weekDays = WeekDays;
+        _weekReminders = await Api.GetOwnRemindersAsync(householdId, weekDays[0], weekDays[^1]);
+    }
+
+    private List<ReminderResponse> RemindersOn(DateOnly date)
+        => [.. _weekReminders.Where(reminder => reminder.Date == date)
+            .OrderBy(reminder => reminder.TimeOfDay.HasValue)
+            .ThenBy(reminder => reminder.TimeOfDay)];
+
+    /// <summary>"Fredag 14:00 · Läkarbesök", or "Fredag · Läkarbesök" for an all-day reminder -
+    /// the weekday name is needed here (unlike Idag's own ReminderLabel) since a whole week is
+    /// shown at once.</summary>
+    private string ReminderRowLabel(DateOnly date, ReminderResponse reminder)
+    {
+        var weekday = date.ToString("dddd", SwedishCulture);
+        return reminder.TimeOfDay is { } time
+            ? $"{weekday} {time.ToString("HH:mm", SwedishCulture)} · {reminder.Title}"
+            : $"{weekday} · {reminder.Title}";
     }
 
     private static IEnumerable<(string Label, string MinutesLabel)> Weekdays(HouseholdMemberResponse member)

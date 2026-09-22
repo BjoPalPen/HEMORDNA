@@ -236,3 +236,25 @@ public sealed record RecurrenceRuleContract(
     DateOnly StartDate,
     string? Weekday,
     string? MonthlyWeek);
+
+/// <summary>A member's own appointment - see docs/PRODUCT.md §11. Never anyone else's; the
+/// server resolves the owner from the caller's own token, not from anything this client sends.
+/// <c>Status</c> is "Upcoming" or "Cancelled" - see the file header for why enum-shaped fields
+/// travel as plain strings.</summary>
+public sealed record ReminderResponse(
+    Guid Id,
+    string Title,
+    string? Location,
+    DateOnly Date,
+    TimeOnly? TimeOfDay,
+    string Status,
+    DateTimeOffset CreatedAt);
+
+public sealed record CreateReminderRequest(string Title, string? Location, DateOnly Date, TimeOnly? TimeOfDay);
+
+public sealed record ChangeReminderTitleRequest(string Title);
+
+/// <summary>Blank clears the location - mirrors the API's own contract.</summary>
+public sealed record ChangeReminderLocationRequest(string? Location);
+
+public sealed record MoveReminderRequest(DateOnly Date, TimeOnly? TimeOfDay);

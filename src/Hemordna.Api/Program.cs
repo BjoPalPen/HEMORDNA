@@ -7,6 +7,7 @@ using Hemordna.Api.Realtime;
 using Hemordna.Application.Households;
 using Hemordna.Application.Planning;
 using Hemordna.Application.Realtime;
+using Hemordna.Application.Reminders;
 using Hemordna.Application.Tasks;
 using Hemordna.Infrastructure;
 using Hemordna.Infrastructure.Email;
@@ -112,6 +113,14 @@ builder.Services.AddScoped<GetMemberTimeCredit>();
 builder.Services.AddScoped<EnsureOccurrencesGenerated>();
 builder.Services.AddScoped<GetDailyPlan>();
 builder.Services.AddSingleton<DailyPlanner>();
+
+builder.Services.AddScoped<CreateReminder>();
+builder.Services.AddScoped<GetOwnReminders>();
+builder.Services.AddScoped<ChangeReminderTitle>();
+builder.Services.AddScoped<ChangeReminderLocation>();
+builder.Services.AddScoped<MoveReminder>();
+builder.Services.AddScoped<CancelReminder>();
+builder.Services.AddScoped<RestoreReminder>();
 
 // SignalR pushes changes to a household's other connected clients - see docs/ARCHITECTURE.md §5.
 builder.Services.AddSignalR();
@@ -301,6 +310,7 @@ app.MapHealthChecks("/health").AllowAnonymous();
 app.MapAuthEndpoints();
 app.MapPasskeyEndpoints();
 app.MapHouseholdEndpoints();
+app.MapReminderEndpoints();
 app.MapHub<HouseholdHub>("/hubs/household", options => options.CloseOnAuthenticationExpiration = true)
     .RequireAuthorization();
 

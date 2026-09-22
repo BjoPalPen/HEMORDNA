@@ -1053,6 +1053,126 @@ public sealed class HemordnaApiClient
         return response.IsSuccessStatusCode;
     }
 
+    /// <summary>
+    /// The signed-in member's own reminders due within [<paramref name="from"/>, <paramref name="to"/>] -
+    /// see docs/PRODUCT.md §11. Never anyone else's, even in the same household - the server
+    /// resolves the owner from the caller's own token, not from anything this client sends.
+    /// </summary>
+    public async Task<IReadOnlyList<ReminderResponse>> GetOwnRemindersAsync(
+        Guid householdId,
+        DateOnly from,
+        DateOnly to,
+        CancellationToken cancellationToken = default)
+        => await GetAsync<IReadOnlyList<ReminderResponse>>(
+            $"api/households/{householdId}/reminders?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}",
+            cancellationToken) ?? [];
+
+    /// <summary>Books a new, upcoming reminder for the signed-in member.</summary>
+    public async Task<ReminderResponse?> CreateReminderAsync(
+        Guid householdId,
+        string title,
+        string? location,
+        DateOnly date,
+        TimeOnly? timeOfDay,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Post, $"api/households/{householdId}/reminders", cancellationToken);
+        request.Content = JsonContent.Create(new CreateReminderRequest(title, location, date, timeOfDay));
+
+        var response = await _http.SendAsync(request, cancellationToken);
+
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<ReminderResponse>(cancellationToken)
+            : null;
+    }
+
+    public async Task<ReminderResponse?> ChangeReminderTitleAsync(
+        Guid householdId,
+        Guid reminderId,
+        string title,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Put, $"api/households/{householdId}/reminders/{reminderId}/title", cancellationToken);
+        request.Content = JsonContent.Create(new ChangeReminderTitleRequest(title));
+
+        var response = await _http.SendAsync(request, cancellationToken);
+
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<ReminderResponse>(cancellationToken)
+            : null;
+    }
+
+    /// <summary>Changes the location, or clears it with a blank value.</summary>
+    public async Task<ReminderResponse?> ChangeReminderLocationAsync(
+        Guid householdId,
+        Guid reminderId,
+        string? location,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Put, $"api/households/{householdId}/reminders/{reminderId}/location", cancellationToken);
+        request.Content = JsonContent.Create(new ChangeReminderLocationRequest(location));
+
+        var response = await _http.SendAsync(request, cancellationToken);
+
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<ReminderResponse>(cancellationToken)
+            : null;
+    }
+
+    /// <summary>Moves a reminder to a new date and time of day.</summary>
+    public async Task<ReminderResponse?> MoveReminderAsync(
+        Guid householdId,
+        Guid reminderId,
+        DateOnly date,
+        TimeOnly? timeOfDay,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Put, $"api/households/{householdId}/reminders/{reminderId}/move", cancellationToken);
+        request.Content = JsonContent.Create(new MoveReminderRequest(date, timeOfDay));
+
+        var response = await _http.SendAsync(request, cancellationToken);
+
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<ReminderResponse>(cancellationToken)
+            : null;
+    }
+
+    /// <summary>Cancels the reminder. Idempotent - safe to call again on one already cancelled.</summary>
+    public async Task<ReminderResponse?> CancelReminderAsync(
+        Guid householdId,
+        Guid reminderId,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Post, $"api/households/{householdId}/reminders/{reminderId}/cancel", cancellationToken);
+
+        var response = await _http.SendAsync(request, cancellationToken);
+
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<ReminderResponse>(cancellationToken)
+            : null;
+    }
+
+    /// <summary>Takes back a cancellation. Fails (non-success status) if the reminder was not cancelled.</summary>
+    public async Task<ReminderResponse?> RestoreReminderAsync(
+        Guid householdId,
+        Guid reminderId,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Post, $"api/households/{householdId}/reminders/{reminderId}/restore", cancellationToken);
+
+        var response = await _http.SendAsync(request, cancellationToken);
+
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<ReminderResponse>(cancellationToken)
+            : null;
+    }
+
     private async Task<T?> GetAsync<T>(string path, CancellationToken cancellationToken)
     {
         var request = await AuthorizedAsync(HttpMethod.Get, path, cancellationToken);
