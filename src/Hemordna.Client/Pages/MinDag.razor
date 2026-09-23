@@ -122,7 +122,7 @@ else
            presentationsläge (så den syns i fokusläget också, utan att någonsin BLI en
            fokusuppgift - se FocusOrder, som aldrig läser _reminders). Bara namn och klockslag/
            plats, aldrig kryssruta eller minutsiffra - en påminnelse är inte hushållsarbete och
-           påverkar varken "N av M klara" eller någon tidssumma, även avbockad (IsReminderLapsed).
+           påverkar varken "N av M klara" eller någon tidssumma, även avbockad (IsReminderCheckedOff).
            En passerad, ej avbockad tid ligger kvar osynligt oförändrad hela dagen (ingen egen
            "passerad"-logik här - datummodellen sköter det: den slutar dyka upp i _reminders
            först nästa dag). En AVBOCKAD påminnelse ligger kvar med en synlig markering i stället
@@ -133,7 +133,7 @@ else
             <ul class="task-list" aria-label="Påminnelser">
                 @foreach (var reminder in TodaysReminders)
                 {
-                    @if (IsReminderLapsed(reminder))
+                    @if (IsReminderCheckedOff(reminder))
                     {
                         @ReminderCheckedRow(reminder)
                     }
@@ -151,8 +151,8 @@ else
                                     <span class="task-note muted small">@location</span>
                                 }
                             </span>
-                            <button type="button" class="btn btn-link" disabled="@(_reminderLapseBusy == reminder.Id)"
-                                    @onclick="() => LapseReminderRowAsync(reminder)">
+                            <button type="button" class="btn btn-link" disabled="@(_reminderCheckOffBusy == reminder.Id)"
+                                    @onclick="() => CheckOffReminderRowAsync(reminder)">
                                 Bocka av
                             </button>
                             <button type="button" class="btn btn-link" @onclick="() => OpenEditReminderSheet(reminder)">
@@ -699,8 +699,8 @@ else
     /// <summary>Today's own reminders (docs/PRODUCT.md §11) - private to the signed-in member,
     /// loaded alongside _day in LoadDayAsync so a reload never shows one without the other.
     /// Already excludes anything cancelled - see IReminderRepository.ListForMemberInRangeAsync.
-    /// A checked-off (Lapsed) reminder is NOT excluded - it stays here so its row can keep
-    /// showing, marked, on its own day - see IsReminderLapsed/ReminderCheckedRow.</summary>
+    /// A checked-off (CheckedOff) reminder is NOT excluded - it stays here so its row can keep
+    /// showing, marked, on its own day - see IsReminderCheckedOff/ReminderCheckedRow.</summary>
     private IReadOnlyList<ReminderResponse> _reminders = [];
 
     private bool _showReminderSheet;
@@ -708,7 +708,7 @@ else
     private bool _reminderBusy;
     private string? _reminderMessage;
     private Guid? _reminderCancelBusy;
-    private Guid? _reminderLapseBusy;
+    private Guid? _reminderCheckOffBusy;
 
     /// <summary>"Ångra" after cancelling OR checking off a reminder - same 8s offer as
     /// completing a task (see _undo/ShowUndo). A reminder's own Reminder.Restore() has no time
@@ -973,16 +973,16 @@ else
 
     /// <summary>Today's own reminders (docs/PRODUCT.md §11) - upcoming AND checked off (a
     /// checked-off one stays on its day, marked, rather than disappearing - see
-    /// IsReminderLapsed/ReminderCheckedRow) - an all-day one (no TimeOfDay) first, then the rest
+    /// IsReminderCheckedOff/ReminderCheckedRow) - an all-day one (no TimeOfDay) first, then the rest
     /// by time of day. Never part of FocusOrder, so a reminder can never become the focus card's
     /// own task (see docs/PRODUCT.md §11, "aldrig en fokusuppgift").</summary>
     private List<ReminderResponse> TodaysReminders
         => [.. _reminders.OrderBy(reminder => reminder.TimeOfDay.HasValue).ThenBy(reminder => reminder.TimeOfDay)];
 
     /// <summary>True once the reminder has been checked off - see
-    /// Hemordna.Domain.Reminders.ReminderStatus.Lapsed. Status travels as a plain string (see
+    /// Hemordna.Domain.Reminders.ReminderStatus.CheckedOff. Status travels as a plain string (see
     /// ReminderResponse's own remarks), compared against the enum member's own name.</summary>
-    private static bool IsReminderLapsed(ReminderResponse reminder) => reminder.Status == "Lapsed";
+    private static bool IsReminderCheckedOff(ReminderResponse reminder) => reminder.Status == "CheckedOff";
 
     /// <summary>"14:00 · Läkarbesök", or just the title for an all-day reminder - see
     /// docs/PRODUCT.md §11. Static - reused as-is by ReminderCheckedRow for a checked-off
@@ -2416,18 +2416,18 @@ else
     /// CancelReminderRowAsync. Unlike a cancellation, a checked-off reminder still matches
     /// GetOwnReminders' date range (see IReminderRepository.ListForMemberInRangeAsync), so
     /// LoadDayAsync makes the row switch to ReminderCheckedRow rather than disappear.</summary>
-    private async Task LapseReminderRowAsync(ReminderResponse reminder)
+    private async Task CheckOffReminderRowAsync(ReminderResponse reminder)
     {
         if (Session.Me is not { HouseholdId: { } householdId })
         {
             return;
         }
 
-        _reminderLapseBusy = reminder.Id;
+        _reminderCheckOffBusy = reminder.Id;
 
         try
         {
-            if (await Api.LapseReminderAsync(householdId, reminder.Id) is not null)
+            if (await Api.CheckOffReminderAsync(householdId, reminder.Id) is not null)
             {
                 ShowReminderUndo(reminder.Id, reminder.Title, "Avbockat");
                 await LoadDayAsync();
@@ -2435,7 +2435,7 @@ else
         }
         finally
         {
-            _reminderLapseBusy = null;
+            _reminderCheckOffBusy = null;
         }
     }
 

@@ -226,7 +226,7 @@ public class ReminderTests
         await Assertions.Expect(reminderGroup.GetByRole(AriaRole.Button, new() { Name = "Ändra" })).ToHaveCountAsync(0);
 
         // A real reload, not just the same component instance - proves the checked-off marking
-        // actually persisted server-side (Reminder.Lapse -> ReminderStatus.Lapsed) rather than
+        // actually persisted server-side (Reminder.CheckOff -> ReminderStatus.CheckedOff) rather than
         // only living in this page's own in-memory state.
         await page.ReloadAsync();
 

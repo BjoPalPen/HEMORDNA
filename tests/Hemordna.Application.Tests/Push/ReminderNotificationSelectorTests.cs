@@ -112,10 +112,10 @@ public class ReminderNotificationSelectorTests
     /// "läkarbesök kl 13, bockar av eftersom man redan varit där" ska inte ge en 'vid tiden'-notis
     /// senare samma dag.</summary>
     [Fact]
-    public void A_lapsed_reminder_never_produces_a_notification()
+    public void A_checked_off_reminder_never_produces_a_notification()
     {
         var reminder = CreateReminder(WinterDate, WinterTimeOfDay, travelMinutes: 30);
-        reminder.Lapse();
+        reminder.CheckOff();
 
         var atLeaveTime = ReminderNotificationSelector.SelectDue(
             WinterAtTimeInstant.AddMinutes(-30), Window, [reminder]);

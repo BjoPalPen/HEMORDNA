@@ -426,13 +426,13 @@ public class ReminderTests
     }
 
     [Fact]
-    public void Lapse_sets_the_status_to_lapsed()
+    public void Lapse_sets_the_status_to_checked_off()
     {
         var reminder = CreateReminder();
 
-        reminder.Lapse();
+        reminder.CheckOff();
 
-        Assert.Equal(ReminderStatus.Lapsed, reminder.Status);
+        Assert.Equal(ReminderStatus.CheckedOff, reminder.Status);
     }
 
     [Fact]
@@ -440,71 +440,71 @@ public class ReminderTests
     {
         var reminder = CreateReminder();
 
-        reminder.Lapse();
-        reminder.Lapse();
+        reminder.CheckOff();
+        reminder.CheckOff();
 
-        Assert.Equal(ReminderStatus.Lapsed, reminder.Status);
+        Assert.Equal(ReminderStatus.CheckedOff, reminder.Status);
     }
 
     [Fact]
-    public void A_cancelled_reminder_cannot_be_lapsed()
+    public void A_cancelled_reminder_cannot_be_checked_off()
     {
         var reminder = CreateReminder();
         reminder.Cancel();
 
-        Assert.Throws<DomainException>(() => reminder.Lapse());
+        Assert.Throws<DomainException>(() => reminder.CheckOff());
     }
 
     [Fact]
-    public void A_lapsed_reminder_cannot_be_cancelled()
+    public void A_checked_off_reminder_cannot_be_cancelled()
     {
         var reminder = CreateReminder();
-        reminder.Lapse();
+        reminder.CheckOff();
 
         Assert.Throws<DomainException>(() => reminder.Cancel());
     }
 
     [Fact]
-    public void A_lapsed_reminder_cannot_have_its_title_changed()
+    public void A_checked_off_reminder_cannot_have_its_title_changed()
     {
         var reminder = CreateReminder();
-        reminder.Lapse();
+        reminder.CheckOff();
 
         Assert.Throws<DomainException>(() => reminder.ChangeTitle("Nytt namn"));
     }
 
     [Fact]
-    public void A_lapsed_reminder_cannot_have_its_location_changed()
+    public void A_checked_off_reminder_cannot_have_its_location_changed()
     {
         var reminder = CreateReminder();
-        reminder.Lapse();
+        reminder.CheckOff();
 
         Assert.Throws<DomainException>(() => reminder.ChangeLocation("Ny plats"));
     }
 
     [Fact]
-    public void A_lapsed_reminder_cannot_be_moved()
+    public void A_checked_off_reminder_cannot_be_moved()
     {
         var reminder = CreateReminder();
-        reminder.Lapse();
+        reminder.CheckOff();
 
         Assert.Throws<DomainException>(() => reminder.MoveTo(Friday.AddDays(1), null));
     }
 
     [Fact]
-    public void A_lapsed_reminder_cannot_have_its_travel_minutes_changed()
+    public void A_checked_off_reminder_cannot_have_its_travel_minutes_changed()
     {
         var reminder = CreateReminder(timeOfDay: new TimeOnly(14, 0));
-        reminder.Lapse();
+        reminder.CheckOff();
 
         Assert.Throws<DomainException>(() => reminder.SetTravelMinutes(30));
     }
 
     [Fact]
-    public void Restore_sets_a_lapsed_reminder_back_to_upcoming()
+    public void Restore_sets_a_checked_off_reminder_back_to_upcoming()
     {
         var reminder = CreateReminder();
-        reminder.Lapse();
+        reminder.CheckOff();
 
         reminder.Restore();
 
@@ -512,22 +512,22 @@ public class ReminderTests
     }
 
     [Fact]
-    public void A_restored_lapsed_reminder_can_be_lapsed_again()
+    public void A_restored_checked_off_reminder_can_be_checked_off_again()
     {
         var reminder = CreateReminder();
-        reminder.Lapse();
+        reminder.CheckOff();
         reminder.Restore();
 
-        reminder.Lapse();
+        reminder.CheckOff();
 
-        Assert.Equal(ReminderStatus.Lapsed, reminder.Status);
+        Assert.Equal(ReminderStatus.CheckedOff, reminder.Status);
     }
 
     [Fact]
-    public void A_restored_lapsed_reminder_can_be_cancelled()
+    public void A_restored_checked_off_reminder_can_be_cancelled()
     {
         var reminder = CreateReminder();
-        reminder.Lapse();
+        reminder.CheckOff();
         reminder.Restore();
 
         reminder.Cancel();

@@ -171,13 +171,13 @@ public sealed class Reminder
     /// Cancels the reminder. Idempotent, so a duplicate request from a second client cannot
     /// fail merely because the first one already went through - the same reasoning as
     /// <see cref="TaskOccurrence.Skip"/>. Blocked once the reminder has been checked off
-    /// (<see cref="Lapse"/>): silently overwriting <see cref="ReminderStatus.Lapsed"/> would
+    /// (<see cref="CheckOff"/>): silently overwriting <see cref="ReminderStatus.CheckedOff"/> would
     /// erase the owner's own "I've handled this" without an explicit <see cref="Restore"/> -
     /// call <see cref="Restore"/> first.
     /// </summary>
     public void Cancel()
     {
-        if (Status == ReminderStatus.Lapsed)
+        if (Status == ReminderStatus.CheckedOff)
         {
             throw new DomainException("A checked-off reminder cannot be cancelled - restore it first.");
         }
@@ -187,15 +187,15 @@ public sealed class Reminder
 
     /// <summary>
     /// Marks this reminder's own time as no longer needing a reminder - see
-    /// <see cref="ReminderStatus.Lapsed"/> for why this is about the TIME, not about a chore.
+    /// <see cref="ReminderStatus.CheckedOff"/> for why this is about the TIME, not about a chore.
     /// Idempotent, same reasoning as <see cref="Cancel"/>: a duplicate request from a second
     /// client cannot fail merely because the first one already went through. Blocked on a
     /// cancelled reminder - an appointment that was called off entirely has nothing left to
     /// check off; <see cref="Restore"/> it first if that was a mistake.
     /// </summary>
-    public void Lapse()
+    public void CheckOff()
     {
-        if (Status == ReminderStatus.Lapsed)
+        if (Status == ReminderStatus.CheckedOff)
         {
             return;
         }
@@ -205,7 +205,7 @@ public sealed class Reminder
             throw new DomainException("A cancelled reminder cannot be checked off.");
         }
 
-        Status = ReminderStatus.Lapsed;
+        Status = ReminderStatus.CheckedOff;
     }
 
     /// <summary>

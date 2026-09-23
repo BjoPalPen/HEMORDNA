@@ -22,7 +22,7 @@ public interface IReminderRepository
     /// This member's own reminders due within [<paramref name="fromDate"/>, <paramref name="toDate"/>] -
     /// Min dag and Vecka. Cancelled reminders are excluded: a cancelled reminder "lämnar dagen utan
     /// markering" (docs/PRODUCT.md §11), so it has nothing to show anywhere. A checked-off
-    /// (<see cref="ReminderStatus.Lapsed"/>) reminder is deliberately NOT excluded here - unlike a
+    /// (<see cref="ReminderStatus.CheckedOff"/>) reminder is deliberately NOT excluded here - unlike a
     /// cancellation, checking one off leaves a visible marking on its day, the same way a
     /// completed task stays visible rather than disappearing. Scoped by both
     /// <paramref name="householdId"/> and <paramref name="memberId"/> - unlike

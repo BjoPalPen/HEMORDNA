@@ -2,15 +2,15 @@ using Hemordna.Domain.Reminders;
 
 namespace Hemordna.Application.Reminders;
 
-/// <summary>Checks off one of the caller's own reminders - see <see cref="Reminder.Lapse"/>.</summary>
-public sealed class LapseReminder
+/// <summary>Checks off one of the caller's own reminders - see <see cref="Reminder.CheckOff"/>.</summary>
+public sealed class CheckOffReminder
 {
     private readonly IReminderRepository _reminders;
 
-    public LapseReminder(IReminderRepository reminders) => _reminders = reminders;
+    public CheckOffReminder(IReminderRepository reminders) => _reminders = reminders;
 
     /// <summary>
-    /// Lapses the reminder, or returns <c>null</c> when the household has no such reminder OR
+    /// ChecksOff the reminder, or returns <c>null</c> when the household has no such reminder OR
     /// the reminder belongs to a different member - see <see cref="ChangeReminderTitle"/> for why
     /// those two cases are indistinguishable on purpose. A rule violation from the domain (a
     /// cancelled reminder cannot be checked off) is left to throw uncaught.
@@ -28,7 +28,7 @@ public sealed class LapseReminder
             return null;
         }
 
-        reminder.Lapse();
+        reminder.CheckOff();
 
         await _reminders.UpdateAsync(reminder, cancellationToken);
 

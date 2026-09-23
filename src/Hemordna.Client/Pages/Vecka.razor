@@ -86,7 +86,10 @@ else
             {
                 @foreach (var reminder in RemindersOn(day))
                 {
-                    <li class="list-item">
+                    @* En avbockad påminnelse ligger kvar på sin dag, men måste se avbockad ut
+                       här också - annars ser veckan ut att ha kvar något man redan hanterat.
+                       Samma "task-done"-behandling som Idag ger raden. *@
+                    <li class="list-item @(IsReminderCheckedOff(reminder) ? "task-done" : null)">
                         <span class="list-name">@ReminderRowLabel(day, reminder)</span>
                         @if (reminder.Location is { } location)
                         {
@@ -257,6 +260,12 @@ else
         => [.. _weekReminders.Where(reminder => reminder.Date == date)
             .OrderBy(reminder => reminder.TimeOfDay.HasValue)
             .ThenBy(reminder => reminder.TimeOfDay)];
+
+    /// <summary>Whether its owner has ticked this reminder off - see
+    /// <see cref="Hemordna.Domain.Reminders.ReminderStatus"/>. Mirrors Idag's own helper of the
+    /// same name; the two pages each own their reminder rendering, so the one-line check lives in
+    /// both rather than pulling a shared type in for it.</summary>
+    private static bool IsReminderCheckedOff(ReminderResponse reminder) => reminder.Status == "CheckedOff";
 
     /// <summary>"Fredag 14:00 · Läkarbesök", or "Fredag · Läkarbesök" for an all-day reminder -
     /// the weekday name is needed here (unlike Idag's own ReminderLabel) since a whole week is

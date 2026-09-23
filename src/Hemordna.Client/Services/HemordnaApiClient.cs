@@ -1181,15 +1181,15 @@ public sealed class HemordnaApiClient
             : null;
     }
 
-    /// <summary>Checks off the reminder - see Hemordna.Domain.Reminders.Reminder.Lapse. Idempotent,
+    /// <summary>Checks off the reminder - see Hemordna.Domain.Reminders.Reminder.CheckOff. Idempotent,
     /// safe to call again on one already checked off.</summary>
-    public async Task<ReminderResponse?> LapseReminderAsync(
+    public async Task<ReminderResponse?> CheckOffReminderAsync(
         Guid householdId,
         Guid reminderId,
         CancellationToken cancellationToken = default)
     {
         var request = await AuthorizedAsync(
-            HttpMethod.Post, $"api/households/{householdId}/reminders/{reminderId}/lapse", cancellationToken);
+            HttpMethod.Post, $"api/households/{householdId}/reminders/{reminderId}/check-off", cancellationToken);
 
         var response = await _http.SendAsync(request, cancellationToken);
 
