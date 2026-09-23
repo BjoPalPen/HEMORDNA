@@ -19,13 +19,18 @@ namespace Hemordna.Application.Push;
 /// it has nothing to read it from.
 /// </para>
 /// <para>
-/// <b>Idempotency.</b> <see cref="ISentReminderNotificationRepository.MarkSentAsync"/> is called
-/// before <see cref="IPushSender.SendAsync"/>, not after. If the process crashes between the two,
-/// that one notification is silently dropped rather than retried - the opposite failure would be
-/// worse: retrying after a crash risks sending the same "time to leave"/"vid tiden" notification
-/// twice, which this task's idempotency requirement rules out outright. A dropped notification
-/// only ever happens on an actual process crash in a multi-millisecond window, not in normal
-/// operation.
+/// <b>Idempotency, and which way it leans.</b>
+/// <see cref="ISentReminderNotificationRepository.MarkSentAsync"/> is called AFTER
+/// <see cref="IPushSender.SendAsync"/>, deliberately. That makes this at-least-once: a transient
+/// failure at the push service leaves the notification unmarked, so the next sweep tries again
+/// while <see cref="DueWindow"/> is still open, and a crash in between the send and the mark can
+/// deliver the same notification twice.
+/// <para>
+/// Björn's decision, and the right way round for THIS feature: a duplicate "Dags att gå" is a
+/// moment's irritation, while a missed one means arriving late - which is the exact failure the
+/// whole reminder feature exists to prevent. Marking first would trade that annoyance for silent
+/// loss whenever Apple's push service hiccups. Do not "tidy" this back into mark-then-send.
+/// </para>
 /// </para>
 /// <para>
 /// A notification for a member with zero live push subscriptions is never marked sent - nothing
@@ -105,12 +110,21 @@ public sealed class SendDueReminderNotifications
                 continue;
             }
 
-            // Recorded before the send is attempted - see this class's remarks on idempotency.
+            var (title, body) = BuildText(notification);
+            var delivered = await _sender.SendAsync(subscriptions, title, body, "/", cancellationToken);
+
+            if (delivered == 0)
+            {
+                // Nothing actually reached a device, so there is nothing to remember - the next
+                // sweep tries again while DueWindow is open. See this class's remarks.
+                continue;
+            }
+
+            // Recorded only once something was delivered - see this class's remarks on idempotency.
             await _sentLog.MarkSentAsync(
                 notification.HouseholdId, notification.ReminderId, notification.Kind, now, cancellationToken);
 
-            var (title, body) = BuildText(notification);
-            deliveredCount += await _sender.SendAsync(subscriptions, title, body, "/", cancellationToken);
+            deliveredCount += delivered;
         }
 
         return deliveredCount;

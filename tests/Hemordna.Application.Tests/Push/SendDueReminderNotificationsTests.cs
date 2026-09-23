@@ -24,6 +24,39 @@ public class SendDueReminderNotificationsTests
     private SendDueReminderNotifications CreateUseCase()
         => new(_reminders, _sentLog, _subscriptions, _sender);
 
+    /// <summary>
+    /// Björn's decision, and the reason the mark-sent write sits AFTER the send: a notification
+    /// that reached no device must be tried again while the window is open, not quietly written
+    /// off as delivered. Fails if anyone reorders the two back to mark-then-send - which is the
+    /// whole point of this test existing, because both orderings look equally reasonable in a
+    /// diff and only one of them keeps a "Dags att gå" from vanishing when Apple hiccups.
+    /// </summary>
+    [Fact]
+    public async Task A_notification_that_reached_no_device_is_not_recorded_as_sent()
+    {
+        SeedDueReminder();
+        _sender.SentCount = 0;
+
+        var delivered = await CreateUseCase().HandleAsync(AtTimeInstant, CancellationToken.None);
+
+        Assert.Equal(0, delivered);
+        Assert.Equal(0, _sentLog.MarkSentCallCount);
+    }
+
+    /// <summary>The same sweep run twice still sends once - at-least-once must not become
+    /// every-time.</summary>
+    [Fact]
+    public async Task A_delivered_notification_is_recorded_and_not_sent_again()
+    {
+        SeedDueReminder();
+
+        await CreateUseCase().HandleAsync(AtTimeInstant, CancellationToken.None);
+        var second = await CreateUseCase().HandleAsync(AtTimeInstant, CancellationToken.None);
+
+        Assert.Equal(0, second);
+        Assert.Equal(1, _sentLog.MarkSentCallCount);
+    }
+
     private (Reminder Reminder, Guid HouseholdId, Guid MemberId) SeedDueReminder()
     {
         var householdId = Guid.NewGuid();
