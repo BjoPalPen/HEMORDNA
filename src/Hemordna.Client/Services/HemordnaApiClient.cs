@@ -1197,6 +1197,54 @@ public sealed class HemordnaApiClient
             : null;
     }
 
+    /// <summary>The public VAPID key a browser needs before it can create a push subscription.
+    /// Never anyone else's; unused by the caller if not signed in with a household.</summary>
+    public async Task<string?> GetPushVapidPublicKeyAsync(
+        Guid householdId, CancellationToken cancellationToken = default)
+    {
+        var response = await GetAsync<VapidPublicKeyResponse>(
+            $"api/households/{householdId}/push/vapid-public-key", cancellationToken);
+        return response?.PublicKey;
+    }
+
+    /// <summary>Registers this device's push subscription for the signed-in member.</summary>
+    public async Task<bool> SubscribeToPushAsync(
+        Guid householdId, string endpoint, string p256dh, string auth, CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Post, $"api/households/{householdId}/push/subscribe", cancellationToken);
+        request.Content = JsonContent.Create(new SubscribeToPushRequest(endpoint, p256dh, auth));
+
+        var response = await _http.SendAsync(request, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
+    /// <summary>Removes this device's push subscription for the signed-in member.</summary>
+    public async Task<bool> UnsubscribeFromPushAsync(
+        Guid householdId, string endpoint, CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Post, $"api/households/{householdId}/push/unsubscribe", cancellationToken);
+        request.Content = JsonContent.Create(new UnsubscribeFromPushRequest(endpoint));
+
+        var response = await _http.SendAsync(request, cancellationToken);
+        return response.IsSuccessStatusCode;
+    }
+
+    /// <summary>Sends a test notification to every one of the signed-in member's own devices.
+    /// Returns how many actually received it, or <c>null</c> on failure.</summary>
+    public async Task<int?> SendTestPushAsync(Guid householdId, CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Post, $"api/households/{householdId}/push/test", cancellationToken);
+
+        var response = await _http.SendAsync(request, cancellationToken);
+
+        return response.IsSuccessStatusCode
+            ? (await response.Content.ReadFromJsonAsync<SendTestPushResponse>(cancellationToken))?.Sent
+            : null;
+    }
+
     private async Task<T?> GetAsync<T>(string path, CancellationToken cancellationToken)
     {
         var request = await AuthorizedAsync(HttpMethod.Get, path, cancellationToken);

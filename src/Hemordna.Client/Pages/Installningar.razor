@@ -4,6 +4,7 @@
 @inject HemordnaApiClient Api
 @inject HemordnaSession Session
 @inject WebAuthnClient WebAuthn
+@inject PushNotificationService Push
 @inject IJSRuntime JS
 
 <PageTitle>Inställningar – Hemordna</PageTitle>
@@ -237,6 +238,63 @@ else
         </div>
     }
 
+    @if (_pushCheckDone)
+    {
+        <div class="card">
+            <h2>Notiser</h2>
+
+            @if (_pushIosSafariTab)
+            {
+                <p class="muted">
+                    Notiser kräver att Hemordna är tillagd på hemskärmen. Lägg till appen där för att kunna få notiser.
+                </p>
+            }
+            else if (!_pushSupported)
+            {
+                <p class="muted">Den här enheten eller webbläsaren stödjer inte notiser.</p>
+            }
+            else if (_pushPermission == "denied")
+            {
+                <p class="muted">
+                    Notiser är blockerade för Hemordna i webbläsaren. Ändra det i webbläsarens
+                    inställningar för att kunna aktivera dem.
+                </p>
+            }
+            else if (_pushSubscribed)
+            {
+                <p class="muted small">Notiser är aktiverade på den här enheten.</p>
+
+                <div class="list-item-actions">
+                    <button type="button" class="btn btn-secondary" disabled="@_pushBusy" @onclick="SendTestPushAsync">
+                        @(_pushBusy ? "Skickar…" : "Skicka en testnotis")
+                    </button>
+                    <button type="button" class="btn btn-link" disabled="@_pushBusy" @onclick="DisablePushAsync">
+                        Stäng av
+                    </button>
+                </div>
+
+                @if (_pushTestResult is { } testResult)
+                {
+                    <p class="notice" role="status">@testResult</p>
+                }
+            }
+            else
+            {
+                <p class="muted small">Få en notis här på den här enheten.</p>
+
+                <button type="button" class="btn btn-primary" disabled="@(_pushBusy || _vapidPublicKey is null)"
+                        @onclick="EnablePushAsync">
+                    @(_pushBusy ? "Ett ögonblick…" : "Aktivera notiser")
+                </button>
+            }
+
+            @if (_pushMessage is { } pushMessage)
+            {
+                <div class="notice notice-problem" role="alert">@pushMessage</div>
+            }
+        </div>
+    }
+
     <div class="card">
         <h2>Om ikonerna</h2>
         <p class="muted small">
@@ -335,6 +393,16 @@ else
     private bool _passkeyBusy;
     private string? _busyPasskeyId;
 
+    private bool _pushCheckDone;
+    private bool _pushSupported;
+    private bool _pushIosSafariTab;
+    private string _pushPermission = "default";
+    private bool _pushSubscribed;
+    private string? _vapidPublicKey;
+    private bool _pushBusy;
+    private string? _pushMessage;
+    private string? _pushTestResult;
+
     protected override async Task OnInitializedAsync()
     {
         await Session.EnsureLoadedAsync();
@@ -362,6 +430,33 @@ else
         finally
         {
             _passkeyCheckDone = true;
+        }
+
+        // Same guard as the passkey check above - a capability probe or a flaky network call
+        // here must never take the rest of the page down with it.
+        try
+        {
+            _pushIosSafariTab = await Push.IsIosSafariTabAsync();
+            _pushSupported = await Push.IsSupportedAsync();
+
+            if (_pushSupported && !_pushIosSafariTab)
+            {
+                _pushPermission = await Push.GetPermissionAsync();
+                _pushSubscribed = await Push.IsSubscribedAsync();
+
+                if (Session.Me is { HouseholdId: { } householdId })
+                {
+                    _vapidPublicKey = await Api.GetPushVapidPublicKeyAsync(householdId);
+                }
+            }
+        }
+        catch (HttpRequestException)
+        {
+            _pushMessage = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _pushCheckDone = true;
         }
     }
 
@@ -681,6 +776,127 @@ else
         finally
         {
             _busyPasskeyId = null;
+        }
+    }
+
+    /// <summary>
+    /// Requests notification permission and subscribes. Called directly from the button's
+    /// @onclick with no prior await in this method's own caller - iOS only honours the
+    /// permission prompt as a direct result of a real press. <see cref="Push"/>'s own JS call is
+    /// therefore the very first await here, same as <see cref="AddPasskeyAsync"/>'s WebAuthn call.
+    /// </summary>
+    private async Task EnablePushAsync()
+    {
+        if (_vapidPublicKey is not { } vapidPublicKey || Session.Me is not { HouseholdId: { } householdId })
+        {
+            return;
+        }
+
+        _pushBusy = true;
+        _pushMessage = null;
+
+        try
+        {
+            var result = await Push.SubscribeAsync(vapidPublicKey);
+
+            // Reflects a "denied" choice even when the person cancels rather than explicitly
+            // denies - the button hides behind _pushPermission next render either way.
+            _pushPermission = await Push.GetPermissionAsync();
+
+            if (!result.Success || result.Endpoint is null || result.P256dh is null || result.Auth is null)
+            {
+                _pushMessage = result.Error ?? "Det gick inte att aktivera notiser.";
+                return;
+            }
+
+            if (!await Api.SubscribeToPushAsync(householdId, result.Endpoint, result.P256dh, result.Auth))
+            {
+                _pushMessage = "Kunde inte spara prenumerationen. Försök igen.";
+                return;
+            }
+
+            _pushSubscribed = true;
+        }
+        catch (HttpRequestException)
+        {
+            _pushMessage = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _pushBusy = false;
+        }
+    }
+
+    private async Task DisablePushAsync()
+    {
+        _pushBusy = true;
+        _pushMessage = null;
+        _pushTestResult = null;
+
+        try
+        {
+            var result = await Push.UnsubscribeAsync();
+
+            if (!result.Success)
+            {
+                _pushMessage = result.Error;
+                return;
+            }
+
+            // Best-effort on the server - the browser side is already unsubscribed either way,
+            // which is what IsSubscribedAsync and the UI below actually reflect.
+            if (result.Endpoint is { } endpoint && Session.Me is { HouseholdId: { } householdId })
+            {
+                await Api.UnsubscribeFromPushAsync(householdId, endpoint);
+            }
+
+            _pushSubscribed = false;
+        }
+        catch (HttpRequestException)
+        {
+            _pushMessage = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _pushBusy = false;
+        }
+    }
+
+    private async Task SendTestPushAsync()
+    {
+        if (Session.Me is not { HouseholdId: { } householdId })
+        {
+            return;
+        }
+
+        _pushBusy = true;
+        _pushMessage = null;
+        _pushTestResult = null;
+
+        try
+        {
+            var sent = await Api.SendTestPushAsync(householdId);
+
+            _pushTestResult = sent switch
+            {
+                null => null,
+                0 => "Ingen enhet tog emot notisen.",
+                1 => "Skickad till 1 enhet.",
+                _ => $"Skickad till {sent} enheter."
+            };
+
+            if (sent is null)
+            {
+                _pushMessage = "Kunde inte skicka testnotisen. Försök igen.";
+            }
+        }
+        catch (HttpRequestException)
+        {
+            _pushMessage = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _pushBusy = false;
         }
     }
 }
