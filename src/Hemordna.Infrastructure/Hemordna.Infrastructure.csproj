@@ -19,6 +19,15 @@
     <PackageReference Include="Fido2" Version="4.0.1" />
     <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.11" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.3" />
+    <!-- Web Push (RFC 8030/8291/8292) sender for browser notifications. Verified running on
+         net10.0 in BowlingPlatform (Björn's other product, same stack) - see push-info.txt
+         there. Pulls in Newtonsoft.Json and Portable.BouncyCastle; approved. -->
+    <PackageReference Include="WebPush" Version="1.0.12" />
+    <!-- WebPush 1.0.12 asks for Newtonsoft.Json 10.0.3, which carries a known high severity
+         advisory (NU1903 / GHSA-5crp-9r3c-p9vr: deeply nested JSON can exhaust the stack).
+         Pinning the fixed line here lifts the transitive reference instead - the same thing
+         BowlingPlatform already does. Remove this only together with WebPush itself. -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
 
   <PropertyGroup>

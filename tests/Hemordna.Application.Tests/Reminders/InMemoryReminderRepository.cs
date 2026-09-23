@@ -44,4 +44,9 @@ internal sealed class InMemoryReminderRepository : IReminderRepository
                 && reminder.Date <= toDate)
             .OrderBy(reminder => reminder.Date)
             .ThenBy(reminder => reminder.TimeOfDay)]);
+
+    public Task<IReadOnlyList<Reminder>> ListInDateRangeAsync(
+        DateOnly fromDate, DateOnly toDate, CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<Reminder>>([.. _reminders
+            .Where(reminder => reminder.Date >= fromDate && reminder.Date <= toDate)]);
 }

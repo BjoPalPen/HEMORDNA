@@ -36,6 +36,7 @@ builder.Services.AddScoped<TokenStore>();
 builder.Services.AddScoped<HemordnaApiClient>();
 builder.Services.AddScoped<HemordnaSession>();
 builder.Services.AddScoped<WebAuthnClient>();
+builder.Services.AddScoped<PushNotificationService>();
 builder.Services.AddScoped(sp => new HouseholdRealtimeClient(apiBaseAddress, sp.GetRequiredService<TokenStore>()));
 
 await builder.Build().RunAsync();

@@ -269,3 +269,12 @@ public sealed record MoveReminderRequest(DateOnly Date, TimeOnly? TimeOfDay);
 
 /// <summary><c>null</c> clears the travel time - mirrors the API's own contract.</summary>
 public sealed record SetReminderTravelMinutesRequest(int? TravelMinutes);
+
+public sealed record VapidPublicKeyResponse(string PublicKey);
+
+public sealed record SubscribeToPushRequest(string Endpoint, string P256dh, string Auth);
+
+public sealed record UnsubscribeFromPushRequest(string Endpoint);
+
+/// <summary>How many of the caller's own devices actually received the test notification.</summary>
+public sealed record SendTestPushResponse(int Sent);

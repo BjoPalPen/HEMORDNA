@@ -1,10 +1,12 @@
 using Hemordna.Application.Households;
 using Hemordna.Application.Planning;
+using Hemordna.Application.Push;
 using Hemordna.Application.Reminders;
 using Hemordna.Application.Tasks;
 using Hemordna.Infrastructure.Email;
 using Hemordna.Infrastructure.Identity;
 using Hemordna.Infrastructure.Persistence;
+using Hemordna.Infrastructure.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -46,6 +48,13 @@ public static class DependencyInjection
         services.AddScoped<IMemberDayOffRepository, MemberDayOffRepository>();
         services.AddScoped<IMemberPreferenceRepository, MemberPreferenceRepository>();
         services.AddScoped<IReminderRepository, ReminderRepository>();
+        services.AddScoped<IPushSubscriptionRepository, PushSubscriptionRepository>();
+        services.AddScoped<ISentReminderNotificationRepository, SentReminderNotificationRepository>();
+        // Resolved lazily by whatever endpoint actually calls it - so an environment with no
+        // Vapid:* configuration set still starts and serves everything except push, rather
+        // than failing at startup for a feature most requests never touch (see WebPushSender's
+        // constructor, which is where the missing-config failure actually surfaces).
+        services.AddScoped<IPushSender, WebPushSender>();
         services.AddScoped<ITaskDefinitionRepository, TaskDefinitionRepository>();
         services.AddScoped<ITaskOccurrenceRepository, TaskOccurrenceRepository>();
         services.AddScoped<ITaskAssignmentRepository, TaskAssignmentRepository>();
