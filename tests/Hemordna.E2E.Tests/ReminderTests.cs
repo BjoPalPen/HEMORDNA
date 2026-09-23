@@ -191,4 +191,48 @@ public class ReminderTests
         await Assertions.Expect(undoRow).Not.ToBeVisibleAsync();
         await Assertions.Expect(page.Locator("ul[aria-label=\"Påminnelser\"]").GetByText("Frisör")).ToBeVisibleAsync();
     }
+
+    /// <summary>Björns egentliga begäran: en påminnelse ska gå att bocka av, precis som en
+    /// uppgift - utan att försvinna från dagen (till skillnad från en avbokning) och utan att
+    /// ge upphov till "vid tiden"-notiser för en tid som redan är hanterad (bevisat på
+    /// domän-/applikationsnivå i ReminderNotificationSelectorTests, inte här). En riktig
+    /// omladdning bevisar att markeringen faktiskt sparades server-side, inte bara i sheetens
+    /// egna lokala tillstånd.</summary>
+    [Fact]
+    public async Task Checking_off_a_reminder_marks_it_and_the_marking_survives_a_reload()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Embla");
+
+        var today = AppDate.Today;
+        await CreateReminderViaUiAsync(page, "Tandläkare", today, "13:00");
+
+        var reminderGroup = page.Locator("ul[aria-label=\"Påminnelser\"]");
+        await Assertions.Expect(reminderGroup.GetByText("Tandläkare")).ToBeVisibleAsync();
+
+        await reminderGroup.GetByRole(AriaRole.Button, new() { Name = "Bocka av" }).ClickAsync();
+
+        // Offers "Ångra", same shape as cancelling - just a different label ("Avbockat", not
+        // "Avbokat").
+        var undoRow = page.GetByRole(AriaRole.Status).Filter(new() { HasText = "Avbockat: Tandläkare" });
+        await Assertions.Expect(undoRow).ToBeVisibleAsync();
+
+        // Still on its day right away - unlike a cancelled reminder, which disappears - with a
+        // visible checked marking and no more "Bocka av"/"Ändra"/"Avboka" actions on the row.
+        var checkedRow = page.Locator("li.task-done", new() { HasText = "Tandläkare" });
+        await Assertions.Expect(checkedRow).ToBeVisibleAsync();
+        await Assertions.Expect(reminderGroup.GetByRole(AriaRole.Button, new() { Name = "Bocka av" })).ToHaveCountAsync(0);
+        await Assertions.Expect(reminderGroup.GetByRole(AriaRole.Button, new() { Name = "Avboka" })).ToHaveCountAsync(0);
+        await Assertions.Expect(reminderGroup.GetByRole(AriaRole.Button, new() { Name = "Ändra" })).ToHaveCountAsync(0);
+
+        // A real reload, not just the same component instance - proves the checked-off marking
+        // actually persisted server-side (Reminder.Lapse -> ReminderStatus.Lapsed) rather than
+        // only living in this page's own in-memory state.
+        await page.ReloadAsync();
+
+        var reminderGroupAfterReload = page.Locator("ul[aria-label=\"Påminnelser\"]");
+        await Assertions.Expect(reminderGroupAfterReload.GetByText("Tandläkare")).ToBeVisibleAsync();
+        await Assertions.Expect(page.Locator("li.task-done", new() { HasText = "Tandläkare" })).ToBeVisibleAsync();
+        await Assertions.Expect(reminderGroupAfterReload.GetByRole(AriaRole.Button, new() { Name = "Avboka" })).ToHaveCountAsync(0);
+    }
 }

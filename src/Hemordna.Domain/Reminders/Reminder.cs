@@ -111,7 +111,7 @@ public sealed class Reminder
     /// <summary>Changes the title. Only an upcoming reminder can be changed.</summary>
     public void ChangeTitle(string title)
     {
-        EnsureNotCancelled("changed");
+        EnsureUpcoming("changed");
 
         Title = ValidateTitle(title);
     }
@@ -122,7 +122,7 @@ public sealed class Reminder
     /// </summary>
     public void ChangeLocation(string? location)
     {
-        EnsureNotCancelled("changed");
+        EnsureUpcoming("changed");
 
         Location = ValidateLocation(location);
     }
@@ -141,7 +141,7 @@ public sealed class Reminder
     /// </summary>
     public void MoveTo(DateOnly date, TimeOnly? timeOfDay)
     {
-        EnsureNotCancelled("moved");
+        EnsureUpcoming("moved");
         SchedulingDate.ValidateCalendar(date);
 
         Date = date;
@@ -162,7 +162,7 @@ public sealed class Reminder
     /// </summary>
     public void SetTravelMinutes(int? travelMinutes)
     {
-        EnsureNotCancelled("changed");
+        EnsureUpcoming("changed");
 
         TravelMinutes = ValidateTravelMinutes(travelMinutes, TimeOfDay, Title);
     }
@@ -230,7 +230,7 @@ public sealed class Reminder
         Status = ReminderStatus.Upcoming;
     }
 
-    private void EnsureNotCancelled(string action)
+    private void EnsureUpcoming(string action)
     {
         if (Status != ReminderStatus.Upcoming)
         {
