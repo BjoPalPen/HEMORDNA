@@ -134,6 +134,10 @@ else
                     <li class="task">
                         <span class="task-name">
                             @ReminderLabel(reminder)
+                            @if (DepartureLabel(reminder) is { } departureLabel)
+                            {
+                                <span class="task-note muted small">@departureLabel</span>
+                            }
                             @if (reminder.Location is { } location)
                             {
                                 <span class="task-note muted small">@location</span>
@@ -641,8 +645,22 @@ else
 
                 <label class="field">
                     <span>Klockslag</span>
-                    <input type="time" @bind="_reminderForm.TimeOfDay" />
+                    <input type="time" @bind="_reminderForm.TimeOfDay" @bind:after="OnReminderTimeOfDayChanged" />
                 </label>
+
+                <label class="field">
+                    <span>Restid</span>
+                    <input type="number" min="1" max="1440" @bind="_reminderForm.TravelMinutes"
+                           disabled="@(_reminderForm.TimeOfDay is null)" placeholder="Till exempel 30" />
+                </label>
+                @* Deliberately a sibling of the label above, not nested inside it - text inside
+                   a <label> becomes part of its wrapped control's accessible name, which would
+                   make this hint's own mention of "klockslag" match the real Klockslag field
+                   too (GetByLabel does substring matching - see ReminderTests). *@
+                @if (_reminderForm.TimeOfDay is null)
+                {
+                    <span class="muted small">Lägg till ett klockslag för att kunna ange restid.</span>
+                }
 
                 <label class="field">
                     <span>Plats</span>
@@ -692,6 +710,12 @@ else
         public string Location { get; set; } = string.Empty;
         public DateOnly? Date { get; set; }
         public TimeOnly? TimeOfDay { get; set; }
+
+        /// <summary>Mirrors <see cref="Hemordna.Client.Contracts.ReminderResponse.TravelMinutes"/>.
+        /// Cleared automatically whenever <see cref="TimeOfDay"/> is cleared - see
+        /// OnReminderTimeOfDayChanged - so the field never shows a number the save is about to
+        /// throw away; the domain does the same thing for the same reason (Reminder.MoveTo).</summary>
+        public int? TravelMinutes { get; set; }
     }
 
     /// <summary>"Jag ser min morgondag på Idag" - tomorrow's own plan, shown read-only in its
@@ -942,6 +966,32 @@ else
         => reminder.TimeOfDay is { } time
             ? $"{time.ToString("HH:mm", SwedishCulture)} · {reminder.Title}"
             : reminder.Title;
+
+    /// <summary>"Gå 13:30" - the number this whole field exists for (docs/PRODUCT.md §11:
+    /// "13:30, not 14:00"), so a member never has to do the subtraction themselves. <c>null</c>
+    /// whenever there is nothing to count back from (no time of day) or nothing set to count
+    /// (no travel minutes) - the same two conditions the domain's own Reminder.SetTravelMinutes
+    /// requires. When counting back crosses midnight the departure is said to be the evening
+    /// before, spelled out rather than silently showing a same-looking clock time for what is
+    /// actually yesterday evening. Travel minutes is capped at 24h server-side
+    /// (Reminder.MaxTravelMinutes), so counting back can land at most one calendar day earlier -
+    /// never further - which is why "kvällen innan" alone, with no day count, is always enough.</summary>
+    private static string? DepartureLabel(ReminderResponse reminder)
+    {
+        if (reminder.TimeOfDay is not { } time || reminder.TravelMinutes is not { } travelMinutes)
+        {
+            return null;
+        }
+
+        const int minutesPerDay = 24 * 60;
+        var rawMinutes = (time.Hour * 60) + time.Minute - travelMinutes;
+        var isEveningBefore = rawMinutes < 0;
+        var normalizedMinutes = ((rawMinutes % minutesPerDay) + minutesPerDay) % minutesPerDay;
+        var departure = new TimeOnly(normalizedMinutes / 60, normalizedMinutes % 60);
+        var departureText = departure.ToString("HH:mm", SwedishCulture);
+
+        return isEveningBefore ? $"Gå {departureText} kvällen innan" : $"Gå {departureText}";
+    }
 
     private static string RoomHeadingName(TaskGroup group) => group.AreaName ?? "Övrigt";
 
@@ -2193,6 +2243,7 @@ else
         _reminderForm.Location = string.Empty;
         _reminderForm.Date = Today;
         _reminderForm.TimeOfDay = null;
+        _reminderForm.TravelMinutes = null;
         _reminderMessage = null;
         _showReminderSheet = true;
     }
@@ -2206,16 +2257,32 @@ else
         _reminderForm.Location = reminder.Location ?? string.Empty;
         _reminderForm.Date = reminder.Date;
         _reminderForm.TimeOfDay = reminder.TimeOfDay;
+        _reminderForm.TravelMinutes = reminder.TravelMinutes;
         _reminderMessage = null;
         _showReminderSheet = true;
+    }
+
+    /// <summary>Clears the form's own travel minutes the moment the time of day is cleared -
+    /// mirrors Reminder.MoveTo nulling TravelMinutes server-side when a reminder becomes "all
+    /// day", so a person switching to "hela dagen" never sees a stale number sitting in a
+    /// disabled field as if it still applied.</summary>
+    private void OnReminderTimeOfDayChanged()
+    {
+        if (_reminderForm.TimeOfDay is null)
+        {
+            _reminderForm.TravelMinutes = null;
+        }
     }
 
     /// <summary>
     /// Creates a new reminder, or - when _reminderForm.Id is set (OpenEditReminderSheet) -
     /// changes an existing one. There is no single combined "update" endpoint (see
-    /// HemordnaApiClient's own Reminder methods), so an edit goes through title/location/move in
-    /// turn; each is itself idempotent-safe to repeat, so stopping partway on a failure never
-    /// leaves the reminder in a state a retry could not still fix.
+    /// HemordnaApiClient's own Reminder methods), so an edit goes through title/location/move/
+    /// travel-minutes in turn; each is itself idempotent-safe to repeat, so stopping partway on a
+    /// failure never leaves the reminder in a state a retry could not still fix. Travel minutes
+    /// is always sent last and always reflects the form's own value (never a stale one - see
+    /// OnReminderTimeOfDayChanged and the disabled input in the markup above), so it can never
+    /// ask the domain to set a travel time with no time of day to count back from.
     /// </summary>
     private async Task SaveReminderAsync()
     {
@@ -2238,8 +2305,11 @@ else
                 var titled = await Api.ChangeReminderTitleAsync(householdId, reminderId, _reminderForm.Title);
                 var located = titled is null ? null : await Api.ChangeReminderLocationAsync(householdId, reminderId, location);
                 var moved = located is null ? null : await Api.MoveReminderAsync(householdId, reminderId, date, _reminderForm.TimeOfDay);
+                var withTravel = moved is null
+                    ? null
+                    : await Api.SetReminderTravelMinutesAsync(householdId, reminderId, _reminderForm.TravelMinutes);
 
-                if (moved is null)
+                if (withTravel is null)
                 {
                     _reminderMessage = "Det gick inte att spara. Försök igen.";
                     return;
@@ -2247,7 +2317,8 @@ else
             }
             else
             {
-                var created = await Api.CreateReminderAsync(householdId, _reminderForm.Title, location, date, _reminderForm.TimeOfDay);
+                var created = await Api.CreateReminderAsync(
+                    householdId, _reminderForm.Title, location, date, _reminderForm.TimeOfDay, _reminderForm.TravelMinutes);
 
                 if (created is null)
                 {
