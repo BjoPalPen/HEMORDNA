@@ -971,11 +971,13 @@ else
     /// "13:30, not 14:00"), so a member never has to do the subtraction themselves. <c>null</c>
     /// whenever there is nothing to count back from (no time of day) or nothing set to count
     /// (no travel minutes) - the same two conditions the domain's own Reminder.SetTravelMinutes
-    /// requires. When counting back crosses midnight the departure is said to be the evening
-    /// before, spelled out rather than silently showing a same-looking clock time for what is
-    /// actually yesterday evening. Travel minutes is capped at 24h server-side
-    /// (Reminder.MaxTravelMinutes), so counting back can land at most one calendar day earlier -
-    /// never further - which is why "kvällen innan" alone, with no day count, is always enough.</summary>
+    /// requires. When counting back crosses midnight the departure is spelled out as being the
+    /// day before, rather than silently showing a same-looking clock time for what is actually
+    /// yesterday. Deliberately "dagen innan" and not "kvällen innan": travel minutes is capped at
+    /// 24h (Reminder.MaxTravelMinutes), so a long enough trip lands in yesterday MORNING - 06:00
+    /// minus 20h is 10:00 the day before - and telling someone "kvällen" then would send them a
+    /// day wrong, which is the exact opposite of what this field is for. The cap does guarantee
+    /// at most one calendar day back, so no day count is ever needed.</summary>
     private static string? DepartureLabel(ReminderResponse reminder)
     {
         if (reminder.TimeOfDay is not { } time || reminder.TravelMinutes is not { } travelMinutes)
@@ -985,12 +987,12 @@ else
 
         const int minutesPerDay = 24 * 60;
         var rawMinutes = (time.Hour * 60) + time.Minute - travelMinutes;
-        var isEveningBefore = rawMinutes < 0;
+        var isDayBefore = rawMinutes < 0;
         var normalizedMinutes = ((rawMinutes % minutesPerDay) + minutesPerDay) % minutesPerDay;
         var departure = new TimeOnly(normalizedMinutes / 60, normalizedMinutes % 60);
         var departureText = departure.ToString("HH:mm", SwedishCulture);
 
-        return isEveningBefore ? $"Gå {departureText} kvällen innan" : $"Gå {departureText}";
+        return isDayBefore ? $"Gå {departureText} dagen innan" : $"Gå {departureText}";
     }
 
     private static string RoomHeadingName(TaskGroup group) => group.AreaName ?? "Övrigt";
