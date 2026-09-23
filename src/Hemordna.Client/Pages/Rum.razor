@@ -512,7 +512,8 @@ else
                             StaleAfterDays: staleAfterDays,
                             RequiresAdult: task.AdultsOnly,
                             Effort: task.Effort.ToString(),
-                            AutoPlaceWeekday: true));
+                            AutoPlaceWeekday: true,
+                            Today: Today));
                     }
 
                     created.Add((name, selectedTasks.Sum(t => t.EstimatedMinutes)));

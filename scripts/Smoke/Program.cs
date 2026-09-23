@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 using Microsoft.Playwright;
 
 if (args.Length != 1 || !Uri.TryCreate(args[0], UriKind.Absolute, out var origin)
@@ -11,9 +12,26 @@ if (args.Length != 1 || !Uri.TryCreate(args[0], UriKind.Absolute, out var origin
 using var http = new HttpClient { BaseAddress = origin, Timeout = TimeSpan.FromSeconds(30) };
 using var health = await http.GetAsync("/health");
 health.EnsureSuccessStatusCode();
-if ((await health.Content.ReadAsStringAsync()).Trim() != "Healthy")
+
+// /health reports every check by name, not just an overall status word. A degraded check still
+// answers 200, so the body - not the status code - is what decides whether this passes. Each
+// check's description is printed because that is where "which timezone is the server actually
+// using" shows up: a server that fell back to UTC reports Degraded here rather than only saying
+// so in a log nobody reads.
+var report = JsonDocument.Parse(await health.Content.ReadAsStringAsync()).RootElement;
+foreach (var check in report.GetProperty("checks").EnumerateArray())
 {
-    throw new InvalidOperationException("Database health check did not report Healthy.");
+    var name = check.GetProperty("name").GetString();
+    var status = check.GetProperty("status").GetString();
+    var description = check.GetProperty("description").GetString();
+
+    Console.WriteLine($"  health/{name}: {status}{(description is null ? "" : $" ({description})")}");
+}
+
+if (report.GetProperty("status").GetString() != "Healthy")
+{
+    throw new InvalidOperationException(
+        $"Health check did not report Healthy: {report.GetRawText()}");
 }
 
 using var playwright = await Playwright.CreateAsync();

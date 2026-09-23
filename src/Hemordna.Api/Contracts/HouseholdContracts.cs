@@ -152,6 +152,13 @@ public sealed record WeeklyEffortCeilingContract(
 /// Monthly, only its <c>Frequency</c>/<c>Interval</c> are read - <c>StartDate</c>/<c>Weekday</c>/
 /// <c>MonthlyWeek</c> may be left at any placeholder value, since the server chooses them.
 /// </param>
+/// <param name="Today">
+/// The client's own local date - see <c>CompleteOccurrenceRequest</c> for why. Matters doubly
+/// with <c>AutoPlaceWeekday</c>: it is both the placement algorithm's anchor and the new
+/// recurrence's <c>StartDate</c>, so a task created just after the household's local midnight
+/// must not be anchored to the wrong day - and wrong weekday - for the rest of its life. The
+/// server's own date is used when it is <c>null</c>.
+/// </param>
 public sealed record CreateTaskRequest(
     string? Name,
     int EstimatedMinutes,
@@ -167,7 +174,8 @@ public sealed record CreateTaskRequest(
     RecurrenceRuleContract? Recurrence = null,
     int? StaleAfterDays = null,
     TaskEffort Effort = TaskEffort.Medium,
-    bool AutoPlaceWeekday = false);
+    bool AutoPlaceWeekday = false,
+    DateOnly? Today = null);
 
 /// <summary>Both null means "ingen - schemaläggs för hand" - see TaskDefinition.</summary>
 public sealed record UpdateTaskFrequencyRequest(RecurrenceRuleContract? Recurrence, int? StaleAfterDays);

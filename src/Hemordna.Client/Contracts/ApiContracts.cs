@@ -155,6 +155,11 @@ public sealed record SetCanManageHouseholdRequest(bool CanManageHousehold);
 public sealed record CreateExtraTaskRequest(
     string Name, int EstimatedMinutes, string? Description, Guid? AreaId, DateOnly? Today = null);
 
+/// <summary><paramref name="Today"/> lets the client name its own local date - see
+/// CompleteOccurrenceAsync's own remarks for why. Matters doubly with
+/// <paramref name="AutoPlaceWeekday"/>: it is both the placement algorithm's anchor and the new
+/// recurrence's StartDate, so a task created just after the household's local midnight must not
+/// be anchored to the wrong day - and wrong weekday - for the rest of its life.</summary>
 public sealed record CreateTaskRequest(
     string Name,
     int EstimatedMinutes,
@@ -170,7 +175,8 @@ public sealed record CreateTaskRequest(
     int? StaleAfterDays = null,
     bool RequiresAdult = false,
     string Effort = "Medium",
-    bool AutoPlaceWeekday = false);
+    bool AutoPlaceWeekday = false,
+    DateOnly? Today = null);
 
 public sealed record TaskDefinitionResponse(
     Guid Id,
