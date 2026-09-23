@@ -51,7 +51,7 @@ public class RemoteCompletionNameTests
         var task = await (await aHttp.PostAsJsonAsync(
             $"/api/households/{householdId}/tasks", new { name = "Diska", estimatedMinutes = 5 }))
             .Content.ReadFromJsonAsync<JsonElement>();
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
         var occurrence = await (await aHttp.PostAsJsonAsync(
             $"/api/households/{householdId}/tasks/{task.GetProperty("id").GetGuid()}/occurrences",
             new { date = today, assignToMemberId = aMemberId }))

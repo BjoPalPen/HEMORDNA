@@ -283,7 +283,7 @@ public class SkarmbilderTests
             .Content.ReadFromJsonAsync<JsonElement>();
         var areaId = area.GetProperty("id").GetGuid();
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
         string[] names = ["Diska", "Dammsuga", "Torka golvet"];
 
         foreach (var name in names)

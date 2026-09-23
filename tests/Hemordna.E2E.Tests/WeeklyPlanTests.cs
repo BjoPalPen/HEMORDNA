@@ -79,7 +79,7 @@ public class WeeklyPlanTests
         var bathroom = await CreateAreaAsync(http, householdId, "Badrum");
         var kitchen = await CreateAreaAsync(http, householdId, "Kök");
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
         await CreateTaskAsync(http, householdId, "Storstäda badrummet", 40, "Heavy", bathroom, today, "Monday");
         await CreateTaskAsync(http, householdId, "Diska köket varje vecka", 10, "Medium", kitchen, today, "Monday");
 
@@ -131,7 +131,7 @@ public class WeeklyPlanTests
             new { monday = 120, tuesday = 120, wednesday = 120, thursday = 120, friday = 120, saturday = 120, sunday = 120 });
 
         var bathroom = await CreateAreaAsync(http, householdId, "Badrum");
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
         await CreateTaskAsync(http, householdId, "Skrubba handfatet", 20, "Medium", bathroom, today, "Friday");
 
         await page.GotoAsync("/rum");

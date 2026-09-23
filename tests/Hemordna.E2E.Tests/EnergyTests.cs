@@ -33,7 +33,7 @@ public class EnergyTests
     /// which "Lite" would otherwise filter out regardless of how much time is left).</summary>
     private static async Task ScheduleFourTwentyMinuteTasksAsync(HttpClient http, Guid householdId, Guid memberId)
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
 
         for (var i = 1; i <= 4; i++)
         {
@@ -53,7 +53,7 @@ public class EnergyTests
             .Content.ReadFromJsonAsync<JsonElement>();
         var member = household.GetProperty("members").EnumerateArray()
             .Single(m => m.GetProperty("id").GetGuid() == memberId);
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
         var dayProperty = today.DayOfWeek.ToString().ToLowerInvariant();
         return member.GetProperty("weeklyTimeBudgetMinutes").GetProperty(dayProperty).GetInt32();
     }
@@ -187,7 +187,7 @@ public class EnergyTests
         var memberId = me.GetProperty("memberId").GetGuid();
 
         await GiveFullWeekAsync(http, householdId, memberId, 60);
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
 
         var heavyTask = await (await http.PostAsJsonAsync(
             $"/api/households/{householdId}/tasks",

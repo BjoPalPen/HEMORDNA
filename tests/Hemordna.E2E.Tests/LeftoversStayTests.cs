@@ -68,7 +68,7 @@ public class LeftoversStayTests
             .Content.ReadFromJsonAsync<JsonElement>();
         var taskId = task.GetProperty("id").GetGuid();
 
-        var yesterday = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-1);
+        var yesterday = AppDate.Today.AddDays(-1);
         await aHttp.PostAsJsonAsync(
             $"/api/households/{householdId}/tasks/{taskId}/occurrences",
             new { date = yesterday, assignToMemberId = aMemberId });

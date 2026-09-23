@@ -542,7 +542,7 @@ public class OmradenTests
         http.DefaultRequestHeaders.Authorization = new("Bearer", token);
         var me = await (await http.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
         var householdId = me.GetProperty("householdId").GetGuid();
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
 
         await http.PutAsJsonAsync(
             $"/api/households/{householdId}/tasks/{handdukarId}/frequency",

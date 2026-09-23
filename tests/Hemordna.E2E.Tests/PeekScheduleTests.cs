@@ -39,7 +39,7 @@ public class PeekScheduleTests
         // fresh member otherwise starts at zero minutes a day.
         await http.PutAsJsonAsync(
             $"/api/households/{householdId}/members/{svenId}/availability",
-            new { date = DateOnly.FromDateTime(DateTime.UtcNow), availableMinutes = 60 });
+            new { date = AppDate.Today, availableMinutes = 60 });
 
         var task = await (await http.PostAsJsonAsync(
             $"/api/households/{householdId}/tasks",
@@ -47,7 +47,7 @@ public class PeekScheduleTests
             .Content.ReadFromJsonAsync<JsonElement>();
         var taskId = task.GetProperty("id").GetGuid();
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
         await http.PostAsJsonAsync(
             $"/api/households/{householdId}/tasks/{taskId}/occurrences",
             new { date = today, assignToMemberId = svenId });
@@ -79,7 +79,7 @@ public class PeekScheduleTests
         var householdId = me.GetProperty("householdId").GetGuid();
         var memberId = me.GetProperty("memberId").GetGuid();
 
-        var tomorrow = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(1);
+        var tomorrow = AppDate.Today.AddDays(1);
         await http.PutAsJsonAsync(
             $"/api/households/{householdId}/members/{memberId}/availability",
             new { date = tomorrow, availableMinutes = 60 });
@@ -122,7 +122,7 @@ public class PeekScheduleTests
         var householdId = me.GetProperty("householdId").GetGuid();
         var memberId = me.GetProperty("memberId").GetGuid();
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
         var tomorrow = today.AddDays(1);
         await http.PutAsJsonAsync(
             $"/api/households/{householdId}/members/{memberId}/availability",
@@ -182,7 +182,7 @@ public class PeekScheduleTests
             $"/api/households/{householdId}/areas", new { name = "Sovrum 2" }))
             .Content.ReadFromJsonAsync<JsonElement>();
 
-        var tomorrow = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(1);
+        var tomorrow = AppDate.Today.AddDays(1);
         await http.PutAsJsonAsync(
             $"/api/households/{householdId}/members/{memberId}/availability",
             new { date = tomorrow, availableMinutes = 60 });

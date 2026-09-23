@@ -150,7 +150,7 @@ public class MinDagTests
             $"/api/households/{householdId}/members/{memberId}/weekly-budget",
             new { monday = 60, tuesday = 60, wednesday = 60, thursday = 60, friday = 60, saturday = 60, sunday = 60 });
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
         string[] names = ["Diska", "Damma", "Dammsuga"];
 
         foreach (var name in names)
@@ -215,7 +215,7 @@ public class MinDagTests
             $"/api/households/{householdId}/members/{memberId}/preferences",
             new { presentation = "OneAtATime", motivation = "None", showTimeLevel = false });
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
         string[] names = ["Diska", "Damma"];
 
         foreach (var name in names)
@@ -280,7 +280,7 @@ public class MinDagTests
             $"/api/households/{householdId}/members/{memberId}/preferences",
             new { presentation = "OneAtATime", motivation = "None", showTimeLevel = false });
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
         var task = await (await http.PostAsJsonAsync(
             $"/api/households/{householdId}/tasks", new { name = "Vädra rummet", estimatedMinutes = 5 }))
             .Content.ReadFromJsonAsync<JsonElement>();

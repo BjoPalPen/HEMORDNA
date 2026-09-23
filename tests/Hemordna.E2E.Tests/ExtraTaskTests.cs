@@ -59,7 +59,7 @@ public class ExtraTaskTests
             $"/api/households/{householdId}/tasks", new { name = "Dammsug", estimatedMinutes = 10 }))
             .Content.ReadFromJsonAsync<JsonElement>();
         var taskId = task.GetProperty("id").GetGuid();
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
 
         var assignedToOther = await ownerHttp.PostAsJsonAsync(
             $"/api/households/{householdId}/tasks/{taskId}/occurrences",
@@ -97,7 +97,7 @@ public class ExtraTaskTests
             $"/api/households/{householdId}/tasks", new { name = "Ullas uppgift", estimatedMinutes = 10 }))
             .Content.ReadFromJsonAsync<JsonElement>();
         var taskId = task.GetProperty("id").GetGuid();
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
 
         var assignedToUlla = await ownerHttp.PostAsJsonAsync(
             $"/api/households/{householdId}/tasks/{taskId}/occurrences",
@@ -161,7 +161,7 @@ public class ExtraTaskTests
             $"/api/households/{householdId}/tasks",
             new { name = "Redan planerad", estimatedMinutes = 10 }))
             .Content.ReadFromJsonAsync<JsonElement>();
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
         await http.PutAsJsonAsync(
             $"/api/households/{householdId}/members/{memberId}/availability",
             new { date = today, availableMinutes = 10 });
