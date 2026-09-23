@@ -107,6 +107,24 @@ public class ReminderNotificationSelectorTests
         Assert.Empty(atTimeOfDay);
     }
 
+    /// <summary>The exact scenario the whole status exists for: checking off a reminder before
+    /// its own time must silence the notification that would otherwise still fire at that time -
+    /// "läkarbesök kl 13, bockar av eftersom man redan varit där" ska inte ge en 'vid tiden'-notis
+    /// senare samma dag.</summary>
+    [Fact]
+    public void A_lapsed_reminder_never_produces_a_notification()
+    {
+        var reminder = CreateReminder(WinterDate, WinterTimeOfDay, travelMinutes: 30);
+        reminder.Lapse();
+
+        var atLeaveTime = ReminderNotificationSelector.SelectDue(
+            WinterAtTimeInstant.AddMinutes(-30), Window, [reminder]);
+        var atTimeOfDay = ReminderNotificationSelector.SelectDue(WinterAtTimeInstant, Window, [reminder]);
+
+        Assert.Empty(atLeaveTime);
+        Assert.Empty(atTimeOfDay);
+    }
+
     [Fact]
     public void An_instant_still_inside_the_window_is_due()
     {

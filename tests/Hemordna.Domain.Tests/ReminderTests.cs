@@ -424,4 +424,114 @@ public class ReminderTests
 
         Assert.Throws<DomainException>(() => reminder.SetTravelMinutes(30));
     }
+
+    [Fact]
+    public void Lapse_sets_the_status_to_lapsed()
+    {
+        var reminder = CreateReminder();
+
+        reminder.Lapse();
+
+        Assert.Equal(ReminderStatus.Lapsed, reminder.Status);
+    }
+
+    [Fact]
+    public void Lapsing_twice_is_a_no_op()
+    {
+        var reminder = CreateReminder();
+
+        reminder.Lapse();
+        reminder.Lapse();
+
+        Assert.Equal(ReminderStatus.Lapsed, reminder.Status);
+    }
+
+    [Fact]
+    public void A_cancelled_reminder_cannot_be_lapsed()
+    {
+        var reminder = CreateReminder();
+        reminder.Cancel();
+
+        Assert.Throws<DomainException>(() => reminder.Lapse());
+    }
+
+    [Fact]
+    public void A_lapsed_reminder_cannot_be_cancelled()
+    {
+        var reminder = CreateReminder();
+        reminder.Lapse();
+
+        Assert.Throws<DomainException>(() => reminder.Cancel());
+    }
+
+    [Fact]
+    public void A_lapsed_reminder_cannot_have_its_title_changed()
+    {
+        var reminder = CreateReminder();
+        reminder.Lapse();
+
+        Assert.Throws<DomainException>(() => reminder.ChangeTitle("Nytt namn"));
+    }
+
+    [Fact]
+    public void A_lapsed_reminder_cannot_have_its_location_changed()
+    {
+        var reminder = CreateReminder();
+        reminder.Lapse();
+
+        Assert.Throws<DomainException>(() => reminder.ChangeLocation("Ny plats"));
+    }
+
+    [Fact]
+    public void A_lapsed_reminder_cannot_be_moved()
+    {
+        var reminder = CreateReminder();
+        reminder.Lapse();
+
+        Assert.Throws<DomainException>(() => reminder.MoveTo(Friday.AddDays(1), null));
+    }
+
+    [Fact]
+    public void A_lapsed_reminder_cannot_have_its_travel_minutes_changed()
+    {
+        var reminder = CreateReminder(timeOfDay: new TimeOnly(14, 0));
+        reminder.Lapse();
+
+        Assert.Throws<DomainException>(() => reminder.SetTravelMinutes(30));
+    }
+
+    [Fact]
+    public void Restore_sets_a_lapsed_reminder_back_to_upcoming()
+    {
+        var reminder = CreateReminder();
+        reminder.Lapse();
+
+        reminder.Restore();
+
+        Assert.Equal(ReminderStatus.Upcoming, reminder.Status);
+    }
+
+    [Fact]
+    public void A_restored_lapsed_reminder_can_be_lapsed_again()
+    {
+        var reminder = CreateReminder();
+        reminder.Lapse();
+        reminder.Restore();
+
+        reminder.Lapse();
+
+        Assert.Equal(ReminderStatus.Lapsed, reminder.Status);
+    }
+
+    [Fact]
+    public void A_restored_lapsed_reminder_can_be_cancelled()
+    {
+        var reminder = CreateReminder();
+        reminder.Lapse();
+        reminder.Restore();
+
+        reminder.Cancel();
+
+        Assert.Equal(ReminderStatus.Cancelled, reminder.Status);
+    }
 }
