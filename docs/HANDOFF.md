@@ -35,10 +35,9 @@ Byt dem aldrig: alla prenumerationer slutar då fungera samtidigt.
 
 ## Verifierat
 
-Build 0 fel, 0 varningar. Domän 266/266, Application 434/434, E2E 218/219. VAPID-paret bevisat
-giltigt genom en riktig signerad JWT, offline-cachen verifierad genom att faktiskt gå offline i
-Playwright. Produktion: migreringarna applicerade, bakgrundstjänsten observerad starta, smoke
-PASS. `SkarmbilderTests` är **äkta flakigt, inte belastningsberoende** – rättelse av en tidigare
+Build 0 fel, 0 varningar. Domän 266/266, Application 434/434, E2E 218/219. Produktion:
+migreringarna applicerade, bakgrundstjänsten observerad starta, smoke PASS.
+`SkarmbilderTests` är **äkta flakigt, inte belastningsberoende** – rättelse av en tidigare
 bedömning: det föll även isolerat (3/4) och passerade sedan isolerat (4/4). Förtjänar utredning.
 
 ## Drift och kvarstående frågor
