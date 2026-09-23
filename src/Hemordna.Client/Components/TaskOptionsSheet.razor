@@ -1,6 +1,7 @@
 @using Hemordna.Client.Support
 @inject HemordnaApiClient Api
 @inject HemordnaSession Session
+@inject TimeProvider TimeProvider
 
 <BottomSheet Title="@Task.Name" IsOpen="IsOpen" IsOpenChanged="OnIsOpenChanged" Detent="SheetDetent.Half">
     @switch (_view)
@@ -346,7 +347,7 @@
         // lämnas i fred".
         _firstDate = ShowFirstDate(_recurrenceOption, _interval) && Task.Recurrence is { } currentRecurrence
             ? currentRecurrence.StartDate
-            : DateOnly.FromDateTime(DateTime.UtcNow);
+            : Today;
         _assignmentMemberId = Task.DefaultResponsibleMemberId?.ToString() ?? string.Empty;
         _estimatedMinutes = TimeLevel.ClosestMinutes(Task.EstimatedMinutes);
         _roomAreaId = Task.AreaId?.ToString() ?? string.Empty;
@@ -382,6 +383,8 @@
     private static bool ShowFirstDate(string recurrenceOption, int interval)
         => recurrenceOption is "Weekly" or "Monthly" && interval > 1;
 
+    private DateOnly Today => DateOnly.FromDateTime(TimeProvider.GetLocalNow().DateTime);
+
     private static string RecurrenceOptionFor(TaskDefinitionResponse task) => task switch
     {
         { StaleAfterDays: not null } => "AsNeeded",
@@ -411,7 +414,7 @@
 
         try
         {
-            var today = ShowFirstDate(_recurrenceOption, _interval) ? _firstDate : DateOnly.FromDateTime(DateTime.UtcNow);
+            var today = ShowFirstDate(_recurrenceOption, _interval) ? _firstDate : Today;
             var recurrence = BuildRecurrence(_recurrenceOption, today, _interval);
             var staleAfterDays = _recurrenceOption == "AsNeeded" ? RoomTemplateTask.AsNeededDefaultDays : (int?)null;
 
@@ -551,7 +554,7 @@
         {
             var weekday = string.IsNullOrEmpty(_preferredWeekday) ? null : _preferredWeekday;
 
-            if (await Api.SetTaskPreferredWeekdayAsync(HouseholdId, Task.Id, weekday) is null)
+            if (await Api.SetTaskPreferredWeekdayAsync(HouseholdId, Task.Id, weekday, Today) is null)
             {
                 _message = "Det gick inte att spara. Försök igen.";
                 return;
