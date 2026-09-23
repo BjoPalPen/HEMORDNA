@@ -250,4 +250,40 @@ public class CreateTaskDefinitionTests
         Assert.Equal(DayOfWeek.Wednesday, definition!.Recurrence!.Weekday);
         Assert.Equal(new DateOnly(2026, 7, 8), definition.Recurrence.StartDate);
     }
+
+    /// <summary>
+    /// The server's own clock says 2026-07-02 (Thursday, plain Stockholm daytime - not a
+    /// midnight-boundary case). The client explicitly sends 2026-07-01 (Wednesday) as its own
+    /// "today" - POST /tasks must let that win, exactly like every other endpoint that accepts a
+    /// client "today". Joins a Wednesday sibling so the chosen WEEKDAY cannot itself depend on
+    /// which "today" was used - isolating the anchor DATE's dependency on it. Both candidate
+    /// "today"s roll forward to the very same weekday (Wednesday), so this cannot pass by
+    /// accident the way an earlier attempt did when the weekday-choice absorbed a one-day
+    /// difference: the client's Wednesday anchors immediately (2026-07-01, no roll), while the
+    /// server's Thursday rolls a full week forward (2026-07-08) - the two results are genuinely
+    /// different dates, not just phrased differently. Regression test for the client's own
+    /// "today" being ignored on task creation.
+    /// </summary>
+    [Fact]
+    public async Task AutoPlaceWeekday_anchors_to_the_clients_today_when_it_sends_one()
+    {
+        var (householdId, area) = await ArrangeHouseholdWithAreaAsync("Badrum");
+        var existing = TaskDefinition.Create(householdId, "Dammsug golvet", 10, Now);
+        existing.AssignToArea(area);
+        existing.SetRecurrence(RecurrenceRule.Weekly(new DateOnly(2026, 2, 6), DayOfWeek.Wednesday));
+        _definitions.Seed(existing);
+
+        var serverNowUtc = new DateTimeOffset(2026, 7, 2, 8, 0, 0, TimeSpan.Zero); // 2026-07-02 in Stockholm too
+        var clientsToday = new DateOnly(2026, 7, 1);
+        var placeholderAnchor = RecurrenceRule.Weekly(new DateOnly(2026, 2, 6), DayOfWeek.Monday);
+
+        var definition = await CreateUseCaseAt(serverNowUtc).HandleAsync(
+            householdId,
+            new NewTaskDefinition("Torka golvet", 5, AreaId: area, Recurrence: placeholderAnchor, AutoPlaceWeekday: true),
+            CancellationToken.None,
+            today: clientsToday);
+
+        Assert.Equal(DayOfWeek.Wednesday, definition!.Recurrence!.Weekday);
+        Assert.Equal(clientsToday, definition.Recurrence.StartDate);
+    }
 }

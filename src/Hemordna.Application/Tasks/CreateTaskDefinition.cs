@@ -30,7 +30,8 @@ public sealed class CreateTaskDefinition
     public async Task<TaskDefinition?> HandleAsync(
         Guid householdId,
         NewTaskDefinition request,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        DateOnly? today = null)
     {
         var household = await _households.FindByIdAsync(householdId, cancellationToken);
 
@@ -61,20 +62,26 @@ public sealed class CreateTaskDefinition
         // besöken placeras; inget befintligt flyttas.
         if (request.AutoPlaceWeekday && recurrence is { IsWeeklyRhythm: true })
         {
-            var today = HouseholdClock.Today(_timeProvider);
+            // The client's own "today" when it sends one - see HouseholdEndpoints'
+            // CompleteOccurrenceAsync remarks for why. Matters doubly here: it is both the
+            // placement algorithm's anchor AND the new recurrence's StartDate, so a task created
+            // just after the household's local midnight must not be anchored to the wrong day -
+            // and wrong weekday - for the rest of its life. Falls back to the server's own date
+            // when the client does not send one.
+            var resolvedToday = today ?? HouseholdClock.Today(_timeProvider);
             var existing = await _definitions.ListByHouseholdAsync(householdId, cancellationToken);
             var visitKind = VisitKindClassifier.Of(recurrence, request.Effort);
 
             var chosenDay = NewTaskWeekdayPlacement.Choose(
-                household, existing, today, request.AreaId, visitKind, request.Effort, request.EstimatedMinutes);
+                household, existing, resolvedToday, request.AreaId, visitKind, request.Effort, request.EstimatedMinutes);
 
             recurrence = recurrence.Frequency == RecurrenceFrequency.Monthly
                 ? RecurrenceRule.MonthlyOnWeekday(
-                    today,
+                    resolvedToday,
                     NewTaskWeekdayPlacement.ChooseMonthlyWeek(existing, request.AreaId, visitKind, chosenDay),
                     chosenDay,
                     recurrence.Interval)
-                : RecurrenceRule.Weekly(today, chosenDay, recurrence.Interval);
+                : RecurrenceRule.Weekly(resolvedToday, chosenDay, recurrence.Interval);
         }
 
         var definition = TaskDefinition.Create(householdId, request.Name, request.EstimatedMinutes, now);

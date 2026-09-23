@@ -877,7 +877,8 @@
                 StaleAfterDays: staleAfterDays,
                 RequiresAdult: _addForm.RequiresAdult,
                 Effort: _addForm.Effort.ToString(),
-                AutoPlaceWeekday: true);
+                AutoPlaceWeekday: true,
+                Today: Today);
 
             if (await Api.CreateTaskAsync(HouseholdId, request) is null)
             {
@@ -940,7 +941,8 @@
                     StaleAfterDays: staleAfterDays,
                     RequiresAdult: task.AdultsOnly,
                     Effort: _suggestedEffort.GetValueOrDefault(task.Name, task.Effort).ToString(),
-                    AutoPlaceWeekday: true));
+                    AutoPlaceWeekday: true,
+                    Today: Today));
             }
 
             foreach (var task in selected)

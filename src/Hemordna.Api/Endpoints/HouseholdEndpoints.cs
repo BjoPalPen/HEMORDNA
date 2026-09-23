@@ -542,7 +542,8 @@ internal static class HouseholdEndpoints
                 request.StaleAfterDays,
                 request.Effort,
                 request.AutoPlaceWeekday),
-            cancellationToken);
+            cancellationToken,
+            request.Today);
 
         return definition is null
             ? Results.NotFound()
