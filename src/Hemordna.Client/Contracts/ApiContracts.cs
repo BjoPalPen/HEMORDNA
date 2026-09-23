@@ -245,8 +245,9 @@ public sealed record RecurrenceRuleContract(
 
 /// <summary>A member's own appointment - see docs/PRODUCT.md §11. Never anyone else's; the
 /// server resolves the owner from the caller's own token, not from anything this client sends.
-/// <c>Status</c> is "Upcoming" or "Cancelled" - see the file header for why enum-shaped fields
-/// travel as plain strings.</summary>
+/// <c>Status</c> is "Upcoming", "Cancelled" or "Lapsed" (checked off - see
+/// Hemordna.Domain.Reminders.ReminderStatus.Lapsed for the name's reasoning) - see the file
+/// header for why enum-shaped fields travel as plain strings.</summary>
 public sealed record ReminderResponse(
     Guid Id,
     string Title,

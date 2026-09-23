@@ -63,7 +63,13 @@ internal static class ReminderEndpoints
 
         reminders.MapPost("/{reminderId:guid}/cancel", CancelReminderAsync)
             .Produces<ReminderResponse>()
-            .Produces(StatusCodes.Status404NotFound);
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status409Conflict);
+
+        reminders.MapPost("/{reminderId:guid}/lapse", LapseReminderAsync)
+            .Produces<ReminderResponse>()
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status409Conflict);
 
         reminders.MapPost("/{reminderId:guid}/restore", RestoreReminderAsync)
             .Produces<ReminderResponse>()
@@ -229,6 +235,21 @@ internal static class ReminderEndpoints
         var membership = httpContext.GetMembership();
 
         var reminder = await cancelReminder.HandleAsync(
+            householdId, membership.MemberId, reminderId, cancellationToken);
+
+        return reminder is null ? Results.NotFound() : Results.Ok(ToResponse(reminder));
+    }
+
+    private static async Task<IResult> LapseReminderAsync(
+        Guid householdId,
+        Guid reminderId,
+        HttpContext httpContext,
+        LapseReminder lapseReminder,
+        CancellationToken cancellationToken)
+    {
+        var membership = httpContext.GetMembership();
+
+        var reminder = await lapseReminder.HandleAsync(
             householdId, membership.MemberId, reminderId, cancellationToken);
 
         return reminder is null ? Results.NotFound() : Results.Ok(ToResponse(reminder));

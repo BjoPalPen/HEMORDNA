@@ -122,35 +122,48 @@ else
            presentationsläge (så den syns i fokusläget också, utan att någonsin BLI en
            fokusuppgift - se FocusOrder, som aldrig läser _reminders). Bara namn och klockslag/
            plats, aldrig kryssruta eller minutsiffra - en påminnelse är inte hushållsarbete och
-           påverkar varken "N av M klara" eller någon tidssumma. En passerad tid ligger kvar
-           osynligt oförändrad hela dagen (ingen egen "passerad"-logik här - datummodellen sköter
-           det: den slutar dyka upp i _reminders först nästa dag). *@
+           påverkar varken "N av M klara" eller någon tidssumma, även avbockad (IsReminderLapsed).
+           En passerad, ej avbockad tid ligger kvar osynligt oförändrad hela dagen (ingen egen
+           "passerad"-logik här - datummodellen sköter det: den slutar dyka upp i _reminders
+           först nästa dag). En AVBOCKAD påminnelse ligger kvar med en synlig markering i stället
+           - se ReminderCheckedRow - precis som en avbockad uppgift gör (task-done nedan). *@
         @if (TodaysReminders.Count > 0)
         {
             @GroupHeading("Påminnelser", TodaysReminders.Count, showKvar: false)
             <ul class="task-list" aria-label="Påminnelser">
                 @foreach (var reminder in TodaysReminders)
                 {
-                    <li class="task">
-                        <span class="task-name">
-                            @ReminderLabel(reminder)
-                            @if (DepartureLabel(reminder) is { } departureLabel)
-                            {
-                                <span class="task-note muted small">@departureLabel</span>
-                            }
-                            @if (reminder.Location is { } location)
-                            {
-                                <span class="task-note muted small">@location</span>
-                            }
-                        </span>
-                        <button type="button" class="btn btn-link" @onclick="() => OpenEditReminderSheet(reminder)">
-                            Ändra
-                        </button>
-                        <button type="button" class="btn btn-link" disabled="@(_reminderCancelBusy == reminder.Id)"
-                                @onclick="() => CancelReminderRowAsync(reminder)">
-                            Avboka
-                        </button>
-                    </li>
+                    @if (IsReminderLapsed(reminder))
+                    {
+                        @ReminderCheckedRow(reminder)
+                    }
+                    else
+                    {
+                        <li class="task">
+                            <span class="task-name">
+                                @ReminderLabel(reminder)
+                                @if (DepartureLabel(reminder) is { } departureLabel)
+                                {
+                                    <span class="task-note muted small">@departureLabel</span>
+                                }
+                                @if (reminder.Location is { } location)
+                                {
+                                    <span class="task-note muted small">@location</span>
+                                }
+                            </span>
+                            <button type="button" class="btn btn-link" disabled="@(_reminderLapseBusy == reminder.Id)"
+                                    @onclick="() => LapseReminderRowAsync(reminder)">
+                                Bocka av
+                            </button>
+                            <button type="button" class="btn btn-link" @onclick="() => OpenEditReminderSheet(reminder)">
+                                Ändra
+                            </button>
+                            <button type="button" class="btn btn-link" disabled="@(_reminderCancelBusy == reminder.Id)"
+                                    @onclick="() => CancelReminderRowAsync(reminder)">
+                                Avboka
+                            </button>
+                        </li>
+                    }
                 }
             </ul>
         }
@@ -685,7 +698,9 @@ else
 
     /// <summary>Today's own reminders (docs/PRODUCT.md §11) - private to the signed-in member,
     /// loaded alongside _day in LoadDayAsync so a reload never shows one without the other.
-    /// Already excludes anything cancelled - see IReminderRepository.ListForMemberInRangeAsync.</summary>
+    /// Already excludes anything cancelled - see IReminderRepository.ListForMemberInRangeAsync.
+    /// A checked-off (Lapsed) reminder is NOT excluded - it stays here so its row can keep
+    /// showing, marked, on its own day - see IsReminderLapsed/ReminderCheckedRow.</summary>
     private IReadOnlyList<ReminderResponse> _reminders = [];
 
     private bool _showReminderSheet;
@@ -693,13 +708,16 @@ else
     private bool _reminderBusy;
     private string? _reminderMessage;
     private Guid? _reminderCancelBusy;
+    private Guid? _reminderLapseBusy;
 
-    /// <summary>"Ångra" after cancelling a reminder - same 8s offer as completing a task (see
-    /// _undo/ShowUndo). A reminder's own Reminder.Restore() has no time window at all (it is
-    /// private, so nobody else's history is at stake) - how long the OFFER itself stays on
-    /// screen is this page's own decision, kept identical to the existing pattern so the app
-    /// feels consistent rather than inventing a second one.</summary>
-    private (Guid ReminderId, string Title)? _reminderUndo;
+    /// <summary>"Ångra" after cancelling OR checking off a reminder - same 8s offer as
+    /// completing a task (see _undo/ShowUndo). A reminder's own Reminder.Restore() has no time
+    /// window at all (it is private, so nobody else's history is at stake) - how long the OFFER
+    /// itself stays on screen is this page's own decision, kept identical to the existing
+    /// pattern so the app feels consistent rather than inventing a second one. ActionLabel is
+    /// "Avbokat" or "Avbockat" - the same domain call (Restore) undoes either, so only the
+    /// label shown while the offer is up needs to say which one happened.</summary>
+    private (Guid ReminderId, string Title, string ActionLabel)? _reminderUndo;
     private bool _reminderUndoBusy;
     private CancellationTokenSource? _reminderUndoCts;
 
@@ -953,16 +971,23 @@ else
     /// nullability the compiler already knows about is respected instead of silenced.</summary>
     private int SuggestedTomorrowRemainingMinutes => _day?.RemainingMinutes ?? 0;
 
-    /// <summary>Today's own upcoming reminders (docs/PRODUCT.md §11), an all-day one (no
-    /// TimeOfDay) first, then the rest by time of day - never part of FocusOrder, so a reminder
-    /// can never become the focus card's own task (see docs/PRODUCT.md §11, "aldrig en
-    /// fokusuppgift").</summary>
+    /// <summary>Today's own reminders (docs/PRODUCT.md §11) - upcoming AND checked off (a
+    /// checked-off one stays on its day, marked, rather than disappearing - see
+    /// IsReminderLapsed/ReminderCheckedRow) - an all-day one (no TimeOfDay) first, then the rest
+    /// by time of day. Never part of FocusOrder, so a reminder can never become the focus card's
+    /// own task (see docs/PRODUCT.md §11, "aldrig en fokusuppgift").</summary>
     private List<ReminderResponse> TodaysReminders
         => [.. _reminders.OrderBy(reminder => reminder.TimeOfDay.HasValue).ThenBy(reminder => reminder.TimeOfDay)];
 
+    /// <summary>True once the reminder has been checked off - see
+    /// Hemordna.Domain.Reminders.ReminderStatus.Lapsed. Status travels as a plain string (see
+    /// ReminderResponse's own remarks), compared against the enum member's own name.</summary>
+    private static bool IsReminderLapsed(ReminderResponse reminder) => reminder.Status == "Lapsed";
+
     /// <summary>"14:00 · Läkarbesök", or just the title for an all-day reminder - see
-    /// docs/PRODUCT.md §11.</summary>
-    private string ReminderLabel(ReminderResponse reminder)
+    /// docs/PRODUCT.md §11. Static - reused as-is by ReminderCheckedRow for a checked-off
+    /// reminder's own row.</summary>
+    private static string ReminderLabel(ReminderResponse reminder)
         => reminder.TimeOfDay is { } time
             ? $"{time.ToString("HH:mm", SwedishCulture)} · {reminder.Title}"
             : reminder.Title;
@@ -1357,13 +1382,31 @@ else
         <button type="button" class="btn btn-link" disabled="@_undoBusy" @onclick="UndoAsync">Ångra</button>
     </div>;
 
-    /// <summary>Same "brief window to take it back" shown after cancelling a reminder - see
-    /// _reminderUndo's own remarks for why the window's LENGTH matches UndoBar's while the
-    /// domain rule behind it (Reminder.Restore) does not.</summary>
+    /// <summary>Same "brief window to take it back" shown after cancelling OR checking off a
+    /// reminder - see _reminderUndo's own remarks for why the window's LENGTH matches UndoBar's
+    /// while the domain rule behind it (Reminder.Restore) does not.</summary>
     private RenderFragment ReminderUndoBar => @<div class="undo-bar" role="status">
-        <span>Avbokat: @_reminderUndo!.Value.Title</span>
-        <button type="button" class="btn btn-link" disabled="@_reminderUndoBusy" @onclick="UndoReminderCancelAsync">Ångra</button>
+        <span>@_reminderUndo!.Value.ActionLabel: @_reminderUndo!.Value.Title</span>
+        <button type="button" class="btn btn-link" disabled="@_reminderUndoBusy" @onclick="UndoReminderAsync">Ångra</button>
     </div>;
+
+    /// <summary>A checked-off reminder's own row - stays on its day with a visible marking,
+    /// the same "task-done" treatment a checked-off task's own row gets (see the "Klart idag"
+    /// list above), rather than disappearing the way a cancelled reminder does. No "Ändra" or
+    /// "Avboka" here - see Reminder.EnsureNotCancelled, which blocks edits on anything that is
+    /// not Upcoming.</summary>
+    private static RenderFragment ReminderCheckedRow(ReminderResponse reminder) => @<li class="task task-done">
+        <span class="task-check task-check-done" aria-hidden="true">
+            <Icon Name="check" Size="18" />
+        </span>
+        <span class="task-name">
+            @ReminderLabel(reminder)
+            @if (reminder.Location is { } location)
+            {
+                <span class="task-note muted small">@location</span>
+            }
+        </span>
+    </li>;
 
     private RenderFragment CalmState => @<div class="calm-state">
         @if (_day is { Items.Count: 0, Completed.Count: > 0 })
@@ -2359,7 +2402,7 @@ else
         {
             if (await Api.CancelReminderAsync(householdId, reminder.Id) is not null)
             {
-                ShowReminderUndo(reminder.Id, reminder.Title);
+                ShowReminderUndo(reminder.Id, reminder.Title, "Avbokat");
                 await LoadDayAsync();
             }
         }
@@ -2369,12 +2412,39 @@ else
         }
     }
 
-    private void ShowReminderUndo(Guid reminderId, string title)
+    /// <summary>Checks off one of today's reminders and offers "Ångra" - same shape as
+    /// CancelReminderRowAsync. Unlike a cancellation, a checked-off reminder still matches
+    /// GetOwnReminders' date range (see IReminderRepository.ListForMemberInRangeAsync), so
+    /// LoadDayAsync makes the row switch to ReminderCheckedRow rather than disappear.</summary>
+    private async Task LapseReminderRowAsync(ReminderResponse reminder)
+    {
+        if (Session.Me is not { HouseholdId: { } householdId })
+        {
+            return;
+        }
+
+        _reminderLapseBusy = reminder.Id;
+
+        try
+        {
+            if (await Api.LapseReminderAsync(householdId, reminder.Id) is not null)
+            {
+                ShowReminderUndo(reminder.Id, reminder.Title, "Avbockat");
+                await LoadDayAsync();
+            }
+        }
+        finally
+        {
+            _reminderLapseBusy = null;
+        }
+    }
+
+    private void ShowReminderUndo(Guid reminderId, string title, string actionLabel)
     {
         _reminderUndoCts?.Cancel();
         _reminderUndoCts?.Dispose();
         _reminderUndoCts = new CancellationTokenSource();
-        _reminderUndo = (reminderId, title);
+        _reminderUndo = (reminderId, title, actionLabel);
 
         _ = HideReminderUndoAfterDelayAsync(_reminderUndoCts.Token);
     }
@@ -2394,10 +2464,11 @@ else
         await InvokeAsync(StateHasChanged);
     }
 
-    /// <summary>"Ångra" - Reminder.Restore() itself has no time window (see _reminderUndo's own
-    /// remarks), so this only ever fails if the offer's local 8s window has already run out and
-    /// _reminderUndo is gone, or a genuine network problem - never a domain rule rejecting it.</summary>
-    private async Task UndoReminderCancelAsync()
+    /// <summary>"Ångra" for either a cancellation or a check-off - both go through the same
+    /// Reminder.Restore(), which itself has no time window (see _reminderUndo's own remarks), so
+    /// this only ever fails if the offer's local 8s window has already run out and _reminderUndo
+    /// is gone, or a genuine network problem - never a domain rule rejecting it.</summary>
+    private async Task UndoReminderAsync()
     {
         if (_reminderUndo is not { ReminderId: var reminderId } || Session.Me is not { HouseholdId: { } householdId })
         {
