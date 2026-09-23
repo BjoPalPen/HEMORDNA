@@ -25,21 +25,21 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      ConnectionStrings__Hemordna: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-hemordna};Username=${POSTGRES_USER:-hemordna};Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD maaste saettas i .env}"
-      Jwt__SigningKey: ${JWT_SIGNING_KEY:?JWT_SIGNING_KEY maaste saettas i .env}
+      ConnectionStrings__Hemordna: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-hemordna};Username=${POSTGRES_USER:-hemordna};Password=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD måste sättas i .env}"
+      Jwt__SigningKey: ${JWT_SIGNING_KEY:?JWT_SIGNING_KEY måste sättas i .env}
       # Migrations har ingen dotnet-ef CLI i runtime-imagen - se Program.cs. Additiva
       # migrationer bara (CLAUDE.md), så påslaget är säkert vid varje omstart.
       RunMigrationsOnStartup: "true"
-      Resend__ApiKey: ${RESEND_API_KEY:?RESEND_API_KEY maaste saettas i .env}
+      Resend__ApiKey: ${RESEND_API_KEY:?RESEND_API_KEY måste sättas i .env}
       # Verified bowling-edge subnet; only this trusted proxy network may forward client IPs.
       ReverseProxy__KnownNetworks__0: ${REVERSE_PROXY_NETWORK:-172.19.0.0/16}
       Resend__FromAddress: ${RESEND_FROM_ADDRESS:-no-reply@hemordna.se}
       # Web Push (RFC 8292). Required only for the push endpoints - WebPushSender reads these
       # lazily on first use, so the API still starts and serves everything else if they are
       # unset. See Hemordna.Infrastructure/Services/WebPushSender.cs.
-      Vapid__PublicKey: ${VAPID_PUBLIC_KEY:?VAPID_PUBLIC_KEY maaste saettas i .env}
-      Vapid__PrivateKey: ${VAPID_PRIVATE_KEY:?VAPID_PRIVATE_KEY maaste saettas i .env}
-      Vapid__Subject: ${VAPID_SUBJECT:?VAPID_SUBJECT maaste saettas i .env}
+      Vapid__PublicKey: ${VAPID_PUBLIC_KEY:?VAPID_PUBLIC_KEY måste sättas i .env}
+      Vapid__PrivateKey: ${VAPID_PRIVATE_KEY:?VAPID_PRIVATE_KEY måste sättas i .env}
+      Vapid__Subject: ${VAPID_SUBJECT:?VAPID_SUBJECT måste sättas i .env}
       App__PublicUrl: "https://app.hemordna.se"
       # Passkeys (WebAuthn) - must match the real origin exactly, unlike App:PublicUrl above,
       # or the browser refuses the ceremony outright. See Program.cs.
@@ -63,7 +63,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-hemordna}
       POSTGRES_USER: ${POSTGRES_USER:-hemordna}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD maaste saettas i .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD måste sättas i .env}
     volumes:
       - hemordna-postgres-data:/var/lib/postgresql/data
     healthcheck:
