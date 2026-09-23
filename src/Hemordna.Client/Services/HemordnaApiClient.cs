@@ -1078,11 +1078,13 @@ public sealed class HemordnaApiClient
         string? location,
         DateOnly date,
         TimeOnly? timeOfDay,
+        int? travelMinutes = null,
         CancellationToken cancellationToken = default)
     {
         var request = await AuthorizedAsync(
             HttpMethod.Post, $"api/households/{householdId}/reminders", cancellationToken);
-        request.Content = JsonContent.Create(new CreateReminderRequest(title, location, date, timeOfDay));
+        request.Content = JsonContent.Create(
+            new CreateReminderRequest(title, location, date, timeOfDay, travelMinutes));
 
         var response = await _http.SendAsync(request, cancellationToken);
 
@@ -1137,6 +1139,24 @@ public sealed class HemordnaApiClient
         var request = await AuthorizedAsync(
             HttpMethod.Put, $"api/households/{householdId}/reminders/{reminderId}/move", cancellationToken);
         request.Content = JsonContent.Create(new MoveReminderRequest(date, timeOfDay));
+
+        var response = await _http.SendAsync(request, cancellationToken);
+
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<ReminderResponse>(cancellationToken)
+            : null;
+    }
+
+    /// <summary>Sets or clears the travel time before the reminder's time of day - see docs/PRODUCT.md §11.</summary>
+    public async Task<ReminderResponse?> SetReminderTravelMinutesAsync(
+        Guid householdId,
+        Guid reminderId,
+        int? travelMinutes,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Put, $"api/households/{householdId}/reminders/{reminderId}/travel-minutes", cancellationToken);
+        request.Content = JsonContent.Create(new SetReminderTravelMinutesRequest(travelMinutes));
 
         var response = await _http.SendAsync(request, cancellationToken);
 

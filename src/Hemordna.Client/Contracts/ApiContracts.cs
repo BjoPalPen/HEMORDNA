@@ -253,10 +253,12 @@ public sealed record ReminderResponse(
     string? Location,
     DateOnly Date,
     TimeOnly? TimeOfDay,
+    int? TravelMinutes,
     string Status,
     DateTimeOffset CreatedAt);
 
-public sealed record CreateReminderRequest(string Title, string? Location, DateOnly Date, TimeOnly? TimeOfDay);
+public sealed record CreateReminderRequest(
+    string Title, string? Location, DateOnly Date, TimeOnly? TimeOfDay, int? TravelMinutes);
 
 public sealed record ChangeReminderTitleRequest(string Title);
 
@@ -264,3 +266,6 @@ public sealed record ChangeReminderTitleRequest(string Title);
 public sealed record ChangeReminderLocationRequest(string? Location);
 
 public sealed record MoveReminderRequest(DateOnly Date, TimeOnly? TimeOfDay);
+
+/// <summary><c>null</c> clears the travel time - mirrors the API's own contract.</summary>
+public sealed record SetReminderTravelMinutesRequest(int? TravelMinutes);
