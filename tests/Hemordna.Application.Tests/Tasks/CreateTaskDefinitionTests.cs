@@ -220,4 +220,34 @@ public class CreateTaskDefinitionTests
         Assert.NotNull(definition!.Recurrence!.Weekday);
         Assert.NotNull(definition.Recurrence.MonthlyWeek);
     }
+
+    /// <summary>
+    /// 2026-07-01 22:30 UTC is already 2026-07-02 (a Thursday) in Stockholm (CEST, UTC+2). Joins
+    /// a Wednesday sibling so the chosen weekday is fixed and does not itself depend on "today" -
+    /// isolating the anchor date's own dependency on which "today" was used. Rolling a Wednesday
+    /// weekday forward from a (buggy) Wednesday UTC "today" lands on the very same day
+    /// (2026-07-01); rolling it forward from the correct Thursday "today" lands a full week
+    /// later (2026-07-08). Regression test for the server/client day-boundary mismatch
+    /// (HouseholdClock).
+    /// </summary>
+    [Fact]
+    public async Task AutoPlaceWeekday_anchors_to_the_households_date_not_the_utc_one()
+    {
+        var (householdId, area) = await ArrangeHouseholdWithAreaAsync("Badrum");
+        var existing = TaskDefinition.Create(householdId, "Dammsug golvet", 10, Now);
+        existing.AssignToArea(area);
+        existing.SetRecurrence(RecurrenceRule.Weekly(new DateOnly(2026, 2, 6), DayOfWeek.Wednesday));
+        _definitions.Seed(existing);
+
+        var lateNightUtc = new DateTimeOffset(2026, 7, 1, 22, 30, 0, TimeSpan.Zero);
+        var placeholderAnchor = RecurrenceRule.Weekly(new DateOnly(2026, 2, 6), DayOfWeek.Monday);
+
+        var definition = await CreateUseCaseAt(lateNightUtc).HandleAsync(
+            householdId,
+            new NewTaskDefinition("Torka golvet", 5, AreaId: area, Recurrence: placeholderAnchor, AutoPlaceWeekday: true),
+            CancellationToken.None);
+
+        Assert.Equal(DayOfWeek.Wednesday, definition!.Recurrence!.Weekday);
+        Assert.Equal(new DateOnly(2026, 7, 8), definition.Recurrence.StartDate);
+    }
 }

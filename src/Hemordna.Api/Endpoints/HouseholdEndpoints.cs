@@ -3,6 +3,7 @@ using Hemordna.Api.Contracts;
 using Hemordna.Application.Households;
 using Hemordna.Application.Planning;
 using Hemordna.Application.Tasks;
+using Hemordna.Application.Time;
 using Hemordna.Domain.Areas;
 using Hemordna.Domain.Households;
 using Hemordna.Domain.Tasks;
@@ -654,7 +655,7 @@ internal static class HouseholdEndpoints
         // The client's own "today" when it sends one - see CompleteOccurrenceAsync's own
         // remarks. Matters here: it is the exact date the re-anchored recurrence is anchored
         // from - see RecurrenceReanchoring.
-        var today = request.Today ?? DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        var today = request.Today ?? HouseholdClock.Today(timeProvider);
 
         var definition = await setPreferredWeekday.HandleAsync(
             householdId, taskId, request.Weekday, today, cancellationToken);
@@ -681,7 +682,7 @@ internal static class HouseholdEndpoints
         // The server's own date is fine here (see RebalanceTaskAssignments.HandleAsync's own
         // "today" doc) - unlike most "what does today mean" endpoints, this one does not need
         // the client's own today.
-        var today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        var today = HouseholdClock.Today(timeProvider);
         var changed = await rebalanceAssignments.HandleAsync(householdId, today, cancellationToken);
 
         return changed is null ? Results.NotFound() : Results.Ok(new RebalanceAssignmentsResponse(changed.Value));
@@ -925,7 +926,7 @@ internal static class HouseholdEndpoints
         // The client's own "today" when it sends one - it decides whether this completion earns
         // "tid i förväg" (see CompleteTaskOccurrence), and the client's local date can differ
         // from the server's around midnight. Falls back to the server's own date otherwise.
-        var today = request?.Today ?? DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        var today = request?.Today ?? HouseholdClock.Today(timeProvider);
 
         var occurrence = await complete.HandleAsync(
             householdId, occurrenceId, membership.MemberId, today, cancellationToken);
@@ -987,7 +988,7 @@ internal static class HouseholdEndpoints
         // The client's own "today" when it sends one - see CompleteOccurrenceAsync's own remarks
         // on why this can differ from the server's around midnight, and matters here too: it is
         // exactly the boundary BringForwardTo checks ("not yet due").
-        var today = request?.Today ?? DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        var today = request?.Today ?? HouseholdClock.Today(timeProvider);
 
         var result = await bringForward.HandleAsync(
             householdId, occurrenceId, membership.MemberId, today, cancellationToken);
@@ -1022,7 +1023,7 @@ internal static class HouseholdEndpoints
         // The client's own "today" when it sends one - see CompleteOccurrenceAsync's own
         // remarks. Matters doubly here: it both bounds MemberDayOff's own validity window and,
         // for DayOffMode.BringAllForward, is the exact date work moves to.
-        var today = request.Today ?? DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        var today = request.Today ?? HouseholdClock.Today(timeProvider);
 
         var result = await setDayOff.HandleAsync(
             householdId, memberId, date, today, request.Mode, cancellationToken);
@@ -1053,7 +1054,7 @@ internal static class HouseholdEndpoints
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        var today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        var today = HouseholdClock.Today(timeProvider);
         var rangeStart = from ?? today;
         var rangeEnd = to ?? today.AddDays(35);
 
@@ -1080,7 +1081,7 @@ internal static class HouseholdEndpoints
 
         // The client's own "today" when it sends one - see CompleteOccurrenceAsync's own
         // remarks. Bounds the 60-day lookback window this balance is summed over.
-        today ??= DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        today ??= HouseholdClock.Today(timeProvider);
 
         var minutes = await getTimeCredit.HandleAsync(householdId, membership.MemberId, today.Value, cancellationToken);
 
@@ -1106,7 +1107,7 @@ internal static class HouseholdEndpoints
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        var today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        var today = HouseholdClock.Today(timeProvider);
         var summaries = await dailyActivity.FindRecentDaysAsync(
             householdId, today, Math.Clamp(days ?? 7, 1, 31), cancellationToken);
 
@@ -1122,7 +1123,7 @@ internal static class HouseholdEndpoints
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        var anchor = date ?? DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        var anchor = date ?? HouseholdClock.Today(timeProvider);
 
         // ISO week: Monday first. DayOfWeek.Sunday is 0, so it needs its own case rather than
         // falling out of the (int)DayOfWeek - 1 arithmetic that works for every other day.
@@ -1177,7 +1178,7 @@ internal static class HouseholdEndpoints
         // "today" when it sends one - see CompleteOccurrenceAsync's own remarks on why this can
         // differ from the server's around midnight. Falls back to the server's own date otherwise.
         var membership = httpContext.GetMembership();
-        var today = request.Today ?? DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        var today = request.Today ?? HouseholdClock.Today(timeProvider);
 
         var occurrence = await createExtraTask.HandleAsync(
             householdId,
@@ -1202,7 +1203,7 @@ internal static class HouseholdEndpoints
         // The date is a transport concern: if the caller does not name one, "today" is
         // resolved here at the boundary and passed in explicitly. Nothing below this line
         // reads a clock.
-        var planDate = date ?? DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        var planDate = date ?? HouseholdClock.Today(timeProvider);
 
         var day = await getDailyPlan.HandleAsync(householdId, memberId, planDate, cancellationToken);
 
@@ -1216,7 +1217,7 @@ internal static class HouseholdEndpoints
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        var planDate = request.Today ?? DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        var planDate = request.Today ?? HouseholdClock.Today(timeProvider);
         var result = await previewWeeklyPlan.HandleAsync(householdId, planDate, ToMoves(request.Moves), cancellationToken);
 
         return result is null ? Results.NotFound() : Results.Ok(ToResponse(result));
@@ -1229,7 +1230,7 @@ internal static class HouseholdEndpoints
         TimeProvider timeProvider,
         CancellationToken cancellationToken)
     {
-        var planDate = request.Today ?? DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        var planDate = request.Today ?? HouseholdClock.Today(timeProvider);
         var changedCount = await applyWeeklyPlan.HandleAsync(householdId, planDate, ToMoves(request.Moves), cancellationToken);
 
         return changedCount is null ? Results.NotFound() : Results.Ok(new ApplyWeeklyPlanResponse(changedCount.Value));

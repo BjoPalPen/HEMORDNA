@@ -1,5 +1,6 @@
 using Hemordna.Application.Households;
 using Hemordna.Application.Planning;
+using Hemordna.Application.Time;
 using Hemordna.Domain.Tasks;
 
 namespace Hemordna.Application.Tasks;
@@ -60,7 +61,7 @@ public sealed class CreateTaskDefinition
         // besöken placeras; inget befintligt flyttas.
         if (request.AutoPlaceWeekday && recurrence is { IsWeeklyRhythm: true })
         {
-            var today = DateOnly.FromDateTime(now.UtcDateTime);
+            var today = HouseholdClock.Today(_timeProvider);
             var existing = await _definitions.ListByHouseholdAsync(householdId, cancellationToken);
             var visitKind = VisitKindClassifier.Of(recurrence, request.Effort);
 

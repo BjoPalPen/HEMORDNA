@@ -1,5 +1,6 @@
 using Hemordna.Application.Households;
 using Hemordna.Application.Tasks;
+using Hemordna.Application.Time;
 using Hemordna.Domain.Households;
 using Hemordna.Domain.Tasks;
 using Hemordna.Infrastructure.Identity;
@@ -39,6 +40,7 @@ internal static class DevelopmentDataSeeder
         }
 
         var cancellationToken = CancellationToken.None;
+        var timeProvider = scope.ServiceProvider.GetRequiredService<TimeProvider>();
         var memberships = scope.ServiceProvider.GetRequiredService<IHouseholdMembershipQuery>();
         var membership = await memberships.FindByUserIdAsync(user.Id, cancellationToken);
         var households = scope.ServiceProvider.GetRequiredService<IHouseholdRepository>();
@@ -110,7 +112,7 @@ internal static class DevelopmentDataSeeder
             await scheduleTask.HandleAsync(
                 household.Id,
                 washDishes.Id,
-                DateOnly.FromDateTime(DateTime.UtcNow),
+                HouseholdClock.Today(timeProvider),
                 demoMember.Id,
                 cancellationToken);
         }
@@ -120,7 +122,7 @@ internal static class DevelopmentDataSeeder
         // starts today so it is visible the first time anyone loads Min dag, not next week.
         if (existingTasks.All(task => task.Name != "Dammsug vardagsrum"))
         {
-            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            var today = HouseholdClock.Today(timeProvider);
 
             var vacuum = await createTask.HandleAsync(
                 household.Id,
@@ -141,7 +143,7 @@ internal static class DevelopmentDataSeeder
         // empty week. Only seeded once - later runs must not keep completing today's copy.
         if (existingTasks.All(task => task.Name != "Torka av köksbänken"))
         {
-            var today = DateOnly.FromDateTime(DateTime.UtcNow);
+            var today = HouseholdClock.Today(timeProvider);
             var weekAgo = today.AddDays(-6);
 
             var counterWipe = await createTask.HandleAsync(

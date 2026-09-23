@@ -267,4 +267,25 @@ public class RebalanceScheduleTests
 
         Assert.Equal(Today, occurrence.ScheduledDate);
     }
+
+    /// <summary>
+    /// 2026-07-01 22:30 UTC is already 2026-07-02 in Stockholm (CEST, UTC+2) - the "today" this
+    /// re-anchors the lone group onto must be the household's own date, or the server disagrees
+    /// with what the client's own clock already shows for the ~2 hours after UTC midnight.
+    /// Regression test for the server/client day-boundary mismatch (HouseholdClock).
+    /// </summary>
+    [Fact]
+    public async Task Reanchoring_uses_the_households_date_not_the_utc_one()
+    {
+        var household = await SeedHouseholdAsync();
+        var lateNightUtc = new DateTimeOffset(2026, 7, 1, 22, 30, 0, TimeSpan.Zero);
+        var stockholmToday = new DateOnly(2026, 7, 2);
+        var solo = SeedTask(
+            household, "Dammsug hallen", RecurrenceRule.Weekly(new DateOnly(2026, 2, 6), DayOfWeek.Friday), Guid.NewGuid());
+
+        var useCase = new RebalanceSchedule(_households, _definitions, _occurrences, new FixedTimeProvider(lateNightUtc));
+        await useCase.HandleAsync(household.Id, CancellationToken.None);
+
+        Assert.Equal(stockholmToday, solo.Recurrence!.StartDate);
+    }
 }

@@ -1,4 +1,5 @@
 using Hemordna.Application.Households;
+using Hemordna.Application.Time;
 using Hemordna.Domain.Tasks;
 
 namespace Hemordna.Application.Tasks;
@@ -60,7 +61,7 @@ public sealed class RebalanceSchedule
         // needs a change is re-fetched below through FindByIdAsync instead, which returns a
         // tracked instance SaveChanges can actually persist.
         var definitions = await _definitions.ListByHouseholdAsync(householdId, cancellationToken);
-        var today = DateOnly.FromDateTime(_timeProvider.GetUtcNow().UtcDateTime);
+        var today = HouseholdClock.Today(_timeProvider);
 
         var groups = definitions
             .Where(definition => definition.IsActive && definition.Recurrence is not null)
