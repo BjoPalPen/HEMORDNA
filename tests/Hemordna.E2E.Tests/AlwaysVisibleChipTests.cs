@@ -35,7 +35,7 @@ public class AlwaysVisibleChipTests
         var task = await (await http.PostAsJsonAsync(
             $"/api/households/{householdId}/tasks", new { name = "Diska", estimatedMinutes = 5 }))
             .Content.ReadFromJsonAsync<JsonElement>();
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
         await http.PostAsJsonAsync(
             $"/api/households/{householdId}/tasks/{task.GetProperty("id").GetGuid()}/occurrences",
             new { date = today, assignToMemberId = memberId });

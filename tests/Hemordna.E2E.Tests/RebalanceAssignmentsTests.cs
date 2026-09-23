@@ -37,7 +37,7 @@ public class RebalanceAssignmentsTests
             .Content.ReadFromJsonAsync<JsonElement>();
         var svenId = sven.GetProperty("id").GetGuid();
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
 
         // Five rotating tasks, all currently assigned to Elin by scheduling each one by hand -
         // heavily skewed her way despite her much smaller share of the household's capacity.

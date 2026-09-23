@@ -70,7 +70,7 @@ public class ReminderTests
         var task = await (await http.PostAsJsonAsync(
             $"/api/households/{householdId}/tasks", new { name = "Diska", estimatedMinutes = 5 }))
             .Content.ReadFromJsonAsync<JsonElement>();
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
         await http.PostAsJsonAsync(
             $"/api/households/{householdId}/tasks/{task.GetProperty("id").GetGuid()}/occurrences",
             new { date = today, assignToMemberId = memberId });
@@ -109,7 +109,7 @@ public class ReminderTests
         var ownerPage = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(ownerPage, ownerName);
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
         await CreateReminderViaUiAsync(ownerPage, "Tandläkare", today, "09:00");
         await Assertions.Expect(ownerPage.GetByText("Tandläkare")).ToBeVisibleAsync();
 
@@ -145,7 +145,7 @@ public class ReminderTests
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Disa");
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
         await CreateReminderViaUiAsync(page, "Frisör", today);
 
         var reminderGroup = page.Locator("ul[aria-label=\"Påminnelser\"]");

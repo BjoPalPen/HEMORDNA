@@ -26,7 +26,7 @@ public class MinDagFloorGroupingTests
         var me = await (await http.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
         var householdId = me.GetProperty("householdId").GetGuid();
         var memberId = me.GetProperty("memberId").GetGuid();
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
 
         await http.PutAsJsonAsync($"/api/households/{householdId}/members/{memberId}/availability",
             new { date = today, availableMinutes = 120 });

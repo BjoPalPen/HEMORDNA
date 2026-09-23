@@ -32,7 +32,7 @@ public class HushallActivityTests
             .Content.ReadFromJsonAsync<JsonElement>();
         var taskId = task.GetProperty("id").GetGuid();
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
         var occurrence = await (await http.PostAsJsonAsync(
             $"/api/households/{householdId}/tasks/{taskId}/occurrences",
             new { date = today, assignToMemberId = memberId }))
@@ -67,7 +67,7 @@ public class HushallActivityTests
         var me = await (await http.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
         var householdId = me.GetProperty("householdId").GetGuid();
         var memberId = me.GetProperty("memberId").GetGuid();
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
 
         async Task CompleteOneTaskAsync(string name)
         {
@@ -125,7 +125,7 @@ public class HushallActivityTests
         var me = await (await http.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
         var householdId = me.GetProperty("householdId").GetGuid();
         var memberId = me.GetProperty("memberId").GetGuid();
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
 
         // Gets left behind as Skipped once its frequency moves to a weekday other than today.
         var dailyTask = await (await http.PostAsJsonAsync(

@@ -60,7 +60,7 @@ public class SpeechTests
             new { name = "Diska", estimatedMinutes = 5, areaId = area.GetProperty("id").GetGuid() }))
             .Content.ReadFromJsonAsync<JsonElement>();
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
         await http.PostAsJsonAsync(
             $"/api/households/{householdId}/tasks/{task.GetProperty("id").GetGuid()}/occurrences",
             new { date = today, assignToMemberId = memberId });
@@ -110,7 +110,7 @@ public class SpeechTests
             new { name = "Skura golvet", estimatedMinutes = 15, description = "Ta fram hinken\nTorka" }))
             .Content.ReadFromJsonAsync<JsonElement>();
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
         await http.PostAsJsonAsync(
             $"/api/households/{householdId}/tasks/{task.GetProperty("id").GetGuid()}/occurrences",
             new { date = today, assignToMemberId = memberId });

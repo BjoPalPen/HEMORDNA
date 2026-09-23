@@ -23,7 +23,7 @@ public class PlanningSecurityTests
         var householdId = household.GetProperty("id").GetGuid();
         var memberId = household.GetProperty("members")[0].GetProperty("id").GetGuid();
         var root = $"/api/households/{householdId}";
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
         var extreme = await http.PostAsJsonAsync(root + "/tasks/extra", new { name = "Extrem", estimatedMinutes = int.MaxValue, today });
         Assert.Equal(HttpStatusCode.BadRequest, extreme.StatusCode);
         var taskResponse = await http.PostAsJsonAsync(root + "/tasks", new {

@@ -75,7 +75,7 @@ public class MixedHouseholdTests
     /// </summary>
     private static async Task<Guid> ScheduleTaskForTodayAsync(HttpClient http, Guid householdId, Guid memberId, string name)
     {
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
         var occurrence = await (await http.PostAsJsonAsync(
             $"/api/households/{householdId}/tasks/extra",
             new { name, estimatedMinutes = 5, today }))
@@ -255,7 +255,7 @@ public class MixedHouseholdTests
         var task = await (await aHttp.PostAsJsonAsync(
             $"/api/households/{householdId}/tasks", new { name = "Extra diskning", estimatedMinutes = 30 }))
             .Content.ReadFromJsonAsync<JsonElement>();
-        var today = DateOnly.FromDateTime(DateTime.Now);
+        var today = AppDate.Today;
         var occurrence = await (await aHttp.PostAsJsonAsync(
             $"/api/households/{householdId}/tasks/{task.GetProperty("id").GetGuid()}/occurrences",
             new { date = today, assignToMemberId = aMemberId, addedAsExtra = true }))

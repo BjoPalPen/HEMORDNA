@@ -59,7 +59,7 @@ public class TimeCreditTests
         var task = await (await http.PostAsJsonAsync(
             $"/api/households/{householdId}/tasks",
             new { name = "Extra stadning", estimatedMinutes = 25 })).Content.ReadFromJsonAsync<JsonElement>();
-        var today = DateOnly.FromDateTime(DateTime.Now);
+        var today = AppDate.Today;
         var occurrence = await (await http.PostAsJsonAsync(
             $"/api/households/{householdId}/tasks/{task.GetProperty("id").GetGuid()}/occurrences",
             new { date = today, assignToMemberId = memberId, addedAsExtra = true }))

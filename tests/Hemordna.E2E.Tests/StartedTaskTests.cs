@@ -36,7 +36,7 @@ public class StartedTaskTests
             .Content.ReadFromJsonAsync<JsonElement>();
         var areaId = area.GetProperty("id").GetGuid();
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
         string[] names = ["Diska", "Damma", "Dammsuga"];
 
         foreach (var name in names)

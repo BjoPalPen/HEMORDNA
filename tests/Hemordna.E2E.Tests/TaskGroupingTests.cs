@@ -31,7 +31,7 @@ public class TaskGroupingTests
         var householdId = me.GetProperty("householdId").GetGuid();
         var memberId = me.GetProperty("memberId").GetGuid();
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
         await http.PutAsJsonAsync(
             $"/api/households/{householdId}/members/{memberId}/availability",
             new { date = today, availableMinutes = 60 });
@@ -150,7 +150,7 @@ public class TaskGroupingTests
         var householdId = me.GetProperty("householdId").GetGuid();
         var memberId = me.GetProperty("memberId").GetGuid();
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
         var yesterday = today.AddDays(-1);
         await http.PutAsJsonAsync(
             $"/api/households/{householdId}/members/{memberId}/weekly-budget",
@@ -213,7 +213,7 @@ public class TaskGroupingTests
         var householdId = me.GetProperty("householdId").GetGuid();
         var memberId = me.GetProperty("memberId").GetGuid();
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
         await http.PutAsJsonAsync(
             $"/api/households/{householdId}/members/{memberId}/availability",
             new { date = today, availableMinutes = 60 });

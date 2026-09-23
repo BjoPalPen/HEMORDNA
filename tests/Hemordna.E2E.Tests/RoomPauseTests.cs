@@ -45,7 +45,7 @@ public class RoomPauseTests
             new { name = "Skrubba dusch", estimatedMinutes = 10, areaId }))
             .Content.ReadFromJsonAsync<JsonElement>();
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
         await http.PostAsJsonAsync(
             $"/api/households/{householdId}/tasks/{task.GetProperty("id").GetGuid()}/occurrences",
             new { date = today, assignToMemberId = memberId });
@@ -97,7 +97,7 @@ public class RoomPauseTests
         var room = Sheet(page, "Källare");
         await room.WaitForAsync();
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
         await room.GetByRole(AriaRole.Button, new() { Name = "Rummets meny" }).ClickAsync();
         await room.GetByRole(AriaRole.Button, new() { Name = "Pausa rummet" }).ClickAsync();
         await room.GetByLabel("Pausa till och med").FillAsync(today.AddDays(7).ToString("yyyy-MM-dd"));

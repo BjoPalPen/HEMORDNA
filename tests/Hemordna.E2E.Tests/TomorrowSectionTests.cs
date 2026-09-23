@@ -34,7 +34,7 @@ public class TomorrowSectionTests
 
         // Local, not UTC - matches whatever the page's own TimeProvider.GetLocalNow() resolves
         // "Today" to, so the seeded data lands on the exact date the UI itself will look at.
-        var today = DateOnly.FromDateTime(DateTime.Now);
+        var today = AppDate.Today;
 
         return (http, householdId, memberId, today);
     }

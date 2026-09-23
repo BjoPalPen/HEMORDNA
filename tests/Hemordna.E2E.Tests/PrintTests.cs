@@ -38,7 +38,7 @@ public class PrintTests
             .Content.ReadFromJsonAsync<JsonElement>();
         var taskId = task.GetProperty("id").GetGuid();
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
         await http.PostAsJsonAsync(
             $"/api/households/{householdId}/tasks/{taskId}/occurrences",
             new { date = today, assignToMemberId = memberId });
@@ -81,7 +81,7 @@ public class PrintTests
             $"/api/households/{householdId}/members/{memberId}/preferences",
             new { presentation = "OneAtATime", motivation = "None", showTimeLevel = false });
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
         string[] names = ["Diska", "Damma"];
 
         foreach (var name in names)

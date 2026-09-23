@@ -266,7 +266,7 @@ public class InstallningarTests
             .Content.ReadFromJsonAsync<JsonElement>();
         await http.PostAsJsonAsync(
             $"/api/households/{householdId}/tasks/{task.GetProperty("id").GetGuid()}/occurrences",
-            new { date = DateOnly.FromDateTime(DateTime.UtcNow), assignToMemberId = memberId });
+            new { date = AppDate.Today, assignToMemberId = memberId });
 
         await UploadBackdropAsync(page);
         await page.SetViewportSizeAsync(390, 844);

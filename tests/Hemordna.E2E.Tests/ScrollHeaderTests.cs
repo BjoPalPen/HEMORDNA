@@ -45,7 +45,7 @@ public class ScrollHeaderTests
         // Enough rows that the page is actually taller than the 844px viewport - a single task
         // leaves nothing to scroll, so window.scrollTo would silently clamp to 0 and the
         // threshold in Support/ScrollState.cs would never trip.
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
         for (var i = 1; i <= 10; i++)
         {
             var task = await (await http.PostAsJsonAsync(

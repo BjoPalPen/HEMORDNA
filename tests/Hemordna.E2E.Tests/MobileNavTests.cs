@@ -58,7 +58,7 @@ public class MobileNavTests
             $"/api/households/{householdId}/members/{memberId}/weekly-budget",
             new { monday = 120, tuesday = 120, wednesday = 120, thursday = 120, friday = 120, saturday = 120, sunday = 120 });
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
         for (var i = 1; i <= 8; i++)
         {
             var task = await (await http.PostAsJsonAsync(

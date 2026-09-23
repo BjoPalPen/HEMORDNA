@@ -36,7 +36,7 @@ public class CalmMotivationTests
             $"/api/households/{householdId}/members/{memberId}/preferences",
             new { presentation = "Text", motivation = "Calm", showTimeLevel = false });
 
-        var today = DateOnly.FromDateTime(DateTime.Now);
+        var today = AppDate.Today;
         var occurrenceIds = new List<Guid>();
 
         for (var i = 0; i < total; i++)
@@ -144,7 +144,7 @@ public class CalmMotivationTests
         var task = await (await http.PostAsJsonAsync(
             $"/api/households/{householdId}/tasks", new { name = "Diska", estimatedMinutes = 5 }))
             .Content.ReadFromJsonAsync<JsonElement>();
-        var today = DateOnly.FromDateTime(DateTime.Now);
+        var today = AppDate.Today;
         await http.PostAsJsonAsync(
             $"/api/households/{householdId}/tasks/{task.GetProperty("id").GetGuid()}/occurrences",
             new { date = today, assignToMemberId = memberId });

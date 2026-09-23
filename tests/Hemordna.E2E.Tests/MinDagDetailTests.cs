@@ -42,7 +42,7 @@ public class MinDagDetailTests
             .Content.ReadFromJsonAsync<JsonElement>();
         var taskId = task.GetProperty("id").GetGuid();
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
         await http.PostAsJsonAsync(
             $"/api/households/{householdId}/tasks/{taskId}/occurrences",
             new { date = today, assignToMemberId = memberId });
@@ -81,7 +81,7 @@ public class MinDagDetailTests
         var householdId = me.GetProperty("householdId").GetGuid();
         var memberId = me.GetProperty("memberId").GetGuid();
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
         await http.PutAsJsonAsync(
             $"/api/households/{householdId}/members/{memberId}/availability",
             new { date = today, availableMinutes = 60 });
@@ -134,7 +134,7 @@ public class MinDagDetailTests
         var householdId = me.GetProperty("householdId").GetGuid();
         var memberId = me.GetProperty("memberId").GetGuid();
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
         await http.PutAsJsonAsync(
             $"/api/households/{householdId}/members/{memberId}/availability",
             new { date = today, availableMinutes = 60 });
@@ -207,7 +207,7 @@ public class MinDagDetailTests
             .Content.ReadFromJsonAsync<JsonElement>();
         var taskId = task.GetProperty("id").GetGuid();
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
         var occurrence = await (await http.PostAsJsonAsync(
             $"/api/households/{householdId}/tasks/{taskId}/occurrences",
             new { date = today, assignToMemberId = memberId }))

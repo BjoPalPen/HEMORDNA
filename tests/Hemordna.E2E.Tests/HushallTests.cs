@@ -215,7 +215,7 @@ public class HushallTests
             .Content.ReadFromJsonAsync<JsonElement>();
         var occurrence = await (await http.PostAsJsonAsync(
             $"/api/households/{householdId}/tasks/{task.GetProperty("id").GetGuid()}/occurrences",
-            new { date = DateOnly.FromDateTime(DateTime.UtcNow), assignToMemberId = memberId }))
+            new { date = AppDate.Today, assignToMemberId = memberId }))
             .Content.ReadFromJsonAsync<JsonElement>();
         await http.PostAsync(
             $"/api/households/{householdId}/occurrences/{occurrence.GetProperty("id").GetGuid()}/complete", content: null);
@@ -268,7 +268,7 @@ public class HushallTests
             .Content.ReadFromJsonAsync<JsonElement>();
         var taskId = task.GetProperty("id").GetGuid();
 
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var today = AppDate.Today;
         var occurrence = await (await http.PostAsJsonAsync(
             $"/api/households/{householdId}/tasks/{taskId}/occurrences",
             new { date = today, assignToMemberId = memberId }))

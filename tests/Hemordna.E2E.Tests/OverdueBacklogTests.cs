@@ -43,7 +43,7 @@ public class OverdueBacklogTests
         var (http, householdId, memberId) = await ArrangeAsync(page, _app.ApiUrl);
         using var _ = http;
 
-        var yesterday = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-1);
+        var yesterday = AppDate.Today.AddDays(-1);
 
         for (var i = 1; i <= 7; i++)
         {
@@ -80,7 +80,7 @@ public class OverdueBacklogTests
         var (http, householdId, memberId) = await ArrangeAsync(page, _app.ApiUrl);
         using var _ = http;
 
-        var yesterday = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(-1);
+        var yesterday = AppDate.Today.AddDays(-1);
 
         for (var i = 1; i <= 2; i++)
         {
