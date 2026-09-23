@@ -32,4 +32,18 @@ public interface IReminderRepository
         DateOnly fromDate,
         DateOnly toDate,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Every reminder - any household, any member, any <see cref="ReminderStatus"/>, "all day"
+    /// included - whose <see cref="Reminder.Date"/> falls in [<paramref name="fromDate"/>,
+    /// <paramref name="toDate"/>]. Used by the reminder push background service
+    /// (<c>Hemordna.Application.Push.SendDueReminderNotifications</c>) to gather candidates
+    /// around "now" without scanning the whole table. Deliberately unfiltered on status or
+    /// <see cref="Reminder.TimeOfDay"/>, unlike <see cref="ListForMemberInRangeAsync"/> - that
+    /// filtering is <c>ReminderNotificationSelector</c>'s job, not this query's, so it stays
+    /// testable as a pure function against exactly the same candidate shapes this method
+    /// returns.
+    /// </summary>
+    Task<IReadOnlyList<Reminder>> ListInDateRangeAsync(
+        DateOnly fromDate, DateOnly toDate, CancellationToken cancellationToken);
 }

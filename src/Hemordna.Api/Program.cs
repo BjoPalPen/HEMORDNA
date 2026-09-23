@@ -5,6 +5,7 @@ using Hemordna.Api;
 using Hemordna.Api.Authentication;
 using Hemordna.Api.Endpoints;
 using Hemordna.Api.Realtime;
+using Hemordna.Api.Services;
 using Hemordna.Application.Households;
 using Hemordna.Application.Planning;
 using Hemordna.Application.Push;
@@ -131,6 +132,8 @@ builder.Services.AddScoped<RestoreReminder>();
 builder.Services.AddScoped<SubscribeToPush>();
 builder.Services.AddScoped<UnsubscribeFromPush>();
 builder.Services.AddScoped<SendTestPushNotification>();
+builder.Services.AddScoped<SendDueReminderNotifications>();
+builder.Services.AddHostedService<ReminderPushBackgroundService>();
 
 // SignalR pushes changes to a household's other connected clients - see docs/ARCHITECTURE.md §5.
 builder.Services.AddSignalR();

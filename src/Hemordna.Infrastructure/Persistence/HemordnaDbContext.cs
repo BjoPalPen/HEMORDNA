@@ -51,6 +51,8 @@ public sealed class HemordnaDbContext : IdentityDbContext<HemordnaUser, Identity
 
     public DbSet<PushSubscription> PushSubscriptions => Set<PushSubscription>();
 
+    public DbSet<SentReminderNotification> SentReminderNotifications => Set<SentReminderNotification>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);

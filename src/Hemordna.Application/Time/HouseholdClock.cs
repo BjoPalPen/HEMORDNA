@@ -36,8 +36,49 @@ public static class HouseholdClock
     /// <paramref name="clock"/>'s UTC time. Never reads a wall clock directly - see CLAUDE.md
     /// §5 - so callers stay deterministic under test.
     /// </summary>
-    public static DateOnly Today(TimeProvider clock)
-        => DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(clock.GetUtcNow(), Zone).DateTime);
+    public static DateOnly Today(TimeProvider clock) => Today(clock.GetUtcNow());
+
+    /// <summary>
+    /// Same as <see cref="Today(TimeProvider)"/>, for a caller that already has an instant (for
+    /// example a background service that read <see cref="TimeProvider.GetUtcNow"/> once and
+    /// wants every downstream calculation - "today", "is this due" - to agree on the exact same
+    /// instant rather than each reading the clock separately.
+    /// </summary>
+    public static DateOnly Today(DateTimeOffset utcNow)
+        => DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(utcNow, Zone).DateTime);
+
+    /// <summary>
+    /// Converts a household-local wall-clock date and time (Europe/Stockholm) to the UTC instant
+    /// it represents - the counterpart to <see cref="Today(TimeProvider)"/>: that answers "what
+    /// day is it", this answers "when, in UTC, does this Stockholm wall-clock moment actually
+    /// happen". Deliberately goes through this type's own <see cref="Zone"/> rather than
+    /// <c>DateTime.Now</c>/<c>GetLocalNow()</c> or a hard-coded UTC offset, so callers (for
+    /// example <c>Hemordna.Application.Push.ReminderNotificationSelector</c>, turning a
+    /// <c>Reminder.TimeOfDay</c> into a comparable instant) get the correct instant across a
+    /// daylight-saving transition instead of a fixed +1 or +2 hours.
+    /// </summary>
+    /// <returns>
+    /// <c>false</c> for the roughly one hour each spring the clocks skip over (02:00-02:59 on
+    /// the DST-start Sunday in March does not exist in Stockholm time) - there is no correct UTC
+    /// instant to return for a wall-clock moment that was never reached, so the caller is
+    /// expected to treat that as "nothing to compute here" rather than fail. The one hour each
+    /// autumn that repeats (DST-end Sunday in October) is not ambiguous from this method's point
+    /// of view: <see cref="TimeZoneInfo.ConvertTimeToUtc(DateTime, TimeZoneInfo)"/> resolves it
+    /// to its standard-time (winter) occurrence, deterministically, every time.
+    /// </returns>
+    public static bool TryToUtc(DateOnly date, TimeOnly timeOfDay, out DateTimeOffset utc)
+    {
+        var local = DateTime.SpecifyKind(date.ToDateTime(timeOfDay), DateTimeKind.Unspecified);
+
+        if (Zone.IsInvalidTime(local))
+        {
+            utc = default;
+            return false;
+        }
+
+        utc = new DateTimeOffset(TimeZoneInfo.ConvertTimeToUtc(local, Zone), TimeSpan.Zero);
+        return true;
+    }
 
     private static TimeZoneInfo ResolveZone()
     {

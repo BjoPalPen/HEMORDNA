@@ -49,6 +49,7 @@ public static class DependencyInjection
         services.AddScoped<IMemberPreferenceRepository, MemberPreferenceRepository>();
         services.AddScoped<IReminderRepository, ReminderRepository>();
         services.AddScoped<IPushSubscriptionRepository, PushSubscriptionRepository>();
+        services.AddScoped<ISentReminderNotificationRepository, SentReminderNotificationRepository>();
         // Resolved lazily by whatever endpoint actually calls it - so an environment with no
         // Vapid:* configuration set still starts and serves everything except push, rather
         // than failing at startup for a feature most requests never touch (see WebPushSender's
