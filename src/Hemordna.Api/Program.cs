@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using Hemordna.Api;
 using Hemordna.Api.Authentication;
@@ -9,6 +10,7 @@ using Hemordna.Application.Planning;
 using Hemordna.Application.Realtime;
 using Hemordna.Application.Reminders;
 using Hemordna.Application.Tasks;
+using Hemordna.Application.Time;
 using Hemordna.Infrastructure;
 using Hemordna.Infrastructure.Email;
 using Fido2NetLib;
@@ -21,6 +23,8 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.HttpOverrides;
 using Hemordna.Infrastructure.Identity;
 using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -226,9 +230,23 @@ builder.Services.AddExceptionHandler<DomainExceptionHandler>();
 builder.Services.AddProblemDetails();
 
 builder.Services.AddHealthChecks()
-    .AddDbContextCheck<HemordnaDbContext>("database");
+    .AddDbContextCheck<HemordnaDbContext>("database")
+    // Surfaces which zone HouseholdClock actually resolved, on /health, without anyone having
+    // to go read logs for it - see the Critical log right below for the same fact at startup.
+    .AddCheck("timezone", () => HouseholdClock.UsingFallback
+        ? HealthCheckResult.Degraded("UTC (Europe/Stockholm kunde inte slås upp)")
+        : HealthCheckResult.Healthy("Europe/Stockholm"));
 
 var app = builder.Build();
+
+// HouseholdClock cannot inject a logger (it is a static class - see its own remarks), so this
+// is where its UsingFallback flag actually gets acted on. Without this, a machine missing the
+// Europe/Stockholm zone would silently compute every "today" from UTC and nothing would say so.
+if (HouseholdClock.UsingFallback)
+{
+    app.Logger.LogCritical(
+        "Europe/Stockholm kunde inte slås upp på den här maskinen - serverns datum baseras på UTC i stället.");
+}
 
 if (app.Environment.IsDevelopment())
 {
@@ -305,7 +323,10 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapHealthChecks("/health").AllowAnonymous();
+// Default writer only returns the overall status word - not enough to see WHICH zone is in use
+// without also reading logs, which is exactly what the timezone check above exists to avoid.
+app.MapHealthChecks("/health", new HealthCheckOptions { ResponseWriter = WriteHealthReportAsync })
+    .AllowAnonymous();
 
 app.MapAuthEndpoints();
 app.MapPasskeyEndpoints();
@@ -319,3 +340,21 @@ app.MapHub<HouseholdHub>("/hubs/household", options => options.CloseOnAuthentica
 app.MapFallbackToFile("index.html");
 
 app.Run();
+
+static Task WriteHealthReportAsync(HttpContext context, HealthReport report)
+{
+    context.Response.ContentType = "application/json";
+
+    var payload = JsonSerializer.Serialize(new
+    {
+        status = report.Status.ToString(),
+        checks = report.Entries.Select(entry => new
+        {
+            name = entry.Key,
+            status = entry.Value.Status.ToString(),
+            description = entry.Value.Description
+        })
+    });
+
+    return context.Response.WriteAsync(payload);
+}
