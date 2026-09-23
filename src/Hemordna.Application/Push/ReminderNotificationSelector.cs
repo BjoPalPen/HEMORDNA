@@ -16,7 +16,11 @@ namespace Hemordna.Application.Push;
 /// <see cref="ReminderNotificationKind.TimeToLeave"/> at <c>TimeOfDay</c> minus
 /// <c>TravelMinutes</c> (only when <c>TravelMinutes</c> is set), and
 /// <see cref="ReminderNotificationKind.AtTime"/> at <c>TimeOfDay</c> itself. A reminder with no
-/// <c>TimeOfDay</c> ("all day") or a cancelled reminder never produces either.
+/// <c>TimeOfDay</c> ("all day"), or a reminder that is not <see cref="ReminderStatus.Upcoming"/> -
+/// cancelled OR checked off (<see cref="ReminderStatus.CheckedOff"/>) - never produces either. A
+/// checked-off reminder muting its own remaining notices is the whole point of the status: if
+/// someone has already said "I don't need reminding about this", a "time to leave" or "at time"
+/// notification arriving afterwards would flatly contradict them.
 /// </para>
 /// <para>
 /// <b>"Due" means the notification's instant falls in the half-open window
@@ -45,7 +49,11 @@ public static class ReminderNotificationSelector
 
         foreach (var reminder in reminders)
         {
-            if (reminder.Status == ReminderStatus.Cancelled || reminder.TimeOfDay is not { } timeOfDay)
+            // Anything other than Upcoming - cancelled or checked off (CheckedOff) alike - has
+            // nothing left to notify about. Written as "not Upcoming" rather than naming each
+            // non-upcoming status so a future status added here is silent by default, the same
+            // fail-safe direction as the rest of this selector.
+            if (reminder.Status != ReminderStatus.Upcoming || reminder.TimeOfDay is not { } timeOfDay)
             {
                 continue;
             }

@@ -1181,7 +1181,25 @@ public sealed class HemordnaApiClient
             : null;
     }
 
-    /// <summary>Takes back a cancellation. Fails (non-success status) if the reminder was not cancelled.</summary>
+    /// <summary>Checks off the reminder - see Hemordna.Domain.Reminders.Reminder.CheckOff. Idempotent,
+    /// safe to call again on one already checked off.</summary>
+    public async Task<ReminderResponse?> CheckOffReminderAsync(
+        Guid householdId,
+        Guid reminderId,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Post, $"api/households/{householdId}/reminders/{reminderId}/check-off", cancellationToken);
+
+        var response = await _http.SendAsync(request, cancellationToken);
+
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<ReminderResponse>(cancellationToken)
+            : null;
+    }
+
+    /// <summary>Takes back a cancellation or a check-off. Fails (non-success status) if the
+    /// reminder was already upcoming.</summary>
     public async Task<ReminderResponse?> RestoreReminderAsync(
         Guid householdId,
         Guid reminderId,

@@ -2,19 +2,18 @@ using Hemordna.Domain.Reminders;
 
 namespace Hemordna.Application.Reminders;
 
-/// <summary>Takes back a cancellation or a check-off on one of the caller's own reminders - see
-/// <see cref="Reminder.Restore"/>.</summary>
-public sealed class RestoreReminder
+/// <summary>Checks off one of the caller's own reminders - see <see cref="Reminder.CheckOff"/>.</summary>
+public sealed class CheckOffReminder
 {
     private readonly IReminderRepository _reminders;
 
-    public RestoreReminder(IReminderRepository reminders) => _reminders = reminders;
+    public CheckOffReminder(IReminderRepository reminders) => _reminders = reminders;
 
     /// <summary>
-    /// Restores the reminder, or returns <c>null</c> when the household has no such reminder OR
+    /// ChecksOff the reminder, or returns <c>null</c> when the household has no such reminder OR
     /// the reminder belongs to a different member - see <see cref="ChangeReminderTitle"/> for why
-    /// those two cases are indistinguishable on purpose. A rule violation from the domain (the
-    /// reminder is already upcoming) is left to throw uncaught.
+    /// those two cases are indistinguishable on purpose. A rule violation from the domain (a
+    /// cancelled reminder cannot be checked off) is left to throw uncaught.
     /// </summary>
     public async Task<Reminder?> HandleAsync(
         Guid householdId,
@@ -29,7 +28,7 @@ public sealed class RestoreReminder
             return null;
         }
 
-        reminder.Restore();
+        reminder.CheckOff();
 
         await _reminders.UpdateAsync(reminder, cancellationToken);
 

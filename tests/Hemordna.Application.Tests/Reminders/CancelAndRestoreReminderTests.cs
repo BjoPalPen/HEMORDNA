@@ -18,6 +18,8 @@ public class CancelAndRestoreReminderTests
 
     private RestoreReminder Restore() => new(_reminders);
 
+    private CheckOffReminder CheckOff() => new(_reminders);
+
     private Reminder Seed(Guid? memberId = null)
     {
         var reminder = Reminder.Create(
@@ -103,5 +105,67 @@ public class CancelAndRestoreReminderTests
 
         await Assert.ThrowsAsync<DomainException>(
             () => Restore().HandleAsync(HouseholdId, AnnaId, reminder.Id, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task ChecksOff_the_callers_own_reminder()
+    {
+        var reminder = Seed();
+
+        var result = await CheckOff().HandleAsync(HouseholdId, AnnaId, reminder.Id, CancellationToken.None);
+
+        Assert.NotNull(result);
+        Assert.Equal(ReminderStatus.CheckedOff, result.Status);
+        Assert.Equal(1, _reminders.UpdateCallCount);
+    }
+
+    /// <summary>The single most important rule in this whole feature: a reminder is private to
+    /// its owner, even within the same household. See PRODUCT.md §11 and CLAUDE.md §9.</summary>
+    [Fact]
+    public async Task Another_members_reminder_cannot_be_checked_off()
+    {
+        var reminder = Seed(memberId: BjornId);
+
+        var result = await CheckOff().HandleAsync(HouseholdId, AnnaId, reminder.Id, CancellationToken.None);
+
+        Assert.Null(result);
+        Assert.Equal(0, _reminders.UpdateCallCount);
+        Assert.Equal(ReminderStatus.Upcoming, reminder.Status);
+    }
+
+    [Fact]
+    public async Task An_unknown_reminder_finds_nothing_for_check_off()
+    {
+        var result = await CheckOff().HandleAsync(HouseholdId, AnnaId, Guid.NewGuid(), CancellationToken.None);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task Restores_the_callers_own_checked_off_reminder()
+    {
+        var reminder = Seed();
+        reminder.CheckOff();
+
+        var result = await Restore().HandleAsync(HouseholdId, AnnaId, reminder.Id, CancellationToken.None);
+
+        Assert.NotNull(result);
+        Assert.Equal(ReminderStatus.Upcoming, result.Status);
+        Assert.Equal(1, _reminders.UpdateCallCount);
+    }
+
+    /// <summary>The single most important rule in this whole feature: a reminder is private to
+    /// its owner, even within the same household. See PRODUCT.md §11 and CLAUDE.md §9.</summary>
+    [Fact]
+    public async Task Another_members_checked_off_reminder_cannot_be_restored()
+    {
+        var reminder = Seed(memberId: BjornId);
+        reminder.CheckOff();
+
+        var result = await Restore().HandleAsync(HouseholdId, AnnaId, reminder.Id, CancellationToken.None);
+
+        Assert.Null(result);
+        Assert.Equal(0, _reminders.UpdateCallCount);
+        Assert.Equal(ReminderStatus.CheckedOff, reminder.Status);
     }
 }

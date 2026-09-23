@@ -111,7 +111,7 @@ public sealed class Reminder
     /// <summary>Changes the title. Only an upcoming reminder can be changed.</summary>
     public void ChangeTitle(string title)
     {
-        EnsureNotCancelled("changed");
+        EnsureUpcoming("changed");
 
         Title = ValidateTitle(title);
     }
@@ -122,7 +122,7 @@ public sealed class Reminder
     /// </summary>
     public void ChangeLocation(string? location)
     {
-        EnsureNotCancelled("changed");
+        EnsureUpcoming("changed");
 
         Location = ValidateLocation(location);
     }
@@ -141,7 +141,7 @@ public sealed class Reminder
     /// </summary>
     public void MoveTo(DateOnly date, TimeOnly? timeOfDay)
     {
-        EnsureNotCancelled("moved");
+        EnsureUpcoming("moved");
         SchedulingDate.ValidateCalendar(date);
 
         Date = date;
@@ -162,7 +162,7 @@ public sealed class Reminder
     /// </summary>
     public void SetTravelMinutes(int? travelMinutes)
     {
-        EnsureNotCancelled("changed");
+        EnsureUpcoming("changed");
 
         TravelMinutes = ValidateTravelMinutes(travelMinutes, TimeOfDay, Title);
     }
@@ -170,35 +170,71 @@ public sealed class Reminder
     /// <summary>
     /// Cancels the reminder. Idempotent, so a duplicate request from a second client cannot
     /// fail merely because the first one already went through - the same reasoning as
-    /// <see cref="TaskOccurrence.Skip"/>.
+    /// <see cref="TaskOccurrence.Skip"/>. Blocked once the reminder has been checked off
+    /// (<see cref="CheckOff"/>): silently overwriting <see cref="ReminderStatus.CheckedOff"/> would
+    /// erase the owner's own "I've handled this" without an explicit <see cref="Restore"/> -
+    /// call <see cref="Restore"/> first.
     /// </summary>
-    public void Cancel() => Status = ReminderStatus.Cancelled;
+    public void Cancel()
+    {
+        if (Status == ReminderStatus.CheckedOff)
+        {
+            throw new DomainException("A checked-off reminder cannot be cancelled - restore it first.");
+        }
+
+        Status = ReminderStatus.Cancelled;
+    }
 
     /// <summary>
-    /// Takes back a cancellation, returning the reminder to <see cref="ReminderStatus.Upcoming"/>.
-    /// Throws <see cref="DomainException"/> if the reminder is not cancelled - there is nothing to
-    /// restore. Unlike <see cref="TaskOccurrence.Reopen"/>, there is deliberately no time window
-    /// here: <c>Reopen</c>'s 15 minutes exist because a completed occurrence is shared household
-    /// history that nobody should be able to quietly rewrite days later. A reminder is private to
-    /// its owner - nobody else is affected by restoring one, so a member who notices two days
-    /// later that an appointment was cancelled by mistake should still get it back. How long
-    /// "Undo" is offered in practice is a client-side decision, not a domain one.
+    /// Marks this reminder's own time as no longer needing a reminder - see
+    /// <see cref="ReminderStatus.CheckedOff"/> for why this is about the TIME, not about a chore.
+    /// Idempotent, same reasoning as <see cref="Cancel"/>: a duplicate request from a second
+    /// client cannot fail merely because the first one already went through. Blocked on a
+    /// cancelled reminder - an appointment that was called off entirely has nothing left to
+    /// check off; <see cref="Restore"/> it first if that was a mistake.
+    /// </summary>
+    public void CheckOff()
+    {
+        if (Status == ReminderStatus.CheckedOff)
+        {
+            return;
+        }
+
+        if (Status == ReminderStatus.Cancelled)
+        {
+            throw new DomainException("A cancelled reminder cannot be checked off.");
+        }
+
+        Status = ReminderStatus.CheckedOff;
+    }
+
+    /// <summary>
+    /// Takes back a cancellation or a check-off, returning the reminder to
+    /// <see cref="ReminderStatus.Upcoming"/>. Throws <see cref="DomainException"/> if the
+    /// reminder is already upcoming - there is nothing to restore. Unlike
+    /// <see cref="TaskOccurrence.Reopen"/>, there is deliberately no time window here for either
+    /// direction: <c>Reopen</c>'s 15 minutes exist because a completed occurrence is shared
+    /// household history that nobody should be able to quietly rewrite days later. A reminder
+    /// is private to its owner - nobody else is affected by restoring one, whether it had been
+    /// cancelled or checked off, so a member who notices two days later that an appointment was
+    /// cancelled, or checked off, by mistake should still get it back. How long "Undo" is
+    /// offered in practice is a client-side decision, not a domain one.
     /// </summary>
     public void Restore()
     {
-        if (Status != ReminderStatus.Cancelled)
+        if (Status == ReminderStatus.Upcoming)
         {
-            throw new DomainException("Only a cancelled reminder can be restored.");
+            throw new DomainException("Only a cancelled or checked-off reminder can be restored.");
         }
 
         Status = ReminderStatus.Upcoming;
     }
 
-    private void EnsureNotCancelled(string action)
+    private void EnsureUpcoming(string action)
     {
-        if (Status == ReminderStatus.Cancelled)
+        if (Status != ReminderStatus.Upcoming)
         {
-            throw new DomainException($"A cancelled reminder cannot be {action}.");
+            throw new DomainException($"A reminder with status '{Status}' cannot be {action}.");
         }
     }
 
