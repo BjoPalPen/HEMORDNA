@@ -15,7 +15,8 @@ public class ReminderTests
         DateOnly? date = null,
         TimeOnly? timeOfDay = null,
         Guid? householdId = null,
-        Guid? memberId = null)
+        Guid? memberId = null,
+        int? travelMinutes = null)
         => Reminder.Create(
             householdId ?? Guid.NewGuid(),
             memberId ?? Guid.NewGuid(),
@@ -23,7 +24,8 @@ public class ReminderTests
             location,
             date ?? Friday,
             timeOfDay,
-            CreatedAt);
+            CreatedAt,
+            travelMinutes);
 
     [Fact]
     public void A_new_reminder_is_upcoming()
@@ -315,5 +317,111 @@ public class ReminderTests
 
         Assert.Equal(Friday.AddDays(1), reminder.Date);
         Assert.Equal(new TimeOnly(10, 0), reminder.TimeOfDay);
+    }
+
+    [Fact]
+    public void Travel_minutes_can_be_set_on_creation_alongside_a_time_of_day()
+    {
+        var reminder = CreateReminder(timeOfDay: new TimeOnly(14, 0), travelMinutes: 30);
+
+        Assert.Equal(30, reminder.TravelMinutes);
+    }
+
+    [Fact]
+    public void Setting_travel_minutes_on_creation_without_a_time_of_day_throws()
+    {
+        Assert.Throws<DomainException>(() => CreateReminder(timeOfDay: null, travelMinutes: 30));
+    }
+
+    [Fact]
+    public void SetTravelMinutes_without_a_time_of_day_throws()
+    {
+        var reminder = CreateReminder(timeOfDay: null);
+
+        Assert.Throws<DomainException>(() => reminder.SetTravelMinutes(30));
+    }
+
+    [Fact]
+    public void SetTravelMinutes_with_a_time_of_day_is_saved()
+    {
+        var reminder = CreateReminder(timeOfDay: new TimeOnly(14, 0));
+
+        reminder.SetTravelMinutes(45);
+
+        Assert.Equal(45, reminder.TravelMinutes);
+    }
+
+    [Fact]
+    public void SetTravelMinutes_can_clear_the_travel_time()
+    {
+        var reminder = CreateReminder(timeOfDay: new TimeOnly(14, 0), travelMinutes: 30);
+
+        reminder.SetTravelMinutes(null);
+
+        Assert.Null(reminder.TravelMinutes);
+    }
+
+    [Fact]
+    public void Zero_travel_minutes_is_rejected()
+    {
+        var reminder = CreateReminder(timeOfDay: new TimeOnly(14, 0));
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => reminder.SetTravelMinutes(0));
+    }
+
+    [Fact]
+    public void Negative_travel_minutes_is_rejected()
+    {
+        var reminder = CreateReminder(timeOfDay: new TimeOnly(14, 0));
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => reminder.SetTravelMinutes(-5));
+    }
+
+    [Fact]
+    public void Travel_minutes_beyond_the_maximum_is_rejected()
+    {
+        var reminder = CreateReminder(timeOfDay: new TimeOnly(14, 0));
+
+        Assert.Throws<ArgumentOutOfRangeException>(
+            () => reminder.SetTravelMinutes(Reminder.MaxTravelMinutes + 1));
+    }
+
+    [Fact]
+    public void Travel_minutes_at_the_maximum_is_accepted()
+    {
+        var reminder = CreateReminder(timeOfDay: new TimeOnly(14, 0));
+
+        reminder.SetTravelMinutes(Reminder.MaxTravelMinutes);
+
+        Assert.Equal(Reminder.MaxTravelMinutes, reminder.TravelMinutes);
+    }
+
+    [Fact]
+    public void MoveTo_all_day_clears_travel_minutes()
+    {
+        var reminder = CreateReminder(timeOfDay: new TimeOnly(14, 0), travelMinutes: 30);
+
+        reminder.MoveTo(Friday.AddDays(1), null);
+
+        Assert.Null(reminder.TravelMinutes);
+    }
+
+    [Fact]
+    public void MoveTo_keeping_a_time_of_day_does_not_clear_travel_minutes()
+    {
+        var reminder = CreateReminder(timeOfDay: new TimeOnly(14, 0), travelMinutes: 30);
+
+        reminder.MoveTo(Friday.AddDays(1), new TimeOnly(9, 0));
+
+        Assert.Equal(30, reminder.TravelMinutes);
+    }
+
+    [Fact]
+    public void A_cancelled_reminder_cannot_have_its_travel_minutes_changed()
+    {
+        var reminder = CreateReminder(timeOfDay: new TimeOnly(14, 0));
+        reminder.Cancel();
+
+        Assert.Throws<DomainException>(() => reminder.SetTravelMinutes(30));
     }
 }

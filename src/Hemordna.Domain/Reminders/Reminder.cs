@@ -18,6 +18,10 @@ public sealed class Reminder
     /// <summary>Free text for where the appointment is - a clinic name, an address fragment.</summary>
     public const int MaxLocationLength = 200;
 
+    /// <summary>A single trip can take at most a full day - same reasoning as
+    /// <see cref="TaskDefinition.MaxEstimatedMinutes"/>.</summary>
+    public const int MaxTravelMinutes = 24 * 60;
+
     private Reminder(
         Guid id,
         Guid householdId,
@@ -26,7 +30,8 @@ public sealed class Reminder
         string? location,
         DateOnly date,
         TimeOnly? timeOfDay,
-        DateTimeOffset createdAt)
+        DateTimeOffset createdAt,
+        int? travelMinutes)
     {
         Id = id;
         HouseholdId = householdId;
@@ -37,6 +42,7 @@ public sealed class Reminder
         TimeOfDay = timeOfDay;
         Status = ReminderStatus.Upcoming;
         CreatedAt = createdAt;
+        TravelMinutes = travelMinutes;
     }
 
     public Guid Id { get; private set; }
@@ -57,6 +63,14 @@ public sealed class Reminder
     /// <summary>The time this is due, or <c>null</c> meaning "all day".</summary>
     public TimeOnly? TimeOfDay { get; private set; }
 
+    /// <summary>
+    /// Minutes to leave before <see cref="TimeOfDay"/> - the number that actually matters
+    /// ("13:30, not 14:00"), see docs/PRODUCT.md §11. <c>null</c> when no travel time is tracked.
+    /// Always <c>null</c> for an "all day" reminder - see <see cref="SetTravelMinutes"/> and
+    /// <see cref="MoveTo"/>.
+    /// </summary>
+    public int? TravelMinutes { get; private set; }
+
     public ReminderStatus Status { get; private set; }
 
     public DateTimeOffset CreatedAt { get; private set; }
@@ -73,21 +87,25 @@ public sealed class Reminder
         string? location,
         DateOnly date,
         TimeOnly? timeOfDay,
-        DateTimeOffset createdAt)
+        DateTimeOffset createdAt,
+        int? travelMinutes = null)
     {
         Guard.AgainstEmpty(householdId, nameof(householdId));
         Guard.AgainstEmpty(memberId, nameof(memberId));
         SchedulingDate.Validate(date, DateOnly.FromDateTime(createdAt.UtcDateTime));
 
+        var validatedTitle = ValidateTitle(title);
+
         return new Reminder(
             Guid.NewGuid(),
             householdId,
             memberId,
-            ValidateTitle(title),
+            validatedTitle,
             ValidateLocation(location),
             date,
             timeOfDay,
-            createdAt);
+            createdAt,
+            ValidateTravelMinutes(travelMinutes, timeOfDay, validatedTitle));
     }
 
     /// <summary>Changes the title. Only an upcoming reminder can be changed.</summary>
@@ -114,7 +132,12 @@ public sealed class Reminder
     /// moved. Unlike <see cref="Create"/>, no reference date is available here, so the date is
     /// only checked against the supported calendar bounds - the same choice
     /// <see cref="TaskOccurrence.DeferTo"/> and <see cref="TaskOccurrence.ReanchorTo"/> already
-    /// make for the same reason.
+    /// make for the same reason. Clearing the time of day (moving to "all day") also clears
+    /// <see cref="TravelMinutes"/> - the same stale-lock cleanup
+    /// <see cref="TaskDefinition.SetRecurrence"/> already does for
+    /// <see cref="TaskDefinition.PreferredWeekday"/> when a change leaves it pointing at
+    /// something that no longer exists: a travel time with no departure time to count back from
+    /// would just be confusing left behind.
     /// </summary>
     public void MoveTo(DateOnly date, TimeOnly? timeOfDay)
     {
@@ -123,6 +146,25 @@ public sealed class Reminder
 
         Date = date;
         TimeOfDay = timeOfDay;
+
+        if (timeOfDay is null)
+        {
+            TravelMinutes = null;
+        }
+    }
+
+    /// <summary>
+    /// Sets or clears the travel time before <see cref="TimeOfDay"/> - see docs/PRODUCT.md §11
+    /// and this class's own remarks on <see cref="TravelMinutes"/>. Requires a time of day to
+    /// count back from - the same kind of requirement
+    /// <see cref="TaskDefinition.SetPreferredWeekday"/> enforces against a task with no single
+    /// weekday to lock to. Only an upcoming reminder can be changed.
+    /// </summary>
+    public void SetTravelMinutes(int? travelMinutes)
+    {
+        EnsureNotCancelled("changed");
+
+        TravelMinutes = ValidateTravelMinutes(travelMinutes, TimeOfDay, Title);
     }
 
     /// <summary>
@@ -187,5 +229,33 @@ public sealed class Reminder
         }
 
         return trimmed;
+    }
+
+    /// <summary>
+    /// <c>null</c> clears the travel time. Otherwise requires a time of day to count back from -
+    /// see <see cref="SetTravelMinutes"/> - and a positive value up to <see cref="MaxTravelMinutes"/>.
+    /// </summary>
+    private static int? ValidateTravelMinutes(int? travelMinutes, TimeOnly? timeOfDay, string title)
+    {
+        if (travelMinutes is not { } minutes)
+        {
+            return null;
+        }
+
+        if (timeOfDay is null)
+        {
+            throw new DomainException(
+                $"Reminder '{title}' has no time of day to count travel time against.");
+        }
+
+        Guard.AgainstNonPositive(minutes, nameof(travelMinutes));
+
+        if (minutes > MaxTravelMinutes)
+        {
+            throw new ArgumentOutOfRangeException(nameof(travelMinutes), minutes,
+                $"Travel minutes must be at most {MaxTravelMinutes}.");
+        }
+
+        return minutes;
     }
 }
