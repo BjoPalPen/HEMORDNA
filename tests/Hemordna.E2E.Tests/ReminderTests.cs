@@ -25,7 +25,8 @@ public class ReminderTests
     /// <summary>Assumes the page is already on Min dag ("/") - "Ny påminnelse" is one of the
     /// always-visible chips there, same as "Extra uppgift".</summary>
     private static async Task CreateReminderViaUiAsync(
-        IPage page, string title, DateOnly date, string? time = null, string? location = null)
+        IPage page, string title, DateOnly date, string? time = null, string? location = null,
+        int? travelMinutes = null)
     {
         await page.GetByRole(AriaRole.Button, new() { Name = "Ny påminnelse" }).ClickAsync();
         var sheet = page.GetByRole(AriaRole.Dialog, new() { Name = "Ny påminnelse" });
@@ -35,6 +36,11 @@ public class ReminderTests
         if (time is not null)
         {
             await sheet.GetByLabel("Klockslag").FillAsync(time);
+        }
+
+        if (travelMinutes is not null)
+        {
+            await sheet.GetByLabel("Restid").FillAsync(travelMinutes.Value.ToString());
         }
 
         if (location is not null)
@@ -100,6 +106,27 @@ public class ReminderTests
         // klar"-tillstånd för en påminnelse.
         await Assertions.Expect(
             page.GetByRole(AriaRole.Button, new() { Name = "Markera Läkarbesök som klar" })).ToHaveCountAsync(0);
+    }
+
+    /// <summary>The number a member actually acts on - "13:30", not the appointment's own
+    /// "14:00" - docs/PRODUCT.md §11. Reloads for real afterwards, same as the first test above,
+    /// so this proves the travel time round-tripped through the server rather than only living
+    /// in the sheet's own local state.</summary>
+    [Fact]
+    public async Task Adding_travel_minutes_shows_the_departure_time_on_the_row_after_a_reload()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Elin");
+
+        var today = AppDate.Today;
+        await CreateReminderViaUiAsync(page, "Tandläkare", today, "14:00", travelMinutes: 30);
+
+        await page.ReloadAsync();
+
+        var reminderGroup = page.Locator("ul[aria-label=\"Påminnelser\"]");
+        await Assertions.Expect(reminderGroup.GetByText("Tandläkare")).ToBeVisibleAsync();
+        await Assertions.Expect(reminderGroup).ToContainTextAsync("14:00");
+        await Assertions.Expect(reminderGroup).ToContainTextAsync("Gå 13:30");
     }
 
     [Fact]

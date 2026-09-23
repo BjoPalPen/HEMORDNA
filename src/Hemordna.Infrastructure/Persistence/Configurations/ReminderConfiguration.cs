@@ -31,6 +31,9 @@ internal sealed class ReminderConfiguration : IEntityTypeConfiguration<Reminder>
         // "All day" is a real state (null), not a missing value - no IsRequired().
         builder.Property(reminder => reminder.TimeOfDay);
 
+        // Null when no travel time is tracked - see Reminder.TravelMinutes and MoveTo/SetTravelMinutes.
+        builder.Property(reminder => reminder.TravelMinutes);
+
         builder.Property(reminder => reminder.Status).IsRequired();
         builder.Property(reminder => reminder.CreatedAt).IsRequired();
 

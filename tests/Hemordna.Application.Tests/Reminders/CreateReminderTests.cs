@@ -1,6 +1,7 @@
 using Hemordna.Application.Households;
 using Hemordna.Application.Reminders;
 using Hemordna.Application.Tests.Households;
+using Hemordna.Domain.Common;
 using Hemordna.Domain.Reminders;
 
 namespace Hemordna.Application.Tests.Reminders;
@@ -29,7 +30,8 @@ public class CreateReminderTests
         var (householdId, memberId) = await ArrangeHouseholdAsync();
 
         var reminder = await CreateUseCase().HandleAsync(
-            householdId, memberId, "Tandläkare", "Folktandvården", Friday, new TimeOnly(9, 0), CancellationToken.None);
+            householdId, memberId, "Tandläkare", "Folktandvården", Friday, new TimeOnly(9, 0), null,
+            CancellationToken.None);
 
         Assert.NotNull(reminder);
         Assert.Equal(householdId, reminder.HouseholdId);
@@ -38,8 +40,31 @@ public class CreateReminderTests
         Assert.Equal("Folktandvården", reminder.Location);
         Assert.Equal(Friday, reminder.Date);
         Assert.Equal(new TimeOnly(9, 0), reminder.TimeOfDay);
+        Assert.Null(reminder.TravelMinutes);
         Assert.Equal(ReminderStatus.Upcoming, reminder.Status);
         Assert.Equal(1, _reminders.AddCallCount);
+    }
+
+    [Fact]
+    public async Task Creates_a_reminder_with_travel_minutes_alongside_a_time_of_day()
+    {
+        var (householdId, memberId) = await ArrangeHouseholdAsync();
+
+        var reminder = await CreateUseCase().HandleAsync(
+            householdId, memberId, "Tandläkare", "Folktandvården", Friday, new TimeOnly(14, 0), 30,
+            CancellationToken.None);
+
+        Assert.NotNull(reminder);
+        Assert.Equal(30, reminder.TravelMinutes);
+    }
+
+    [Fact]
+    public async Task Travel_minutes_without_a_time_of_day_is_rejected_by_the_domain_uncaught()
+    {
+        var (householdId, memberId) = await ArrangeHouseholdAsync();
+
+        await Assert.ThrowsAsync<DomainException>(() => CreateUseCase()
+            .HandleAsync(householdId, memberId, "Tandläkare", null, Friday, null, 30, CancellationToken.None));
     }
 
     [Fact]
@@ -48,7 +73,7 @@ public class CreateReminderTests
         var (householdId, _) = await ArrangeHouseholdAsync();
 
         var reminder = await CreateUseCase()
-            .HandleAsync(householdId, Guid.NewGuid(), "Tandläkare", null, Friday, null, CancellationToken.None);
+            .HandleAsync(householdId, Guid.NewGuid(), "Tandläkare", null, Friday, null, null, CancellationToken.None);
 
         Assert.Null(reminder);
         Assert.Equal(0, _reminders.AddCallCount);
@@ -58,7 +83,7 @@ public class CreateReminderTests
     public async Task Returns_null_for_an_unknown_household()
     {
         var reminder = await CreateUseCase()
-            .HandleAsync(Guid.NewGuid(), Guid.NewGuid(), "Tandläkare", null, Friday, null, CancellationToken.None);
+            .HandleAsync(Guid.NewGuid(), Guid.NewGuid(), "Tandläkare", null, Friday, null, null, CancellationToken.None);
 
         Assert.Null(reminder);
     }
@@ -69,6 +94,6 @@ public class CreateReminderTests
         var (householdId, memberId) = await ArrangeHouseholdAsync();
 
         await Assert.ThrowsAsync<ArgumentException>(() => CreateUseCase()
-            .HandleAsync(householdId, memberId, "   ", null, Friday, null, CancellationToken.None));
+            .HandleAsync(householdId, memberId, "   ", null, Friday, null, null, CancellationToken.None));
     }
 }

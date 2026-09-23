@@ -56,6 +56,11 @@ internal static class ReminderEndpoints
             .Produces(StatusCodes.Status400BadRequest)
             .ProducesValidationProblem();
 
+        reminders.MapPut("/{reminderId:guid}/travel-minutes", SetReminderTravelMinutesAsync)
+            .Produces<ReminderResponse>()
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status409Conflict);
+
         reminders.MapPost("/{reminderId:guid}/cancel", CancelReminderAsync)
             .Produces<ReminderResponse>()
             .Produces(StatusCodes.Status404NotFound);
@@ -126,6 +131,7 @@ internal static class ReminderEndpoints
             request.Location,
             request.Date.Value,
             request.TimeOfDay,
+            request.TravelMinutes,
             cancellationToken);
 
         return reminder is null
@@ -197,6 +203,22 @@ internal static class ReminderEndpoints
         return reminder is null ? Results.NotFound() : Results.Ok(ToResponse(reminder));
     }
 
+    private static async Task<IResult> SetReminderTravelMinutesAsync(
+        Guid householdId,
+        Guid reminderId,
+        HttpContext httpContext,
+        SetReminderTravelMinutesRequest request,
+        SetReminderTravelMinutes setReminderTravelMinutes,
+        CancellationToken cancellationToken)
+    {
+        var membership = httpContext.GetMembership();
+
+        var reminder = await setReminderTravelMinutes.HandleAsync(
+            householdId, membership.MemberId, reminderId, request.TravelMinutes, cancellationToken);
+
+        return reminder is null ? Results.NotFound() : Results.Ok(ToResponse(reminder));
+    }
+
     private static async Task<IResult> CancelReminderAsync(
         Guid householdId,
         Guid reminderId,
@@ -234,6 +256,7 @@ internal static class ReminderEndpoints
             reminder.Location,
             reminder.Date,
             reminder.TimeOfDay,
+            reminder.TravelMinutes,
             reminder.Status,
             reminder.CreatedAt);
 }

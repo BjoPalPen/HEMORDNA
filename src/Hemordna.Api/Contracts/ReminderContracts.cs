@@ -10,10 +10,12 @@ public sealed record ReminderResponse(
     string? Location,
     DateOnly Date,
     TimeOnly? TimeOfDay,
+    int? TravelMinutes,
     ReminderStatus Status,
     DateTimeOffset CreatedAt);
 
-public sealed record CreateReminderRequest(string? Title, string? Location, DateOnly? Date, TimeOnly? TimeOfDay);
+public sealed record CreateReminderRequest(
+    string? Title, string? Location, DateOnly? Date, TimeOnly? TimeOfDay, int? TravelMinutes);
 
 public sealed record ChangeReminderTitleRequest(string? Title);
 
@@ -21,3 +23,6 @@ public sealed record ChangeReminderTitleRequest(string? Title);
 public sealed record ChangeReminderLocationRequest(string? Location);
 
 public sealed record MoveReminderRequest(DateOnly? Date, TimeOnly? TimeOfDay);
+
+/// <summary><c>null</c> clears the travel time - see <c>Reminder.SetTravelMinutes</c>.</summary>
+public sealed record SetReminderTravelMinutesRequest(int? TravelMinutes);
