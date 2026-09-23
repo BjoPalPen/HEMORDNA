@@ -242,7 +242,9 @@ Reglerna:
   inte i hushållsvyn, inte i Vecka för andra, aldrig i "Senaste händelser". Titel och plats
   loggas aldrig någonstans.
 - **Förvarningen är hela poängen.** En notis som kommer fem minuter i förväg hjälper ingen som
-  är tidsblind. Förvalet är kvällen innan plus en timme före, inte vid tiden.
+  är tidsblind. Därför skickas två notiser: **dags att gå**, räknad bakåt från restiden, och
+  en **vid tiden**. Restiden ersätter en generisk förvarning på "en timme före" – hur lång
+  resan är vet användaren, hur mycket framförhållning hen behöver är en gissning.
 - **Titeln visas i notisen.** Ett medvetet beslut: utan den är notisen värdelös. Den kan
   därmed synas på en låst skärm.
 - **En passerad tid blir tyst.** Den lämnar dagen utan markering, utan färg, utan räkneverk.
