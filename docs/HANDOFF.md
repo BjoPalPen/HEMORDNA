@@ -5,45 +5,46 @@ Lägesbild per 2026-09-23. Arbetssätt: [../CLAUDE.md](../CLAUDE.md).
 
 ## Läge
 
-`main` pushad, kodrelease `4ec6c59` deployad till https://app.hemordna.se. Fyra PR (#23–#26)
-sedan `21410b4`, varav en med datamigrering.
+`main` pushad, kodrelease `809c03e` deployad till https://app.hemordna.se. Sex PR (#23–#28)
+sedan `21410b4`, fyra med datamigrering.
 
-- **Serverns "idag" är Europe/Stockholm** (PR #26). `HouseholdClock.Today(TimeProvider)` är enda
-  källan; 15 serverhärledda datum pekar dit. Hårdkodad zon med flit — containern kör UTC utan
-  `TZ`, så `GetLocalNow()` där ÄR UTC. Värst var inte fallbacken: `CreateTaskDefinition` ankrade
-  nya uppgifters `RecurrenceRule.StartDate` på serverns dag – en uppgift skapad efter midnatt
-  fick fel veckodag för alltid. `POST /tasks` tar nu emot
-  `today`; två klientbuggar som aldrig skickade sitt datum är också åtgärdade.
-- **Påminnelser om egna tider** (PR #24). Läkarbesök och möten, överst på Min dag och på Vecka.
-  Reglerna: PRODUCT.md §11. **Sekretessgränsen skiljer den från allt annat i repot:** privat
-  även inom hushållet, så `HouseholdId` räcker inte — varje use case jämför även `MemberId` mot
-  anroparen, och "tillhör någon annan" är oskiljaktigt från "finns inte". `Title`/`Location`
-  loggas aldrig. Inga notiser ännu.
+- **Pushnotiser för påminnelser** (PR #28). Två per påminnelse: "dags att gå", räknad bakåt från
+  restiden, och en vid tiden. Ingen notis för en heldagspåminnelse eller en avbokad. Kedjan är
+  portad från BowlingPlatform (samma stack, kör mot iPhone); `NotificationPolicy`-maskineriet
+  därifrån följde medvetet INTE med. Urvalet är en ren funktion utan klocka eller databas, så
+  sommartiden går att testa – testet binder även vad en naiv fast UTC+1 skulle räknat ut.
+  **Markering "skickad" sker EFTER utskicket** (Björns beslut): hellre en dubblerad notis än en
+  utebliven, eftersom en utebliven "dags att gå" betyder att man kommer för sent. Två tester
+  binder ordningen – städa inte tillbaka den. Loop 5 min, fönster/cutoff 15 min.
+- **Restid på påminnelser** (PR #27). `TravelMinutes` kräver ett klockslag, och ett borttaget
+  klockslag nollar restiden. Raden visar avgångstiden ("Gå 13:30"), inte råa minuter.
 
 ## Köra och deploya
 
 Uppstart: [../README.md](../README.md). API `5199`, klient `5200`, Postgres `5432`.
-Docker Desktop krävs för lokal API/E2E – utan den faller ALLA 217 E2E på "did not become
+Docker Desktop krävs för lokal API/E2E – utan den faller ALLA E2E på "did not become
 reachable", vilket ser ut som en regression men är tom miljö.
 Server: `ssh -i ~/.ssh/hetzner_deploy deploy@62.238.45.45`, checkout `~/hemordna`. Deploy:
 `git pull --ff-only origin main`, sedan `docker compose -f docker-compose.prod.yml up -d
 --build --no-deps hemordna-api` – migrationer körs vid uppstart, kontrollera
-`docker logs hemordna-api` efter en schemaändring. `libgssapi_krb5.so.2`-varningen ignoreras.
-Postgres heter `hemordna-postgres-1`. En allow-regel för deploy-ssh i användarens
-`settings.json` går före auto-lägets `[Production Deploy]`-spärr – verifierat, Shift+Tab behövs
-inte. `/health` svarar JSON med en kontroll per rad, inklusive zonen.
-Browserkontroll: `dotnet run --project scripts/Smoke -- https://app.hemordna.se`.
+`docker logs hemordna-api` efter en schemaändring. Postgres heter `hemordna-postgres-1`.
+En allow-regel för deploy-ssh i `settings.json` går före auto-lägets spärr. **VAPID-nycklarna
+ligger i serverns `.env`**, aldrig i repot. Compose kräver dem med `:?` – saknas de vägrar
+containern starta. Byt dem aldrig: alla befintliga prenumerationer slutar då fungera samtidigt.
+`VAPID_SUBJECT` är just nu Björns gmail. `/health` svarar JSON med zonen.
 
 ## Verifierat
 
-Build 0 fel/varningar. Domän 229/229, Application 389/389, E2E 217/217. Regressionstesterna
-bevisades falla före fixen – ett tidigare försök passerade i BÅDA fallen, läs testets kommentar
-innan det ändras. Produktion: health `timezone: Healthy`, RestartCount 0, smoke PASS.
+Build 0 fel, 0 varningar. Domän 255/255, Application 428/428, E2E 217/218 – det enda röda är
+`SkarmbilderTests`, en belastningsflake som ger 4/4 isolerat. VAPID-paret bevisat giltigt genom
+en riktig signerad JWT, och offline-cachen verifierad genom att faktiskt gå offline i Playwright.
+Produktion: båda migreringarna applicerade, bakgrundstjänsten observerad starta, smoke PASS.
 
 ## Drift och kvarstående frågor
 
-Rollback-taggar: `rollback-before-725fedc`, `rollback-before-4ec6c59`. Floor-releasens `Down()`
-återskapar inte Floor+Name. `HouseholdClock`s fallback-gren är inte enhetstestad – hälsokontroll
-och `Critical`-logg är mitigeringen. `rebalance-assignments`/`activity/daily-summary` använder
-medvetet serverns eget datum (ARCHITECTURE.md rad ~2718). Kvar: "Tid i förväg"-etiketten, en
-gles Heavy-uppgift i ett sammanslaget besök, och att påminnelserna inte setts på en iPhone.
+**Ingen har sett notiserna på en riktig iPhone.** Det kräver att appen ligger på hemskärmen – i
+en Safari-flik kommer inga notiser alls. Enda obevisade delen av kedjan. Rollback-taggar:
+`rollback-before-725fedc`, `-4ec6c59`, `-restid`, `-push`. `HouseholdClock`s fallback-gren är
+inte enhetstestad; hälsokontroll och `Critical`-logg är mitigeringen. Två samtidiga containrar
+kan racea på markeringen (unikt index fångar det) – inte härdat, driften är en container. Kvar
+sedan tidigare: "Tid i förväg"-etiketten och en gles Heavy-uppgift.
