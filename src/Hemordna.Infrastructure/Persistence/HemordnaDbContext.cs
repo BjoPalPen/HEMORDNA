@@ -1,5 +1,6 @@
 using Hemordna.Domain.Areas;
 using Hemordna.Domain.Households;
+using Hemordna.Domain.Push;
 using Hemordna.Domain.Reminders;
 using Hemordna.Domain.Tasks;
 using Hemordna.Infrastructure.Identity;
@@ -47,6 +48,8 @@ public sealed class HemordnaDbContext : IdentityDbContext<HemordnaUser, Identity
     public DbSet<PasskeyCredential> PasskeyCredentials => Set<PasskeyCredential>();
 
     public DbSet<Reminder> Reminders => Set<Reminder>();
+
+    public DbSet<PushSubscription> PushSubscriptions => Set<PushSubscription>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

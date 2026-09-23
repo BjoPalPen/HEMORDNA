@@ -1,5 +1,6 @@
 using Hemordna.Application.Households;
 using Hemordna.Application.Planning;
+using Hemordna.Application.Push;
 using Hemordna.Application.Reminders;
 using Hemordna.Application.Tasks;
 using Hemordna.Infrastructure.Email;
@@ -46,6 +47,7 @@ public static class DependencyInjection
         services.AddScoped<IMemberDayOffRepository, MemberDayOffRepository>();
         services.AddScoped<IMemberPreferenceRepository, MemberPreferenceRepository>();
         services.AddScoped<IReminderRepository, ReminderRepository>();
+        services.AddScoped<IPushSubscriptionRepository, PushSubscriptionRepository>();
         services.AddScoped<ITaskDefinitionRepository, TaskDefinitionRepository>();
         services.AddScoped<ITaskOccurrenceRepository, TaskOccurrenceRepository>();
         services.AddScoped<ITaskAssignmentRepository, TaskAssignmentRepository>();
