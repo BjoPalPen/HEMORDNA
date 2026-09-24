@@ -1,25 +1,25 @@
 # Överlämning
 
-Lägesbild per 2026-09-23. Arbetssätt: [../CLAUDE.md](../CLAUDE.md).
+Lägesbild per 2026-09-24. Arbetssätt: [../CLAUDE.md](../CLAUDE.md).
 Äldre lägesbilder bevaras i [handoff/](handoff/). Max 50 rader.
 
 ## Läge
 
-`main` pushad, kodrelease `11e13db` deployad till https://app.hemordna.se. Sju PR (#23–#29)
+`main` pushad, kodrelease `4f0f3aa` deployad till https://app.hemordna.se. Åtta PR (#23–#30)
 sedan `21410b4`, fyra med datamigrering.
 
 - **Pushnotiser för påminnelser** (PR #28). Två per påminnelse: "dags att gå" (bakåt från restiden)
-  och en vid tiden, bara för en `Upcoming` påminnelse med klockslag. Portad från BowlingPlatform;
-  `NotificationPolicy`-maskineriet följde medvetet INTE med. Urvalet är en ren funktion utan klocka
-  eller databas, så sommartiden går att testa – testet binder även vad en naiv fast UTC+1 gett.
-  **Markering "skickad" sker EFTER utskicket** (Björns beslut, två tester binder det – städa inte
-  tillbaka): hellre en dubblerad notis än en utebliven. Loop 5 min, fönster/cutoff 15 min.
+  och en vid tiden, bara för en `Upcoming` med klockslag. Loop 5 min, fönster 15 min. **Markering
+  "skickad" sker EFTER utskicket** (Björns beslut, två tester binder det – städa inte tillbaka):
+  hellre en dubblerad notis än en utebliven.
 - **Bocka av en påminnelse** (PR #29). `ReminderStatus.CheckedOff` – namnet är handlingen
   medlemmen utförde, det enda appen vet. Två gränser, båda testade: den räknas ALDRIG som
-  hushållsarbete (ingen tidskredit – annars dras städschemat ner för ett tandläkarbesök), och
-  den tystar sina återstående notiser.
-- **Restid** (PR #27). `TravelMinutes` kräver klockslag; tas det bort nollas restiden. Raden
-  visar avgångstiden ("Gå 13:30"), inte råa minuter.
+  hushållsarbete (annars dras städschemat ner för ett tandläkarbesök), och den tystar sina notiser.
+- **Gallring efter 30 dagar** (PR #30). En påminnelse raderas 30 dagar efter sitt EGET datum –
+  dataminimering (§10), inte diskutrymme. Alla statusar lika; `SentReminderNotifications` följer
+  med via FK-kaskad (verifierad i prod-databasen). Egen bakgrundstjänst, 24 h, loggar bara antal.
+  `ResetHousehold` rör medvetet INTE påminnelser – privat tid är inte hushållsarbete.
+- **Restid** (PR #27). `TravelMinutes` kräver klockslag; tas klockslaget bort nollas restiden.
 
 ## Köra och deploya
 
@@ -35,16 +35,16 @@ Byt dem aldrig: alla prenumerationer slutar då fungera samtidigt.
 
 ## Verifierat
 
-Build 0 fel, 0 varningar. Domän 266/266, Application 434/434, E2E 218/219. Produktion:
-migreringarna applicerade, bakgrundstjänsten observerad starta, smoke PASS.
+Build 0 fel, 0 varningar. Domän 266/266, Application 440/440, E2E 218/219. Produktion:
+RestartCount 0, båda bakgrundstjänsterna observerade starta, health Europe/Stockholm, smoke PASS.
 `SkarmbilderTests` är **äkta flakigt, inte belastningsberoende** – rättelse av en tidigare
 bedömning: det föll även isolerat (3/4) och passerade sedan isolerat (4/4). Förtjänar utredning.
 
 ## Drift och kvarstående frågor
 
 **Ingen har sett notiserna på en riktig iPhone.** Kräver att appen ligger på hemskärmen – i en
-Safari-flik kommer inga notiser alls. Enda obevisade delen av kedjan. Rollback-taggar:
-`rollback-before-725fedc`, `-4ec6c59`, `-restid`, `-push`, `-bockaav`. `HouseholdClock`s
-fallback-gren är inte enhetstestad; hälsokontroll och `Critical`-logg är mitigeringen. Två
-containrar kan racea på notismarkeringen (unikt index fångar det) – inte härdat, driften är en.
-Kvar sedan tidigare: "Tid i förväg"-etiketten och en gles Heavy-uppgift.
+Safari-flik kommer inga notiser alls. Enda obevisade delen av kedjan. Gallringen har ännu inte
+raderat något (äldsta påminnelsen i prod: 2026-09-23). Rollback-taggar: `rollback-before-725fedc`,
+`-4ec6c59`, `-restid`, `-push`, `-bockaav`. `HouseholdClock`s fallback-gren är inte enhetstestad;
+hälsokontroll och `Critical`-logg är mitigeringen. Två containrar kan racea på notismarkeringen
+(unikt index fångar det) – inte härdat, driften är en. Kvar: "Tid i förväg" och en gles Heavy.
