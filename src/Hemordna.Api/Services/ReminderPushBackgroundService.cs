@@ -10,25 +10,37 @@ namespace Hemordna.Api.Services;
 /// </summary>
 /// <remarks>
 /// <para>
-/// <b>Poll interval: 5 minutes.</b> That means a notification can arrive up to 5 minutes after
-/// its instant. Acceptable here: neither "dags att gå" nor "vid tiden" is a precision alarm -
-/// both already build in their own slack (a reminder's travel time is itself an estimate,
-/// and "vid tiden" is "around now", not a countdown) - so a few minutes of latency does not
-/// undermine the point of either notification. <see cref="SendDueReminderNotifications.DueWindow"/>
-/// (15 minutes) is kept wider than this interval specifically so that latency never becomes a
-/// missed notification: even a slow or overlapping sweep still finds a not-yet-expired instant
-/// on its next pass.
+/// <b>Poll interval: 1 minute.</b> Raised from 5 minutes after a real production incident: on
+/// 2026-09-24, Björn's own <see cref="Hemordna.Domain.Reminders.ReminderNotificationKind.TimeToLeave"/>
+/// notification (a doctor's appointment, <c>ScheduledFor</c> 16:45:00) was sent at 16:49:44 -
+/// 4 minutes 44 seconds late, an artefact of the 5-minute sweep, not a bug in the selection
+/// logic. That lateness is NOT acceptable for this particular notification, even though the
+/// previous 5-minute figure was defended on exactly that basis: "vid tiden" tolerates arriving
+/// late because it means "around now", but "time to leave" is a deadline counted backwards from
+/// a meeting - every late minute is eaten directly out of the travel margin the notification
+/// exists to protect, which is the one thing a member cannot recover once the notification has
+/// already arrived. <see cref="SendDueReminderNotifications.DueWindow"/> (15 minutes) is kept as
+/// is: it is already comfortably wider than this interval, which is what a sweep interval needs
+/// to be (otherwise an instant could fall between two sweeps and never be seen as due at all),
+/// and it still protects against a burst of stale notifications after a real outage - see
+/// CLAUDE.md §8 and this class's own <see cref="RunOnceAsync"/> for that boundary.
+/// </para>
+/// <para>
+/// The extra cost of sweeping twelve times as often is negligible: each sweep is one indexed
+/// query over a couple of days' worth of reminders (<see cref="SendDueReminderNotifications"/>'s
+/// own lookahead range), and on almost every sweep it finds nothing due at all. There is no
+/// reason to trade a member's travel margin for a query this cheap.
 /// </para>
 /// <para>
 /// Same overall shape as BowlingPlatform's <c>MeetingReminderService</c> (scope-per-sweep,
 /// swallow-and-log around each sweep so one bad run cannot kill the loop) - but not its cadence.
-/// That service runs once a day and compares whole days; this one runs every few minutes and
+/// That service runs once a day and compares whole days; this one runs every minute and
 /// compares exact instants, because a <c>Reminder.TimeOfDay</c> is a clock time, not a date.
 /// </para>
 /// </remarks>
 public sealed class ReminderPushBackgroundService : BackgroundService
 {
-    private static readonly TimeSpan PollInterval = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan PollInterval = TimeSpan.FromMinutes(1);
 
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly TimeProvider _timeProvider;
