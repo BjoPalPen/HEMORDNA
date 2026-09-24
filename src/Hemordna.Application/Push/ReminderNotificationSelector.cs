@@ -91,12 +91,21 @@ public static class ReminderNotificationSelector
             return;
         }
 
-        if (instant > now || instant <= now - window)
+        // A reminder's time of day is minute-precise by nature (docs/PRODUCT.md §11: it comes
+        // from an <input type="time">, never seconds), but ISentReminderNotificationRepository
+        // compares this value for exact DateTimeOffset equality against what it reads back from
+        // Postgres, whose timestamptz only keeps microsecond precision against .NET's 100ns
+        // ticks. Truncating to the minute here means that comparison never has to rely on nobody
+        // ever adding sub-minute precision to a reminder's time - the stored and recomputed
+        // values are identical by construction, not by accident.
+        var scheduledFor = instant.AddTicks(-(instant.Ticks % TimeSpan.TicksPerMinute));
+
+        if (scheduledFor > now || scheduledFor <= now - window)
         {
             return;
         }
 
         (due ??= []).Add(new DueReminderNotification(
-            reminder.Id, reminder.HouseholdId, reminder.MemberId, kind, reminder.Title, reminder.Location));
+            reminder.Id, reminder.HouseholdId, reminder.MemberId, kind, scheduledFor, reminder.Title, reminder.Location));
     }
 }
