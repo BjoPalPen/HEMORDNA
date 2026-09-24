@@ -721,6 +721,17 @@ else
     private bool _reminderUndoBusy;
     private CancellationTokenSource? _reminderUndoCts;
 
+    /// <summary>Ticks the countdown toward a reminder's departure (Support/DepartureCountdown.cs)
+    /// once a minute so the bars and the "om N min" text never sit still while time actually
+    /// passes - a stopped-clock countdown would be worse than none at all. Created via the
+    /// page's own injected TimeProvider (not <c>new Timer(...)</c>), so it reads the same clock
+    /// seam as everything else on this page (<see cref="Today"/> and friends) rather than a
+    /// second, untestable one. Ticks unconditionally rather than only while a countdown happens
+    /// to be on screen - starting/stopping it around every event that could change that (a new
+    /// reminder, a check-off, a cancellation, a move, simply an hour passing) would add real
+    /// bookkeeping for a callback that costs nothing when there is nothing to redraw.</summary>
+    private ITimer? _countdownTimer;
+
     private sealed class ReminderForm
     {
         public Guid? Id { get; set; }
@@ -1524,10 +1535,27 @@ else
             _showTimeLevel = preference?.ShowTimeLevel ?? false;
             _household = await householdTask;
 
+            // Nedräkning mot avgång - se _countdownTimer:s egen doc. Startas här (inte i
+            // OnAfterRenderAsync) eftersom den inte rör DOM:en eller JS-interop, bara
+            // TimeProvider - samma plats som resten av den här blockens uppstartslogik. Måste stå
+            // FÖRE Realtime.ConnectAsync nedan: den awaitar ett nätverksanrop som kan kasta (ett
+            // flackigt nät, en server som inte svarar), och timern behöver bara TimeProvider -
+            // den har inget att göra bakom en anslutning som kan fallera. Står den efter och
+            // ConnectAsync kastar skapas timern aldrig, och nedräkningen står stilla resten av
+            // sessionen utan att synas som ett fel.
+            _countdownTimer = TimeProvider.CreateTimer(
+                OnCountdownTick, state: null, dueTime: TimeSpan.FromMinutes(1), period: TimeSpan.FromMinutes(1));
+
             Realtime.OccurrencesChanged += OnOccurrencesChanged;
             await Realtime.ConnectAsync(householdId);
         }
     }
+
+    /// <summary>Marshaller alltid via InvokeAsync - callbacken kommer inte från Blazors egen
+    /// renderarkontext (samma anledning som OnOccurrencesChanged redan gör det för realtids-
+    /// händelser), ett rakt StateHasChanged()-anrop härifrån vore fel även om det råkar fungera
+    /// ibland.</summary>
+    private void OnCountdownTick(object? state) => InvokeAsync(StateHasChanged);
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -1725,6 +1753,7 @@ else
     public void Dispose()
     {
         Realtime.OccurrencesChanged -= OnOccurrencesChanged;
+        _countdownTimer?.Dispose();
         _undoCts?.Cancel();
         _undoCts?.Dispose();
         _reminderUndoCts?.Cancel();
