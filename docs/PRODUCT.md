@@ -249,5 +249,7 @@ Reglerna:
   därmed synas på en låst skärm.
 - **En passerad tid blir tyst.** Den lämnar dagen utan markering, utan färg, utan räkneverk.
   §8 gäller utan undantag – Hemordna säger aldrig att någon missat något.
+- **En gammal påminnelse försvinner för gott.** En månad efter sitt eget datum raderas den –
+  Hemordna sparar aldrig ett läkarbesök eller en annan privat tid längre än nödvändigt.
 - **Återkommande tider ingår inte.** De drar mot mötesserier och undantag, och
   recurrence-motorn får inte byggas ut i förväg (§9).

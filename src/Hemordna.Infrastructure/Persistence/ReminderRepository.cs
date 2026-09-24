@@ -48,4 +48,13 @@ internal sealed class ReminderRepository : IReminderRepository
             .AsNoTracking()
             .Where(reminder => reminder.Date >= fromDate && reminder.Date <= toDate)
             .ToListAsync(cancellationToken);
+
+    // The existing (HouseholdId, MemberId, Date) index (see ReminderConfiguration) does not help
+    // this query - it filters on Date alone, across every household and member. Deliberately not
+    // adding an index for it: the table is small and this query runs once a day (the reminder
+    // cleanup background service), not on a user-facing path.
+    public Task<int> DeleteOlderThanAsync(DateOnly cutoff, CancellationToken cancellationToken)
+        => _dbContext.Reminders
+            .Where(reminder => reminder.Date < cutoff)
+            .ExecuteDeleteAsync(cancellationToken);
 }

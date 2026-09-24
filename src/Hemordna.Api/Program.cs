@@ -129,12 +129,14 @@ builder.Services.AddScoped<SetReminderTravelMinutes>();
 builder.Services.AddScoped<CancelReminder>();
 builder.Services.AddScoped<RestoreReminder>();
 builder.Services.AddScoped<CheckOffReminder>();
+builder.Services.AddScoped<PurgeOldReminders>();
 
 builder.Services.AddScoped<SubscribeToPush>();
 builder.Services.AddScoped<UnsubscribeFromPush>();
 builder.Services.AddScoped<SendTestPushNotification>();
 builder.Services.AddScoped<SendDueReminderNotifications>();
 builder.Services.AddHostedService<ReminderPushBackgroundService>();
+builder.Services.AddHostedService<ReminderCleanupBackgroundService>();
 
 // SignalR pushes changes to a household's other connected clients - see docs/ARCHITECTURE.md §5.
 builder.Services.AddSignalR();

@@ -49,4 +49,30 @@ public interface IReminderRepository
     /// </summary>
     Task<IReadOnlyList<Reminder>> ListInDateRangeAsync(
         DateOnly fromDate, DateOnly toDate, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Deletes every reminder - any household, any member, any <see cref="ReminderStatus"/> -
+    /// whose <see cref="Reminder.Date"/> is strictly before <paramref name="cutoff"/>, and
+    /// returns how many were removed. Data minimisation (CLAUDE.md §10), not disk space: a
+    /// reminder's title can read "Läkarbesök" or "Psykolog", and no view ever shows anything
+    /// older than the current week (Min dag fetches [Today, Today], Vecka fetches the current
+    /// Monday–Sunday), so nothing in the app ever reads a row this old again.
+    /// <para>
+    /// Deliberately global, not household-scoped, exactly like <see cref="ListInDateRangeAsync"/>
+    /// - this is a system maintenance job, not an API-reachable operation, so CLAUDE.md §9's
+    /// household boundary (which applies to what a user can reach) does not apply here.
+    /// </para>
+    /// <para>
+    /// Every status is deleted alike - an <see cref="ReminderStatus.Upcoming"/> reminder from 40
+    /// days ago is exactly as dead as a checked-off one; nothing distinguishes them once the
+    /// date has passed.
+    /// </para>
+    /// <para>
+    /// <see cref="SentReminderNotification"/> rows for a deleted reminder are removed
+    /// automatically by the FK cascade in <c>SentReminderNotificationConfiguration</c>
+    /// (<c>OnDelete(DeleteBehavior.Cascade)</c> on <c>ReminderId</c>) - that log needs no purge
+    /// of its own.
+    /// </para>
+    /// </summary>
+    Task<int> DeleteOlderThanAsync(DateOnly cutoff, CancellationToken cancellationToken);
 }
