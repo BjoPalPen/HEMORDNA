@@ -129,6 +129,11 @@ else
            - se ReminderCheckedRow - precis som en avbockad uppgift gör (task-done nedan). *@
         @if (TodaysReminders.Count > 0)
         {
+            // Computed once per render, outside the loop below - "bara den närmaste" means at
+            // most one row ever matches, so this avoids re-running SelectReminder's own scan of
+            // every reminder once per row (O(n) instead of O(n²)) - see ActiveDepartureCountdown.
+            var activeCountdown = ActiveDepartureCountdown;
+
             @GroupHeading("Påminnelser", TodaysReminders.Count, showKvar: false)
             <ul class="task-list" aria-label="Påminnelser">
                 @foreach (var reminder in TodaysReminders)
@@ -149,6 +154,10 @@ else
                                 @if (reminder.Location is { } location)
                                 {
                                     <span class="task-note muted small">@location</span>
+                                }
+                                @if (activeCountdown is { } active && active.Reminder.Id == reminder.Id)
+                                {
+                                    @DepartureCountdownRow(active.Countdown)
                                 }
                             </span>
                             <button type="button" class="btn btn-link" disabled="@(_reminderCheckOffBusy == reminder.Id)"
@@ -1031,6 +1040,58 @@ else
         return isDayBefore ? $"Gå {departureText} dagen innan" : $"Gå {departureText}";
     }
 
+    /// <summary>The one reminder (of <see cref="TodaysReminders"/>, checked-off ones included -
+    /// DepartureCountdown.SelectReminder skips those itself) currently within the last hour
+    /// before its own departure, together with its bars/minutes - "bara den närmaste": at most
+    /// one row ever shows a countdown, never one per reminder. <c>null</c> most of the time, same
+    /// as the two pure functions it composes - see Support/DepartureCountdown.cs.</summary>
+    private (ReminderResponse Reminder, DepartureCountdown.Countdown Countdown)? ActiveDepartureCountdown
+    {
+        get
+        {
+            if (DepartureCountdown.SelectReminder(TodaysReminders, Now) is not { } reminder)
+            {
+                return null;
+            }
+
+            // DepartureTime/Calculate cannot fail here: SelectReminder only ever returns a
+            // reminder for which both already succeeded against this same Now.
+            var departure = DepartureCountdown.DepartureTime(reminder)!.Value;
+            return (reminder, DepartureCountdown.Calculate(Now, departure)!.Value);
+        }
+    }
+
+    /// <summary>Plain-language equivalent of the bars for a screen reader - "25 minuter kvar
+    /// till avgång" - so nobody has to interpret a row of bars themselves (see
+    /// DepartureCountdownRow's own <c>role="img"</c>). Singular "minut" only at exactly 1;
+    /// docs/PRODUCT.md §11's own "Gå 13:30" example never has to handle this because a clock
+    /// time has no plural form.</summary>
+    private static string DepartureCountdownAriaLabel(DepartureCountdown.Countdown countdown)
+        => countdown.MinutesRemaining == 1
+            ? "1 minut kvar till avgång"
+            : $"{countdown.MinutesRemaining} minuter kvar till avgång";
+
+    /// <summary>Short vertical bars, not the dots Vecka.razor's own week grid uses for a day's
+    /// status - deliberately different shape and class names (.departure-bar, never .dot) so the
+    /// two are never mistaken for each other: a dot's COLOR carries meaning there, the NUMBER of
+    /// bars carries it here. Filled bars are time still ahead, empty (outlined) ones are the
+    /// quantum already spent - both stay visible so the row shows how much is left AND how much
+    /// has gone, rather than just shrinking away. The bar row alone carries role="img" plus the
+    /// plain-language aria-label; individual bars need no aria-hidden of their own since
+    /// role="img" already collapses its own subtree out of the accessibility tree by itself. The
+    /// "om N min" text sits outside that role="img" span, as ordinary readable text - see
+    /// docs/DESIGN.md "Talet står kvar": the bars are for someone who reads quantity, the number
+    /// is for someone who prefers to read a figure, and both come from the same Countdown.</summary>
+    private static RenderFragment DepartureCountdownRow(DepartureCountdown.Countdown countdown) => @<span class="departure-countdown">
+        <span class="departure-bars" role="img" aria-label="@DepartureCountdownAriaLabel(countdown)">
+            @for (var i = 0; i < countdown.TotalBars; i++)
+            {
+                <span class="departure-bar @(i < countdown.FilledBars ? "departure-bar-filled" : "departure-bar-empty")"></span>
+            }
+        </span>
+        <span class="task-note muted small">om @countdown.MinutesRemaining min</span>
+    </span>;
+
     private static string RoomHeadingName(TaskGroup group) => group.AreaName ?? "Övrigt";
 
     /// <summary>How many rows in a group are still genuinely outstanding - a remotely-completed
@@ -1493,6 +1554,13 @@ else
     // The date is resolved from an injected clock here at the edge; nothing below reads one.
     // TimeProvider rather than DateTime.Now so the page can be rendered at a fixed date.
     private DateOnly Today => DateOnly.FromDateTime(TimeProvider.GetLocalNow().DateTime);
+
+    /// <summary>Local wall-clock "now", read the same way as <see cref="Today"/> - the only
+    /// value DepartureCountdown.Calculate/SelectReminder are allowed to be fed (see that type's
+    /// own <c>&lt;remarks&gt;</c>: a UTC instant would give a silently wrong answer instead of
+    /// an exception). _countdownTimer's tick is what makes re-reading this every render actually
+    /// move forward instead of staying fixed at whenever the page first loaded.</summary>
+    private DateTime Now => TimeProvider.GetLocalNow().DateTime;
 
     private string DateLabel => Today.ToString("dddd d MMMM", SwedishCulture);
 
