@@ -16,7 +16,8 @@ public class ReminderTests
         TimeOnly? timeOfDay = null,
         Guid? householdId = null,
         Guid? memberId = null,
-        int? travelMinutes = null)
+        int? travelMinutes = null,
+        ReminderVisibility? visibility = null)
         => Reminder.Create(
             householdId ?? Guid.NewGuid(),
             memberId ?? Guid.NewGuid(),
@@ -25,7 +26,8 @@ public class ReminderTests
             date ?? Friday,
             timeOfDay,
             CreatedAt,
-            travelMinutes);
+            travelMinutes,
+            visibility ?? ReminderVisibility.Private);
 
     [Fact]
     public void A_new_reminder_is_upcoming()
@@ -533,5 +535,71 @@ public class ReminderTests
         reminder.Cancel();
 
         Assert.Equal(ReminderStatus.Cancelled, reminder.Status);
+    }
+
+    [Fact]
+    public void A_new_reminder_is_private_by_default()
+    {
+        var reminder = Reminder.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            "Tandläkare",
+            "Folktandvården",
+            Friday,
+            null,
+            CreatedAt);
+
+        Assert.Equal(ReminderVisibility.Private, reminder.Visibility);
+    }
+
+    [Theory]
+    [InlineData(ReminderVisibility.Private)]
+    [InlineData(ReminderVisibility.BusyOnly)]
+    [InlineData(ReminderVisibility.Household)]
+    public void Create_with_an_explicit_visibility_respects_it(ReminderVisibility visibility)
+    {
+        var reminder = Reminder.Create(
+            Guid.NewGuid(),
+            Guid.NewGuid(),
+            "Tandläkare",
+            "Folktandvården",
+            Friday,
+            null,
+            CreatedAt,
+            travelMinutes: null,
+            visibility: visibility);
+
+        Assert.Equal(visibility, reminder.Visibility);
+    }
+
+    [Theory]
+    [InlineData(ReminderVisibility.Private)]
+    [InlineData(ReminderVisibility.BusyOnly)]
+    [InlineData(ReminderVisibility.Household)]
+    public void ChangeVisibility_sets_the_visibility(ReminderVisibility visibility)
+    {
+        var reminder = CreateReminder();
+
+        reminder.ChangeVisibility(visibility);
+
+        Assert.Equal(visibility, reminder.Visibility);
+    }
+
+    [Fact]
+    public void A_cancelled_reminder_cannot_have_its_visibility_changed()
+    {
+        var reminder = CreateReminder();
+        reminder.Cancel();
+
+        Assert.Throws<DomainException>(() => reminder.ChangeVisibility(ReminderVisibility.Household));
+    }
+
+    [Fact]
+    public void A_checked_off_reminder_cannot_have_its_visibility_changed()
+    {
+        var reminder = CreateReminder();
+        reminder.CheckOff();
+
+        Assert.Throws<DomainException>(() => reminder.ChangeVisibility(ReminderVisibility.Household));
     }
 }
