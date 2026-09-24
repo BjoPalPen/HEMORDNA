@@ -129,6 +129,11 @@ else
            - se ReminderCheckedRow - precis som en avbockad uppgift gör (task-done nedan). *@
         @if (TodaysReminders.Count > 0)
         {
+            // Computed once per render, outside the loop below - "bara den närmaste" means at
+            // most one row ever matches, so this avoids re-running SelectReminder's own scan of
+            // every reminder once per row (O(n) instead of O(n²)) - see ActiveDepartureCountdown.
+            var activeCountdown = ActiveDepartureCountdown;
+
             @GroupHeading("Påminnelser", TodaysReminders.Count, showKvar: false)
             <ul class="task-list" aria-label="Påminnelser">
                 @foreach (var reminder in TodaysReminders)
@@ -149,6 +154,10 @@ else
                                 @if (reminder.Location is { } location)
                                 {
                                     <span class="task-note muted small">@location</span>
+                                }
+                                @if (activeCountdown is { } active && active.Reminder.Id == reminder.Id)
+                                {
+                                    @DepartureCountdownRow(active.Countdown)
                                 }
                             </span>
                             <button type="button" class="btn btn-link" disabled="@(_reminderCheckOffBusy == reminder.Id)"
@@ -721,6 +730,17 @@ else
     private bool _reminderUndoBusy;
     private CancellationTokenSource? _reminderUndoCts;
 
+    /// <summary>Ticks the countdown toward a reminder's departure (Support/DepartureCountdown.cs)
+    /// once a minute so the bars and the "om N min" text never sit still while time actually
+    /// passes - a stopped-clock countdown would be worse than none at all. Created via the
+    /// page's own injected TimeProvider (not <c>new Timer(...)</c>), so it reads the same clock
+    /// seam as everything else on this page (<see cref="Today"/> and friends) rather than a
+    /// second, untestable one. Ticks unconditionally rather than only while a countdown happens
+    /// to be on screen - starting/stopping it around every event that could change that (a new
+    /// reminder, a check-off, a cancellation, a move, simply an hour passing) would add real
+    /// bookkeeping for a callback that costs nothing when there is nothing to redraw.</summary>
+    private ITimer? _countdownTimer;
+
     private sealed class ReminderForm
     {
         public Guid? Id { get; set; }
@@ -1019,6 +1039,67 @@ else
 
         return isDayBefore ? $"Gå {departureText} dagen innan" : $"Gå {departureText}";
     }
+
+    /// <summary>The one reminder (of <see cref="TodaysReminders"/>, checked-off ones included -
+    /// DepartureCountdown.SelectReminder skips those itself) currently within the last hour
+    /// before its own departure, together with its bars/minutes - "bara den närmaste": at most
+    /// one row ever shows a countdown, never one per reminder. <c>null</c> most of the time, same
+    /// as the two pure functions it composes - see Support/DepartureCountdown.cs.</summary>
+    private (ReminderResponse Reminder, DepartureCountdown.Countdown Countdown)? ActiveDepartureCountdown
+    {
+        get
+        {
+            // Captured ONCE into a local: Now is a property that re-reads the clock on every
+            // access, so calling it separately for SelectReminder and Calculate below would ask
+            // two different instants "is this within the window" - right at the 60-minute or
+            // 0-minute edge, the clock can tick over BETWEEN the two calls, SelectReminder says
+            // yes against the first Now and Calculate says null against the second, and the
+            // `!.Value` below throws. Capturing once makes that impossible: both calls judge the
+            // exact same instant, so DepartureTime/Calculate genuinely cannot fail here - not
+            // because "not enough time can pass", but because there is only one Now to disagree
+            // with.
+            var now = Now;
+
+            if (DepartureCountdown.SelectReminder(TodaysReminders, now) is not { } reminder)
+            {
+                return null;
+            }
+
+            var departure = DepartureCountdown.DepartureTime(reminder)!.Value;
+            return (reminder, DepartureCountdown.Calculate(now, departure)!.Value);
+        }
+    }
+
+    /// <summary>Plain-language equivalent of the bars for a screen reader - "25 minuter kvar
+    /// till avgång" - so nobody has to interpret a row of bars themselves (see
+    /// DepartureCountdownRow's own <c>role="img"</c>). Singular "minut" only at exactly 1;
+    /// docs/PRODUCT.md §11's own "Gå 13:30" example never has to handle this because a clock
+    /// time has no plural form.</summary>
+    private static string DepartureCountdownAriaLabel(DepartureCountdown.Countdown countdown)
+        => countdown.MinutesRemaining == 1
+            ? "1 minut kvar till avgång"
+            : $"{countdown.MinutesRemaining} minuter kvar till avgång";
+
+    /// <summary>Short vertical bars, not the dots Vecka.razor's own week grid uses for a day's
+    /// status - deliberately different shape and class names (.departure-bar, never .dot) so the
+    /// two are never mistaken for each other: a dot's COLOR carries meaning there, the NUMBER of
+    /// bars carries it here. Filled bars are time still ahead, empty (outlined) ones are the
+    /// quantum already spent - both stay visible so the row shows how much is left AND how much
+    /// has gone, rather than just shrinking away. The bar row alone carries role="img" plus the
+    /// plain-language aria-label; individual bars need no aria-hidden of their own since
+    /// role="img" already collapses its own subtree out of the accessibility tree by itself. The
+    /// "om N min" text sits outside that role="img" span, as ordinary readable text - see
+    /// docs/DESIGN.md "Talet står kvar": the bars are for someone who reads quantity, the number
+    /// is for someone who prefers to read a figure, and both come from the same Countdown.</summary>
+    private static RenderFragment DepartureCountdownRow(DepartureCountdown.Countdown countdown) => @<span class="departure-countdown">
+        <span class="departure-bars" role="img" aria-label="@DepartureCountdownAriaLabel(countdown)">
+            @for (var i = 0; i < countdown.TotalBars; i++)
+            {
+                <span class="departure-bar @(i < countdown.FilledBars ? "departure-bar-filled" : "departure-bar-empty")"></span>
+            }
+        </span>
+        <span class="task-note muted small">om @countdown.MinutesRemaining min</span>
+    </span>;
 
     private static string RoomHeadingName(TaskGroup group) => group.AreaName ?? "Övrigt";
 
@@ -1483,6 +1564,13 @@ else
     // TimeProvider rather than DateTime.Now so the page can be rendered at a fixed date.
     private DateOnly Today => DateOnly.FromDateTime(TimeProvider.GetLocalNow().DateTime);
 
+    /// <summary>Local wall-clock "now", read the same way as <see cref="Today"/> - the only
+    /// value DepartureCountdown.Calculate/SelectReminder are allowed to be fed (see that type's
+    /// own <c>&lt;remarks&gt;</c>: a UTC instant would give a silently wrong answer instead of
+    /// an exception). _countdownTimer's tick is what makes re-reading this every render actually
+    /// move forward instead of staying fixed at whenever the page first loaded.</summary>
+    private DateTime Now => TimeProvider.GetLocalNow().DateTime;
+
     private string DateLabel => Today.ToString("dddd d MMMM", SwedishCulture);
 
     /// <summary>No emoji, time of day picks the word - see docs/DESIGN.md "Idag".</summary>
@@ -1524,10 +1612,27 @@ else
             _showTimeLevel = preference?.ShowTimeLevel ?? false;
             _household = await householdTask;
 
+            // Nedräkning mot avgång - se _countdownTimer:s egen doc. Startas här (inte i
+            // OnAfterRenderAsync) eftersom den inte rör DOM:en eller JS-interop, bara
+            // TimeProvider - samma plats som resten av den här blockens uppstartslogik. Måste stå
+            // FÖRE Realtime.ConnectAsync nedan: den awaitar ett nätverksanrop som kan kasta (ett
+            // flackigt nät, en server som inte svarar), och timern behöver bara TimeProvider -
+            // den har inget att göra bakom en anslutning som kan fallera. Står den efter och
+            // ConnectAsync kastar skapas timern aldrig, och nedräkningen står stilla resten av
+            // sessionen utan att synas som ett fel.
+            _countdownTimer = TimeProvider.CreateTimer(
+                OnCountdownTick, state: null, dueTime: TimeSpan.FromMinutes(1), period: TimeSpan.FromMinutes(1));
+
             Realtime.OccurrencesChanged += OnOccurrencesChanged;
             await Realtime.ConnectAsync(householdId);
         }
     }
+
+    /// <summary>Marshaller alltid via InvokeAsync - callbacken kommer inte från Blazors egen
+    /// renderarkontext (samma anledning som OnOccurrencesChanged redan gör det för realtids-
+    /// händelser), ett rakt StateHasChanged()-anrop härifrån vore fel även om det råkar fungera
+    /// ibland.</summary>
+    private void OnCountdownTick(object? state) => InvokeAsync(StateHasChanged);
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -1725,6 +1830,7 @@ else
     public void Dispose()
     {
         Realtime.OccurrencesChanged -= OnOccurrencesChanged;
+        _countdownTimer?.Dispose();
         _undoCts?.Cancel();
         _undoCts?.Dispose();
         _reminderUndoCts?.Cancel();

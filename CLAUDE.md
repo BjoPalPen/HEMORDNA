@@ -142,6 +142,10 @@ inte testet.
 
 - `Hemordna.Domain.Tests`: invarianter, ogiltig input, statusövergångar.
 - `Hemordna.Application.Tests`: use cases och `DailyPlanner`.
+- `Hemordna.Client.Tests`: rena hjälpfunktioner i `Client/Support`, sådant som inte kan testas
+  via E2E därför att E2E inte kan styra klockan. Smalt avsett – inga Blazor-beroenden, ingen
+  bUnit eller annan komponentrenderare; behöver något en renderad komponent hör det hemma i
+  `Hemordna.E2E.Tests` i stället.
 - Application-tester ska inte kräva en verklig PostgreSQL-instans utan starkt skäl.
 - Testa inte rena property getters/setters.
 - `DailyPlanner` ska testas med fasta datum och deterministisk ordning.

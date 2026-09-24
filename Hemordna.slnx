@@ -8,6 +8,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Hemordna.Application.Tests/Hemordna.Application.Tests.csproj" />
+    <Project Path="tests/Hemordna.Client.Tests/Hemordna.Client.Tests.csproj" />
     <Project Path="tests/Hemordna.Domain.Tests/Hemordna.Domain.Tests.csproj" />
     <Project Path="tests/Hemordna.E2E.Tests/Hemordna.E2E.Tests.csproj" />
   </Folder>

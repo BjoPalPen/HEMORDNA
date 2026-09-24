@@ -261,6 +261,43 @@
     font-weight: 400;
 }
 
+/* Nedräkning mot avgång (Support/DepartureCountdown.cs, docs/PRODUCT.md §11) - a fixed 5-minute
+   quantum, never stretched to fit whatever time actually remains (a varying pace is unreadable;
+   a fixed one is learnable). Own class names throughout, deliberately never .dot/.dot-done/
+   .dot-planned/.dot-off (Vecka.razor.css): a dot's COLOR carries meaning there, the NUMBER of
+   bars carries it here, and reusing the same shape for two different meanings would blur both.
+   Colors are the same tokens .task-check/.progress already use - --gustav and --line are
+   redefined for dark mode in app.css itself, so nothing extra is needed here for either theme. */
+.departure-countdown {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-top: var(--space-1);
+}
+
+.departure-bars {
+    display: inline-flex;
+    align-items: flex-end;
+    gap: 2px;
+}
+
+/* Filled = time still ahead, empty (outlined) = the quantum already spent - both stay visible so
+   the row shows how much is left AND how much has gone, rather than just shrinking away. */
+.departure-bar {
+    box-sizing: border-box;
+    width: 3px;
+    height: 14px;
+    border-radius: var(--pill);
+}
+
+.departure-bar-filled {
+    background: var(--gustav);
+}
+
+.departure-bar-empty {
+    border: 1px solid var(--line);
+}
+
 /* "Klart idag" - done work stays visible but recedes, struck through rather than removed, so
    the day reads as progress rather than a shrinking list. */
 .task-list-done .task {
