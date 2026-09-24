@@ -136,6 +136,7 @@ builder.Services.AddScoped<UnsubscribeFromPush>();
 builder.Services.AddScoped<SendTestPushNotification>();
 builder.Services.AddScoped<SendDueReminderNotifications>();
 builder.Services.AddHostedService<ReminderPushBackgroundService>();
+builder.Services.AddHostedService<ReminderCleanupBackgroundService>();
 
 // SignalR pushes changes to a household's other connected clients - see docs/ARCHITECTURE.md §5.
 builder.Services.AddSignalR();
