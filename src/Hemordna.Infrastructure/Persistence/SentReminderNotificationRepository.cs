@@ -34,8 +34,15 @@ internal sealed class SentReminderNotificationRepository : ISentReminderNotifica
         DateTimeOffset sentAt,
         CancellationToken cancellationToken)
     {
+        // Interim state for this commit only: ISentReminderNotificationRepository.MarkSentAsync
+        // does not yet receive the notification's real due instant (ScheduledFor) - that plumbing
+        // (DueReminderNotification, ListSentAsync, this method's signature) lands in the next
+        // commit. Passing sentAt for both keeps this compiling without pretending the two-field
+        // idempotency key is wired end-to-end yet; nothing depends on ScheduledFor being correct
+        // until that commit lands.
         await _dbContext.SentReminderNotifications.AddAsync(
-            SentReminderNotification.Create(householdId, reminderId, kind, sentAt), cancellationToken);
+            SentReminderNotification.Create(householdId, reminderId, kind, scheduledFor: sentAt, sentAt),
+            cancellationToken);
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 }
