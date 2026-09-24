@@ -129,6 +129,7 @@ builder.Services.AddScoped<SetReminderTravelMinutes>();
 builder.Services.AddScoped<CancelReminder>();
 builder.Services.AddScoped<RestoreReminder>();
 builder.Services.AddScoped<CheckOffReminder>();
+builder.Services.AddScoped<PurgeOldReminders>();
 
 builder.Services.AddScoped<SubscribeToPush>();
 builder.Services.AddScoped<UnsubscribeFromPush>();

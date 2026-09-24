@@ -49,4 +49,10 @@ internal sealed class InMemoryReminderRepository : IReminderRepository
         DateOnly fromDate, DateOnly toDate, CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<Reminder>>([.. _reminders
             .Where(reminder => reminder.Date >= fromDate && reminder.Date <= toDate)]);
+
+    public Task<int> DeleteOlderThanAsync(DateOnly cutoff, CancellationToken cancellationToken)
+    {
+        var removed = _reminders.RemoveAll(reminder => reminder.Date < cutoff);
+        return Task.FromResult(removed);
+    }
 }
