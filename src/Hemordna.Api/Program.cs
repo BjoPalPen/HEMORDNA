@@ -122,8 +122,10 @@ builder.Services.AddSingleton<DailyPlanner>();
 
 builder.Services.AddScoped<CreateReminder>();
 builder.Services.AddScoped<GetOwnReminders>();
+builder.Services.AddScoped<GetHouseholdReminders>();
 builder.Services.AddScoped<ChangeReminderTitle>();
 builder.Services.AddScoped<ChangeReminderLocation>();
+builder.Services.AddScoped<ChangeReminderVisibility>();
 builder.Services.AddScoped<MoveReminder>();
 builder.Services.AddScoped<SetReminderTravelMinutes>();
 builder.Services.AddScoped<CancelReminder>();

@@ -6,8 +6,10 @@ using Hemordna.Domain.Reminders;
 namespace Hemordna.Api.Endpoints;
 
 /// <summary>
-/// Transport for a member's own reminders - see docs/PRODUCT.md §11. The endpoints map and
-/// delegate; every rule (including the privacy boundary) lives in the domain and the use cases.
+/// Transport for reminders - a member's own (see docs/PRODUCT.md §11) and, since the
+/// reminder-visibility feature, what other household members are allowed to see of everyone
+/// else's. The endpoints map and delegate; every rule (including the privacy boundary) lives in
+/// the domain and the use cases.
 /// </summary>
 /// <remarks>
 /// All routes run behind <see cref="HouseholdAccessFilter"/>, same as
@@ -16,9 +18,20 @@ namespace Hemordna.Api.Endpoints;
 /// <c>selfOnly</c> either, since there is no <c>memberId</c> route parameter to check: the owner
 /// is always <c>httpContext.GetMembership().MemberId</c>, the same pattern
 /// <c>GetTimeCreditAsync</c> and <c>CreateExtraTaskAsync</c> already use for "always the caller's
-/// own". A caller can therefore never name another member's reminder, and every use case already
-/// treats "belongs to someone else" identically to "does not exist" - see
-/// <see cref="IReminderRepository.FindByIdAsync"/>.
+/// own". A caller can therefore never name another member's reminder by id, and every
+/// single-reminder use case already treats "belongs to someone else" identically to "does not
+/// exist" - see <see cref="IReminderRepository.FindByIdAsync"/>.
+/// <para>
+/// <c>GET /household</c> is the one deliberate exception to "never see someone else's reminder":
+/// it is a household-wide read, not a single-id lookup, and it goes through its own use case
+/// (<see cref="GetHouseholdReminders"/>), its own repository call
+/// (<see cref="IReminderRepository.ListVisibleForOthersInRangeAsync"/>) and its own response type
+/// (<see cref="HouseholdReminderResponse"/>) rather than a wider <see cref="ReminderResponse"/>
+/// with some fields hidden. <see cref="ReminderResponse"/> carries <c>Location</c> and
+/// <c>TravelMinutes</c>; reusing it here would turn every future field added to it into a
+/// potential leak to the rest of the household the moment nobody remembers to strip it back out
+/// at this boundary. A narrower, separate DTO cannot leak a field it was never given.
+/// </para>
 /// </remarks>
 internal static class ReminderEndpoints
 {
@@ -31,6 +44,10 @@ internal static class ReminderEndpoints
 
         reminders.MapGet("/", ListOwnRemindersAsync)
             .Produces<IReadOnlyList<ReminderResponse>>()
+            .ProducesValidationProblem();
+
+        reminders.MapGet("/household", ListHouseholdRemindersAsync)
+            .Produces<IReadOnlyList<HouseholdReminderResponse>>()
             .ProducesValidationProblem();
 
         reminders.MapPost("/", CreateReminderAsync)
@@ -48,6 +65,12 @@ internal static class ReminderEndpoints
             .Produces<ReminderResponse>()
             .Produces(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status409Conflict);
+
+        reminders.MapPut("/{reminderId:guid}/visibility", SetReminderVisibilityAsync)
+            .Produces<ReminderResponse>()
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status409Conflict)
+            .ProducesValidationProblem();
 
         reminders.MapPut("/{reminderId:guid}/move", MoveReminderAsync)
             .Produces<ReminderResponse>()
@@ -105,6 +128,33 @@ internal static class ReminderEndpoints
         return Results.Ok(found.Select(ToResponse).ToList());
     }
 
+    private static async Task<IResult> ListHouseholdRemindersAsync(
+        Guid householdId,
+        DateOnly? from,
+        DateOnly? to,
+        HttpContext httpContext,
+        GetHouseholdReminders getHouseholdReminders,
+        CancellationToken cancellationToken)
+    {
+        if (from is null || to is null)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["Range"] = ["Både from och to måste anges."]
+            });
+        }
+
+        // The caller's own id is only used to EXCLUDE their own reminders here - see
+        // GetHouseholdReminders and IReminderRepository.ListVisibleForOthersInRangeAsync - not to
+        // scope what they may see, unlike every other route in this file.
+        var membership = httpContext.GetMembership();
+
+        var found = await getHouseholdReminders.HandleAsync(
+            householdId, membership.MemberId, from.Value, to.Value, cancellationToken);
+
+        return Results.Ok(found.Select(ToHouseholdResponse).ToList());
+    }
+
     private static async Task<IResult> CreateReminderAsync(
         Guid householdId,
         HttpContext httpContext,
@@ -138,6 +188,7 @@ internal static class ReminderEndpoints
             request.Date.Value,
             request.TimeOfDay,
             request.TravelMinutes,
+            request.Visibility,
             cancellationToken);
 
         return reminder is null
@@ -181,6 +232,30 @@ internal static class ReminderEndpoints
 
         var reminder = await changeReminderLocation.HandleAsync(
             householdId, membership.MemberId, reminderId, request.Location, cancellationToken);
+
+        return reminder is null ? Results.NotFound() : Results.Ok(ToResponse(reminder));
+    }
+
+    private static async Task<IResult> SetReminderVisibilityAsync(
+        Guid householdId,
+        Guid reminderId,
+        HttpContext httpContext,
+        SetReminderVisibilityRequest request,
+        ChangeReminderVisibility changeReminderVisibility,
+        CancellationToken cancellationToken)
+    {
+        if (request.Visibility is not { } visibility)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                [nameof(request.Visibility)] = ["En nivå måste anges."]
+            });
+        }
+
+        var membership = httpContext.GetMembership();
+
+        var reminder = await changeReminderVisibility.HandleAsync(
+            householdId, membership.MemberId, reminderId, visibility, cancellationToken);
 
         return reminder is null ? Results.NotFound() : Results.Ok(ToResponse(reminder));
     }
@@ -279,5 +354,9 @@ internal static class ReminderEndpoints
             reminder.TimeOfDay,
             reminder.TravelMinutes,
             reminder.Status,
-            reminder.CreatedAt);
+            reminder.CreatedAt,
+            reminder.Visibility);
+
+    private static HouseholdReminderResponse ToHouseholdResponse(HouseholdReminderView view)
+        => new(view.Id, view.MemberId, view.Date, view.TimeOfDay, view.Title);
 }

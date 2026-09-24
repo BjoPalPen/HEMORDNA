@@ -31,7 +31,7 @@ public class CreateReminderTests
 
         var reminder = await CreateUseCase().HandleAsync(
             householdId, memberId, "Tandläkare", "Folktandvården", Friday, new TimeOnly(9, 0), null,
-            CancellationToken.None);
+            null, CancellationToken.None);
 
         Assert.NotNull(reminder);
         Assert.Equal(householdId, reminder.HouseholdId);
@@ -42,6 +42,7 @@ public class CreateReminderTests
         Assert.Equal(new TimeOnly(9, 0), reminder.TimeOfDay);
         Assert.Null(reminder.TravelMinutes);
         Assert.Equal(ReminderStatus.Upcoming, reminder.Status);
+        Assert.Equal(ReminderVisibility.Private, reminder.Visibility);
         Assert.Equal(1, _reminders.AddCallCount);
     }
 
@@ -52,7 +53,7 @@ public class CreateReminderTests
 
         var reminder = await CreateUseCase().HandleAsync(
             householdId, memberId, "Tandläkare", "Folktandvården", Friday, new TimeOnly(14, 0), 30,
-            CancellationToken.None);
+            null, CancellationToken.None);
 
         Assert.NotNull(reminder);
         Assert.Equal(30, reminder.TravelMinutes);
@@ -64,7 +65,7 @@ public class CreateReminderTests
         var (householdId, memberId) = await ArrangeHouseholdAsync();
 
         await Assert.ThrowsAsync<DomainException>(() => CreateUseCase()
-            .HandleAsync(householdId, memberId, "Tandläkare", null, Friday, null, 30, CancellationToken.None));
+            .HandleAsync(householdId, memberId, "Tandläkare", null, Friday, null, 30, null, CancellationToken.None));
     }
 
     [Fact]
@@ -73,7 +74,7 @@ public class CreateReminderTests
         var (householdId, _) = await ArrangeHouseholdAsync();
 
         var reminder = await CreateUseCase()
-            .HandleAsync(householdId, Guid.NewGuid(), "Tandläkare", null, Friday, null, null, CancellationToken.None);
+            .HandleAsync(householdId, Guid.NewGuid(), "Tandläkare", null, Friday, null, null, null, CancellationToken.None);
 
         Assert.Null(reminder);
         Assert.Equal(0, _reminders.AddCallCount);
@@ -83,7 +84,7 @@ public class CreateReminderTests
     public async Task Returns_null_for_an_unknown_household()
     {
         var reminder = await CreateUseCase()
-            .HandleAsync(Guid.NewGuid(), Guid.NewGuid(), "Tandläkare", null, Friday, null, null, CancellationToken.None);
+            .HandleAsync(Guid.NewGuid(), Guid.NewGuid(), "Tandläkare", null, Friday, null, null, null, CancellationToken.None);
 
         Assert.Null(reminder);
     }
@@ -94,6 +95,31 @@ public class CreateReminderTests
         var (householdId, memberId) = await ArrangeHouseholdAsync();
 
         await Assert.ThrowsAsync<ArgumentException>(() => CreateUseCase()
-            .HandleAsync(householdId, memberId, "   ", null, Friday, null, null, CancellationToken.None));
+            .HandleAsync(householdId, memberId, "   ", null, Friday, null, null, null, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task An_explicit_visibility_is_used_on_the_created_reminder()
+    {
+        var (householdId, memberId) = await ArrangeHouseholdAsync();
+
+        var reminder = await CreateUseCase().HandleAsync(
+            householdId, memberId, "Tandläkare", null, Friday, null, null,
+            ReminderVisibility.Household, CancellationToken.None);
+
+        Assert.NotNull(reminder);
+        Assert.Equal(ReminderVisibility.Household, reminder.Visibility);
+    }
+
+    [Fact]
+    public async Task An_omitted_visibility_defaults_to_private()
+    {
+        var (householdId, memberId) = await ArrangeHouseholdAsync();
+
+        var reminder = await CreateUseCase().HandleAsync(
+            householdId, memberId, "Tandläkare", null, Friday, null, null, null, CancellationToken.None);
+
+        Assert.NotNull(reminder);
+        Assert.Equal(ReminderVisibility.Private, reminder.Visibility);
     }
 }
