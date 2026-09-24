@@ -45,6 +45,38 @@ public class ReminderNotificationSelectorTests
         Assert.Equal(ReminderNotificationKind.AtTime, notification.Kind);
         Assert.Equal(reminder.Title, notification.Title);
         Assert.Equal(reminder.Location, notification.Location);
+
+        // AtTime is unaffected by ReminderNotificationSelector.PrepareMinutes - that only
+        // applies to TimeToLeave. Exact equality, not just "inside the window", so a future
+        // change that accidentally shifts AtTime too would fail this test.
+        Assert.Equal(WinterAtTimeInstant, notification.ScheduledFor);
+    }
+
+    /// <summary>
+    /// Björn's decision (driftrapporten som utlöste denna ändring): TimeToLeave is a "get
+    /// ready" signal, not a "walk out the door now" signal - putting on shoes and a coat takes
+    /// a few minutes that travel time itself does not cover. Exact <c>ScheduledFor</c>
+    /// equality, not just "inside the window", so this fails if PrepareMinutes stops being
+    /// applied.
+    /// </summary>
+    [Fact]
+    public void Time_to_leave_fires_PrepareMinutes_earlier_than_travel_minutes_alone_would_give()
+    {
+        const int travelMinutes = 30;
+        var reminder = CreateReminder(WinterDate, WinterTimeOfDay, travelMinutes: travelMinutes);
+        var departureInstant = WinterAtTimeInstant.AddMinutes(
+            -(travelMinutes + ReminderNotificationSelector.PrepareMinutes));
+
+        // Not yet due one minute before the new, earlier departure instant.
+        var notYetDue = ReminderNotificationSelector.SelectDue(
+            departureInstant.AddMinutes(-1), Window, [reminder]);
+        Assert.DoesNotContain(notYetDue, n => n.Kind == ReminderNotificationKind.TimeToLeave);
+
+        // Due exactly at the new departure instant, and ScheduledFor reflects it precisely.
+        var due = ReminderNotificationSelector.SelectDue(departureInstant, Window, [reminder]);
+        var notification = Assert.Single(due);
+        Assert.Equal(ReminderNotificationKind.TimeToLeave, notification.Kind);
+        Assert.Equal(departureInstant, notification.ScheduledFor);
     }
 
     [Fact]
@@ -167,18 +199,45 @@ public class ReminderNotificationSelectorTests
     [Fact]
     public void Travel_minutes_crossing_midnight_moves_the_leave_instant_to_the_previous_day()
     {
-        // 00:20 minus 60 minutes travel time is 23:20 the day before.
+        // 00:20 minus (60 travel + 5 PrepareMinutes =) 65 minutes is 23:15 the day before.
         var date = new DateOnly(2026, 2, 10);
         var timeOfDay = new TimeOnly(0, 20);
         var reminder = CreateReminder(date, timeOfDay, travelMinutes: 60);
 
-        // 2026-02-09 23:20 Stockholm (CET, UTC+1) = 2026-02-09T22:20:00Z.
-        var expectedLeaveInstant = new DateTimeOffset(2026, 2, 9, 22, 20, 0, TimeSpan.Zero);
+        // 2026-02-09 23:15 Stockholm (CET, UTC+1) = 2026-02-09T22:15:00Z.
+        var expectedLeaveInstant = new DateTimeOffset(2026, 2, 9, 22, 15, 0, TimeSpan.Zero);
 
         var due = ReminderNotificationSelector.SelectDue(expectedLeaveInstant, Window, [reminder]);
 
         var notification = Assert.Single(due);
         Assert.Equal(ReminderNotificationKind.TimeToLeave, notification.Kind);
+        Assert.Equal(expectedLeaveInstant, notification.ScheduledFor);
+    }
+
+    /// <summary>
+    /// Guards against computing the leave instant as two separate subtractions (TimeOnly minus
+    /// travel minutes, THEN minus PrepareMinutes) instead of one combined subtraction: here,
+    /// travel minutes alone (1 minute) would stay on the same day (00:03 -&gt; 00:02), and only
+    /// travel time PLUS PrepareMinutes together (6 minutes) crosses midnight into the day
+    /// before. A two-step implementation that discards or mishandles the first subtraction's
+    /// day-wrap can get this specific case wrong even while passing the single-subtraction case
+    /// above.
+    /// </summary>
+    [Fact]
+    public void Prepare_minutes_can_push_the_leave_instant_across_midnight_even_when_travel_minutes_alone_would_not()
+    {
+        var date = new DateOnly(2026, 2, 10);
+        var timeOfDay = new TimeOnly(0, 3);
+        var reminder = CreateReminder(date, timeOfDay, travelMinutes: 1);
+
+        // 2026-02-09 23:57 Stockholm (CET, UTC+1) = 2026-02-09T22:57:00Z.
+        var expectedLeaveInstant = new DateTimeOffset(2026, 2, 9, 22, 57, 0, TimeSpan.Zero);
+
+        var due = ReminderNotificationSelector.SelectDue(expectedLeaveInstant, Window, [reminder]);
+
+        var notification = Assert.Single(due);
+        Assert.Equal(ReminderNotificationKind.TimeToLeave, notification.Kind);
+        Assert.Equal(expectedLeaveInstant, notification.ScheduledFor);
     }
 
     [Fact]

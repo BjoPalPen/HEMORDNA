@@ -9,8 +9,10 @@ namespace Hemordna.Domain.Reminders;
 public enum ReminderNotificationKind
 {
     /// <summary>
-    /// <see cref="Reminder.TimeOfDay"/> minus <see cref="Reminder.TravelMinutes"/> - only ever
-    /// due when <see cref="Reminder.TravelMinutes"/> is set.
+    /// <see cref="Reminder.TimeOfDay"/> minus <see cref="Reminder.TravelMinutes"/> minus
+    /// <c>Hemordna.Application.Push.ReminderNotificationSelector.PrepareMinutes</c> (a fixed few
+    /// minutes' buffer to get ready, on top of the travel time itself) - only ever due when
+    /// <see cref="Reminder.TravelMinutes"/> is set.
     /// </summary>
     TimeToLeave = 0,
 

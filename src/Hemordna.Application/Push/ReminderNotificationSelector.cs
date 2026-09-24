@@ -14,8 +14,8 @@ namespace Hemordna.Application.Push;
 /// <para>
 /// Two notifications per reminder, never more (docs/PRODUCT.md §11, this task's spec):
 /// <see cref="ReminderNotificationKind.TimeToLeave"/> at <c>TimeOfDay</c> minus
-/// <c>TravelMinutes</c> (only when <c>TravelMinutes</c> is set), and
-/// <see cref="ReminderNotificationKind.AtTime"/> at <c>TimeOfDay</c> itself. A reminder with no
+/// <c>TravelMinutes</c> minus <see cref="PrepareMinutes"/> (only when <c>TravelMinutes</c> is
+/// set), and <see cref="ReminderNotificationKind.AtTime"/> at <c>TimeOfDay</c> itself. A reminder with no
 /// <c>TimeOfDay</c> ("all day"), or a reminder that is not <see cref="ReminderStatus.Upcoming"/> -
 /// cancelled OR checked off (<see cref="ReminderStatus.CheckedOff"/>) - never produces either. A
 /// checked-off reminder muting its own remaining notices is the whole point of the status: if
@@ -35,6 +35,17 @@ namespace Hemordna.Application.Push;
 /// </remarks>
 public static class ReminderNotificationSelector
 {
+    /// <summary>
+    /// Extra minutes subtracted on top of <c>TravelMinutes</c> when computing
+    /// <see cref="ReminderNotificationKind.TimeToLeave"/> - Björn's decision: the notification is
+    /// a "get ready" signal, not a "walk out the door now" signal, and getting dressed / finding
+    /// keys takes a few minutes that <c>TravelMinutes</c> itself does not cover (that field is
+    /// purely how long the trip takes, not how long it takes to become ready to make it). This is
+    /// what actually makes it NOT zero: without it, "TimeToLeave" would fire at the instant a
+    /// member needs to already be walking out the door, leaving no time to act on it at all.
+    /// </summary>
+    public const int PrepareMinutes = 5;
+
     public static IReadOnlyList<DueReminderNotification> SelectDue(
         DateTimeOffset now, TimeSpan window, IReadOnlyList<Reminder> reminders)
     {
@@ -62,10 +73,15 @@ public static class ReminderNotificationSelector
 
             if (reminder.TravelMinutes is { } travelMinutes)
             {
-                // TimeOnly wraps at midnight rather than throwing, so a reminder just after
-                // midnight with enough travel time genuinely leaves the day before - the
-                // wrappedDays out-parameter is what tells us that happened.
-                var leaveTimeOfDay = timeOfDay.AddMinutes(-travelMinutes, out var wrappedDays);
+                // TravelMinutes and PrepareMinutes are subtracted together, in one AddMinutes
+                // call, not as two separate subtractions. TimeOnly wraps at midnight rather than
+                // throwing - the wrappedDays out-parameter is what tells us that happened - but it
+                // only reports ONE wrap correctly per call; subtracting travel time and then
+                // PrepareMinutes as two separate calls can lose track of (or double-count) a
+                // day-wrap that only shows up once the two are combined, landing the notification
+                // on the wrong date. Combining them first avoids that entirely.
+                var minutesBeforeTimeOfDay = travelMinutes + PrepareMinutes;
+                var leaveTimeOfDay = timeOfDay.AddMinutes(-minutesBeforeTimeOfDay, out var wrappedDays);
                 var leaveDate = reminder.Date.AddDays(wrappedDays);
 
                 TryAdd(reminder, ReminderNotificationKind.TimeToLeave, leaveDate, leaveTimeOfDay, now, window, ref due);
