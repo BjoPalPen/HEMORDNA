@@ -137,5 +137,7 @@ public class DepartureCountdownTests
 
     private static ReminderResponse MakeReminder(
         string title, DateOnly date, TimeOnly? timeOfDay, int? travelMinutes, string status = "Upcoming")
-        => new(Guid.NewGuid(), title, Location: null, date, timeOfDay, travelMinutes, status, CreatedAt: DateTimeOffset.UtcNow);
+        => new(
+            Guid.NewGuid(), title, Location: null, date, timeOfDay, travelMinutes, status,
+            CreatedAt: DateTimeOffset.UtcNow, Visibility: "Private");
 }

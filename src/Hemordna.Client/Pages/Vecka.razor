@@ -1,4 +1,5 @@
 @page "/vecka"
+@using Hemordna.Client.Support
 @inject HemordnaApiClient Api
 @inject HemordnaSession Session
 @inject TimeProvider TimeProvider
@@ -95,6 +96,26 @@ else
                         {
                             <span class="list-meta muted small">@location</span>
                         }
+                    </li>
+                }
+            }
+        </ul>
+    }
+
+    @* Andras synliga tider (docs/PRODUCT.md §11) - bara det ägaren själv valde att dela
+       (BusyOnly eller Household), aldrig Private, och aldrig den inloggade medlemmens egna
+       (de står redan ovan). Rena textrader utan knappar, kryssrutor eller task-done-markering -
+       en delad tid är information, inte något andra kan agera på (docs/PRODUCT.md §8). *@
+    @if (_othersReminders.Count > 0)
+    {
+        <h2 class="vecka-section-heading">Andras tider den här veckan</h2>
+        <ul class="list" aria-label="Andras tider den här veckan">
+            @foreach (var day in WeekDays)
+            {
+                @foreach (var reminder in OthersRemindersOn(day))
+                {
+                    <li class="list-item">
+                        <span class="list-name">@OthersReminderRowLabel(day, reminder)</span>
                     </li>
                 }
             }
@@ -217,6 +238,12 @@ else
     /// private, never anyone else's; see LoadAsync.</summary>
     private IReadOnlyList<ReminderResponse> _weekReminders = [];
 
+    /// <summary>Other household members' visible reminders due this week - "Andras tider den här
+    /// veckan". Already excludes the signed-in member's own (server-side, see
+    /// Hemordna.Application.Reminders.GetHouseholdReminders) and anything Private; see
+    /// LoadAsync.</summary>
+    private IReadOnlyList<HouseholdReminderResponse> _othersReminders = [];
+
     private IReadOnlyList<HouseholdMemberResponse>? _householdMembers;
     private Guid _peekMemberId;
     private int _peekDayOffset;
@@ -254,10 +281,16 @@ else
 
         var weekDays = WeekDays;
         _weekReminders = await Api.GetOwnRemindersAsync(householdId, weekDays[0], weekDays[^1]);
+        _othersReminders = await Api.GetHouseholdRemindersAsync(householdId, weekDays[0], weekDays[^1]);
     }
 
     private List<ReminderResponse> RemindersOn(DateOnly date)
         => [.. _weekReminders.Where(reminder => reminder.Date == date)
+            .OrderBy(reminder => reminder.TimeOfDay.HasValue)
+            .ThenBy(reminder => reminder.TimeOfDay)];
+
+    private List<HouseholdReminderResponse> OthersRemindersOn(DateOnly date)
+        => [.. _othersReminders.Where(reminder => reminder.Date == date)
             .OrderBy(reminder => reminder.TimeOfDay.HasValue)
             .ThenBy(reminder => reminder.TimeOfDay)];
 
@@ -276,6 +309,18 @@ else
         return reminder.TimeOfDay is { } time
             ? $"{weekday} {time.ToString("HH:mm", SwedishCulture)} · {reminder.Title}"
             : $"{weekday} · {reminder.Title}";
+    }
+
+    /// <summary>"Fredag 14:00 · Anna · Föräldramöte" (Household) or "Fredag 14:00 · Anna har en
+    /// tid" (BusyOnly) - the display name is looked up locally on MemberId from _household
+    /// (already loaded by LoadAsync), same as HouseholdResponse.Members is used everywhere else
+    /// on this page; the row's own title is never re-derived here, only what the server already
+    /// decided to include (see Hemordna.Application.Reminders.GetHouseholdReminders).</summary>
+    private string OthersReminderRowLabel(DateOnly date, HouseholdReminderResponse reminder)
+    {
+        var memberName = _household?.Members.FirstOrDefault(m => m.Id == reminder.MemberId)?.DisplayName
+            ?? "Okänd medlem";
+        return HouseholdReminderRowLabel.Build(date, reminder.TimeOfDay, memberName, reminder.Title);
     }
 
     private static IEnumerable<(string Label, string MinutesLabel)> Weekdays(HouseholdMemberResponse member)
