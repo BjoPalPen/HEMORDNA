@@ -5,20 +5,23 @@ Lägesbild per 2026-09-24. Arbetssätt: [../CLAUDE.md](../CLAUDE.md).
 
 ## Läge
 
-`main` pushad, kodrelease `2636c94` deployad till https://app.hemordna.se. Elva PR (#23–#33)
+`main` pushad, kodrelease `5281a08` deployad till https://app.hemordna.se. Tolv PR (#23–#34)
 sedan `21410b4`, fem med datamigrering.
 
-- **Påminnelser** – restid, två pushnotiser, avbockning, gallring efter 30 dagar (PR #27–#30).
-  Notiserna är sedda på en riktig iPhone. Avbockning räknas ALDRIG som hushållsarbete.
-- **Notis efter ändrad tid** (PR #31). Registret nycklas nu på `(ReminderId, Kind, ScheduledFor)`;
-  förut blev en flyttad påminnelse tyst för alltid. `MoveReminder` m.fl. är medvetet orörda – de
-  ska inte veta något om push. Tidpunkten normaliseras till hela minuter (exakt likhet mot µs).
-- **Nedräkning mot avgång** (PR #32). Staplar, en per 5 min, inom 60 min, bara närmaste
-  påminnelsen. **Kvantumet är fast** – takten är informationen, sträck aldrig ut dem. Nytt
-  projekt `Hemordna.Client.Tests`, skälet står i CLAUDE.md §8.
+- **Påminnelser** – restid, två notiser, avbockning, gallring efter 30 dagar (PR #27–#30). Sedda
+  på riktig iPhone. Avbockning räknas ALDRIG som hushållsarbete.
+- **Notis efter ändrad tid** (PR #31). Nyckeln är `(ReminderId, Kind, ScheduledFor)`; förut blev
+  en flyttad påminnelse tyst för alltid. `MoveReminder` m.fl. medvetet orörda – de ska inte veta
+  något om push. Tidpunkten normaliseras till hela minuter (exakt likhet mot µs).
+- **Nedräkning mot avgång** (PR #32). Staplar, en per 5 min, inom 60 min, bara närmaste.
+  **Kvantumet är fast** – takten är informationen. Nytt projekt `Hemordna.Client.Tests`, §8.
 - **Realtid blockerar inte längre sidan** (PR #33). `ConnectAsync` kastade, `OnInitializedAsync`
-  fångade inte, och den döda anslutningen låg kvar – sidan frös permanent på "Hämtar din dag…".
-  `Speech` hade samma fel. Båda felvägarna saknar seam och är medvetet otestade.
+  fångade inte, döda anslutningen låg kvar – sidan frös permanent på "Hämtar din dag…". `Speech`
+  hade samma fel. Båda felvägarna saknar seam och är medvetet otestade.
+- **Avgångsnotisen i tid** (PR #34). Driftrapport: 4 min 44 s sen. Svepet går nu varje minut och
+  notisen skickas `PrepareMinutes = 5` FÖRE avgång – man kan behöva klä på sig. Brödtexten bär
+  avgångstiden, annars ljuger en sent läst notis. `TravelMinutes` orörd: restid är data,
+  förberedelsetid är notisens policy; Min dag visar fortsatt den verkliga avgången.
 
 ## Köra och deploya
 
@@ -32,19 +35,18 @@ prenumerationer slutar då fungera samtidigt.
 
 ## Verifierat
 
-Build 0 fel, 0 varningar. Domain 267/267, Application 446/446, Client 13/13. Produktion:
-RestartCount 0, trekolumnsindexet på plats i databasen, båda bakgrundstjänsterna observerade
-starta, health Europe/Stockholm, smoke PASS.
+Build 0 fel. Domain 267/267, Application 451/451, Client 13/13. E2E 219/220 på 18 min. Produktion:
+RestartCount 0, `polling every 00:01:00` sedd i loggen, health Europe/Stockholm, smoke PASS.
 
 ## Öppna frågor
 
-**E2E faller slumpmässigt på sidladdning** – 1–7 röda per körning, olika tester varje gång, alla
-med `Hämtar din dag…` i ariasnapshotten. **Rättelse:** bedömningen att `SkarmbilderTests` är
-"äkta flakigt, oberoende av belastning" är tillbakadragen, den var aldrig belagd. PR #33 är inte
-heller bevisad som orsak – den körning som skulle visa det stördes av mätningar jag själv körde
-samtidigt. Dev-maskinen låg på 82 % CPU och 81 % RAM. **Nästa steg: fånga webbläsarkonsolen i
-E2E-fixturen** – i dag går "sidan kraschade" inte att skilja från "sidan var långsam".
-`Reconnected`-closuren fångar `householdId`; byter någon hushåll rejoinas det gamla.
-14 worktrees (3,3 GB) ligger kvar under `.claude/`, elva av dem döda. Gallringen har ännu inte
-raderat något – äldsta påminnelsen i prod är 2026-09-23. Rollback-taggar:
+**E2E föll slumpmässigt på sidladdning** – 1–7 röda per körning, olika tester, alla med
+`Hämtar din dag…`. **Efter att 14 worktrees (3,3 GB) städats bort: noll sådana fel, och sviten
+gick på 18 min mot 23–27.** En körning bevisar inget, men det är enda åtgärden som bitit.
+**Rättelse:** bedömningen att `SkarmbilderTests` är "äkta flakigt, oberoende av belastning" är
+tillbakadragen – aldrig belagd. PR #33 rättar en verklig bugg men är inte bevisad som orsak. Vill
+man veta säkert: fånga webbläsarkonsolen i fixturen. `TaskGroupingTests` faller ibland på delad
+databasstatus, passerar isolerat.
+`Reconnected`-closuren fångar `householdId`; byter någon hushåll rejoinas det gamla. Gallringen
+har ännu inte raderat något – äldsta påminnelsen i prod är 2026-09-23. Rollback-taggar:
 `rollback-before-725fedc`, `-4ec6c59`, `-restid`, `-push`, `-bockaav`. Kvar: "Tid i förväg".
