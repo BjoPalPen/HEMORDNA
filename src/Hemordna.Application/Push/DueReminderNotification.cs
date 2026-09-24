@@ -17,6 +17,19 @@ namespace Hemordna.Application.Push;
 /// re-timed) to a new instant after its old notification already fired is a new key, so it is
 /// never mistaken for a duplicate.
 /// </param>
+/// <param name="DepartureTimeOfDay">
+/// The household-local (Europe/Stockholm) wall-clock departure time - <c>TimeOfDay</c> minus
+/// <c>TravelMinutes</c> minus <c>ReminderNotificationSelector.PrepareMinutes</c> - to show in a
+/// <see cref="ReminderNotificationKind.TimeToLeave"/> notification's own text (see
+/// <c>SendDueReminderNotifications.BuildText</c>): since that notification can now arrive up to
+/// <see cref="ReminderNotificationSelector.PrepareMinutes"/> minutes (and, inside
+/// <c>SendDueReminderNotifications.DueWindow</c>, later still) before the moment it names, the
+/// text needs to say the actual departure time rather than implying "right now". Always set for
+/// <see cref="ReminderNotificationKind.TimeToLeave"/>, always <c>null</c> for
+/// <see cref="ReminderNotificationKind.AtTime"/> (nothing to add - <c>TimeOfDay</c> IS the
+/// moment the notification names). Already the household-local time - it needs no further
+/// timezone conversion to display, see <see cref="ReminderNotificationSelector"/>.
+/// </param>
 public sealed record DueReminderNotification(
     Guid ReminderId,
     Guid HouseholdId,
@@ -24,4 +37,5 @@ public sealed record DueReminderNotification(
     ReminderNotificationKind Kind,
     DateTimeOffset ScheduledFor,
     string Title,
-    string? Location);
+    string? Location,
+    TimeOnly? DepartureTimeOfDay);

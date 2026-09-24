@@ -69,7 +69,9 @@ public static class ReminderNotificationSelector
                 continue;
             }
 
-            TryAdd(reminder, ReminderNotificationKind.AtTime, reminder.Date, timeOfDay, now, window, ref due);
+            TryAdd(
+                reminder, ReminderNotificationKind.AtTime, reminder.Date, timeOfDay, now, window,
+                departureTimeOfDay: null, ref due);
 
             if (reminder.TravelMinutes is { } travelMinutes)
             {
@@ -84,7 +86,14 @@ public static class ReminderNotificationSelector
                 var leaveTimeOfDay = timeOfDay.AddMinutes(-minutesBeforeTimeOfDay, out var wrappedDays);
                 var leaveDate = reminder.Date.AddDays(wrappedDays);
 
-                TryAdd(reminder, ReminderNotificationKind.TimeToLeave, leaveDate, leaveTimeOfDay, now, window, ref due);
+                // leaveTimeOfDay IS the departure time to show in the notification's own text
+                // (DueReminderNotification.DepartureTimeOfDay) - already household-local
+                // (Europe/Stockholm) wall-clock time, since that is what Reminder.TimeOfDay
+                // itself is (see HouseholdClock.TryToUtc below). No separate UTC-to-local
+                // conversion is needed or wanted here.
+                TryAdd(
+                    reminder, ReminderNotificationKind.TimeToLeave, leaveDate, leaveTimeOfDay, now, window,
+                    departureTimeOfDay: leaveTimeOfDay, ref due);
             }
         }
 
@@ -98,6 +107,7 @@ public static class ReminderNotificationSelector
         TimeOnly timeOfDay,
         DateTimeOffset now,
         TimeSpan window,
+        TimeOnly? departureTimeOfDay,
         ref List<DueReminderNotification>? due)
     {
         // A wall-clock moment that never happened (the spring DST gap) has no UTC instant to
@@ -122,6 +132,7 @@ public static class ReminderNotificationSelector
         }
 
         (due ??= []).Add(new DueReminderNotification(
-            reminder.Id, reminder.HouseholdId, reminder.MemberId, kind, scheduledFor, reminder.Title, reminder.Location));
+            reminder.Id, reminder.HouseholdId, reminder.MemberId, kind, scheduledFor, reminder.Title,
+            reminder.Location, departureTimeOfDay));
     }
 }

@@ -83,6 +83,59 @@ public class SendDueReminderNotificationsTests
         Assert.Equal("Tandläkaren", _sender.LastTitle);
     }
 
+    /// <summary>
+    /// This follows directly from ReminderNotificationSelector.PrepareMinutes: TimeToLeave can
+    /// now arrive up to 5 minutes before the reminder's own TimeOfDay (and later still, inside
+    /// SendDueReminderNotifications.DueWindow), so a body that just said "Dags att gå" would be
+    /// wrong whenever it's read a few minutes after it lands. The departure time in the body
+    /// keeps it correct regardless of when it's actually read.
+    /// </summary>
+    [Fact]
+    public async Task A_time_to_leave_notification_body_carries_the_departure_time()
+    {
+        var householdId = Guid.NewGuid();
+        var memberId = Guid.NewGuid();
+        var reminder = Reminder.Create(
+            householdId, memberId, "Läkarbesök", null, Date, TimeOfDay, CreatedAt, travelMinutes: 25);
+        _reminders.Seed(reminder);
+        _subscriptions.Seed(PushSubscription.Subscribe(
+            householdId, memberId, "https://push.example.com/a", "p256dh-key", "auth-secret", CreatedAt));
+        _sender.SentCount = 1;
+
+        // TimeOfDay 09:00 minus (25 travel + 5 PrepareMinutes =) 30 minutes = 08:30 Stockholm
+        // (CET, UTC+1) = 07:30Z.
+        var leaveInstant = new DateTimeOffset(2026, 2, 10, 7, 30, 0, TimeSpan.Zero);
+
+        var delivered = await CreateUseCase().HandleAsync(leaveInstant, CancellationToken.None);
+
+        Assert.Equal(1, delivered);
+        Assert.Equal("Dags att gå", _sender.LastTitle);
+        Assert.Equal("Läkarbesök · gå 08:30", _sender.LastBody);
+    }
+
+    /// <summary>Same as above, but with a location set - the departure time is appended after
+    /// the existing title/location text, not instead of it.</summary>
+    [Fact]
+    public async Task A_time_to_leave_notification_body_carries_both_location_and_departure_time()
+    {
+        var householdId = Guid.NewGuid();
+        var memberId = Guid.NewGuid();
+        var reminder = Reminder.Create(
+            householdId, memberId, "Läkarbesök", "Vårdcentralen", Date, TimeOfDay, CreatedAt, travelMinutes: 25);
+        _reminders.Seed(reminder);
+        _subscriptions.Seed(PushSubscription.Subscribe(
+            householdId, memberId, "https://push.example.com/a", "p256dh-key", "auth-secret", CreatedAt));
+        _sender.SentCount = 1;
+
+        var leaveInstant = new DateTimeOffset(2026, 2, 10, 7, 30, 0, TimeSpan.Zero);
+
+        var delivered = await CreateUseCase().HandleAsync(leaveInstant, CancellationToken.None);
+
+        Assert.Equal(1, delivered);
+        Assert.Equal("Dags att gå", _sender.LastTitle);
+        Assert.Equal("Läkarbesök – Vårdcentralen · gå 08:30", _sender.LastBody);
+    }
+
     [Fact]
     public async Task The_next_sweep_does_not_send_the_same_notification_again()
     {

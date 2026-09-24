@@ -1,3 +1,4 @@
+using System.Globalization;
 using Hemordna.Application.Reminders;
 using Hemordna.Application.Time;
 using Hemordna.Domain.Reminders;
@@ -57,6 +58,10 @@ public sealed class SendDueReminderNotifications
     /// while still being a cheap, bounded query - see <see cref="IReminderRepository.ListInDateRangeAsync"/>.
     /// </summary>
     private const int LookaheadDays = 1;
+
+    // Same convention as the client (see MinDag.razor, Vecka.razor): clock times in
+    // member-facing text are formatted with Swedish culture, not the invariant/current culture.
+    private static readonly CultureInfo SwedishCulture = new("sv-SE");
 
     private readonly IReminderRepository _reminders;
     private readonly ISentReminderNotificationRepository _sentLog;
@@ -139,11 +144,7 @@ public sealed class SendDueReminderNotifications
     {
         // Generic title, so the notification is useful at a glance even before it's opened; the
         // reminder's own title and location (docs/PRODUCT.md §11) carry the specifics.
-        ReminderNotificationKind.TimeToLeave => (
-            "Dags att gå",
-            notification.Location is null
-                ? notification.Title
-                : $"{notification.Title} – {notification.Location}"),
+        ReminderNotificationKind.TimeToLeave => ("Dags att gå", BuildTimeToLeaveBody(notification)),
 
         // Björn's explicit decision (docs/PRODUCT.md §11): the reminder's own title is the
         // notification's title, even though that means it can show on a locked screen.
@@ -153,4 +154,24 @@ public sealed class SendDueReminderNotifications
 
         _ => throw new ArgumentOutOfRangeException(nameof(notification), notification.Kind, "Unknown notification kind.")
     };
+
+    /// <summary>
+    /// The body for a <see cref="ReminderNotificationKind.TimeToLeave"/> notification. This is
+    /// not optional decoration: because <c>ReminderNotificationSelector.PrepareMinutes</c> now
+    /// makes this notification arrive a few minutes before the moment it names - and it can
+    /// arrive later still, up to <see cref="DueWindow"/> after a slow sweep or an outage - a
+    /// title of "Dags att gå" alone would be wrong (too early, or stale) whenever it's actually
+    /// read. Naming the departure time explicitly keeps the text true regardless of when it's
+    /// read, exactly like the title/location text below it.
+    /// </summary>
+    private static string BuildTimeToLeaveBody(DueReminderNotification notification)
+    {
+        // DueReminderNotification.DepartureTimeOfDay is always set for TimeToLeave -
+        // ReminderNotificationSelector guarantees it, see that record's remarks.
+        var departureText = $"gå {notification.DepartureTimeOfDay!.Value.ToString("HH:mm", SwedishCulture)}";
+
+        return notification.Location is null
+            ? $"{notification.Title} · {departureText}"
+            : $"{notification.Title} – {notification.Location} · {departureText}";
+    }
 }
