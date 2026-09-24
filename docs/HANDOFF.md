@@ -10,8 +10,7 @@ sedan `21410b4`, fyra med datamigrering.
 
 - **Pushnotiser för påminnelser** (PR #28). Två per påminnelse: "dags att gå" (bakåt från restiden)
   och en vid tiden, bara för en `Upcoming` med klockslag. Loop 5 min, fönster 15 min. **Markering
-  "skickad" sker EFTER utskicket** (Björns beslut, två tester binder det – städa inte tillbaka):
-  hellre en dubblerad notis än en utebliven.
+  "skickad" sker EFTER utskicket** (två tester binder det): hellre en dubblerad notis än utebliven.
 - **Bocka av en påminnelse** (PR #29). `ReminderStatus.CheckedOff` – namnet är handlingen
   medlemmen utförde, det enda appen vet. Två gränser, båda testade: den räknas ALDRIG som
   hushållsarbete (annars dras städschemat ner för ett tandläkarbesök), och den tystar sina notiser.
@@ -37,14 +36,15 @@ Byt dem aldrig: alla prenumerationer slutar då fungera samtidigt.
 
 Build 0 fel, 0 varningar. Domän 266/266, Application 440/440, E2E 218/219. Produktion:
 RestartCount 0, båda bakgrundstjänsterna observerade starta, health Europe/Stockholm, smoke PASS.
+**Björn har sett båda notiserna på en riktig iPhone (2026-09-24)** – push-kedjan är bevisad hela
+vägen, från bakgrundstjänst till låst skärm. Kräver appen på hemskärmen; en Safari-flik ger inget.
 `SkarmbilderTests` är **äkta flakigt, inte belastningsberoende** – rättelse av en tidigare
 bedömning: det föll även isolerat (3/4) och passerade sedan isolerat (4/4). Förtjänar utredning.
 
 ## Drift och kvarstående frågor
 
-**Ingen har sett notiserna på en riktig iPhone.** Kräver att appen ligger på hemskärmen – i en
-Safari-flik kommer inga notiser alls. Enda obevisade delen av kedjan. Gallringen har ännu inte
-raderat något (äldsta påminnelsen i prod: 2026-09-23). Rollback-taggar: `rollback-before-725fedc`,
-`-4ec6c59`, `-restid`, `-push`, `-bockaav`. `HouseholdClock`s fallback-gren är inte enhetstestad;
-hälsokontroll och `Critical`-logg är mitigeringen. Två containrar kan racea på notismarkeringen
-(unikt index fångar det) – inte härdat, driften är en. Kvar: "Tid i förväg" och en gles Heavy.
+Gallringen har ännu inte raderat något (äldsta påminnelsen i prod: 2026-09-23) – tjänsten lever,
+men att den raderar rätt är testat, inte sett skarpt. Rollback-taggar: `rollback-before-725fedc`,
+`-4ec6c59`, `-restid`, `-push`, `-bockaav`. `HouseholdClock`s fallback-gren är inte enhetstestad
+(hälsokontroll + `Critical`-logg är mitigeringen). Två containrar kan racea på notismarkeringen –
+unikt index fångar det, inte härdat, driften är en. Kvar: "Tid i förväg" och en gles Heavy.
