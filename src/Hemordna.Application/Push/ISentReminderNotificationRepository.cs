@@ -25,8 +25,16 @@ public interface ISentReminderNotificationRepository
 
     /// <summary>
     /// Records that this reminder's notification of this kind, due at <paramref name="scheduledFor"/>,
-    /// was sent. Must be called before the actual push send is attempted - see
-    /// <see cref="SendDueReminderNotifications"/> for why.
+    /// was sent. Must be called AFTER the push send is attempted, and only once something was
+    /// actually delivered - deliberately, not by oversight. See
+    /// <see cref="SendDueReminderNotifications"/>'s remarks for the full reasoning: Björn's
+    /// decision is that a duplicate "Dags att gå" is a moment's irritation, while marking this
+    /// before the send and then losing the notification to a transient push failure would be a
+    /// missed reminder - the exact failure this feature exists to prevent. Two tests
+    /// (<c>SendDueReminderNotificationsTests.A_notification_that_reached_no_device_is_not_recorded_as_sent</c>
+    /// and
+    /// <c>SendDueReminderNotificationsTests.A_delivered_notification_is_recorded_and_not_sent_again</c>)
+    /// hold this ordering in place - do not "tidy" this back into mark-then-send.
     /// </summary>
     Task MarkSentAsync(
         Guid householdId,
