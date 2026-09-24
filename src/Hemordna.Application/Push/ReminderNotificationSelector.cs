@@ -75,25 +75,37 @@ public static class ReminderNotificationSelector
 
             if (reminder.TravelMinutes is { } travelMinutes)
             {
-                // TravelMinutes and PrepareMinutes are subtracted together, in one AddMinutes
-                // call, not as two separate subtractions. TimeOnly wraps at midnight rather than
-                // throwing - the wrappedDays out-parameter is what tells us that happened - but it
-                // only reports ONE wrap correctly per call; subtracting travel time and then
-                // PrepareMinutes as two separate calls can lose track of (or double-count) a
-                // day-wrap that only shows up once the two are combined, landing the notification
-                // on the wrong date. Combining them first avoids that entirely.
+                // notifyTimeOfDay is WHEN THE NOTIFICATION ITSELF FIRES - TimeOfDay minus
+                // TravelMinutes minus PrepareMinutes, the "get ready" lead time. It is
+                // deliberately earlier than the real departure time; that is the whole point of
+                // PrepareMinutes. TravelMinutes and PrepareMinutes are subtracted together, in
+                // one AddMinutes call, not as two separate subtractions: TimeOnly wraps at
+                // midnight rather than throwing - the wrappedDays out-parameter is what tells us
+                // that happened - but it only reports ONE wrap correctly per call, so subtracting
+                // travel time and then PrepareMinutes as two separate calls can lose track of (or
+                // double-count) a day-wrap that only shows up once the two are combined, landing
+                // the notification itself on the wrong date. Combining them first avoids that
+                // entirely.
                 var minutesBeforeTimeOfDay = travelMinutes + PrepareMinutes;
-                var leaveTimeOfDay = timeOfDay.AddMinutes(-minutesBeforeTimeOfDay, out var wrappedDays);
-                var leaveDate = reminder.Date.AddDays(wrappedDays);
+                var notifyTimeOfDay = timeOfDay.AddMinutes(-minutesBeforeTimeOfDay, out var wrappedDays);
+                var notifyDate = reminder.Date.AddDays(wrappedDays);
 
-                // leaveTimeOfDay IS the departure time to show in the notification's own text
-                // (DueReminderNotification.DepartureTimeOfDay) - already household-local
-                // (Europe/Stockholm) wall-clock time, since that is what Reminder.TimeOfDay
-                // itself is (see HouseholdClock.TryToUtc below). No separate UTC-to-local
-                // conversion is needed or wanted here.
+                // departureTimeOfDay is WHEN THE MEMBER ACTUALLY NEEDS TO LEAVE - TimeOfDay minus
+                // TravelMinutes only, WITHOUT PrepareMinutes - the same number Min dag's "Gå
+                // HH:mm" row and its countdown bars are built from. This is deliberately computed
+                // separately from notifyTimeOfDay above, not derived from it: the notification
+                // fires PrepareMinutes before this moment, on purpose, so the two values are
+                // never the same instant, and the text must show THIS one or it tells the member
+                // to leave immediately - eating exactly the preparation time PrepareMinutes was
+                // meant to protect. Only ever used for its "HH:mm" display in the notification
+                // text (see DueReminderNotification.DepartureTimeOfDay), so its own day-wrap is
+                // discarded here - a same-looking clock time the day before is not a concern for
+                // a value nothing but the time-of-day portion of is ever read.
+                var departureTimeOfDay = timeOfDay.AddMinutes(-travelMinutes, out _);
+
                 TryAdd(
-                    reminder, ReminderNotificationKind.TimeToLeave, leaveDate, leaveTimeOfDay, now, window,
-                    departureTimeOfDay: leaveTimeOfDay, ref due);
+                    reminder, ReminderNotificationKind.TimeToLeave, notifyDate, notifyTimeOfDay, now, window,
+                    departureTimeOfDay, ref due);
             }
         }
 

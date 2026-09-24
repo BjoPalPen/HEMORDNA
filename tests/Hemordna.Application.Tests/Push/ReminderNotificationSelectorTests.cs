@@ -1,4 +1,5 @@
 using Hemordna.Application.Push;
+using Hemordna.Application.Time;
 using Hemordna.Domain.Reminders;
 
 namespace Hemordna.Application.Tests.Push;
@@ -77,6 +78,36 @@ public class ReminderNotificationSelectorTests
         var notification = Assert.Single(due);
         Assert.Equal(ReminderNotificationKind.TimeToLeave, notification.Kind);
         Assert.Equal(departureInstant, notification.ScheduledFor);
+    }
+
+    /// <summary>
+    /// The invariant a real bug broke silently: <c>ScheduledFor</c> (when the notification
+    /// itself fires) and <c>DepartureTimeOfDay</c> (the real departure time its text must name)
+    /// are deliberately NOT the same moment - that gap IS <see cref="ReminderNotificationSelector.PrepareMinutes"/>,
+    /// the whole reason it exists. A regression that derives <c>DepartureTimeOfDay</c> from the
+    /// already-shifted notification time (instead of computing it fresh from <c>TravelMinutes</c>
+    /// alone) collapses this gap to zero and makes the notification tell the member to leave
+    /// immediately - eating exactly the preparation time <c>PrepareMinutes</c> exists to protect.
+    /// </summary>
+    [Fact]
+    public void The_notification_instant_and_the_departure_time_in_its_text_differ_by_exactly_PrepareMinutes()
+    {
+        const int travelMinutes = 40;
+        var reminder = CreateReminder(WinterDate, WinterTimeOfDay, travelMinutes: travelMinutes);
+        var notifyInstant = WinterAtTimeInstant.AddMinutes(-(travelMinutes + ReminderNotificationSelector.PrepareMinutes));
+
+        var due = ReminderNotificationSelector.SelectDue(notifyInstant, Window, [reminder]);
+        var notification = Assert.Single(due);
+
+        Assert.Equal(ReminderNotificationKind.TimeToLeave, notification.Kind);
+        Assert.NotNull(notification.DepartureTimeOfDay);
+
+        // Convert the shown departure time-of-day back to a comparable instant (same date - this
+        // scenario does not cross midnight) and assert the gap to ScheduledFor precisely.
+        Assert.True(HouseholdClock.TryToUtc(WinterDate, notification.DepartureTimeOfDay!.Value, out var departureInstant));
+        Assert.Equal(
+            TimeSpan.FromMinutes(ReminderNotificationSelector.PrepareMinutes),
+            departureInstant - notification.ScheduledFor);
     }
 
     [Fact]

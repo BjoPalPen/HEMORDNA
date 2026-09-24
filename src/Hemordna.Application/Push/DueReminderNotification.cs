@@ -18,17 +18,21 @@ namespace Hemordna.Application.Push;
 /// never mistaken for a duplicate.
 /// </param>
 /// <param name="DepartureTimeOfDay">
-/// The household-local (Europe/Stockholm) wall-clock departure time - <c>TimeOfDay</c> minus
-/// <c>TravelMinutes</c> minus <c>ReminderNotificationSelector.PrepareMinutes</c> - to show in a
-/// <see cref="ReminderNotificationKind.TimeToLeave"/> notification's own text (see
-/// <c>SendDueReminderNotifications.BuildText</c>): since that notification can now arrive up to
-/// <see cref="ReminderNotificationSelector.PrepareMinutes"/> minutes (and, inside
-/// <c>SendDueReminderNotifications.DueWindow</c>, later still) before the moment it names, the
-/// text needs to say the actual departure time rather than implying "right now". Always set for
-/// <see cref="ReminderNotificationKind.TimeToLeave"/>, always <c>null</c> for
-/// <see cref="ReminderNotificationKind.AtTime"/> (nothing to add - <c>TimeOfDay</c> IS the
-/// moment the notification names). Already the household-local time - it needs no further
-/// timezone conversion to display, see <see cref="ReminderNotificationSelector"/>.
+/// The household-local (Europe/Stockholm) wall-clock time the member actually needs to leave -
+/// <c>TimeOfDay</c> minus <c>TravelMinutes</c> ONLY. Deliberately NOT the same value as
+/// <paramref name="ScheduledFor"/>/<c>ReminderNotificationSelector.notifyTimeOfDay</c>, which is
+/// <c>ReminderNotificationSelector.PrepareMinutes</c> minutes EARLIER than this - that gap is the
+/// entire point of <c>PrepareMinutes</c> (see <see cref="ReminderNotificationSelector"/>): the
+/// notification fires before the real departure time so there is time left to get ready, and
+/// this field is what lets <c>SendDueReminderNotifications.BuildText</c> say the real departure
+/// time in a <see cref="ReminderNotificationKind.TimeToLeave"/> notification's own text instead
+/// of the (earlier) instant the notification itself happens to have fired at - saying the
+/// notification's own instant here would tell the member to leave immediately, eating exactly
+/// the preparation time <c>PrepareMinutes</c> exists to protect. The same number Min dag's own
+/// "Gå HH:mm" row is built from. Always set for <see cref="ReminderNotificationKind.TimeToLeave"/>,
+/// always <c>null</c> for <see cref="ReminderNotificationKind.AtTime"/> (nothing to add -
+/// <c>TimeOfDay</c> IS the moment that notification names). Already the household-local time - it
+/// needs no further timezone conversion to display, see <see cref="ReminderNotificationSelector"/>.
 /// </param>
 public sealed record DueReminderNotification(
     Guid ReminderId,

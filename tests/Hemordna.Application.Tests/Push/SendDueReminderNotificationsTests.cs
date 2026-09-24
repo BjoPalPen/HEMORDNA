@@ -102,15 +102,17 @@ public class SendDueReminderNotificationsTests
             householdId, memberId, "https://push.example.com/a", "p256dh-key", "auth-secret", CreatedAt));
         _sender.SentCount = 1;
 
-        // TimeOfDay 09:00 minus (25 travel + 5 PrepareMinutes =) 30 minutes = 08:30 Stockholm
-        // (CET, UTC+1) = 07:30Z.
-        var leaveInstant = new DateTimeOffset(2026, 2, 10, 7, 30, 0, TimeSpan.Zero);
+        // The notification itself fires at TimeOfDay 09:00 minus (25 travel + 5 PrepareMinutes =)
+        // 30 minutes = 08:30 Stockholm (CET, UTC+1) = 07:30Z - but the real departure time it
+        // must NAME in its text is TimeOfDay minus travel minutes ONLY: 09:00 - 25 = 08:35. The
+        // whole point of PrepareMinutes is that these two clock times are 5 minutes apart.
+        var notifyInstant = new DateTimeOffset(2026, 2, 10, 7, 30, 0, TimeSpan.Zero);
 
-        var delivered = await CreateUseCase().HandleAsync(leaveInstant, CancellationToken.None);
+        var delivered = await CreateUseCase().HandleAsync(notifyInstant, CancellationToken.None);
 
         Assert.Equal(1, delivered);
         Assert.Equal("Dags att gå", _sender.LastTitle);
-        Assert.Equal("Läkarbesök · gå 08:30", _sender.LastBody);
+        Assert.Equal("Läkarbesök · gå 08:35", _sender.LastBody);
     }
 
     /// <summary>Same as above, but with a location set - the departure time is appended after
@@ -127,13 +129,15 @@ public class SendDueReminderNotificationsTests
             householdId, memberId, "https://push.example.com/a", "p256dh-key", "auth-secret", CreatedAt));
         _sender.SentCount = 1;
 
-        var leaveInstant = new DateTimeOffset(2026, 2, 10, 7, 30, 0, TimeSpan.Zero);
+        // Same instant/departure split as the test above: notified at 07:30Z, real departure
+        // 08:35 Stockholm.
+        var notifyInstant = new DateTimeOffset(2026, 2, 10, 7, 30, 0, TimeSpan.Zero);
 
-        var delivered = await CreateUseCase().HandleAsync(leaveInstant, CancellationToken.None);
+        var delivered = await CreateUseCase().HandleAsync(notifyInstant, CancellationToken.None);
 
         Assert.Equal(1, delivered);
         Assert.Equal("Dags att gå", _sender.LastTitle);
-        Assert.Equal("Läkarbesök – Vårdcentralen · gå 08:30", _sender.LastBody);
+        Assert.Equal("Läkarbesök – Vårdcentralen · gå 08:35", _sender.LastBody);
     }
 
     [Fact]
