@@ -1049,15 +1049,24 @@ else
     {
         get
         {
-            if (DepartureCountdown.SelectReminder(TodaysReminders, Now) is not { } reminder)
+            // Captured ONCE into a local: Now is a property that re-reads the clock on every
+            // access, so calling it separately for SelectReminder and Calculate below would ask
+            // two different instants "is this within the window" - right at the 60-minute or
+            // 0-minute edge, the clock can tick over BETWEEN the two calls, SelectReminder says
+            // yes against the first Now and Calculate says null against the second, and the
+            // `!.Value` below throws. Capturing once makes that impossible: both calls judge the
+            // exact same instant, so DepartureTime/Calculate genuinely cannot fail here - not
+            // because "not enough time can pass", but because there is only one Now to disagree
+            // with.
+            var now = Now;
+
+            if (DepartureCountdown.SelectReminder(TodaysReminders, now) is not { } reminder)
             {
                 return null;
             }
 
-            // DepartureTime/Calculate cannot fail here: SelectReminder only ever returns a
-            // reminder for which both already succeeded against this same Now.
             var departure = DepartureCountdown.DepartureTime(reminder)!.Value;
-            return (reminder, DepartureCountdown.Calculate(Now, departure)!.Value);
+            return (reminder, DepartureCountdown.Calculate(now, departure)!.Value);
         }
     }
 
