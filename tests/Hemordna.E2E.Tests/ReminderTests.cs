@@ -1,5 +1,6 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Microsoft.Playwright;
 
 namespace Hemordna.E2E.Tests;
@@ -127,6 +128,46 @@ public class ReminderTests
         await Assertions.Expect(reminderGroup.GetByText("Tandläkare")).ToBeVisibleAsync();
         await Assertions.Expect(reminderGroup).ToContainTextAsync("14:00");
         await Assertions.Expect(reminderGroup).ToContainTextAsync("Gå 13:30");
+    }
+
+    /// <summary>Nedräkning mot avgång (denna revision, docs/PRODUCT.md §11, Support/
+    /// DepartureCountdown.cs) - staplarna och "om N min" visas BREDVID den redan befintliga
+    /// "Gå HH:mm"-raden, aldrig i stället för den, när avgången ligger inom en timme från nu.
+    /// Klockslaget sätts relativt <c>DateTime.Now</c> (inte <see cref="AppDate.Today"/>, som bara
+    /// ger datumet, inte klockslaget) eftersom en verklig tidpunkt nära nu krävs för att hamna
+    /// innanför 60-minutersfönstret - lokal tid av samma skäl som AppDate.cs:s egna remarks
+    /// beskriver för datumet. travelMinutes är satt till ett positivt tal (5), inte 0 - domänen
+    /// kräver ett positivt tal för restid (till skillnad från DepartureCountdownTests egen
+    /// MakeReminder-hjälpare, som konstruerar DTO:n direkt och aldrig går via domänvalideringen).
+    /// </summary>
+    [Fact]
+    public async Task A_reminder_departing_within_the_hour_shows_a_countdown()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Freja");
+
+        var today = AppDate.Today;
+        const int travelMinutes = 5;
+        // Avgång (klockslag minus restid) om ca 20 minuter - gott om marginal på båda sidor om
+        // fönstrets gränser (0 och 60 minuter) för att tåla den tid testet självt tar att köra.
+        var timeOfDay = DateTime.Now.AddMinutes(20 + travelMinutes).ToString("HH:mm");
+        await CreateReminderViaUiAsync(page, "Massage", today, timeOfDay, travelMinutes: travelMinutes);
+
+        var reminderGroup = page.Locator("ul[aria-label=\"Påminnelser\"]");
+        await Assertions.Expect(reminderGroup.GetByText("Massage")).ToBeVisibleAsync();
+
+        // Klockslaget står kvar - staplarna kompletterar det, ersätter det inte.
+        await Assertions.Expect(reminderGroup).ToContainTextAsync("Gå ");
+
+        var bars = reminderGroup.Locator(".departure-bars");
+        await Assertions.Expect(bars).ToBeVisibleAsync();
+        await Assertions.Expect(bars).ToHaveAttributeAsync("role", "img");
+        var ariaLabel = await bars.GetAttributeAsync("aria-label");
+        Assert.NotNull(ariaLabel);
+        Assert.Contains("kvar till avgång", ariaLabel);
+
+        // "om N min" bredvid staplarna, från samma Countdown.
+        await Assertions.Expect(reminderGroup).ToContainTextAsync(new Regex(@"om \d+ min"));
     }
 
     [Fact]
