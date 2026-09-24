@@ -97,7 +97,7 @@ public sealed class SendDueReminderNotifications
 
         foreach (var notification in due)
         {
-            if (alreadySent.Contains((notification.ReminderId, notification.Kind)))
+            if (alreadySent.Contains((notification.ReminderId, notification.Kind, notification.ScheduledFor)))
             {
                 continue;
             }
@@ -122,7 +122,8 @@ public sealed class SendDueReminderNotifications
 
             // Recorded only once something was delivered - see this class's remarks on idempotency.
             await _sentLog.MarkSentAsync(
-                notification.HouseholdId, notification.ReminderId, notification.Kind, now, cancellationToken);
+                notification.HouseholdId, notification.ReminderId, notification.Kind,
+                notification.ScheduledFor, now, cancellationToken);
 
             deliveredCount += delivered;
         }
