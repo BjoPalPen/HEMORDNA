@@ -3,6 +3,7 @@ using Hemordna.Client;
 using Hemordna.Client.Services;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
+using Microsoft.Extensions.Logging;
 
 // Hemordna is Swedish, so dates and numbers are Swedish no matter what the browser is set to.
 // Without this the app inherits the browser's culture and renders "Friday 4 September" to
@@ -37,6 +38,9 @@ builder.Services.AddScoped<HemordnaApiClient>();
 builder.Services.AddScoped<HemordnaSession>();
 builder.Services.AddScoped<WebAuthnClient>();
 builder.Services.AddScoped<PushNotificationService>();
-builder.Services.AddScoped(sp => new HouseholdRealtimeClient(apiBaseAddress, sp.GetRequiredService<TokenStore>()));
+builder.Services.AddScoped(sp => new HouseholdRealtimeClient(
+    apiBaseAddress,
+    sp.GetRequiredService<TokenStore>(),
+    sp.GetRequiredService<ILogger<HouseholdRealtimeClient>>()));
 
 await builder.Build().RunAsync();
