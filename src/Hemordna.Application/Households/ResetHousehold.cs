@@ -11,10 +11,21 @@ namespace Hemordna.Application.Households;
 /// sees - see docs/ARCHITECTURE.md "Beslut: Rensa ett hushåll".
 /// </summary>
 /// <remarks>
+/// <para>
 /// A hard delete, not a deactivation. Every other removal in the app (<see cref="DeactivateArea"/>,
 /// <see cref="DeactivateHouseholdMember"/>, <see cref="Hemordna.Application.Tasks.DeactivateTaskDefinition"/>)
 /// keeps history pointing at a real entity; here there is no history left to protect, because
 /// everything is being discarded in the same operation.
+/// </para>
+/// <para>
+/// <b>Reminders are deliberately left untouched by a reset - not an oversight.</b> A
+/// <see cref="Hemordna.Domain.Reminders.Reminder"/> is a member's own private appointment, not
+/// household work (docs/PRODUCT.md §11): a doctor's visit, a therapy session. Wiping the
+/// household's chores back to empty must never also throw away someone's private appointment -
+/// the two are not the same kind of thing, and only one of them belongs to the household at all.
+/// An explicit product decision, written down here precisely so a future reader does not mistake
+/// the absence of a reminder purge in this method for something forgotten.
+/// </para>
 /// </remarks>
 public sealed class ResetHousehold
 {
