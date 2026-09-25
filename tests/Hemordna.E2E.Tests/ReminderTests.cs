@@ -692,4 +692,39 @@ public class ReminderTests
 
         await AssertAnnasOwnViewIsUnchangedAsync(annaPage);
     }
+
+    /// <summary>
+    /// Locks the audience picker's own highlighting to the actual selection - "Alla i hushållet"
+    /// and "Bara utvalda" use the same active/inactive button styling as the level-picker above
+    /// them (btn-primary for the chosen one, btn-secondary for the other), and a screenshot alone
+    /// cannot prove which one is genuinely active versus a transient :active/:focus style caught
+    /// mid-click. This asserts the settled state after each click, both directions.
+    /// </summary>
+    [Fact]
+    public async Task The_audience_picker_buttons_reflect_the_actual_selection()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Greta-" + Guid.NewGuid().ToString("N")[..6]);
+
+        await page.GetByRole(AriaRole.Button, new() { Name = "Ny påminnelse" }).ClickAsync();
+        var sheet = page.GetByRole(AriaRole.Dialog, new() { Name = "Ny påminnelse" });
+        await sheet.GetByLabel("Titel").FillAsync("Föräldramöte");
+        await sheet.GetByLabel("Datum").FillAsync(AppDate.Today.ToString("yyyy-MM-dd"));
+        await sheet.GetByRole(AriaRole.Button, new() { Name = "Andra ser vad det är", Exact = true }).ClickAsync();
+
+        var everyoneButton = sheet.GetByRole(AriaRole.Button, new() { Name = "Alla i hushållet", Exact = true });
+        var selectedButton = sheet.GetByRole(AriaRole.Button, new() { Name = "Bara utvalda", Exact = true });
+
+        // Default is "Everyone" - matches Reminder.Audience's own default (see commit 1).
+        await Assertions.Expect(everyoneButton).ToHaveClassAsync(new Regex("btn-primary"));
+        await Assertions.Expect(selectedButton).ToHaveClassAsync(new Regex("btn-secondary"));
+
+        await selectedButton.ClickAsync();
+        await Assertions.Expect(selectedButton).ToHaveClassAsync(new Regex("btn-primary"));
+        await Assertions.Expect(everyoneButton).ToHaveClassAsync(new Regex("btn-secondary"));
+
+        await everyoneButton.ClickAsync();
+        await Assertions.Expect(everyoneButton).ToHaveClassAsync(new Regex("btn-primary"));
+        await Assertions.Expect(selectedButton).ToHaveClassAsync(new Regex("btn-secondary"));
+    }
 }
