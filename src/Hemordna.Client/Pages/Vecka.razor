@@ -126,10 +126,12 @@ else
                         <span class="list-name">@OthersReminderRowLabel(day, reminder)</span>
                         @if (CanAddToMyReminders(reminder))
                         {
-                            <button type="button" class="btn btn-link" disabled="@(_addingReminderId == reminder.Id)"
-                                    @onclick="() => AddToMyRemindersAsync(reminder)">
-                                Lägg till i mina påminnelser
-                            </button>
+                            <span class="list-item-own-line">
+                                <button type="button" class="btn btn-link" disabled="@(_addingReminderId == reminder.Id)"
+                                        @onclick="() => AddToMyRemindersAsync(reminder)">
+                                    Lägg till i mina påminnelser
+                                </button>
+                            </span>
                         }
                     </li>
                 }

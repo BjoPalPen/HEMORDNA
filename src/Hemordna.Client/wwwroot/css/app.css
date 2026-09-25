@@ -655,6 +655,18 @@ html[data-backdrop] .app-main {
     gap: var(--space-2);
 }
 
+/* A single trailing action whose own label is long enough to defeat the sizing above: .list-name's
+   fixed 100px hypothetical size plus this one control's hypothetical (content) width can still add
+   up to less than the row's available width, so flex-wrap decides both fit on one line after all -
+   then shrinks .list-name's ACTUAL rendered width well below its 100px hypothetical to make room,
+   which wraps its text into several internal lines instead of moving the action down (unlike the
+   short "Ta bort"-style labels .list-item-actions above was written for, which never get this
+   close to the edge). A flex-basis of 100% removes the ambiguity outright - nothing can ever share
+   a line with this item, so .list-name is guaranteed the row's own full width first. */
+.list-item-own-line {
+    flex-basis: 100%;
+}
+
 /* A .list-item that hands all its padding to a single full-row control instead (.list-row) -
    the whole row becomes one 44px+ tap target rather than just its trailing chevron. */
 .list-item-flush {
