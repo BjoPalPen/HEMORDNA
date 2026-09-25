@@ -27,10 +27,16 @@ public class ReminderTests
     /// always-visible chips there, same as "Extra uppgift". <paramref name="visibilityButtonLabel"/>
     /// is one of the level-picker's three exact button texts ("Bara jag", "Andra ser att jag har
     /// en tid", "Andra ser vad det är") - left <c>null</c> to keep the sheet's own default
-    /// ("Bara jag" / Private).</summary>
+    /// ("Bara jag" / Private). <paramref name="audienceButtonLabel"/> is one of the audience
+    /// picker's two exact button texts ("Alla i hushållet", "Bara utvalda") - only reachable (and
+    /// only meaningful to pass) once <paramref name="visibilityButtonLabel"/> is not "Bara jag".
+    /// <paramref name="selectedMemberNames"/> checks exactly those candidates in the "Bara
+    /// utvalda" list, by their display name - only meaningful together with
+    /// <paramref name="audienceButtonLabel"/>: "Bara utvalda".</summary>
     private static async Task CreateReminderViaUiAsync(
         IPage page, string title, DateOnly date, string? time = null, string? location = null,
-        int? travelMinutes = null, string? visibilityButtonLabel = null)
+        int? travelMinutes = null, string? visibilityButtonLabel = null,
+        string? audienceButtonLabel = null, IReadOnlyList<string>? selectedMemberNames = null)
     {
         await page.GetByRole(AriaRole.Button, new() { Name = "Ny påminnelse" }).ClickAsync();
         var sheet = page.GetByRole(AriaRole.Dialog, new() { Name = "Ny påminnelse" });
@@ -57,12 +63,45 @@ public class ReminderTests
             await sheet.GetByRole(AriaRole.Button, new() { Name = visibilityButtonLabel, Exact = true }).ClickAsync();
         }
 
+        if (audienceButtonLabel is not null)
+        {
+            await sheet.GetByRole(AriaRole.Button, new() { Name = audienceButtonLabel, Exact = true }).ClickAsync();
+        }
+
+        foreach (var name in selectedMemberNames ?? [])
+        {
+            await sheet.GetByLabel(name, new() { Exact = true }).CheckAsync();
+        }
+
         await sheet.GetByRole(AriaRole.Button, new() { Name = "Spara" }).ClickAsync();
 
         // SaveReminderAsync only closes the sheet once its own server round trip (and the
         // LoadDayAsync reload that follows) has actually completed - waiting for that here means
         // a caller that immediately does a real page reload afterwards (proving persistence, not
         // just local state) cannot race ahead of the save and abort the in-flight request.
+        await Assertions.Expect(sheet).Not.ToBeVisibleAsync();
+    }
+
+    /// <summary>Reopens an existing reminder's "Ändra"-sheet (already on Min dag, "/") and
+    /// changes only its audience, same wording rules as <see cref="CreateReminderViaUiAsync"/>.
+    /// Leaves every other field as it already was - the sheet is pre-filled from the reminder's
+    /// current server state (OpenEditReminderSheet), so nothing here needs to repeat title, date
+    /// or visibility.</summary>
+    private static async Task ChangeReminderAudienceViaUiAsync(
+        IPage page, string title, string audienceButtonLabel, IReadOnlyList<string>? selectedMemberNames = null)
+    {
+        var row = page.Locator("ul[aria-label=\"Påminnelser\"] li", new() { HasText = title });
+        await row.GetByRole(AriaRole.Button, new() { Name = "Ändra" }).ClickAsync();
+
+        var sheet = page.GetByRole(AriaRole.Dialog, new() { Name = "Ändra påminnelse" });
+        await sheet.GetByRole(AriaRole.Button, new() { Name = audienceButtonLabel, Exact = true }).ClickAsync();
+
+        foreach (var name in selectedMemberNames ?? [])
+        {
+            await sheet.GetByLabel(name, new() { Exact = true }).CheckAsync();
+        }
+
+        await sheet.GetByRole(AriaRole.Button, new() { Name = "Spara" }).ClickAsync();
         await Assertions.Expect(sheet).Not.ToBeVisibleAsync();
     }
 
@@ -104,6 +143,57 @@ public class ReminderTests
         var householdId = me.GetProperty("householdId").GetGuid();
 
         return (annaPage, bjornPage, annaHttp, bjornHttp, householdId);
+    }
+
+    /// <summary>Three account-holding members of the same household - Anna (creator), Björn and
+    /// Cecilia (both joined via the same invite code). Sibling of
+    /// <see cref="ArrangeTwoMembersAsync"/>, not an extension of it: the reminder-audience tests
+    /// need a THIRD member who is deliberately never selected, to prove Selected actually
+    /// narrows who sees a shared time rather than just "everyone except the owner" - two members
+    /// alone cannot tell those two apart.</summary>
+    private async Task<(IPage AnnaPage, IPage BjornPage, IPage CeciliaPage, string BjornName, string CeciliaName)>
+        ArrangeThreeMembersAsync()
+    {
+        var annaPage = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(annaPage, "Anna-" + Guid.NewGuid().ToString("N")[..6]);
+
+        await annaPage.GotoAsync("/hushall");
+        await annaPage.GetByRole(AriaRole.Button, new() { Name = "Bjud in" }).ClickAsync();
+        var inviteDialog = annaPage.GetByRole(AriaRole.Dialog, new() { Name = "Bjud in" });
+        var code = inviteDialog.GetByLabel("Inbjudningskod");
+        await code.WaitForAsync();
+        var inviteCode = await code.InnerTextAsync();
+        await inviteDialog.GetByRole(AriaRole.Button, new() { Name = "Stäng" }).ClickAsync();
+
+        await annaPage.GotoAsync("/");
+        await annaPage.GetByRole(AriaRole.Button, new() { Name = "Ny påminnelse" }).WaitForAsync(new() { Timeout = 15_000 });
+
+        var bjornName = "Björn-" + Guid.NewGuid().ToString("N")[..6];
+        var bjornPage = await _app.NewPageAsync();
+        await SignUpHelper.RegisterAsync(bjornPage, bjornName);
+        await bjornPage.GetByText("Har du en inbjudningskod?").ClickAsync();
+        await bjornPage.GetByLabel("Inbjudningskod").FillAsync(inviteCode);
+        await bjornPage.GetByRole(AriaRole.Button, new() { Name = "Gå med i hushållet" }).ClickAsync();
+        await bjornPage.Locator("h1", new() { HasText = bjornName }).WaitForAsync(new() { Timeout = 15_000 });
+
+        var ceciliaName = "Cecilia-" + Guid.NewGuid().ToString("N")[..6];
+        var ceciliaPage = await _app.NewPageAsync();
+        await SignUpHelper.RegisterAsync(ceciliaPage, ceciliaName);
+        await ceciliaPage.GetByText("Har du en inbjudningskod?").ClickAsync();
+        await ceciliaPage.GetByLabel("Inbjudningskod").FillAsync(inviteCode);
+        await ceciliaPage.GetByRole(AriaRole.Button, new() { Name = "Gå med i hushållet" }).ClickAsync();
+        await ceciliaPage.Locator("h1", new() { HasText = ceciliaName }).WaitForAsync(new() { Timeout = 15_000 });
+
+        // Anna's own _household (loaded once, above, right after she read the invite code) is
+        // now stale - Björn and Cecilia joined AFTER that load, so her in-memory Members list
+        // still only has herself, and the "Bara utvalda" checkbox list (ReminderAudienceCandidates)
+        // would offer nobody. A real reload is what makes MinDag.razor's OnInitializedAsync fetch
+        // the household again, this time with all three members - see CreateReminderViaUiAsync's
+        // audience-picker steps, which assume Björn/Cecilia are already offered as checkboxes.
+        await annaPage.ReloadAsync();
+        await annaPage.GetByRole(AriaRole.Button, new() { Name = "Ny påminnelse" }).WaitForAsync(new() { Timeout = 15_000 });
+
+        return (annaPage, bjornPage, ceciliaPage, bjornName, ceciliaName);
     }
 
     [Fact]
@@ -525,5 +615,81 @@ public class ReminderTests
         await annaPage.GotoAsync("/vecka");
         var own = annaPage.Locator("ul[aria-label=\"Dina påminnelser den här veckan\"]");
         await Assertions.Expect(own.GetByText("Tandläkare")).ToBeVisibleAsync();
+    }
+
+    /// <summary>The reminder-audience feature's own end-to-end proof (docs/ARCHITECTURE.md,
+    /// "Beslut: Synlighet för påminnelser") - all four cases from the task in one flowing test,
+    /// on the SAME shared reminder, so each transition is checked against the state the previous
+    /// one actually left behind rather than a freshly created one:
+    /// <list type="number">
+    /// <item>Selected + Björn only -> Björn sees it on Vecka, Cecilia (the third member,
+    /// deliberately never selected) does not - proving Selected actually narrows who sees it,
+    /// not just "everyone but the owner" (two members alone could not tell those apart).</item>
+    /// <item>Switched to "Alla i hushållet" -> both Björn and Cecilia see it.</item>
+    /// <item>Switched back to "Bara utvalda" with nobody checked -> neither sees it - the
+    /// fail-closed guarantee itself (docs/ARCHITECTURE.md), not "everyone" by omission.</item>
+    /// <item>Anna's own Min dag/Vecka rows are unchanged throughout all three transitions -
+    /// checked after each one, not just once at the end.</item>
+    /// </list>
+    /// </summary>
+    [Fact]
+    public async Task Sharing_a_reminder_with_selected_members_controls_who_sees_it_on_vecka()
+    {
+        var (annaPage, bjornPage, ceciliaPage, bjornName, _) = await ArrangeThreeMembersAsync();
+        var today = AppDate.Today;
+
+        static async Task AssertAnnasOwnViewIsUnchangedAsync(IPage annaPage)
+        {
+            var ownMinDag = annaPage.Locator("ul[aria-label=\"Påminnelser\"]");
+            await Assertions.Expect(ownMinDag.GetByText("Föräldramöte")).ToBeVisibleAsync();
+            await Assertions.Expect(ownMinDag.GetByRole(AriaRole.Button, new() { Name = "Bocka av" })).ToBeVisibleAsync();
+            await Assertions.Expect(ownMinDag.GetByRole(AriaRole.Button, new() { Name = "Ändra" })).ToBeVisibleAsync();
+            await Assertions.Expect(ownMinDag.GetByRole(AriaRole.Button, new() { Name = "Avboka" })).ToBeVisibleAsync();
+
+            await annaPage.GotoAsync("/vecka");
+            var ownVecka = annaPage.Locator("ul[aria-label=\"Dina påminnelser den här veckan\"]");
+            await Assertions.Expect(ownVecka.GetByText("Föräldramöte")).ToBeVisibleAsync();
+            await annaPage.GotoAsync("/");
+        }
+
+        // Fall 1: delad med bara Björn.
+        await CreateReminderViaUiAsync(
+            annaPage, "Föräldramöte", today, "18:00",
+            visibilityButtonLabel: "Andra ser vad det är",
+            audienceButtonLabel: "Bara utvalda",
+            selectedMemberNames: [bjornName]);
+
+        await bjornPage.GotoAsync("/vecka");
+        var bjornSection = bjornPage.Locator("ul[aria-label=\"Andras tider den här veckan\"]");
+        await Assertions.Expect(bjornSection.GetByText("Föräldramöte")).ToBeVisibleAsync();
+
+        await ceciliaPage.GotoAsync("/vecka");
+        await Assertions.Expect(ceciliaPage.GetByText("Föräldramöte")).Not.ToBeVisibleAsync();
+        await Assertions.Expect(ceciliaPage.Locator("ul[aria-label=\"Andras tider den här veckan\"]")).ToHaveCountAsync(0);
+
+        await AssertAnnasOwnViewIsUnchangedAsync(annaPage);
+
+        // Fall 2: Anna byter till "Alla i hushållet" - båda ser den nu.
+        await ChangeReminderAudienceViaUiAsync(annaPage, "Föräldramöte", "Alla i hushållet");
+
+        await bjornPage.ReloadAsync();
+        await Assertions.Expect(bjornSection.GetByText("Föräldramöte")).ToBeVisibleAsync();
+
+        await ceciliaPage.ReloadAsync();
+        var ceciliaSection = ceciliaPage.Locator("ul[aria-label=\"Andras tider den här veckan\"]");
+        await Assertions.Expect(ceciliaSection.GetByText("Föräldramöte")).ToBeVisibleAsync();
+
+        await AssertAnnasOwnViewIsUnchangedAsync(annaPage);
+
+        // Fall 3: Anna väljer "Bara utvalda" utan att kryssa någon - ingen av dem ser den.
+        await ChangeReminderAudienceViaUiAsync(annaPage, "Föräldramöte", "Bara utvalda");
+
+        await bjornPage.ReloadAsync();
+        await Assertions.Expect(bjornPage.Locator("ul[aria-label=\"Andras tider den här veckan\"]")).ToHaveCountAsync(0);
+
+        await ceciliaPage.ReloadAsync();
+        await Assertions.Expect(ceciliaPage.Locator("ul[aria-label=\"Andras tider den här veckan\"]")).ToHaveCountAsync(0);
+
+        await AssertAnnasOwnViewIsUnchangedAsync(annaPage);
     }
 }

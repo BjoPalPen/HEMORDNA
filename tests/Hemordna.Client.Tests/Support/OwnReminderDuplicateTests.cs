@@ -11,7 +11,8 @@ public class OwnReminderDuplicateTests
     private static readonly DateOnly Friday = new(2026, 2, 6);
 
     private static ReminderResponse MakeOwn(string title, DateOnly date, TimeOnly? timeOfDay)
-        => new(Guid.NewGuid(), title, null, date, timeOfDay, null, "Upcoming", DateTimeOffset.UtcNow, "Private");
+        => new(Guid.NewGuid(), title, null, date, timeOfDay, null, "Upcoming", DateTimeOffset.UtcNow,
+            "Private", "Everyone", []);
 
     [Fact]
     public void No_own_reminders_means_no_duplicate()

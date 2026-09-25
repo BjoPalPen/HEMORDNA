@@ -139,5 +139,5 @@ public class DepartureCountdownTests
         string title, DateOnly date, TimeOnly? timeOfDay, int? travelMinutes, string status = "Upcoming")
         => new(
             Guid.NewGuid(), title, Location: null, date, timeOfDay, travelMinutes, status,
-            CreatedAt: DateTimeOffset.UtcNow, Visibility: "Private");
+            CreatedAt: DateTimeOffset.UtcNow, Visibility: "Private", Audience: "Everyone", SharedWithMemberIds: []);
 }
