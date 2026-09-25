@@ -388,3 +388,8 @@ static Task WriteHealthReportAsync(HttpContext context, HealthReport report)
 
     return context.Response.WriteAsync(payload);
 }
+
+// Top-level statements generate an internal Program class by default. This partial declaration
+// makes it public so Hemordna.Api.Tests can start the real pipeline through
+// WebApplicationFactory<Program> - standard ASP.NET Core pattern, no behavior change.
+public partial class Program;
