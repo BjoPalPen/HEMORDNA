@@ -104,11 +104,19 @@ else
 
     @* Andras synliga tider (docs/PRODUCT.md §11) - bara det ägaren själv valde att dela
        (BusyOnly eller Household), aldrig Private, och aldrig den inloggade medlemmens egna
-       (de står redan ovan). Rena textrader utan knappar, kryssrutor eller task-done-markering -
-       en delad tid är information, inte något andra kan agera på (docs/PRODUCT.md §8). *@
+       (de står redan ovan). Raden i sig är fortfarande bara text utan kryssruta eller
+       task-done-markering - en delad tid är information, inte något andra kan agera på ägarens
+       vägnar (docs/PRODUCT.md §8). Den enda knapp som förekommer här (steg 2, regel 5) gör
+       ingenting med ägarens egen tid - se AddToMyRemindersAsync. *@
     @if (_othersReminders.Count > 0)
     {
         <h2 class="vecka-section-heading">Andras tider den här veckan</h2>
+
+        @if (_addReminderMessage is { } addReminderMessage)
+        {
+            <div class="notice notice-problem" role="alert">@addReminderMessage</div>
+        }
+
         <ul class="list" aria-label="Andras tider den här veckan">
             @foreach (var day in WeekDays)
             {
@@ -116,6 +124,13 @@ else
                 {
                     <li class="list-item">
                         <span class="list-name">@OthersReminderRowLabel(day, reminder)</span>
+                        @if (CanAddToMyReminders(reminder))
+                        {
+                            <button type="button" class="btn btn-link" disabled="@(_addingReminderId == reminder.Id)"
+                                    @onclick="() => AddToMyRemindersAsync(reminder)">
+                                Lägg till i mina påminnelser
+                            </button>
+                        }
                     </li>
                 }
             }
@@ -244,6 +259,16 @@ else
     /// LoadAsync.</summary>
     private IReadOnlyList<HouseholdReminderResponse> _othersReminders = [];
 
+    /// <summary>Set while a "Lägg till i mina påminnelser"-tryck (steg 2, docs/PRODUCT.md §11)
+    /// pågår för denna rad - stänger av just den knappen så ett dubbeltryck under
+    /// serveranropet inte hinner skapa två kopior innan LoadAsync hunnit uppdatera
+    /// duplikatspärren.</summary>
+    private Guid? _addingReminderId;
+
+    /// <summary>Diskret felmeddelande om ett tryck på "Lägg till i mina påminnelser" misslyckas -
+    /// samma tysta mönster som _reminderMessage på Min dag, ingen skuldbeläggning.</summary>
+    private string? _addReminderMessage;
+
     private IReadOnlyList<HouseholdMemberResponse>? _householdMembers;
     private Guid _peekMemberId;
     private int _peekDayOffset;
@@ -321,6 +346,54 @@ else
         var memberName = _household?.Members.FirstOrDefault(m => m.Id == reminder.MemberId)?.DisplayName
             ?? "Okänd medlem";
         return HouseholdReminderRowLabel.Build(date, reminder.TimeOfDay, memberName, reminder.Title);
+    }
+
+    /// <summary>Regel 1 och 4 (docs/PRODUCT.md §11, steg 2) - knappen visas bara på rader som har
+    /// en titel att kopiera (<c>Household</c>-nivå; en <c>BusyOnly</c>-rad har server-sidan redan
+    /// nollat <c>Title</c>, se Hemordna.Application.Reminders.GetHouseholdReminders) och bara när
+    /// den inloggade inte redan har en egen påminnelse med samma titel, datum och klockslag.</summary>
+    private bool CanAddToMyReminders(HouseholdReminderResponse reminder)
+        => reminder.Title is { } title
+            && !OwnReminderDuplicate.Exists(_weekReminders, title, reminder.Date, reminder.TimeOfDay);
+
+    /// <summary>Mottagaren trycker, inte avsändaren (steg 2, docs/PRODUCT.md §11) - skapar en egen,
+    /// fristående kopia hos den inloggade. Kopian bär bara titel, datum och klockslag (regel 2):
+    /// ingen plats (den finns inte ens på <see cref="HouseholdReminderResponse"/>), ingen restid,
+    /// och nivån är alltid <c>Private</c>. Flyttar ägaren sin tid senare flyttas inte den här
+    /// kopian - en medveten begränsning, inte en glömska (se docs/ARCHITECTURE.md, Beslut:
+    /// Synlighet för påminnelser). Kvittot är att raden dyker upp i "Dina påminnelser den här
+    /// veckan" efter LoadAsync (regel 3) - ingen toast, ingen modal.</summary>
+    private async Task AddToMyRemindersAsync(HouseholdReminderResponse reminder)
+    {
+        if (Session.Me is not { HouseholdId: { } householdId } || reminder.Title is not { } title)
+        {
+            return;
+        }
+
+        _addingReminderId = reminder.Id;
+        _addReminderMessage = null;
+
+        try
+        {
+            var created = await Api.CreateReminderAsync(
+                householdId, title, location: null, reminder.Date, reminder.TimeOfDay, visibility: "Private");
+
+            if (created is null)
+            {
+                _addReminderMessage = "Det gick inte att lägga till påminnelsen. Försök igen.";
+                return;
+            }
+
+            await LoadAsync();
+        }
+        catch (HttpRequestException)
+        {
+            _addReminderMessage = "Vi når inte servern just nu. Försök igen om en stund.";
+        }
+        finally
+        {
+            _addingReminderId = null;
+        }
     }
 
     private static IEnumerable<(string Label, string MinutesLabel)> Weekdays(HouseholdMemberResponse member)
