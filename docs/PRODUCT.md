@@ -243,6 +243,10 @@ Reglerna:
   resten av hushållet i Vecka – platsen delas aldrig, på någon nivå, och titel och plats loggas
   fortfarande aldrig någonstans. En delad tid syns aldrig i "Senaste händelser", och bara ägaren
   kan bocka av, ändra eller avboka den.
+- **En delad tid kan läggas till hos sig själv.** Ser man någon annans delade tid i Vecka (bara
+  när ägaren valt att visa vad den är) kan man lägga till en egen kopia bland sina egna
+  påminnelser – titel, datum och klockslag, aldrig platsen. Kopian är fristående: flyttar ägaren
+  sin egen tid flyttas inte kopian, och var och en sätter sin egen restid på Min dag efteråt.
 - **Förvarningen är hela poängen.** En notis som kommer fem minuter i förväg hjälper ingen som
   är tidsblind. Därför skickas två notiser: **dags att gå**, räknad bakåt från restiden, och
   en **vid tiden**. Restiden ersätter en generisk förvarning på "en timme före" – hur lång
