@@ -261,14 +261,14 @@ else
     /// LoadAsync.</summary>
     private IReadOnlyList<HouseholdReminderResponse> _othersReminders = [];
 
-    /// <summary>Set while a "Lägg till i mina påminnelser"-tryck (steg 2, docs/PRODUCT.md §11)
-    /// pågår för denna rad - stänger av just den knappen så ett dubbeltryck under
-    /// serveranropet inte hinner skapa två kopior innan LoadAsync hunnit uppdatera
-    /// duplikatspärren.</summary>
+    /// <summary>Set while a "Lägg till i mina påminnelser" press (step 2, docs/PRODUCT.md §11) is
+    /// in flight for this row - disables just that button so a double click during the server
+    /// round trip cannot create two copies before LoadAsync has refreshed the duplicate
+    /// check.</summary>
     private Guid? _addingReminderId;
 
-    /// <summary>Diskret felmeddelande om ett tryck på "Lägg till i mina påminnelser" misslyckas -
-    /// samma tysta mönster som _reminderMessage på Min dag, ingen skuldbeläggning.</summary>
+    /// <summary>Discreet error message when a "Lägg till i mina påminnelser" press fails - the
+    /// same quiet pattern as Min dag's own _reminderMessage, no blame.</summary>
     private string? _addReminderMessage;
 
     private IReadOnlyList<HouseholdMemberResponse>? _householdMembers;
@@ -350,21 +350,23 @@ else
         return HouseholdReminderRowLabel.Build(date, reminder.TimeOfDay, memberName, reminder.Title);
     }
 
-    /// <summary>Regel 1 och 4 (docs/PRODUCT.md §11, steg 2) - knappen visas bara på rader som har
-    /// en titel att kopiera (<c>Household</c>-nivå; en <c>BusyOnly</c>-rad har server-sidan redan
-    /// nollat <c>Title</c>, se Hemordna.Application.Reminders.GetHouseholdReminders) och bara när
-    /// den inloggade inte redan har en egen påminnelse med samma titel, datum och klockslag.</summary>
+    /// <summary>Rule 1 and 4 (docs/PRODUCT.md §11, step 2) - the button only shows on rows that
+    /// have a title to copy (<c>Household</c> level; a <c>BusyOnly</c> row already has
+    /// <c>Title</c> nulled server-side, see Hemordna.Application.Reminders.GetHouseholdReminders),
+    /// and only when the signed-in member does not already have an own reminder with the same
+    /// title, date and time of day.</summary>
     private bool CanAddToMyReminders(HouseholdReminderResponse reminder)
         => reminder.Title is { } title
             && !OwnReminderDuplicate.Exists(_weekReminders, title, reminder.Date, reminder.TimeOfDay);
 
-    /// <summary>Mottagaren trycker, inte avsändaren (steg 2, docs/PRODUCT.md §11) - skapar en egen,
-    /// fristående kopia hos den inloggade. Kopian bär bara titel, datum och klockslag (regel 2):
-    /// ingen plats (den finns inte ens på <see cref="HouseholdReminderResponse"/>), ingen restid,
-    /// och nivån är alltid <c>Private</c>. Flyttar ägaren sin tid senare flyttas inte den här
-    /// kopian - en medveten begränsning, inte en glömska (se docs/ARCHITECTURE.md, Beslut:
-    /// Synlighet för påminnelser). Kvittot är att raden dyker upp i "Dina påminnelser den här
-    /// veckan" efter LoadAsync (regel 3) - ingen toast, ingen modal.</summary>
+    /// <summary>The recipient presses, not the sender (step 2, docs/PRODUCT.md §11) - creates a
+    /// separate, independent copy for the signed-in member. The copy carries only title, date and
+    /// time of day (rule 2): no location (it is not even present on
+    /// <see cref="HouseholdReminderResponse"/>), no travel time, and the level is always
+    /// <c>Private</c>. If the owner later moves their own reminder, this copy does not move with
+    /// it - a deliberate limitation, not an oversight (see docs/ARCHITECTURE.md, Beslut:
+    /// Synlighet för påminnelser). The receipt is the row appearing in "Dina påminnelser den här
+    /// veckan" after LoadAsync (rule 3) - no toast, no modal.</summary>
     private async Task AddToMyRemindersAsync(HouseholdReminderResponse reminder)
     {
         if (Session.Me is not { HouseholdId: { } householdId } || reminder.Title is not { } title)
