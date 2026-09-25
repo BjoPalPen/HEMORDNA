@@ -37,7 +37,7 @@ public class SpeechTests
         await FakeSpeechSynthesisAsync(page);
         await SignUpHelper.SignUpAsync(page, "Nils");
 
-        var token = await AccessTokenHelper.GetAsync(page);
+        var token = await AccessTokenHelper.GetAsync(page, _app.ApiUrl);
         using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
         http.DefaultRequestHeaders.Authorization = new("Bearer", token);
 
@@ -90,7 +90,7 @@ public class SpeechTests
         await FakeSpeechSynthesisAsync(page);
         await SignUpHelper.SignUpAsync(page, "Freja");
 
-        var token = await AccessTokenHelper.GetAsync(page);
+        var token = await AccessTokenHelper.GetAsync(page, _app.ApiUrl);
         using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
         http.DefaultRequestHeaders.Authorization = new("Bearer", token);
 

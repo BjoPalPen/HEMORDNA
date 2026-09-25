@@ -23,7 +23,7 @@ public class RoomPauseTests
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Otto");
 
-        var token = await AccessTokenHelper.GetAsync(page);
+        var token = await AccessTokenHelper.GetAsync(page, _app.ApiUrl);
         using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
         http.DefaultRequestHeaders.Authorization = new("Bearer", token);
 

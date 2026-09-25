@@ -20,7 +20,7 @@ public class OverdueBacklogTests
 
     private static async Task<(HttpClient Http, Guid HouseholdId, Guid MemberId)> ArrangeAsync(IPage page, string apiUrl)
     {
-        var token = await AccessTokenHelper.GetAsync(page);
+        var token = await AccessTokenHelper.GetAsync(page, apiUrl);
         var http = new HttpClient { BaseAddress = new Uri(apiUrl) };
         http.DefaultRequestHeaders.Authorization = new("Bearer", token);
 

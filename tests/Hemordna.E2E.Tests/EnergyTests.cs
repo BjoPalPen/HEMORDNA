@@ -64,7 +64,7 @@ public class EnergyTests
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Elsa");
 
-        var token = await AccessTokenHelper.GetAsync(page);
+        var token = await AccessTokenHelper.GetAsync(page, _app.ApiUrl);
         using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
         http.DefaultRequestHeaders.Authorization = new("Bearer", token);
 
@@ -136,14 +136,14 @@ public class EnergyTests
         await bPage.GetByRole(AriaRole.Button, new() { Name = "Gå med i hushållet" }).ClickAsync();
         await bPage.Locator("h1", new() { HasText = "Signe" }).WaitForAsync(new() { Timeout = 15_000 });
 
-        var aToken = await AccessTokenHelper.GetAsync(aPage);
+        var aToken = await AccessTokenHelper.GetAsync(aPage, _app.ApiUrl);
         using var aHttp = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
         aHttp.DefaultRequestHeaders.Authorization = new("Bearer", aToken);
         var aMe = await (await aHttp.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
         var householdId = aMe.GetProperty("householdId").GetGuid();
         var aMemberId = aMe.GetProperty("memberId").GetGuid();
 
-        var bToken = await AccessTokenHelper.GetAsync(bPage);
+        var bToken = await AccessTokenHelper.GetAsync(bPage, _app.ApiUrl);
         using var bHttp = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
         bHttp.DefaultRequestHeaders.Authorization = new("Bearer", bToken);
         var bMe = await (await bHttp.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
@@ -178,7 +178,7 @@ public class EnergyTests
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Nils");
 
-        var token = await AccessTokenHelper.GetAsync(page);
+        var token = await AccessTokenHelper.GetAsync(page, _app.ApiUrl);
         using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
         http.DefaultRequestHeaders.Authorization = new("Bearer", token);
 
@@ -256,7 +256,7 @@ public class EnergyTests
         await page.SetViewportSizeAsync(390, 844);
         await SignUpHelper.SignUpAsync(page, "Otto");
 
-        var token = await AccessTokenHelper.GetAsync(page);
+        var token = await AccessTokenHelper.GetAsync(page, _app.ApiUrl);
         using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
         http.DefaultRequestHeaders.Authorization = new("Bearer", token);
 

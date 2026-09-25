@@ -16,7 +16,7 @@ public class WeeklyPlanTests
 
     private async Task<(HttpClient Http, Guid HouseholdId)> AuthorizedHttpAsync(IPage page)
     {
-        var token = await AccessTokenHelper.GetAsync(page);
+        var token = await AccessTokenHelper.GetAsync(page, _app.ApiUrl);
         var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
         http.DefaultRequestHeaders.Authorization = new("Bearer", token);
         var me = await (await http.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();

@@ -283,7 +283,10 @@ internal static class AuthEndpoints
 
         // Reset-password is the flow used when someone believes the account has been accessed
         // by somebody else - a refresh token that survives it would hand an attacker 60 more
-        // days despite the user having done the one thing they knew to do about it.
+        // days despite the user having done the one thing they knew to do about it. Unlike
+        // ChangePasswordAsync below, no replacement chain is issued here: this request arrives
+        // through an e-mailed link with no session of its own to speak of, so there is no
+        // "device you are sitting at" to carry forward - everything is meant to die, on purpose.
         await revokeAllRefreshTokens.HandleAsync(user.Id, cancellationToken);
 
         return Results.Ok();
@@ -295,6 +298,8 @@ internal static class AuthEndpoints
         UserManager<HemordnaUser> users,
         JwtTokenIssuer tokens,
         RevokeAllRefreshTokensForUser revokeAllRefreshTokens,
+        IssueRefreshToken issueRefreshToken,
+        IOptions<JwtOptions> jwtOptions,
         CancellationToken cancellationToken)
     {
         if (httpContext.User.GetUserId() is not { } userId)
@@ -325,14 +330,21 @@ internal static class AuthEndpoints
                     .ToDictionary(group => group.Key, group => group.Select(e => e.Description).ToArray()));
         }
 
-        // Without this, a refresh token issued before the change would keep working - the same
-        // hole a long-lived JWT would have been (see docs/ARCHITECTURE.md "Beslut: Refresh-token
-        // med rotation"). The current client gets a fresh access token below, but must sign in
-        // again once it runs out - see AuthEndpoints' remarks on this in the commit report.
+        // Every refresh token this user has is revoked first - including the one belonging to
+        // this very request - and then a brand new chain is issued to the device making this
+        // call. That is deliberate, not an oversight: changing your password signs out every
+        // OTHER device, but not the one you are sitting at, since you have just proven both the
+        // old password and the new one in this same request - signing yourself out too would
+        // protect nothing. Contrast ResetPasswordAsync just above: that flow is reached through
+        // an e-mailed link with no session at all, used precisely when someone suspects a
+        // different device is the problem, so everything is meant to die there - no replacement
+        // chain is issued.
         await revokeAllRefreshTokens.HandleAsync(userId, cancellationToken);
+        var refreshLifetime = TimeSpan.FromDays(jwtOptions.Value.RefreshTokenLifetimeDays);
+        var refreshToken = await issueRefreshToken.HandleAsync(userId, refreshLifetime, cancellationToken);
 
         var token = tokens.Issue(user);
-        return Results.Ok(new AccessTokenResponse(token.Token, token.ExpiresAt));
+        return Results.Ok(new AccessTokenResponse(token.Token, token.ExpiresAt, refreshToken.Token, refreshToken.ExpiresAt));
     }
 
     private static async Task<IResult> GetMeAsync(

@@ -40,7 +40,16 @@ builder.Services.AddScoped<WebAuthnClient>();
 builder.Services.AddScoped<PushNotificationService>();
 builder.Services.AddScoped(sp => new HouseholdRealtimeClient(
     apiBaseAddress,
+    sp.GetRequiredService<HemordnaApiClient>(),
     sp.GetRequiredService<TokenStore>(),
     sp.GetRequiredService<ILogger<HouseholdRealtimeClient>>()));
 
-await builder.Build().RunAsync();
+var host = builder.Build();
+
+// One-time cleanup for everyone upgrading from before the access token moved to memory - see
+// TokenStore.RemoveLegacyAccessTokenAsync's own remarks for why this must run unconditionally,
+// before anything else touches storage. Every existing user has to sign in once more after this
+// deploy either way (nobody has a refresh token yet), so this costs nothing extra.
+await host.Services.GetRequiredService<TokenStore>().RemoveLegacyAccessTokenAsync();
+
+await host.RunAsync();

@@ -11,15 +11,18 @@ namespace Hemordna.Client.Services;
 public sealed class HouseholdRealtimeClient : IAsyncDisposable
 {
     private readonly string _apiBaseAddress;
+    private readonly HemordnaApiClient _api;
     private readonly TokenStore _tokens;
     private readonly ILogger<HouseholdRealtimeClient> _logger;
 
     private HubConnection? _connection;
     private Guid? _joinedHouseholdId;
 
-    public HouseholdRealtimeClient(string apiBaseAddress, TokenStore tokens, ILogger<HouseholdRealtimeClient> logger)
+    public HouseholdRealtimeClient(
+        string apiBaseAddress, HemordnaApiClient api, TokenStore tokens, ILogger<HouseholdRealtimeClient> logger)
     {
         _apiBaseAddress = apiBaseAddress;
+        _api = api;
         _tokens = tokens;
         _logger = logger;
     }
@@ -53,9 +56,7 @@ public sealed class HouseholdRealtimeClient : IAsyncDisposable
         {
             if (_connection is null)
             {
-                var token = await _tokens.GetAsync();
-
-                if (token is null)
+                if (!await _api.EnsureAccessTokenAsync(CancellationToken.None))
                 {
                     return;
                 }
@@ -63,7 +64,18 @@ public sealed class HouseholdRealtimeClient : IAsyncDisposable
                 var hubUrl = new Uri(new Uri(_apiBaseAddress), "hubs/household");
 
                 _connection = new HubConnectionBuilder()
-                    .WithUrl(hubUrl, options => options.AccessTokenProvider = () => _tokens.GetAsync())
+                    .WithUrl(hubUrl, options => options.AccessTokenProvider = async () =>
+                    {
+                        // Called fresh on the initial connection AND on every automatic
+                        // reconnect attempt (see WithAutomaticReconnect below) - never a
+                        // captured, possibly-stale value. The server closes the connection the
+                        // moment the access token expires (CloseOnAuthenticationExpiration in
+                        // Program.cs), so without ensuring a valid token here, a reconnect would
+                        // keep presenting the very token that just got the connection closed and
+                        // loop failing until some unrelated REST call happened to refresh it.
+                        await _api.EnsureAccessTokenAsync(CancellationToken.None);
+                        return _tokens.AccessToken;
+                    })
                     .WithAutomaticReconnect()
                     .Build();
 

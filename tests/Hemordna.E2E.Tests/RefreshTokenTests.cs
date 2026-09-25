@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using Microsoft.Playwright;
 
 namespace Hemordna.E2E.Tests;
 
@@ -29,6 +30,34 @@ public class RefreshTokenTests
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var body = await response.Content.ReadFromJsonAsync<JsonElement>();
         return (http, body.GetProperty("token").GetString()!, body.GetProperty("refreshToken").GetString()!);
+    }
+
+    /// <summary>
+    /// The test the coordinator asked for directly, and what the whole client change is actually
+    /// for: a page reload is exactly what happens whenever the browser or the OS reclaims an
+    /// idle PWA's memory (routine on iOS - see the mission's own reasoning for why the refresh
+    /// token has to survive that at all) - not a special case, the ordinary case. The access
+    /// token itself is memory-only and never survives this; the user staying signed in depends on
+    /// HemordnaSession never observing a failed /api/me before a working one - whether the very
+    /// first attempt already carries a token (HemordnaApiClient.EnsureAccessTokenAsync refreshing
+    /// proactively) or only succeeds via SendAsync's own retry, both happen inside the one call
+    /// HemordnaSession.LoadAsync awaits, so IsLoaded never flips to "not signed in" in between.
+    /// </summary>
+    [Fact]
+    public async Task Reloading_the_page_after_signing_in_keeps_the_user_signed_in()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Reload");
+
+        await page.ReloadAsync();
+
+        // If neither mechanism worked (no refresh token read, or the 401 never retried), the
+        // page would render LoggaIn's own "Hemordna" heading instead and the wait below would
+        // time out - a clear, honest failure rather than a false positive. Verified: this test
+        // does fail (15s timeout) when both EnsureAccessTokenAsync and SendAsync's retry are
+        // disabled, and passes with either one alone - see the commit report.
+        await page.Locator("h1", new() { HasText = "Reload" }).WaitForAsync(new() { Timeout = 15_000 });
+        Assert.DoesNotContain("logga-in", page.Url);
     }
 
     [Fact]
@@ -110,8 +139,16 @@ public class RefreshTokenTests
         }
     }
 
+    /// <summary>
+    /// Changing your password signs out every OTHER device, but not the one you are sitting at -
+    /// you have just proven both the old password and the new one in this same request, so
+    /// signing yourself out too would protect nothing (a decision made after this same test file,
+    /// under its previous, narrower name, exposed the gap a memory-only access token opens up -
+    /// see the commit report). The old chain still dies (same as before); a brand new one is
+    /// issued in its place for the caller only.
+    /// </summary>
     [Fact]
-    public async Task Password_change_revokes_the_refresh_token()
+    public async Task Password_change_revokes_the_old_refresh_token_but_issues_a_working_new_one_for_the_caller()
     {
         // Uses the access token register itself already returned, rather than spending the
         // refresh token on a rotation first - this test needs that refresh token to still be
@@ -129,11 +166,57 @@ public class RefreshTokenTests
                 newPassword = "Refresh-Test-New-Password-2026!"
             });
             Assert.Equal(HttpStatusCode.OK, changed.StatusCode);
+            var body = await changed.Content.ReadFromJsonAsync<JsonElement>();
+            var newRefreshToken = body.GetProperty("refreshToken").GetString();
+            Assert.False(string.IsNullOrWhiteSpace(newRefreshToken));
+            Assert.NotEqual(refreshToken, newRefreshToken);
 
-            using var refreshAfterChange = await http.PostAsJsonAsync(
+            // The chain this same session used before changing its password is dead.
+            using var refreshWithOldToken = await http.PostAsJsonAsync(
                 "/api/auth/refresh", new { refreshToken });
-            Assert.Equal(HttpStatusCode.Unauthorized, refreshAfterChange.StatusCode);
+            Assert.Equal(HttpStatusCode.Unauthorized, refreshWithOldToken.StatusCode);
+
+            // But the new chain change-password just handed back works - this device is not
+            // signed out by its own password change.
+            using var refreshWithNewToken = await http.PostAsJsonAsync(
+                "/api/auth/refresh", new { refreshToken = newRefreshToken });
+            Assert.Equal(HttpStatusCode.OK, refreshWithNewToken.StatusCode);
         }
+    }
+
+    /// <summary>The other half of the same decision: password change signs out every device that
+    /// is NOT the one making the request - simulated here with a second, independent login as the
+    /// same user (its own chain, distinct from the one that changes the password).</summary>
+    [Fact]
+    public async Task Password_change_revokes_a_refresh_token_belonging_to_another_device()
+    {
+        var email = $"e2e-refresh-{Guid.NewGuid():N}@example.com";
+
+        using var deviceA = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
+        using var registered = await deviceA.PostAsJsonAsync(
+            "/api/auth/register", new { email, password = Password, displayName = "Refresh" });
+        Assert.Equal(HttpStatusCode.Created, registered.StatusCode);
+        var deviceAAccessToken = (await registered.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("token").GetString();
+
+        using var deviceB = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
+        using var loggedInOnDeviceB = await deviceB.PostAsJsonAsync(
+            "/api/auth/login", new { email, password = Password });
+        Assert.Equal(HttpStatusCode.OK, loggedInOnDeviceB.StatusCode);
+        var deviceBRefreshToken = (await loggedInOnDeviceB.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("refreshToken").GetString();
+
+        deviceA.DefaultRequestHeaders.Authorization = new("Bearer", deviceAAccessToken);
+        using var changed = await deviceA.PostAsJsonAsync("/api/auth/change-password", new
+        {
+            currentPassword = Password,
+            newPassword = "Refresh-Test-New-Password-2026!"
+        });
+        Assert.Equal(HttpStatusCode.OK, changed.StatusCode);
+
+        using var refreshOnDeviceB = await deviceB.PostAsJsonAsync(
+            "/api/auth/refresh", new { refreshToken = deviceBRefreshToken });
+        Assert.Equal(HttpStatusCode.Unauthorized, refreshOnDeviceB.StatusCode);
     }
 
     [Fact]

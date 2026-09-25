@@ -1,25 +1,47 @@
+using System.Net.Http.Json;
+using System.Text.Json;
 using Microsoft.Playwright;
 
 namespace Hemordna.E2E.Tests;
 
 /// <summary>
-/// Reads the client's current access token, the same way every test that needs to call the API
-/// directly (bypassing the UI) for setup or assertions has always done it. This is the one place
-/// that knows WHERE the client keeps that token - currently <c>localStorage</c>, under the same
-/// key the client itself uses (<c>hemordna.token</c>).
+/// Gets a usable access token for tests that call the API directly (bypassing the UI) for setup
+/// or assertions - the same 41 call sites this replaced used to read the access token straight
+/// out of <c>localStorage</c>. That stopped being possible once the client moved the access token
+/// to memory (see docs/ARCHITECTURE.md "Beslut: Refresh-token med rotation"): nothing durable to
+/// read from the page's storage anymore. What IS still in <c>localStorage</c> is the refresh
+/// token, under its own key (<c>hemordna.refresh</c>, deliberately not the old
+/// <c>hemordna.token</c> - see TokenStore's remarks), so this exchanges that for a fresh access
+/// token the same way the app itself would, via <c>POST /api/auth/refresh</c>.
 /// </summary>
 /// <remarks>
-/// A later commit moves the access token to in-memory storage in the client (see
-/// docs/ARCHITECTURE.md "Beslut: Refresh-token med rotation") - the refresh token stays in
-/// <c>localStorage</c>, but the access token will not be readable this way afterwards. Centralizing
-/// the read here, before that change, means it only has to be taught the new way once, in this one
-/// file, instead of in the 41 test files that previously called
-/// <c>page.EvaluateAsync&lt;string&gt;("() =&gt; localStorage.getItem('hemordna.token')")</c>
-/// directly. This commit is a pure refactor: the implementation below is unchanged from what
-/// every call site did inline.
+/// Rotation means the refresh token this reads is consumed the moment it is exchanged - so this
+/// writes the newly rotated refresh token straight back into the page's own <c>localStorage</c>
+/// before returning. Without that, the browser would be left holding a now-dead refresh token:
+/// harmless as long as nothing else in the test ever needs to refresh again, but a real landmine
+/// the moment a test reloads the page, runs long enough for the app's own silent refresh to fire,
+/// or calls this helper a second time for the same page - any of those would present an
+/// already-consumed token, which reuse detection treats as theft and revokes the whole chain,
+/// signing the test's own session out for real. Writing the rotated value back keeps the page's
+/// stored refresh token perpetually valid regardless of how many times this is called.
 /// </remarks>
 internal static class AccessTokenHelper
 {
-    internal static Task<string> GetAsync(IPage page)
-        => page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+    internal static async Task<string> GetAsync(IPage page, string apiBaseUrl)
+    {
+        var refreshToken = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.refresh')");
+
+        using var http = new HttpClient { BaseAddress = new Uri(apiBaseUrl) };
+        using var response = await http.PostAsJsonAsync("/api/auth/refresh", new { refreshToken });
+        response.EnsureSuccessStatusCode();
+
+        var body = await response.Content.ReadFromJsonAsync<JsonElement>();
+        var rotatedRefreshToken = body.GetProperty("refreshToken").GetString();
+
+        await page.EvaluateAsync(
+            "([key, value]) => localStorage.setItem(key, value)",
+            new object?[] { "hemordna.refresh", rotatedRefreshToken });
+
+        return body.GetProperty("token").GetString()!;
+    }
 }

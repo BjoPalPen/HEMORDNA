@@ -22,6 +22,14 @@ public sealed class HemordnaApiClient
         _tokens = tokens;
     }
 
+    /// <summary>
+    /// Raised when a request could not be saved by a refresh - see <see cref="SendAsync"/>. Both
+    /// tokens have already been cleared by the time this fires. This class knows nothing about
+    /// routing, so it does not navigate anywhere itself - <see cref="HemordnaSession"/> is the
+    /// subscriber that updates the signed-in state pages already check.
+    /// </summary>
+    public event Action? SignedOutUnexpectedly;
+
     /// <summary>Signs in and stores the token. Returns false on wrong e-mail or password.</summary>
     public async Task<bool> LoginAsync(string email, string password, CancellationToken cancellationToken = default)
     {
@@ -33,14 +41,14 @@ public sealed class HemordnaApiClient
             return false;
         }
 
-        var token = await response.Content.ReadFromJsonAsync<AccessTokenResponse>(cancellationToken);
+        var tokens = await response.Content.ReadFromJsonAsync<AccessTokenResponse>(cancellationToken);
 
-        if (token is null)
+        if (tokens is null)
         {
             return false;
         }
 
-        await _tokens.SetAsync(token.Token);
+        await StoreTokensAsync(tokens);
         return true;
     }
 
@@ -56,11 +64,11 @@ public sealed class HemordnaApiClient
 
         if (response.IsSuccessStatusCode)
         {
-            var token = await response.Content.ReadFromJsonAsync<AccessTokenResponse>(cancellationToken);
+            var tokens = await response.Content.ReadFromJsonAsync<AccessTokenResponse>(cancellationToken);
 
-            if (token is not null)
+            if (tokens is not null)
             {
-                await _tokens.SetAsync(token.Token);
+                await StoreTokensAsync(tokens);
                 return [];
             }
         }
@@ -97,23 +105,27 @@ public sealed class HemordnaApiClient
         string newPassword,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(HttpMethod.Post, "api/auth/change-password", cancellationToken);
-        request.Content = JsonContent.Create(new { currentPassword, newPassword });
-
-        var response = await _http.SendAsync(request, cancellationToken);
+        var response = await SendAsync(
+            HttpMethod.Post,
+            "api/auth/change-password",
+            JsonContent.Create(new { currentPassword, newPassword }),
+            cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
             return await ReadProblemMessagesAsync(response, cancellationToken);
         }
 
-        var token = await response.Content.ReadFromJsonAsync<AccessTokenResponse>(cancellationToken);
-        if (token is null)
+        var tokens = await response.Content.ReadFromJsonAsync<AccessTokenResponse>(cancellationToken);
+        if (tokens is null)
         {
             return ["Kunde inte uppdatera inloggningen. Logga in igen."];
         }
 
-        await _tokens.SetAsync(token.Token);
+        // No RefreshToken here - change-password revokes all of this user's refresh tokens
+        // server-side but does not reissue one (see the API's own ChangePasswordAsync remarks),
+        // so the one already in storage is left exactly as StoreTokensAsync leaves it: untouched.
+        await StoreTokensAsync(tokens);
         return [];
     }
 
@@ -124,8 +136,7 @@ public sealed class HemordnaApiClient
     /// to this layer, see its own remarks.</summary>
     public async Task<string?> GetPasskeyRegisterOptionsAsync(CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(HttpMethod.Post, "api/auth/passkeys/register/options", cancellationToken);
-        var response = await _http.SendAsync(request, cancellationToken);
+        var response = await SendAsync(HttpMethod.Post, "api/auth/passkeys/register/options", null, cancellationToken);
 
         return response.IsSuccessStatusCode
             ? await response.Content.ReadAsStringAsync(cancellationToken)
@@ -139,10 +150,7 @@ public sealed class HemordnaApiClient
     public async Task<IReadOnlyList<string>> VerifyPasskeyRegisterAsync(
         string attestationJson, CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(HttpMethod.Post, "api/auth/passkeys/register/verify", cancellationToken);
-        request.Content = new StringContent(attestationJson, Encoding.UTF8, "application/json");
-
-        var response = await _http.SendAsync(request, cancellationToken);
+        var response = await SendAsync(HttpMethod.Post, "api/auth/passkeys/register/verify", new StringContent(attestationJson, Encoding.UTF8, "application/json"), cancellationToken);
 
         return response.IsSuccessStatusCode
             ? []
@@ -151,8 +159,7 @@ public sealed class HemordnaApiClient
 
     public async Task<bool> DeletePasskeyAsync(string credentialId, CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(HttpMethod.Delete, $"api/auth/passkeys/{credentialId}", cancellationToken);
-        var response = await _http.SendAsync(request, cancellationToken);
+        var response = await SendAsync(HttpMethod.Delete, $"api/auth/passkeys/{credentialId}", null, cancellationToken);
         return response.IsSuccessStatusCode;
     }
 
@@ -197,18 +204,53 @@ public sealed class HemordnaApiClient
             return false;
         }
 
-        var token = await response.Content.ReadFromJsonAsync<AccessTokenResponse>(cancellationToken);
+        var tokens = await response.Content.ReadFromJsonAsync<AccessTokenResponse>(cancellationToken);
 
-        if (token is null)
+        if (tokens is null)
         {
             return false;
         }
 
-        await _tokens.SetAsync(token.Token);
+        await StoreTokensAsync(tokens);
         return true;
     }
 
-    public async Task SignOutAsync() => await _tokens.ClearAsync();
+    /// <summary>Revokes the refresh token's whole chain server-side, then clears both tokens
+    /// locally - explicit, user-initiated sign-out. Deliberately posts to <c>/api/auth/logout</c>
+    /// before clearing anything: if the request never reaches the server (offline, a dropped
+    /// connection), the tokens stay in place and the next launch can still recover the session,
+    /// rather than the person being stuck signed out locally while a stolen copy of their old
+    /// refresh token would still work for someone else.</summary>
+    public async Task SignOutAsync(CancellationToken cancellationToken = default)
+    {
+        if (await _tokens.GetRefreshTokenAsync() is { } refreshToken)
+        {
+            try
+            {
+                await _http.PostAsJsonAsync("api/auth/logout", new { refreshToken }, cancellationToken);
+            }
+            catch (HttpRequestException)
+            {
+                // Offline or unreachable - see the remarks above; the local sign-out below still
+                // needs to happen so the person is not stuck looking signed in on this device.
+            }
+        }
+
+        await _tokens.ClearAsync();
+    }
+
+    /// <summary>Stores both tokens from a response that carries a refresh token; leaves the
+    /// persisted refresh token untouched when it does not (see <see cref="ChangePasswordAsync"/>,
+    /// the one caller where that happens).</summary>
+    private async Task StoreTokensAsync(AccessTokenResponse tokens)
+    {
+        _tokens.SetAccessToken(tokens.Token);
+
+        if (tokens.RefreshToken is { } refreshToken)
+        {
+            await _tokens.SetRefreshTokenAsync(refreshToken);
+        }
+    }
 
     /// <summary>The signed-in user, or <c>null</c> when the token is missing or no longer valid.</summary>
     public async Task<MeResponse?> GetMeAsync(CancellationToken cancellationToken = default)
@@ -223,10 +265,7 @@ public sealed class HemordnaApiClient
         string name,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(HttpMethod.Post, "api/households", cancellationToken);
-        request.Content = JsonContent.Create(new { name });
-
-        var response = await _http.SendAsync(request, cancellationToken);
+        var response = await SendAsync(HttpMethod.Post, "api/households", JsonContent.Create(new { name }), cancellationToken);
 
         return response.IsSuccessStatusCode
             ? await response.Content.ReadFromJsonAsync<HouseholdResponse>(cancellationToken)
@@ -238,10 +277,7 @@ public sealed class HemordnaApiClient
         string inviteCode,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(HttpMethod.Post, "api/households/join", cancellationToken);
-        request.Content = JsonContent.Create(new JoinHouseholdRequest(inviteCode));
-
-        var response = await _http.SendAsync(request, cancellationToken);
+        var response = await SendAsync(HttpMethod.Post, "api/households/join", JsonContent.Create(new JoinHouseholdRequest(inviteCode)), cancellationToken);
 
         if (response.IsSuccessStatusCode)
         {
@@ -262,10 +298,7 @@ public sealed class HemordnaApiClient
         Guid householdId,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
-            HttpMethod.Post, $"api/households/{householdId}/invite-code/regenerate", cancellationToken);
-
-        var response = await _http.SendAsync(request, cancellationToken);
+        var response = await SendAsync(HttpMethod.Post, $"api/households/{householdId}/invite-code/regenerate", null, cancellationToken);
 
         return response.IsSuccessStatusCode
             ? await response.Content.ReadFromJsonAsync<HouseholdResponse>(cancellationToken)
@@ -281,10 +314,7 @@ public sealed class HemordnaApiClient
         Guid householdId,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
-            HttpMethod.Post, $"api/households/{householdId}/reset", cancellationToken);
-
-        var response = await _http.SendAsync(request, cancellationToken);
+        var response = await SendAsync(HttpMethod.Post, $"api/households/{householdId}/reset", null, cancellationToken);
 
         return response.IsSuccessStatusCode
             ? await response.Content.ReadFromJsonAsync<HouseholdResponse>(cancellationToken)
@@ -302,11 +332,7 @@ public sealed class HemordnaApiClient
         CreateTaskRequest request,
         CancellationToken cancellationToken = default)
     {
-        var httpRequest = await AuthorizedAsync(
-            HttpMethod.Post, $"api/households/{householdId}/tasks", cancellationToken);
-        httpRequest.Content = JsonContent.Create(request);
-
-        var response = await _http.SendAsync(httpRequest, cancellationToken);
+        var response = await SendAsync(HttpMethod.Post, $"api/households/{householdId}/tasks", JsonContent.Create(request), cancellationToken);
 
         return response.IsSuccessStatusCode
             ? await response.Content.ReadFromJsonAsync<TaskDefinitionResponse>(cancellationToken)
@@ -328,12 +354,11 @@ public sealed class HemordnaApiClient
         DateOnly? today = null,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
-            HttpMethod.Post, $"api/households/{householdId}/tasks/extra", cancellationToken);
-        request.Content = JsonContent.Create(
-            new CreateExtraTaskRequest(name, estimatedMinutes, description, areaId, today));
-
-        var response = await _http.SendAsync(request, cancellationToken);
+        var response = await SendAsync(
+            HttpMethod.Post,
+            $"api/households/{householdId}/tasks/extra",
+            JsonContent.Create(new CreateExtraTaskRequest(name, estimatedMinutes, description, areaId, today)),
+            cancellationToken);
 
         return response.IsSuccessStatusCode
             ? await response.Content.ReadFromJsonAsync<TaskOccurrenceResponse>(cancellationToken)
@@ -346,10 +371,8 @@ public sealed class HemordnaApiClient
         Guid taskId,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
-            HttpMethod.Delete, $"api/households/{householdId}/tasks/{taskId}", cancellationToken);
+        var response = await SendAsync(HttpMethod.Delete, $"api/households/{householdId}/tasks/{taskId}", null, cancellationToken);
 
-        var response = await _http.SendAsync(request, cancellationToken);
         return response.IsSuccessStatusCode;
     }
 
@@ -365,11 +388,7 @@ public sealed class HemordnaApiClient
         int? staleAfterDays,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
-            HttpMethod.Put, $"api/households/{householdId}/tasks/{taskId}/frequency", cancellationToken);
-        request.Content = JsonContent.Create(new { recurrence, staleAfterDays });
-
-        var response = await _http.SendAsync(request, cancellationToken);
+        var response = await SendAsync(HttpMethod.Put, $"api/households/{householdId}/tasks/{taskId}/frequency", JsonContent.Create(new { recurrence, staleAfterDays }), cancellationToken);
 
         return response.IsSuccessStatusCode
             ? await response.Content.ReadFromJsonAsync<TaskDefinitionResponse>(cancellationToken)
@@ -383,11 +402,7 @@ public sealed class HemordnaApiClient
         Guid? memberId,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
-            HttpMethod.Put, $"api/households/{householdId}/tasks/{taskId}/assignment", cancellationToken);
-        request.Content = JsonContent.Create(new { memberId });
-
-        var response = await _http.SendAsync(request, cancellationToken);
+        var response = await SendAsync(HttpMethod.Put, $"api/households/{householdId}/tasks/{taskId}/assignment", JsonContent.Create(new { memberId }), cancellationToken);
 
         return response.IsSuccessStatusCode
             ? await response.Content.ReadFromJsonAsync<TaskDefinitionResponse>(cancellationToken)
@@ -401,11 +416,7 @@ public sealed class HemordnaApiClient
         Guid? areaId,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
-            HttpMethod.Put, $"api/households/{householdId}/tasks/{taskId}/area", cancellationToken);
-        request.Content = JsonContent.Create(new { areaId });
-
-        var response = await _http.SendAsync(request, cancellationToken);
+        var response = await SendAsync(HttpMethod.Put, $"api/households/{householdId}/tasks/{taskId}/area", JsonContent.Create(new { areaId }), cancellationToken);
 
         return response.IsSuccessStatusCode
             ? await response.Content.ReadFromJsonAsync<TaskDefinitionResponse>(cancellationToken)
@@ -418,11 +429,7 @@ public sealed class HemordnaApiClient
         bool requiresAdult,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
-            HttpMethod.Put, $"api/households/{householdId}/tasks/{taskId}/requires-adult", cancellationToken);
-        request.Content = JsonContent.Create(new { requiresAdult });
-
-        var response = await _http.SendAsync(request, cancellationToken);
+        var response = await SendAsync(HttpMethod.Put, $"api/households/{householdId}/tasks/{taskId}/requires-adult", JsonContent.Create(new { requiresAdult }), cancellationToken);
 
         return response.IsSuccessStatusCode
             ? await response.Content.ReadFromJsonAsync<TaskDefinitionResponse>(cancellationToken)
@@ -435,11 +442,7 @@ public sealed class HemordnaApiClient
         int estimatedMinutes,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
-            HttpMethod.Put, $"api/households/{householdId}/tasks/{taskId}/estimated-minutes", cancellationToken);
-        request.Content = JsonContent.Create(new { estimatedMinutes });
-
-        var response = await _http.SendAsync(request, cancellationToken);
+        var response = await SendAsync(HttpMethod.Put, $"api/households/{householdId}/tasks/{taskId}/estimated-minutes", JsonContent.Create(new { estimatedMinutes }), cancellationToken);
 
         return response.IsSuccessStatusCode
             ? await response.Content.ReadFromJsonAsync<TaskDefinitionResponse>(cancellationToken)
@@ -454,11 +457,7 @@ public sealed class HemordnaApiClient
         string effort,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
-            HttpMethod.Put, $"api/households/{householdId}/tasks/{taskId}/effort", cancellationToken);
-        request.Content = JsonContent.Create(new { effort });
-
-        var response = await _http.SendAsync(request, cancellationToken);
+        var response = await SendAsync(HttpMethod.Put, $"api/households/{householdId}/tasks/{taskId}/effort", JsonContent.Create(new { effort }), cancellationToken);
 
         return response.IsSuccessStatusCode
             ? await response.Content.ReadFromJsonAsync<TaskDefinitionResponse>(cancellationToken)
@@ -478,11 +477,7 @@ public sealed class HemordnaApiClient
         DateOnly? today = null,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
-            HttpMethod.Put, $"api/households/{householdId}/tasks/{taskId}/preferred-weekday", cancellationToken);
-        request.Content = JsonContent.Create(new { weekday, today });
-
-        var response = await _http.SendAsync(request, cancellationToken);
+        var response = await SendAsync(HttpMethod.Put, $"api/households/{householdId}/tasks/{taskId}/preferred-weekday", JsonContent.Create(new { weekday, today }), cancellationToken);
 
         return response.IsSuccessStatusCode
             ? await response.Content.ReadFromJsonAsync<TaskDefinitionResponse>(cancellationToken)
@@ -495,11 +490,7 @@ public sealed class HemordnaApiClient
         string name,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
-            HttpMethod.Put, $"api/households/{householdId}/areas/{areaId}/name", cancellationToken);
-        request.Content = JsonContent.Create(new { name });
-
-        var response = await _http.SendAsync(request, cancellationToken);
+        var response = await SendAsync(HttpMethod.Put, $"api/households/{householdId}/areas/{areaId}/name", JsonContent.Create(new { name }), cancellationToken);
 
         return response.IsSuccessStatusCode
             ? await response.Content.ReadFromJsonAsync<AreaResponse>(cancellationToken)
@@ -514,11 +505,7 @@ public sealed class HemordnaApiClient
         string? floor,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
-            HttpMethod.Put, $"api/households/{householdId}/areas/{areaId}/floor", cancellationToken);
-        request.Content = JsonContent.Create(new SetAreaFloorRequest(floor));
-
-        var response = await _http.SendAsync(request, cancellationToken);
+        var response = await SendAsync(HttpMethod.Put, $"api/households/{householdId}/areas/{areaId}/floor", JsonContent.Create(new SetAreaFloorRequest(floor)), cancellationToken);
 
         return response.IsSuccessStatusCode
             ? await response.Content.ReadFromJsonAsync<AreaResponse>(cancellationToken)
@@ -533,10 +520,7 @@ public sealed class HemordnaApiClient
         Guid householdId,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
-            HttpMethod.Post, $"api/households/{householdId}/tasks/rebalance-schedule", cancellationToken);
-
-        var response = await _http.SendAsync(request, cancellationToken);
+        var response = await SendAsync(HttpMethod.Post, $"api/households/{householdId}/tasks/rebalance-schedule", null, cancellationToken);
 
         return response.IsSuccessStatusCode
             ? await response.Content.ReadFromJsonAsync<RebalanceScheduleResponse>(cancellationToken)
@@ -551,10 +535,7 @@ public sealed class HemordnaApiClient
         Guid householdId,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
-            HttpMethod.Post, $"api/households/{householdId}/tasks/rebalance-assignments", cancellationToken);
-
-        var response = await _http.SendAsync(request, cancellationToken);
+        var response = await SendAsync(HttpMethod.Post, $"api/households/{householdId}/tasks/rebalance-assignments", null, cancellationToken);
 
         return response.IsSuccessStatusCode
             ? await response.Content.ReadFromJsonAsync<RebalanceAssignmentsResponse>(cancellationToken)
@@ -569,10 +550,7 @@ public sealed class HemordnaApiClient
         Guid householdId,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
-            HttpMethod.Post, $"api/households/{householdId}/members/refresh-role-budgets", cancellationToken);
-
-        var response = await _http.SendAsync(request, cancellationToken);
+        var response = await SendAsync(HttpMethod.Post, $"api/households/{householdId}/members/refresh-role-budgets", null, cancellationToken);
 
         return response.IsSuccessStatusCode
             ? await response.Content.ReadFromJsonAsync<RefreshRoleBudgetsResponse>(cancellationToken)
@@ -587,12 +565,11 @@ public sealed class HemordnaApiClient
         bool addedAsExtra = false,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
-            HttpMethod.Post, $"api/households/{householdId}/tasks/{taskId}/occurrences", cancellationToken);
-        request.Content = JsonContent.Create(
-            new { date = date.ToString("yyyy-MM-dd"), assignToMemberId, addedAsExtra });
-
-        var response = await _http.SendAsync(request, cancellationToken);
+        var response = await SendAsync(
+            HttpMethod.Post,
+            $"api/households/{householdId}/tasks/{taskId}/occurrences",
+            JsonContent.Create(new { date = date.ToString("yyyy-MM-dd"), assignToMemberId, addedAsExtra }),
+            cancellationToken);
         return response.IsSuccessStatusCode;
     }
 
@@ -602,10 +579,7 @@ public sealed class HemordnaApiClient
         string? floor = null,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(HttpMethod.Post, $"api/households/{householdId}/areas", cancellationToken);
-        request.Content = JsonContent.Create(new AddAreaRequest(name, floor));
-
-        var response = await _http.SendAsync(request, cancellationToken);
+        var response = await SendAsync(HttpMethod.Post, $"api/households/{householdId}/areas", JsonContent.Create(new AddAreaRequest(name, floor)), cancellationToken);
 
         return response.IsSuccessStatusCode
             ? await response.Content.ReadFromJsonAsync<AreaResponse>(cancellationToken)
@@ -619,10 +593,7 @@ public sealed class HemordnaApiClient
         string? role = null,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(HttpMethod.Post, $"api/households/{householdId}/members", cancellationToken);
-        request.Content = JsonContent.Create(new AddMemberRequest(displayName, weeklyTimeBudget, role));
-
-        var response = await _http.SendAsync(request, cancellationToken);
+        var response = await SendAsync(HttpMethod.Post, $"api/households/{householdId}/members", JsonContent.Create(new AddMemberRequest(displayName, weeklyTimeBudget, role)), cancellationToken);
 
         return response.IsSuccessStatusCode
             ? await response.Content.ReadFromJsonAsync<HouseholdMemberResponse>(cancellationToken)
@@ -638,11 +609,8 @@ public sealed class HemordnaApiClient
         WeeklyTimeBudgetContract? weeklyTimeBudget = null,
         WeeklyEffortCeilingContract? weeklyEffortCeiling = null)
     {
-        var request = await AuthorizedAsync(
-            HttpMethod.Put, $"api/households/{householdId}/members/{memberId}/role", cancellationToken);
-        request.Content = JsonContent.Create(new SetMemberRoleRequest(role, weeklyTimeBudget, weeklyEffortCeiling));
+        var response = await SendAsync(HttpMethod.Put, $"api/households/{householdId}/members/{memberId}/role", JsonContent.Create(new SetMemberRoleRequest(role, weeklyTimeBudget, weeklyEffortCeiling)), cancellationToken);
 
-        var response = await _http.SendAsync(request, cancellationToken);
         return response.IsSuccessStatusCode;
     }
 
@@ -652,11 +620,8 @@ public sealed class HemordnaApiClient
         DateOnly? until,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
-            HttpMethod.Put, $"api/households/{householdId}/pause", cancellationToken);
-        request.Content = JsonContent.Create(new PauseRequest(until));
+        var response = await SendAsync(HttpMethod.Put, $"api/households/{householdId}/pause", JsonContent.Create(new PauseRequest(until)), cancellationToken);
 
-        var response = await _http.SendAsync(request, cancellationToken);
         return response.IsSuccessStatusCode;
     }
 
@@ -667,11 +632,8 @@ public sealed class HemordnaApiClient
         DateOnly? until,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
-            HttpMethod.Put, $"api/households/{householdId}/members/{memberId}/pause", cancellationToken);
-        request.Content = JsonContent.Create(new PauseRequest(until));
+        var response = await SendAsync(HttpMethod.Put, $"api/households/{householdId}/members/{memberId}/pause", JsonContent.Create(new PauseRequest(until)), cancellationToken);
 
-        var response = await _http.SendAsync(request, cancellationToken);
         return response.IsSuccessStatusCode;
     }
 
@@ -682,11 +644,8 @@ public sealed class HemordnaApiClient
         DateOnly? until,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
-            HttpMethod.Put, $"api/households/{householdId}/areas/{areaId}/pause", cancellationToken);
-        request.Content = JsonContent.Create(new PauseRequest(until));
+        var response = await SendAsync(HttpMethod.Put, $"api/households/{householdId}/areas/{areaId}/pause", JsonContent.Create(new PauseRequest(until)), cancellationToken);
 
-        var response = await _http.SendAsync(request, cancellationToken);
         return response.IsSuccessStatusCode;
     }
 
@@ -696,10 +655,8 @@ public sealed class HemordnaApiClient
         Guid areaId,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
-            HttpMethod.Delete, $"api/households/{householdId}/areas/{areaId}", cancellationToken);
+        var response = await SendAsync(HttpMethod.Delete, $"api/households/{householdId}/areas/{areaId}", null, cancellationToken);
 
-        var response = await _http.SendAsync(request, cancellationToken);
         return response.IsSuccessStatusCode;
     }
 
@@ -712,11 +669,8 @@ public sealed class HemordnaApiClient
         bool canManage,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
-            HttpMethod.Put, $"api/households/{householdId}/members/{memberId}/can-manage", cancellationToken);
-        request.Content = JsonContent.Create(new SetCanManageHouseholdRequest(canManage));
+        var response = await SendAsync(HttpMethod.Put, $"api/households/{householdId}/members/{memberId}/can-manage", JsonContent.Create(new SetCanManageHouseholdRequest(canManage)), cancellationToken);
 
-        var response = await _http.SendAsync(request, cancellationToken);
         return response.IsSuccessStatusCode;
     }
 
@@ -726,10 +680,8 @@ public sealed class HemordnaApiClient
         Guid memberId,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
-            HttpMethod.Delete, $"api/households/{householdId}/members/{memberId}", cancellationToken);
+        var response = await SendAsync(HttpMethod.Delete, $"api/households/{householdId}/members/{memberId}", null, cancellationToken);
 
-        var response = await _http.SendAsync(request, cancellationToken);
         return response.IsSuccessStatusCode;
     }
 
@@ -745,11 +697,7 @@ public sealed class HemordnaApiClient
         IReadOnlyList<WeeklyPlanMoveRequest>? moves = null,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
-            HttpMethod.Post, $"api/households/{householdId}/weekly-plan/preview", cancellationToken);
-        request.Content = JsonContent.Create(new { today, moves });
-
-        var response = await _http.SendAsync(request, cancellationToken);
+        var response = await SendAsync(HttpMethod.Post, $"api/households/{householdId}/weekly-plan/preview", JsonContent.Create(new { today, moves }), cancellationToken);
 
         return response.IsSuccessStatusCode
             ? await response.Content.ReadFromJsonAsync<WeeklyPlanResponse>(cancellationToken)
@@ -765,11 +713,7 @@ public sealed class HemordnaApiClient
         IReadOnlyList<WeeklyPlanMoveRequest>? moves = null,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
-            HttpMethod.Post, $"api/households/{householdId}/weekly-plan/apply", cancellationToken);
-        request.Content = JsonContent.Create(new { today, moves });
-
-        var response = await _http.SendAsync(request, cancellationToken);
+        var response = await SendAsync(HttpMethod.Post, $"api/households/{householdId}/weekly-plan/apply", JsonContent.Create(new { today, moves }), cancellationToken);
 
         return response.IsSuccessStatusCode
             ? await response.Content.ReadFromJsonAsync<ApplyWeeklyPlanResponse>(cancellationToken)
@@ -797,17 +741,13 @@ public sealed class HemordnaApiClient
         DateOnly? today = null,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
+        var content = today is { } value ? JsonContent.Create(new { today = value.ToString("yyyy-MM-dd") }) : null;
+
+        var response = await SendAsync(
             HttpMethod.Post,
             $"api/households/{householdId}/occurrences/{occurrenceId}/complete",
+            content,
             cancellationToken);
-
-        if (today is { } value)
-        {
-            request.Content = JsonContent.Create(new { today = value.ToString("yyyy-MM-dd") });
-        }
-
-        var response = await _http.SendAsync(request, cancellationToken);
         return response.IsSuccessStatusCode;
     }
 
@@ -824,17 +764,13 @@ public sealed class HemordnaApiClient
         DateOnly? today = null,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
+        var content = today is { } value ? JsonContent.Create(new { today = value.ToString("yyyy-MM-dd") }) : null;
+
+        var response = await SendAsync(
             HttpMethod.Post,
             $"api/households/{householdId}/occurrences/{occurrenceId}/bring-forward",
+            content,
             cancellationToken);
-
-        if (today is { } value)
-        {
-            request.Content = JsonContent.Create(new { today = value.ToString("yyyy-MM-dd") });
-        }
-
-        var response = await _http.SendAsync(request, cancellationToken);
         return response.IsSuccessStatusCode;
     }
 
@@ -844,12 +780,11 @@ public sealed class HemordnaApiClient
         Guid occurrenceId,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
+        var response = await SendAsync(
             HttpMethod.Post,
             $"api/households/{householdId}/occurrences/{occurrenceId}/undo-bring-forward",
+            null,
             cancellationToken);
-
-        var response = await _http.SendAsync(request, cancellationToken);
         return response.IsSuccessStatusCode;
     }
 
@@ -868,14 +803,11 @@ public sealed class HemordnaApiClient
         DateOnly? today = null,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
+        var response = await SendAsync(
             HttpMethod.Put,
             $"api/households/{householdId}/members/{memberId}/days-off/{date:yyyy-MM-dd}",
+            JsonContent.Create(new { mode, today = today?.ToString("yyyy-MM-dd") }),
             cancellationToken);
-        request.Content = JsonContent.Create(
-            new { mode, today = today?.ToString("yyyy-MM-dd") });
-
-        var response = await _http.SendAsync(request, cancellationToken);
 
         return response.IsSuccessStatusCode
             ? await response.Content.ReadFromJsonAsync<DayOffResponse>(cancellationToken)
@@ -890,12 +822,11 @@ public sealed class HemordnaApiClient
         DateOnly date,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
+        var response = await SendAsync(
             HttpMethod.Delete,
             $"api/households/{householdId}/members/{memberId}/days-off/{date:yyyy-MM-dd}",
+            null,
             cancellationToken);
-
-        var response = await _http.SendAsync(request, cancellationToken);
         return response.IsSuccessStatusCode;
     }
 
@@ -930,12 +861,11 @@ public sealed class HemordnaApiClient
         Guid occurrenceId,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
+        var response = await SendAsync(
             HttpMethod.Post,
             $"api/households/{householdId}/occurrences/{occurrenceId}/reopen",
+            null,
             cancellationToken);
-
-        var response = await _http.SendAsync(request, cancellationToken);
         return response.IsSuccessStatusCode;
     }
 
@@ -945,13 +875,11 @@ public sealed class HemordnaApiClient
         DateOnly newDate,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
+        var response = await SendAsync(
             HttpMethod.Post,
             $"api/households/{householdId}/occurrences/{occurrenceId}/defer",
+            JsonContent.Create(new { date = newDate.ToString("yyyy-MM-dd") }),
             cancellationToken);
-        request.Content = JsonContent.Create(new { date = newDate.ToString("yyyy-MM-dd") });
-
-        var response = await _http.SendAsync(request, cancellationToken);
         return response.IsSuccessStatusCode;
     }
 
@@ -968,14 +896,11 @@ public sealed class HemordnaApiClient
         string? effortCeiling = null,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
+        var response = await SendAsync(
             HttpMethod.Put,
             $"api/households/{householdId}/members/{memberId}/availability",
+            JsonContent.Create(new { date = date.ToString("yyyy-MM-dd"), availableMinutes, effortCeiling }),
             cancellationToken);
-        request.Content = JsonContent.Create(
-            new { date = date.ToString("yyyy-MM-dd"), availableMinutes, effortCeiling });
-
-        var response = await _http.SendAsync(request, cancellationToken);
         return response.IsSuccessStatusCode;
     }
 
@@ -986,13 +911,11 @@ public sealed class HemordnaApiClient
         WeeklyTimeBudgetContract weeklyTimeBudget,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
+        var response = await SendAsync(
             HttpMethod.Put,
             $"api/households/{householdId}/members/{memberId}/weekly-budget",
+            JsonContent.Create(weeklyTimeBudget),
             cancellationToken);
-        request.Content = JsonContent.Create(weeklyTimeBudget);
-
-        var response = await _http.SendAsync(request, cancellationToken);
         return response.IsSuccessStatusCode;
     }
 
@@ -1004,13 +927,11 @@ public sealed class HemordnaApiClient
         WeeklyEffortCeilingContract weeklyEffortCeiling,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
+        var response = await SendAsync(
             HttpMethod.Put,
             $"api/households/{householdId}/members/{memberId}/effort-ceiling",
+            JsonContent.Create(weeklyEffortCeiling),
             cancellationToken);
-        request.Content = JsonContent.Create(weeklyEffortCeiling);
-
-        var response = await _http.SendAsync(request, cancellationToken);
         return response.IsSuccessStatusCode;
     }
 
@@ -1049,11 +970,8 @@ public sealed class HemordnaApiClient
         bool showTimeLevel,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
-            HttpMethod.Put, $"api/households/{householdId}/members/{memberId}/preferences", cancellationToken);
-        request.Content = JsonContent.Create(new { presentation, motivation, showTimeLevel });
+        var response = await SendAsync(HttpMethod.Put, $"api/households/{householdId}/members/{memberId}/preferences", JsonContent.Create(new { presentation, motivation, showTimeLevel }), cancellationToken);
 
-        var response = await _http.SendAsync(request, cancellationToken);
         return response.IsSuccessStatusCode;
     }
 
@@ -1105,13 +1023,12 @@ public sealed class HemordnaApiClient
         IReadOnlyCollection<Guid>? memberIds = null,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
-            HttpMethod.Post, $"api/households/{householdId}/reminders", cancellationToken);
-        request.Content = JsonContent.Create(
-            new CreateReminderRequest(
-                title, location, date, timeOfDay, travelMinutes, visibility, audience, memberIds));
-
-        var response = await _http.SendAsync(request, cancellationToken);
+        var response = await SendAsync(
+            HttpMethod.Post,
+            $"api/households/{householdId}/reminders",
+            JsonContent.Create(new CreateReminderRequest(
+                title, location, date, timeOfDay, travelMinutes, visibility, audience, memberIds)),
+            cancellationToken);
 
         return response.IsSuccessStatusCode
             ? await response.Content.ReadFromJsonAsync<ReminderResponse>(cancellationToken)
@@ -1124,11 +1041,7 @@ public sealed class HemordnaApiClient
         string title,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
-            HttpMethod.Put, $"api/households/{householdId}/reminders/{reminderId}/title", cancellationToken);
-        request.Content = JsonContent.Create(new ChangeReminderTitleRequest(title));
-
-        var response = await _http.SendAsync(request, cancellationToken);
+        var response = await SendAsync(HttpMethod.Put, $"api/households/{householdId}/reminders/{reminderId}/title", JsonContent.Create(new ChangeReminderTitleRequest(title)), cancellationToken);
 
         return response.IsSuccessStatusCode
             ? await response.Content.ReadFromJsonAsync<ReminderResponse>(cancellationToken)
@@ -1142,11 +1055,7 @@ public sealed class HemordnaApiClient
         string? location,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
-            HttpMethod.Put, $"api/households/{householdId}/reminders/{reminderId}/location", cancellationToken);
-        request.Content = JsonContent.Create(new ChangeReminderLocationRequest(location));
-
-        var response = await _http.SendAsync(request, cancellationToken);
+        var response = await SendAsync(HttpMethod.Put, $"api/households/{householdId}/reminders/{reminderId}/location", JsonContent.Create(new ChangeReminderLocationRequest(location)), cancellationToken);
 
         return response.IsSuccessStatusCode
             ? await response.Content.ReadFromJsonAsync<ReminderResponse>(cancellationToken)
@@ -1161,11 +1070,7 @@ public sealed class HemordnaApiClient
         string visibility,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
-            HttpMethod.Put, $"api/households/{householdId}/reminders/{reminderId}/visibility", cancellationToken);
-        request.Content = JsonContent.Create(new SetReminderVisibilityRequest(visibility));
-
-        var response = await _http.SendAsync(request, cancellationToken);
+        var response = await SendAsync(HttpMethod.Put, $"api/households/{householdId}/reminders/{reminderId}/visibility", JsonContent.Create(new SetReminderVisibilityRequest(visibility)), cancellationToken);
 
         return response.IsSuccessStatusCode
             ? await response.Content.ReadFromJsonAsync<ReminderResponse>(cancellationToken)
@@ -1184,11 +1089,7 @@ public sealed class HemordnaApiClient
         IReadOnlyCollection<Guid> memberIds,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
-            HttpMethod.Put, $"api/households/{householdId}/reminders/{reminderId}/audience", cancellationToken);
-        request.Content = JsonContent.Create(new SetReminderAudienceRequest(audience, memberIds));
-
-        var response = await _http.SendAsync(request, cancellationToken);
+        var response = await SendAsync(HttpMethod.Put, $"api/households/{householdId}/reminders/{reminderId}/audience", JsonContent.Create(new SetReminderAudienceRequest(audience, memberIds)), cancellationToken);
 
         return response.IsSuccessStatusCode
             ? await response.Content.ReadFromJsonAsync<ReminderResponse>(cancellationToken)
@@ -1203,11 +1104,7 @@ public sealed class HemordnaApiClient
         TimeOnly? timeOfDay,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
-            HttpMethod.Put, $"api/households/{householdId}/reminders/{reminderId}/move", cancellationToken);
-        request.Content = JsonContent.Create(new MoveReminderRequest(date, timeOfDay));
-
-        var response = await _http.SendAsync(request, cancellationToken);
+        var response = await SendAsync(HttpMethod.Put, $"api/households/{householdId}/reminders/{reminderId}/move", JsonContent.Create(new MoveReminderRequest(date, timeOfDay)), cancellationToken);
 
         return response.IsSuccessStatusCode
             ? await response.Content.ReadFromJsonAsync<ReminderResponse>(cancellationToken)
@@ -1221,11 +1118,7 @@ public sealed class HemordnaApiClient
         int? travelMinutes,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
-            HttpMethod.Put, $"api/households/{householdId}/reminders/{reminderId}/travel-minutes", cancellationToken);
-        request.Content = JsonContent.Create(new SetReminderTravelMinutesRequest(travelMinutes));
-
-        var response = await _http.SendAsync(request, cancellationToken);
+        var response = await SendAsync(HttpMethod.Put, $"api/households/{householdId}/reminders/{reminderId}/travel-minutes", JsonContent.Create(new SetReminderTravelMinutesRequest(travelMinutes)), cancellationToken);
 
         return response.IsSuccessStatusCode
             ? await response.Content.ReadFromJsonAsync<ReminderResponse>(cancellationToken)
@@ -1238,10 +1131,7 @@ public sealed class HemordnaApiClient
         Guid reminderId,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
-            HttpMethod.Post, $"api/households/{householdId}/reminders/{reminderId}/cancel", cancellationToken);
-
-        var response = await _http.SendAsync(request, cancellationToken);
+        var response = await SendAsync(HttpMethod.Post, $"api/households/{householdId}/reminders/{reminderId}/cancel", null, cancellationToken);
 
         return response.IsSuccessStatusCode
             ? await response.Content.ReadFromJsonAsync<ReminderResponse>(cancellationToken)
@@ -1255,10 +1145,7 @@ public sealed class HemordnaApiClient
         Guid reminderId,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
-            HttpMethod.Post, $"api/households/{householdId}/reminders/{reminderId}/check-off", cancellationToken);
-
-        var response = await _http.SendAsync(request, cancellationToken);
+        var response = await SendAsync(HttpMethod.Post, $"api/households/{householdId}/reminders/{reminderId}/check-off", null, cancellationToken);
 
         return response.IsSuccessStatusCode
             ? await response.Content.ReadFromJsonAsync<ReminderResponse>(cancellationToken)
@@ -1272,10 +1159,7 @@ public sealed class HemordnaApiClient
         Guid reminderId,
         CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
-            HttpMethod.Post, $"api/households/{householdId}/reminders/{reminderId}/restore", cancellationToken);
-
-        var response = await _http.SendAsync(request, cancellationToken);
+        var response = await SendAsync(HttpMethod.Post, $"api/households/{householdId}/reminders/{reminderId}/restore", null, cancellationToken);
 
         return response.IsSuccessStatusCode
             ? await response.Content.ReadFromJsonAsync<ReminderResponse>(cancellationToken)
@@ -1296,11 +1180,8 @@ public sealed class HemordnaApiClient
     public async Task<bool> SubscribeToPushAsync(
         Guid householdId, string endpoint, string p256dh, string auth, CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
-            HttpMethod.Post, $"api/households/{householdId}/push/subscribe", cancellationToken);
-        request.Content = JsonContent.Create(new SubscribeToPushRequest(endpoint, p256dh, auth));
+        var response = await SendAsync(HttpMethod.Post, $"api/households/{householdId}/push/subscribe", JsonContent.Create(new SubscribeToPushRequest(endpoint, p256dh, auth)), cancellationToken);
 
-        var response = await _http.SendAsync(request, cancellationToken);
         return response.IsSuccessStatusCode;
     }
 
@@ -1308,11 +1189,8 @@ public sealed class HemordnaApiClient
     public async Task<bool> UnsubscribeFromPushAsync(
         Guid householdId, string endpoint, CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
-            HttpMethod.Post, $"api/households/{householdId}/push/unsubscribe", cancellationToken);
-        request.Content = JsonContent.Create(new UnsubscribeFromPushRequest(endpoint));
+        var response = await SendAsync(HttpMethod.Post, $"api/households/{householdId}/push/unsubscribe", JsonContent.Create(new UnsubscribeFromPushRequest(endpoint)), cancellationToken);
 
-        var response = await _http.SendAsync(request, cancellationToken);
         return response.IsSuccessStatusCode;
     }
 
@@ -1320,10 +1198,7 @@ public sealed class HemordnaApiClient
     /// Returns how many actually received it, or <c>null</c> on failure.</summary>
     public async Task<int?> SendTestPushAsync(Guid householdId, CancellationToken cancellationToken = default)
     {
-        var request = await AuthorizedAsync(
-            HttpMethod.Post, $"api/households/{householdId}/push/test", cancellationToken);
-
-        var response = await _http.SendAsync(request, cancellationToken);
+        var response = await SendAsync(HttpMethod.Post, $"api/households/{householdId}/push/test", null, cancellationToken);
 
         return response.IsSuccessStatusCode
             ? (await response.Content.ReadFromJsonAsync<SendTestPushResponse>(cancellationToken))?.Sent
@@ -1332,9 +1207,7 @@ public sealed class HemordnaApiClient
 
     private async Task<T?> GetAsync<T>(string path, CancellationToken cancellationToken)
     {
-        var request = await AuthorizedAsync(HttpMethod.Get, path, cancellationToken);
-
-        var response = await _http.SendAsync(request, cancellationToken);
+        var response = await SendAsync(HttpMethod.Get, path, null, cancellationToken);
 
         // 404 is a legitimate answer here, not a failure: the caller asked for something
         // that does not exist, or that they may not see.
@@ -1348,19 +1221,172 @@ public sealed class HemordnaApiClient
         return await response.Content.ReadFromJsonAsync<T>(cancellationToken);
     }
 
-    private async Task<HttpRequestMessage> AuthorizedAsync(
-        HttpMethod method,
-        string path,
-        CancellationToken cancellationToken)
+    /// <summary>
+    /// Sends an authorized request, retrying exactly once on a 401 - see
+    /// <see cref="RefreshAccessTokenAsync"/>'s remarks for why the retry is preceded by a
+    /// refresh rather than a bare resend, and why there is never a second one. Every call site
+    /// in this class goes through here instead of the underlying <see cref="HttpClient"/>
+    /// directly, so this is the one place that owns that policy.
+    /// </summary>
+    private async Task<HttpResponseMessage> SendAsync(
+        HttpMethod method, string path, HttpContent? content, CancellationToken cancellationToken)
+    {
+        // Captured before AuthorizedAsync can change it: whether this call believed it already
+        // had a working session going in - see the remarks below on why that, not merely
+        // "this retry also failed", is what decides whether SignedOutUnexpectedly fires.
+        var wasSignedIn = _tokens.AccessToken is not null;
+
+        var request = await AuthorizedAsync(method, path, cancellationToken);
+        request.Content = content;
+        var response = await _http.SendAsync(request, cancellationToken);
+
+        if (response.StatusCode != HttpStatusCode.Unauthorized)
+        {
+            return response;
+        }
+
+        response.Dispose();
+
+        // Unconditional, not "only if we had no token yet": the token AuthorizedAsync attached
+        // above is the one that just got rejected, so it must not be reused for the retry
+        // regardless of why EnsureAccessTokenAsync thought it still looked usable.
+        await RefreshAccessTokenAsync(cancellationToken);
+
+        var retryRequest = Authorized(method, path);
+        retryRequest.Content = content;
+        var retryResponse = await _http.SendAsync(retryRequest, cancellationToken);
+
+        if (retryResponse.StatusCode == HttpStatusCode.Unauthorized)
+        {
+            // The refresh token itself is unusable - missing, expired, revoked, or already
+            // consumed by someone/something else. Nothing left to retry: clear both tokens.
+            await _tokens.ClearAsync();
+
+            // Only announce a forced sign-out when this call believed it was already signed in
+            // (an access token was cached before it started). Without that check, the very
+            // first request of a page load that has no refresh token at all - someone who was
+            // never signed in this session, or whose refresh token is already dead - would ALSO
+            // fire this event, even though HemordnaSession.LoadAsync's own ordinary flow already
+            // resolves that case correctly on its own (Me stays null, no page ever thought it
+            // was showing a signed-in user to begin with).
+            if (wasSignedIn)
+            {
+                SignedOutUnexpectedly?.Invoke();
+            }
+        }
+
+        return retryResponse;
+    }
+
+    /// <summary>
+    /// Ensures there is a currently-usable access token before <see cref="SendAsync"/> attaches
+    /// one, refreshing it from the persisted refresh token first if there is none in memory yet -
+    /// the case right after a page load, since the access token itself is never persisted (see
+    /// TokenStore's remarks). This is what saves a freshly loaded page's very first request the
+    /// wasted round trip of going out unauthenticated, getting a 401, and only THEN refreshing on
+    /// <see cref="SendAsync"/>'s own retry - both paths end up authenticated before
+    /// HemordnaSession.LoadAsync ever sees an answer (that retry is what actually prevents the
+    /// flash of "signed out": IsLoaded only flips once the whole call, retry included, has
+    /// settled), but going in with a token already in hand is one less network trip and gets the
+    /// page to "signed in" sooner. Internal (not private): <see cref="HouseholdRealtimeClient"/>
+    /// calls this too, so a (re)connection - including SignalR's own automatic reconnect -
+    /// always hands the hub a fresh, still-valid token instead of one that already expired
+    /// (SignalR has no request/retry cycle of its own to fall back on the way SendAsync does).
+    /// </summary>
+    internal Task<bool> EnsureAccessTokenAsync(CancellationToken cancellationToken)
+        => _tokens.AccessToken is not null ? Task.FromResult(true) : RefreshAccessTokenAsync(cancellationToken);
+
+    /// <summary>Single-flight in-progress refresh, mirroring <see cref="HemordnaSession"/>'s own
+    /// <c>_loading</c> field: every caller that arrives while one is already running awaits the
+    /// SAME task instead of starting a second one.</summary>
+    private Task<bool>? _refreshTask;
+
+    /// <summary>
+    /// Exchanges the persisted refresh token for a new access token and a new refresh token
+    /// (rotation - see docs/ARCHITECTURE.md "Beslut: Refresh-token med rotation"), and stores
+    /// both. Returns whether it worked.
+    /// </summary>
+    /// <remarks>
+    /// This is the single most important piece of this whole change to get right: with
+    /// rotation, presenting the same refresh token twice is treated as theft and revokes the
+    /// entire chain - logging the user out for real. Four API calls that each independently
+    /// notice a missing/expired access token and each call this method directly would each
+    /// present the SAME refresh token at once, and only one could ever succeed. The
+    /// <c>_refreshTask ??=</c> below is what stops that: because Blazor WebAssembly runs on one
+    /// thread with cooperative async scheduling, the check-and-assign happens synchronously
+    /// with respect to every other caller reaching this same method before any of them can
+    /// observe a half-updated state - the first caller's assignment is visible to the second
+    /// caller before the second caller's own call has a chance to run ahead of it. All of them
+    /// therefore await the exact same in-flight refresh instead of racing to start their own.
+    /// See <c>HemordnaApiClientTests</c> for a test that fires several callers at once and
+    /// counts how many actual HTTP calls to <c>/api/auth/refresh</c> resulted.
+    /// </remarks>
+    private Task<bool> RefreshAccessTokenAsync(CancellationToken cancellationToken)
+        => _refreshTask ??= DoRefreshAccessTokenAsync(cancellationToken);
+
+    private async Task<bool> DoRefreshAccessTokenAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var refreshToken = await _tokens.GetRefreshTokenAsync();
+
+            if (refreshToken is null)
+            {
+                return false;
+            }
+
+            var response = await _http.PostAsJsonAsync(
+                "api/auth/refresh", new { refreshToken }, cancellationToken);
+
+            if (!response.IsSuccessStatusCode)
+            {
+                await _tokens.ClearAsync();
+                return false;
+            }
+
+            var tokens = await response.Content.ReadFromJsonAsync<AccessTokenResponse>(cancellationToken);
+
+            if (tokens?.RefreshToken is null)
+            {
+                await _tokens.ClearAsync();
+                return false;
+            }
+
+            _tokens.SetAccessToken(tokens.Token);
+            await _tokens.SetRefreshTokenAsync(tokens.RefreshToken);
+            return true;
+        }
+        finally
+        {
+            // Lets a LATER refresh (the access token this one just minted eventually expiring
+            // too) start fresh - callers already awaiting THIS task still get its result
+            // regardless, since resetting the field only affects who a FUTURE call reuses.
+            _refreshTask = null;
+        }
+    }
+
+    /// <summary>Builds a request carrying whatever access token is currently cached, without
+    /// trying to refresh it first - see <see cref="AuthorizedAsync"/> for the version that
+    /// does, and <see cref="SendAsync"/>'s retry for why the retry deliberately uses this one
+    /// instead (the refresh already happened by then; a second check would only risk starting
+    /// a redundant one).</summary>
+    private HttpRequestMessage Authorized(HttpMethod method, string path)
     {
         var request = new HttpRequestMessage(method, path);
 
-        if (await _tokens.GetAsync() is { } token)
+        if (_tokens.AccessToken is { } token)
         {
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         }
 
         return request;
+    }
+
+    private async Task<HttpRequestMessage> AuthorizedAsync(
+        HttpMethod method, string path, CancellationToken cancellationToken)
+    {
+        await EnsureAccessTokenAsync(cancellationToken);
+        return Authorized(method, path);
     }
 
     private static async Task<IReadOnlyList<string>> ReadProblemMessagesAsync(

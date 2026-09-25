@@ -10,7 +10,11 @@ public sealed class HemordnaSession
 {
     private readonly HemordnaApiClient _api;
 
-    public HemordnaSession(HemordnaApiClient api) => _api = api;
+    public HemordnaSession(HemordnaApiClient api)
+    {
+        _api = api;
+        _api.SignedOutUnexpectedly += HandleSignedOutUnexpectedly;
+    }
 
     public MeResponse? Me { get; private set; }
 
@@ -65,6 +69,22 @@ public sealed class HemordnaSession
     public async Task SignOutAsync()
     {
         await _api.SignOutAsync();
+        Me = null;
+        _loading = null;
+        IsLoaded = true;
+        Changed?.Invoke();
+    }
+
+    /// <summary>
+    /// A request came back unauthorized even after HemordnaApiClient refreshed and retried once -
+    /// the refresh token itself was unusable, so both tokens are already cleared by the time this
+    /// fires. Mirrors the end of <see cref="SignOutAsync"/> without calling back into
+    /// <see cref="HemordnaApiClient"/> a second time (nothing left there to clear or revoke).
+    /// Pages already re-check <see cref="IsSignedIn"/> on <see cref="Changed"/> and redirect to
+    /// sign-in themselves - this raises no navigation of its own.
+    /// </summary>
+    private void HandleSignedOutUnexpectedly()
+    {
         Me = null;
         _loading = null;
         IsLoaded = true;
