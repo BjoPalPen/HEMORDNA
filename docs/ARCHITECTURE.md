@@ -4178,10 +4178,42 @@ till påminnelser.
 `TravelMinutes`, `Location` eller `CreatedAt`. En avbockad påminnelse visas för andra som vilken
 tid som helst, utan markering; en `Cancelled` visas inte alls, som innan denna revision.
 
-**Steg 2 och 3 är kända, medvetet inte byggda i denna revision.** Steg 2 ("lägg till i mina
-påminnelser" på en delad tid) och steg 3 (en påminnelse för en medlem utan eget konto) fanns med
-i uppdraget från start som separata, senare steg - inte glömda, inte avslagna, bara inte del av
-detta.
+**Steg 2: mottagaren trycker, inte avsändaren.** En knapp på Veckas "Andras tider den här
+veckan" ("Lägg till i mina påminnelser", bara på `Household`-rader - de enda med en titel att
+kopiera) skapar en ny, egen påminnelse hos den som klickar, inte en ändring av ägarens egen.
+Ingen ny behörighetsregel behövdes: att kunna kopiera det man redan får se kräver inget
+hushålls-scope utöver det `GetHouseholdReminders` redan ger. `CreateReminderAsync` tog redan
+titel, datum, klockslag och nivå, så det här är rent klientarbete (`Vecka.razor`,
+`Hemordna.Client.Support.OwnReminderDuplicate`) - ingen ny endpoint, use case, migrering eller
+domänändring.
+
+**Kopian är fristående, inte länkad - med flit.** Flyttar ägaren sin egen tid rör det inte
+kopian. En länkad kopia (som följer originalet vid en flytt) är början på mötesserier och
+deltagare, vilket §12 utesluter; att hålla kopian som en helt vanlig, egen `Private`-påminnelse
+(bara titel, datum, klockslag - aldrig plats eller restid, som mottagaren sätter själv på Min
+dag efteråt) undviker den gränsen helt i stället för att stänga den med en regel att komma ihåg.
+
+**Duplikatspärren är presentationell, med flit.** `OwnReminderDuplicate.Exists` jämför bara
+titel, datum och klockslag mot mottagarens egna påminnelser för att dölja knappen efter ett
+lyckat tillägg. Det finns ingen server-sidan unikhetsregel bakom den, och det behövs inte: två
+likadana påminnelser hos samma medlem är inget domänen måste förhindra, bara något UI:t inte ska
+erbjuda en genväg till.
+
+**En bredare E2E-assertion smalnades av, med skälet kvar i testet.**
+`A_household_reminder_shows_title_and_time_but_never_the_location_or_action_buttons` hävdade
+tidigare `section.Locator("button")` med count 0 - inga knappar alls på andras rad. Steg 2 lägger
+till just en sådan knapp på en `Household`-rad, så den bredare assertionen stämmer inte längre
+bokstavligt - men principen den skyddade står kvar: knappen gör ingenting med ägarens egen
+påminnelse, den skapar en ny hos mottagaren. Assertionen smalnades därför av till de tre
+ägar-åtgärderna (Bocka av/Ändra/Avboka), och ett eget test
+(`A_household_reminder_row_has_no_action_for_another_member_besides_adding_it_to_their_own`)
+bevisar i stället att raden inte har någon ANNAN åtgärd än den nya knappen - så avsmalningen är
+dokumenterad som en medveten precisering, inte en tyst försvagning för att få igenom en funktion.
+
+**Steg 3 är känt, medvetet inte byggt.** Steg 2 ("lägg till i mina påminnelser" på en delad tid,
+ovan) byggdes i en senare revision av den här posten. Steg 3 (en påminnelse för en medlem utan
+eget konto) fanns med i uppdraget från start som ett separat, ännu senare steg - inte glömt,
+inte avslaget, bara inte del av detta.
 
 | Fråga | Varför den väntar |
 |---|---|

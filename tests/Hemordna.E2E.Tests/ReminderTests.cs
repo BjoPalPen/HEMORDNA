@@ -386,11 +386,122 @@ public class ReminderTests
         await Assertions.Expect(section).ToContainTextAsync("14:00");
         await Assertions.Expect(bjornPage.GetByText("Skolan")).Not.ToBeVisibleAsync();
 
-        // Bara text - ingen knapp av något slag på Annas rad, för Björn.
+        // Historiskt (steg 1) hävdade detta test "section.Locator("button")" med count 0 - inga
+        // knappar av något slag på Annas rad. Steg 2 (docs/PRODUCT.md §11) lägger till "Lägg till
+        // i mina påminnelser" på just den här sortens rad (Household, med titel), så den bredare
+        // assertionen stämmer inte längre bokstavligt. Skillnaden är avsiktlig, inte en
+        // försvagning: knappen gör ingenting med ANNAS påminnelse - den skapar en egen, fristående
+        // kopia hos den som klickar (docs/ARCHITECTURE.md, Beslut: Synlighet för påminnelser).
+        // Ägarens tid är fortfarande orörbar för alla utom ägaren, så assertionen smalnas av till
+        // just de tre ägar-åtgärderna. Att raden inte har NÅGON ANNAN åtgärd än den nya knappen
+        // täcks separat av A_household_reminder_row_has_no_action_for_another_member_besides_adding_it_to_their_own.
         await Assertions.Expect(section.GetByRole(AriaRole.Button, new() { Name = "Bocka av" })).ToHaveCountAsync(0);
         await Assertions.Expect(section.GetByRole(AriaRole.Button, new() { Name = "Ändra" })).ToHaveCountAsync(0);
         await Assertions.Expect(section.GetByRole(AriaRole.Button, new() { Name = "Avboka" })).ToHaveCountAsync(0);
-        await Assertions.Expect(section.Locator("button")).ToHaveCountAsync(0);
+    }
+
+    /// <summary>Komplement till testet ovan (regel 5, docs/PRODUCT.md §11, steg 2) - den enda
+    /// klickbara åtgärden på en annans delade rad är "Lägg till i mina påminnelser". Ingenting
+    /// annat på raden är klickbart, inte bara de tre namngivna ägar-åtgärderna.</summary>
+    [Fact]
+    public async Task A_household_reminder_row_has_no_action_for_another_member_besides_adding_it_to_their_own()
+    {
+        var (annaPage, bjornPage, _, _, _) = await ArrangeTwoMembersAsync();
+        var today = AppDate.Today;
+
+        await CreateReminderViaUiAsync(
+            annaPage, "Föräldramöte", today, "14:00", location: "Skolan",
+            visibilityButtonLabel: "Andra ser vad det är");
+
+        await bjornPage.GotoAsync("/vecka");
+        var section = bjornPage.Locator("ul[aria-label=\"Andras tider den här veckan\"]");
+        var row = section.Locator("li", new() { HasText = "Föräldramöte" });
+
+        await Assertions.Expect(row.Locator("button")).ToHaveCountAsync(1);
+        await Assertions.Expect(
+            row.GetByRole(AriaRole.Button, new() { Name = "Lägg till i mina påminnelser" })).ToBeVisibleAsync();
+    }
+
+    /// <summary>Regel 1 (docs/PRODUCT.md §11, steg 2) - en BusyOnly-rad har ingen titel att
+    /// kopiera. "Anna har en tid" är inget man kan lägga till hos sig själv, så knappen visas
+    /// inte alls på en sådan rad.</summary>
+    [Fact]
+    public async Task A_busy_only_reminder_row_has_no_add_to_my_reminders_button()
+    {
+        var (annaPage, bjornPage, _, _, _) = await ArrangeTwoMembersAsync();
+        var today = AppDate.Today;
+
+        await CreateReminderViaUiAsync(
+            annaPage, "Tandläkare", today, "10:00", visibilityButtonLabel: "Andra ser att jag har en tid");
+
+        await bjornPage.GotoAsync("/vecka");
+        var section = bjornPage.Locator("ul[aria-label=\"Andras tider den här veckan\"]");
+        await Assertions.Expect(section).ToContainTextAsync("har en tid");
+        await Assertions.Expect(
+            section.GetByRole(AriaRole.Button, new() { Name = "Lägg till i mina påminnelser" })).ToHaveCountAsync(0);
+    }
+
+    /// <summary>Björns egentliga behov (steg 2, docs/PRODUCT.md §11): två personer till samma sak
+    /// behöver var sin egen notis, eftersom notiser går per medlem. Mottagaren trycker, inte
+    /// avsändaren - knappen skapar en egen, fristående kopia hos den som klickar, utan att röra
+    /// ägarens tid alls (docs/ARCHITECTURE.md, Beslut: Synlighet för påminnelser). Kopian bär bara
+    /// titel, datum och klockslag (regel 2) - aldrig plats eller restid.</summary>
+    [Fact]
+    public async Task Pressing_add_to_my_reminders_creates_an_independent_private_copy_for_the_pressing_member()
+    {
+        var (annaPage, bjornPage, _, _, _) = await ArrangeTwoMembersAsync();
+        var today = AppDate.Today;
+
+        await CreateReminderViaUiAsync(
+            annaPage, "Föräldramöte", today, "14:00", location: "Skolan", travelMinutes: 20,
+            visibilityButtonLabel: "Andra ser vad det är");
+
+        await bjornPage.GotoAsync("/vecka");
+        var othersSection = bjornPage.Locator("ul[aria-label=\"Andras tider den här veckan\"]");
+        var othersRow = othersSection.Locator("li", new() { HasText = "Föräldramöte" });
+        await othersRow.GetByRole(AriaRole.Button, new() { Name = "Lägg till i mina påminnelser" }).ClickAsync();
+
+        // Kvittot ÄR raden som dyker upp (regel 3) - ingen toast, ingen modal, ingen
+        // bekräftelsedialog att vänta på här.
+        var ownSection = bjornPage.Locator("ul[aria-label=\"Dina påminnelser den här veckan\"]");
+        await Assertions.Expect(ownSection.GetByText("Föräldramöte")).ToBeVisibleAsync();
+        await Assertions.Expect(ownSection).ToContainTextAsync("14:00");
+
+        // Duplikatspärren (regel 4) - knappen är borta på Annas rad, ett andra tryck kan alltså
+        // inte ge två kopior.
+        await Assertions.Expect(
+            othersSection.Locator("li", new() { HasText = "Föräldramöte" })
+                .GetByRole(AriaRole.Button, new() { Name = "Lägg till i mina påminnelser" })).ToHaveCountAsync(0);
+
+        // Kopian syns också på Björns Min dag, med hans EGNA ägar-åtgärder - och utan Annas plats
+        // eller restid, som aldrig följde med (regel 2).
+        await bjornPage.GotoAsync("/");
+        var bjornReminders = bjornPage.Locator("ul[aria-label=\"Påminnelser\"]");
+        var bjornRow = bjornReminders.Locator("li", new() { HasText = "Föräldramöte" });
+        await Assertions.Expect(bjornRow).ToBeVisibleAsync();
+        await Assertions.Expect(bjornRow).ToContainTextAsync("14:00");
+        await Assertions.Expect(bjornRow.GetByText("Skolan")).ToHaveCountAsync(0);
+        await Assertions.Expect(bjornRow.GetByText("Gå")).ToHaveCountAsync(0);
+        await Assertions.Expect(bjornRow.GetByRole(AriaRole.Button, new() { Name = "Bocka av" })).ToBeVisibleAsync();
+        await Assertions.Expect(bjornRow.GetByRole(AriaRole.Button, new() { Name = "Ändra" })).ToBeVisibleAsync();
+        await Assertions.Expect(bjornRow.GetByRole(AriaRole.Button, new() { Name = "Avboka" })).ToBeVisibleAsync();
+
+        // Annas egen påminnelse är oförändrad - hon ser fortfarande sin, med sin plats och sin
+        // restid, och Björns tillägg har inte rört den.
+        await annaPage.ReloadAsync();
+        var annaReminders = annaPage.Locator("ul[aria-label=\"Påminnelser\"]");
+        var annaRow = annaReminders.Locator("li", new() { HasText = "Föräldramöte" });
+        await Assertions.Expect(annaRow).ToContainTextAsync("Skolan");
+        await Assertions.Expect(annaRow).ToContainTextAsync("Gå 13:40");
+
+        // Björn kan bocka av sin kopia utan att något händer med Annas.
+        await bjornRow.GetByRole(AriaRole.Button, new() { Name = "Bocka av" }).ClickAsync();
+        await Assertions.Expect(bjornPage.Locator("li.task-done", new() { HasText = "Föräldramöte" })).ToBeVisibleAsync();
+
+        await annaPage.ReloadAsync();
+        await Assertions.Expect(annaPage.Locator("li.task-done", new() { HasText = "Föräldramöte" })).ToHaveCountAsync(0);
+        await Assertions.Expect(
+            annaPage.Locator("ul[aria-label=\"Påminnelser\"]").GetByText("Föräldramöte")).ToBeVisibleAsync();
     }
 
     /// <summary>Sharing a reminder changes nothing about how the OWNER sees it - Min dag keeps its
