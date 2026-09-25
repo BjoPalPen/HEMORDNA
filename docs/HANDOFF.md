@@ -16,13 +16,11 @@ Lägesbild per 2026-09-25 (kväll). Arbetssätt: [../CLAUDE.md](../CLAUDE.md).
   `OnPrepareResponse`, så varje klientroute saknade huvudet. Delad `SetNoCacheForAppShellFiles` på
   båda ställena nu. **`_framework/*` ska aldrig få `no-cache`** – eget testfall skyddar det.
 - **Synlighet för påminnelser** (PR #35). `ReminderVisibility` i ETT fält: `Private` (default),
-  `BusyOnly` (andra ser tiden, aldrig titeln), `Household` (titel och tid). Ägaren väljer i sheetet
-  på Min dag, andras tider syns på Vecka. **Platsen delas aldrig på någon nivå** – DTO:n för andras
-  tider har inget `Location`-fält alls. `Title` nollas i use casen, så regeln täcks av ett test.
-- **Lägg till i mina påminnelser** (PR #36). Mottagaren trycker på en delad rad i Vecka och får en
-  egen, FRISTÅENDE kopia. Flyttar ägaren sin tid flyttas inte kopian. **Steg 3 är känt, inte
-  byggt:** påminnelse för en medlem utan eget konto. Hela resonemanget för #35 och #36:
-  `Beslut: Synlighet för påminnelser` i [ARCHITECTURE.md](ARCHITECTURE.md).
+  `BusyOnly` (andra ser tiden, aldrig titeln), `Household` (titel och tid). **Platsen delas aldrig
+  på någon nivå** – DTO:n för andras tider har inget `Location`-fält alls, och `Title` nollas i use
+  casen. **#36:** mottagaren kan lägga till en delad tid som en egen, FRISTÅENDE kopia; flyttar
+  ägaren sin tid flyttas inte kopian. **Steg 3 är känt, inte byggt:** påminnelse för en medlem utan
+  eget konto. Resonemanget: `Beslut: Synlighet för påminnelser` i [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Köra och deploya
 
