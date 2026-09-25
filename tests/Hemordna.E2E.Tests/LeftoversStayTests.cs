@@ -32,7 +32,7 @@ public class LeftoversStayTests
         await bPage.GetByRole(AriaRole.Button, new() { Name = "Gå med i hushållet" }).ClickAsync();
         await bPage.Locator("h1", new() { HasText = "Bosse" }).WaitForAsync(new() { Timeout = 15_000 });
 
-        var aToken = await aPage.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        var aToken = await AccessTokenHelper.GetAsync(aPage);
         using var aHttp = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
         aHttp.DefaultRequestHeaders.Authorization = new("Bearer", aToken);
 
@@ -40,7 +40,7 @@ public class LeftoversStayTests
         var householdId = aMe.GetProperty("householdId").GetGuid();
         var aMemberId = aMe.GetProperty("memberId").GetGuid();
 
-        var bToken = await bPage.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        var bToken = await AccessTokenHelper.GetAsync(bPage);
         using var bHttp = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
         bHttp.DefaultRequestHeaders.Authorization = new("Bearer", bToken);
         var bMemberId = (await (await bHttp.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>())

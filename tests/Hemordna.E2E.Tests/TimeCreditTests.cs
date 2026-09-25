@@ -21,7 +21,7 @@ public class TimeCreditTests
     {
         await SignUpHelper.SignUpAsync(page, displayName);
 
-        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        var token = await AccessTokenHelper.GetAsync(page);
         var http = new HttpClient { BaseAddress = new Uri(apiUrl) };
         http.DefaultRequestHeaders.Authorization = new("Bearer", token);
 

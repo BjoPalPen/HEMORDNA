@@ -41,7 +41,7 @@ public class HushallTests
         // - verified against the API, the only place minutes still live. AdultFullTime is 35
         // min every day (245/week) - a 7:13 ratio against Retired's 65/day, so the two roles'
         // combined default is a 35%/65% split - see docs/ARCHITECTURE.md "65/35 target split".
-        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        var token = await AccessTokenHelper.GetAsync(page);
         using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
         http.DefaultRequestHeaders.Authorization = new("Bearer", token);
         var me = await (await http.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
@@ -72,7 +72,7 @@ public class HushallTests
         // or the check below can race the still-in-flight request.
         await Assertions.Expect(retiredButton).ToBeEnabledAsync();
 
-        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        var token = await AccessTokenHelper.GetAsync(page);
         using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
         http.DefaultRequestHeaders.Authorization = new("Bearer", token);
         var me = await (await http.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
@@ -117,7 +117,7 @@ public class HushallTests
         await sheet.GetByLabel("Söndag", new() { Exact = true }).FillAsync("90");
         await sheet.GetByRole(AriaRole.Button, new() { Name = "Spara" }).ClickAsync();
 
-        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        var token = await AccessTokenHelper.GetAsync(page);
         using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
         http.DefaultRequestHeaders.Authorization = new("Bearer", token);
         var me = await (await http.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
@@ -202,7 +202,7 @@ public class HushallTests
         await page.GotoAsync("/hushall");
         await HushallHelper.AddMemberWithoutAccountAsync(page, "Agda", "Vuxen, jobbar heltid");
 
-        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        var token = await AccessTokenHelper.GetAsync(page);
         using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
         http.DefaultRequestHeaders.Authorization = new("Bearer", token);
         var me = await (await http.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
@@ -254,7 +254,7 @@ public class HushallTests
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Henrik");
 
-        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        var token = await AccessTokenHelper.GetAsync(page);
 
         using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
         http.DefaultRequestHeaders.Authorization = new("Bearer", token);

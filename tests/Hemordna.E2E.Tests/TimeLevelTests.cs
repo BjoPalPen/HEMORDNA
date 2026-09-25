@@ -19,7 +19,7 @@ public class TimeLevelTests
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Yara");
 
-        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        var token = await AccessTokenHelper.GetAsync(page);
         using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
         http.DefaultRequestHeaders.Authorization = new("Bearer", token);
 
@@ -70,7 +70,7 @@ public class TimeLevelTests
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Nils");
 
-        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        var token = await AccessTokenHelper.GetAsync(page);
         using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
         http.DefaultRequestHeaders.Authorization = new("Bearer", token);
 
