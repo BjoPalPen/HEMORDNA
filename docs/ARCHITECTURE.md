@@ -4147,7 +4147,7 @@ oförändrade. Andras synliga tider går genom sin egen kedja: en ny repository-
 (`ListVisibleForOthersInRangeAsync`), en ny use case (`GetHouseholdReminders`) och en egen
 läsmodell (`HouseholdReminderView`/`HouseholdReminderResponse`) som bär exakt `Id`, `MemberId`,
 `Date`, `TimeOfDay`, `Title` - inget annat. Skälet är att `ReminderResponse` bär `Location` och
-`TravelMinutes`; en union med den (eller ett bredare typ med några fält gömda i UI:t) hade gjort
+`TravelMinutes`; en union med den (eller en bredare typ med några fält gömda i UI:t) hade gjort
 varje framtida fält på den DTO:n till en potentiell läcka till resten av hushållet den dag någon
 glömde tänka på det. En typ som aldrig fått ett fält kan inte läcka det. `Title` nollas i
 use casen (`GetHouseholdReminders`, inte i endpointen eller klienten) för allt utom `Household`,
