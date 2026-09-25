@@ -49,6 +49,8 @@ public sealed class HemordnaDbContext : IdentityDbContext<HemordnaUser, Identity
 
     public DbSet<Reminder> Reminders => Set<Reminder>();
 
+    public DbSet<ReminderShare> ReminderShares => Set<ReminderShare>();
+
     public DbSet<PushSubscription> PushSubscriptions => Set<PushSubscription>();
 
     public DbSet<SentReminderNotification> SentReminderNotifications => Set<SentReminderNotification>();
