@@ -248,7 +248,9 @@ internal static class AuthEndpoints
 
     private static async Task<IResult> ResetPasswordAsync(
         ResetPasswordRequest request,
-        UserManager<HemordnaUser> users)
+        UserManager<HemordnaUser> users,
+        RevokeAllRefreshTokensForUser revokeAllRefreshTokens,
+        CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(request.Email)
             || string.IsNullOrWhiteSpace(request.Token)
@@ -278,6 +280,11 @@ internal static class AuthEndpoints
                     .GroupBy(error => error.Code)
                     .ToDictionary(group => group.Key, group => group.Select(e => e.Description).ToArray()));
         }
+
+        // Reset-password is the flow used when someone believes the account has been accessed
+        // by somebody else - a refresh token that survives it would hand an attacker 60 more
+        // days despite the user having done the one thing they knew to do about it.
+        await revokeAllRefreshTokens.HandleAsync(user.Id, cancellationToken);
 
         return Results.Ok();
     }

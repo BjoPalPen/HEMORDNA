@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace Hemordna.E2E.Tests;
 
@@ -133,6 +134,39 @@ public class RefreshTokenTests
                 "/api/auth/refresh", new { refreshToken });
             Assert.Equal(HttpStatusCode.Unauthorized, refreshAfterChange.StatusCode);
         }
+    }
+
+    [Fact]
+    public async Task Password_reset_revokes_the_refresh_token()
+    {
+        // Reset-password (the forgotten-password flow, via an e-mailed link) is what someone
+        // uses when they believe the account has been accessed by somebody else - a refresh
+        // token issued before that must not still be usable afterwards, or the one thing the
+        // user knew to do about it would leave an attacker up to 60 more days on the account.
+        using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
+        var email = $"e2e-refresh-reset-{Guid.NewGuid():N}@example.com";
+        using var registered = await http.PostAsJsonAsync(
+            "/api/auth/register", new { email, password = Password, displayName = "Refresh" });
+        Assert.Equal(HttpStatusCode.Created, registered.StatusCode);
+        var refreshToken = (await registered.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("refreshToken").GetString()!;
+
+        using var requested = await http.PostAsJsonAsync("/api/auth/forgot-password", new { email });
+        Assert.Equal(HttpStatusCode.OK, requested.StatusCode);
+        var html = await http.GetStringAsync($"/api/auth/dev/last-email?email={Uri.EscapeDataString(email)}");
+        var link = new Uri(WebUtility.HtmlDecode(Regex.Match(html, "href=\"([^\"]+)\"").Groups[1].Value));
+        var query = System.Web.HttpUtility.ParseQueryString(link.Query);
+
+        using var reset = await http.PostAsJsonAsync("/api/auth/reset-password", new
+        {
+            email,
+            token = query["token"],
+            newPassword = "Refresh-Test-New-Password-2026!"
+        });
+        Assert.Equal(HttpStatusCode.OK, reset.StatusCode);
+
+        using var refreshAfterReset = await http.PostAsJsonAsync("/api/auth/refresh", new { refreshToken });
+        Assert.Equal(HttpStatusCode.Unauthorized, refreshAfterReset.StatusCode);
     }
 
     /// <summary>
