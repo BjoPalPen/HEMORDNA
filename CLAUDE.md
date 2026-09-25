@@ -146,6 +146,10 @@ inte testet.
   via E2E därför att E2E inte kan styra klockan. Smalt avsett – inga Blazor-beroenden, ingen
   bUnit eller annan komponentrenderare; behöver något en renderad komponent hör det hemma i
   `Hemordna.E2E.Tests` i stället.
+- `Hemordna.Api.Tests`: det API-värden själv gör med en request – cachehuvuden, pipeline-ordning,
+  fallback-routing. `WebApplicationFactory` med en temporär `UseWebRoot`; kräver ingen databas.
+  Smalt avsett: hör svaret ihop med affärsregler är det Application-testerna som gäller, och
+  behövs en riktig webbläsare hör det hemma i `Hemordna.E2E.Tests`.
 - Application-tester ska inte kräva en verklig PostgreSQL-instans utan starkt skäl.
 - Testa inte rena property getters/setters.
 - `DailyPlanner` ska testas med fasta datum och deterministisk ordning.
