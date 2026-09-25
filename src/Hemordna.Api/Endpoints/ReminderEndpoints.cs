@@ -32,6 +32,16 @@ namespace Hemordna.Api.Endpoints;
 /// potential leak to the rest of the household the moment nobody remembers to strip it back out
 /// at this boundary. A narrower, separate DTO cannot leak a field it was never given.
 /// </para>
+/// <para>
+/// Which rows <c>GET /household</c> even returns now depends on two things, not one: the
+/// reminder's <see cref="ReminderVisibility"/> (WHAT the household may see, unchanged) and its
+/// <c>Reminder.Audience</c> (WHO among them - a caller not named in a
+/// <c>ReminderAudience.Selected</c> reminder's shares never sees that row at all, same as if it
+/// were <see cref="ReminderVisibility.Private"/>). Both checks already happen inside
+/// <see cref="IReminderRepository.ListVisibleForOthersInRangeAsync"/>, so this endpoint and
+/// <see cref="GetHouseholdReminders"/> stay exactly as thin as before - see that method's own
+/// remarks for the fail-closed guarantee behind it.
+/// </para>
 /// </remarks>
 internal static class ReminderEndpoints
 {
@@ -67,6 +77,12 @@ internal static class ReminderEndpoints
             .Produces(StatusCodes.Status409Conflict);
 
         reminders.MapPut("/{reminderId:guid}/visibility", SetReminderVisibilityAsync)
+            .Produces<ReminderResponse>()
+            .Produces(StatusCodes.Status404NotFound)
+            .Produces(StatusCodes.Status409Conflict)
+            .ProducesValidationProblem();
+
+        reminders.MapPut("/{reminderId:guid}/audience", SetReminderAudienceAsync)
             .Produces<ReminderResponse>()
             .Produces(StatusCodes.Status404NotFound)
             .Produces(StatusCodes.Status409Conflict)
@@ -189,6 +205,8 @@ internal static class ReminderEndpoints
             request.TimeOfDay,
             request.TravelMinutes,
             request.Visibility,
+            request.Audience,
+            request.MemberIds,
             cancellationToken);
 
         return reminder is null
@@ -256,6 +274,30 @@ internal static class ReminderEndpoints
 
         var reminder = await changeReminderVisibility.HandleAsync(
             householdId, membership.MemberId, reminderId, visibility, cancellationToken);
+
+        return reminder is null ? Results.NotFound() : Results.Ok(ToResponse(reminder));
+    }
+
+    private static async Task<IResult> SetReminderAudienceAsync(
+        Guid householdId,
+        Guid reminderId,
+        HttpContext httpContext,
+        SetReminderAudienceRequest request,
+        SetReminderAudience setReminderAudience,
+        CancellationToken cancellationToken)
+    {
+        if (request.Audience is not { } audience)
+        {
+            return Results.ValidationProblem(new Dictionary<string, string[]>
+            {
+                [nameof(request.Audience)] = ["En mottagargrupp måste anges."]
+            });
+        }
+
+        var membership = httpContext.GetMembership();
+
+        var reminder = await setReminderAudience.HandleAsync(
+            householdId, membership.MemberId, reminderId, audience, request.MemberIds ?? [], cancellationToken);
 
         return reminder is null ? Results.NotFound() : Results.Ok(ToResponse(reminder));
     }
@@ -355,7 +397,9 @@ internal static class ReminderEndpoints
             reminder.TravelMinutes,
             reminder.Status,
             reminder.CreatedAt,
-            reminder.Visibility);
+            reminder.Visibility,
+            reminder.Audience,
+            [.. reminder.Shares.Select(share => share.MemberId)]);
 
     private static HouseholdReminderResponse ToHouseholdResponse(HouseholdReminderView view)
         => new(view.Id, view.MemberId, view.Date, view.TimeOfDay, view.Title);

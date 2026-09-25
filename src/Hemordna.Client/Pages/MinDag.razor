@@ -704,6 +704,40 @@ else
                     <span class="muted small">Platsen syns aldrig för andra.</span>
                 </div>
 
+                @if (_reminderForm.Visibility != "Private")
+                {
+                    <div class="field">
+                        <span>Vilka ser den?</span>
+                        <div class="level-picker">
+                            @foreach (var option in ReminderAudienceOptions)
+                            {
+                                <button type="button"
+                                        class="@(_reminderForm.Audience == option.Value ? "btn btn-primary" : "btn btn-secondary")"
+                                        @onclick="() => _reminderForm.Audience = option.Value">
+                                    @option.Label
+                                </button>
+                            }
+                        </div>
+
+                        @if (_reminderForm.Audience == "Selected")
+                        {
+                            @foreach (var member in ReminderAudienceCandidates)
+                            {
+                                <label class="field-check">
+                                    <input type="checkbox" checked="@_reminderForm.SelectedMemberIds.Contains(member.Id)"
+                                           @onchange="@((ChangeEventArgs e) => ToggleReminderAudienceMember(member.Id, (bool)e.Value!))" />
+                                    <span>@member.DisplayName</span>
+                                </label>
+                            }
+
+                            @if (_reminderForm.SelectedMemberIds.Count == 0)
+                            {
+                                <span class="muted small">Ingen ser den än.</span>
+                            }
+                        }
+                    </div>
+                }
+
                 @if (_reminderMessage is { } reminderMessage)
                 {
                     <div class="notice notice-problem" role="alert">@reminderMessage</div>
@@ -774,6 +808,17 @@ else
         /// <see cref="Hemordna.Client.Contracts.ReminderResponse.Visibility"/>. Defaults to
         /// "Private" for a new reminder, same as the domain's own default.</summary>
         public string Visibility { get; set; } = "Private";
+
+        /// <summary>"Everyone" or "Selected" - mirrors
+        /// <see cref="Hemordna.Client.Contracts.ReminderResponse.Audience"/>. Only meaningful
+        /// (and only shown - see the audience picker below) once <see cref="Visibility"/> is not
+        /// "Private". Defaults to "Everyone", same as the domain's own default.</summary>
+        public string Audience { get; set; } = "Everyone";
+
+        /// <summary>The members checked when <see cref="Audience"/> is "Selected" - mirrors
+        /// <see cref="Hemordna.Client.Contracts.ReminderResponse.SharedWithMemberIds"/>. Empty is
+        /// a valid, deliberate state ("Ingen ser den än.") - never read as "everyone".</summary>
+        public HashSet<Guid> SelectedMemberIds { get; set; } = [];
     }
 
     /// <summary>The level-picker's three fixed choices, in the exact wording docs/PRODUCT.md §7/§8
@@ -786,6 +831,16 @@ else
         ("Bara jag", "Private"),
         ("Andra ser att jag har en tid", "BusyOnly"),
         ("Andra ser vad det är", "Household")
+    ];
+
+    /// <summary>The audience picker's two fixed choices, in the exact wording the task decided
+    /// on - see the "Vilka ser den?" field below. A genuinely separate question from
+    /// <see cref="ReminderVisibilityOptions"/>'s WHAT: this is WHO, among whoever WHAT already
+    /// allows, actually sees it.</summary>
+    private static readonly (string Label, string Value)[] ReminderAudienceOptions =
+    [
+        ("Alla i hushållet", "Everyone"),
+        ("Bara utvalda", "Selected")
     ];
 
     /// <summary>"Jag ser min morgondag på Idag" - tomorrow's own plan, shown read-only in its
@@ -2195,6 +2250,13 @@ else
 
     private Guid MemberId => Session.Me?.MemberId ?? Guid.Empty;
 
+    /// <summary>Who the "Bara utvalda" checkbox list offers: every active household member
+    /// except the signed-in one - a reminder's owner can never be their own audience (see
+    /// Reminder.SetAudience), so they are never offered as a candidate in the first place.
+    /// Inactive members are left out too - see ReminderAudienceValidation server-side.</summary>
+    private IReadOnlyList<HouseholdMemberResponse> ReminderAudienceCandidates
+        => _household?.Members.Where(member => member.IsActive && member.Id != MemberId).ToList() ?? [];
+
     /// <summary>Which of _day/_tomorrow's own IsDayOff applies to whichever date DayOffSheet is
     /// currently open for - it only ever opens for one of those two exact dates (see
     /// OpenDayOffSheet), never an arbitrary one.</summary>
@@ -2428,6 +2490,8 @@ else
         _reminderForm.TimeOfDay = null;
         _reminderForm.TravelMinutes = null;
         _reminderForm.Visibility = "Private";
+        _reminderForm.Audience = "Everyone";
+        _reminderForm.SelectedMemberIds.Clear();
         _reminderMessage = null;
         _showReminderSheet = true;
     }
@@ -2443,8 +2507,24 @@ else
         _reminderForm.TimeOfDay = reminder.TimeOfDay;
         _reminderForm.TravelMinutes = reminder.TravelMinutes;
         _reminderForm.Visibility = reminder.Visibility;
+        _reminderForm.Audience = reminder.Audience;
+        _reminderForm.SelectedMemberIds = [.. reminder.SharedWithMemberIds];
         _reminderMessage = null;
         _showReminderSheet = true;
+    }
+
+    /// <summary>Checks or unchecks one candidate in the "Bara utvalda" list - purely local form
+    /// state, same as picking a Visibility level; nothing is sent to the server until Spara.</summary>
+    private void ToggleReminderAudienceMember(Guid memberId, bool isSelected)
+    {
+        if (isSelected)
+        {
+            _reminderForm.SelectedMemberIds.Add(memberId);
+        }
+        else
+        {
+            _reminderForm.SelectedMemberIds.Remove(memberId);
+        }
     }
 
     /// <summary>Clears the form's own travel minutes the moment the time of day is cleared -
@@ -2463,11 +2543,20 @@ else
     /// Creates a new reminder, or - when _reminderForm.Id is set (OpenEditReminderSheet) -
     /// changes an existing one. There is no single combined "update" endpoint (see
     /// HemordnaApiClient's own Reminder methods), so an edit goes through title/location/move/
-    /// travel-minutes in turn; each is itself idempotent-safe to repeat, so stopping partway on a
-    /// failure never leaves the reminder in a state a retry could not still fix. Travel minutes
-    /// is always sent last and always reflects the form's own value (never a stale one - see
-    /// OnReminderTimeOfDayChanged and the disabled input in the markup above), so it can never
-    /// ask the domain to set a travel time with no time of day to count back from.
+    /// travel-minutes/visibility in turn; each is itself idempotent-safe to repeat, so stopping
+    /// partway on a failure never leaves the reminder in a state a retry could not still fix.
+    /// Travel minutes is always sent last before visibility and always reflects the form's own
+    /// value (never a stale one - see OnReminderTimeOfDayChanged and the disabled input in the
+    /// markup above), so it can never ask the domain to set a travel time with no time of day to
+    /// count back from.
+    /// <para>
+    /// Audience is sent last of all, and only when <see cref="ReminderForm.Visibility"/> is not
+    /// "Private" - the audience picker is hidden for "Private" (see the markup above), so its
+    /// form fields may still hold a stale "Selected" choice from before the level was switched
+    /// back. Sending that would fight the visibility step just before it: switching to "Private"
+    /// already clears the server's own share list (Reminder.ChangeVisibility), and re-sending a
+    /// stale "Selected" list right after would resurrect exactly what fail-closed just cleared.
+    /// </para>
     /// </summary>
     private async Task SaveReminderAsync()
     {
@@ -2484,6 +2573,9 @@ else
         try
         {
             var location = string.IsNullOrWhiteSpace(_reminderForm.Location) ? null : _reminderForm.Location.Trim();
+            var sendAudience = _reminderForm.Visibility != "Private";
+            var audience = sendAudience ? _reminderForm.Audience : null;
+            var memberIds = sendAudience ? (IReadOnlyCollection<Guid>)[.. _reminderForm.SelectedMemberIds] : null;
 
             if (_reminderForm.Id is { } reminderId)
             {
@@ -2496,8 +2588,11 @@ else
                 var withVisibility = withTravel is null
                     ? null
                     : await Api.SetReminderVisibilityAsync(householdId, reminderId, _reminderForm.Visibility);
+                var withAudience = withVisibility is null || !sendAudience
+                    ? withVisibility
+                    : await Api.SetReminderAudienceAsync(householdId, reminderId, audience!, memberIds!);
 
-                if (withVisibility is null)
+                if (withAudience is null)
                 {
                     _reminderMessage = "Det gick inte att spara. Försök igen.";
                     return;
@@ -2507,7 +2602,7 @@ else
             {
                 var created = await Api.CreateReminderAsync(
                     householdId, _reminderForm.Title, location, date, _reminderForm.TimeOfDay,
-                    _reminderForm.TravelMinutes, _reminderForm.Visibility);
+                    _reminderForm.TravelMinutes, _reminderForm.Visibility, audience, memberIds);
 
                 if (created is null)
                 {

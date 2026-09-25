@@ -29,6 +29,19 @@ public sealed class CreateReminder
     /// <see cref="ReminderVisibility.Private"/>, never left for the domain default to resolve
     /// silently: a caller who forgot to send a level should get the same private-by-default
     /// guarantee as one who explicitly asked for it.
+    /// <para>
+    /// <paramref name="audience"/> and <paramref name="memberIds"/> let a reminder be created
+    /// already shared, in one call, instead of a second <see cref="SetReminderAudience"/> round
+    /// trip. <c>null</c> <paramref name="audience"/> becomes <see cref="ReminderAudience.Everyone"/>
+    /// (the same default <see cref="Reminder.Create"/> itself already starts every reminder at),
+    /// and <paramref name="memberIds"/> is treated as empty when omitted. Also returns
+    /// <c>null</c>, creating nothing at all, when <paramref name="audience"/> is
+    /// <see cref="ReminderAudience.Selected"/> and any id in <paramref name="memberIds"/> is not
+    /// currently an active member of this household - <see cref="ReminderAudienceValidation"/>,
+    /// the exact same check <see cref="SetReminderAudience"/> makes. Creation must not be a
+    /// backdoor around that validation just because it happens to run before the reminder exists
+    /// rather than after.
+    /// </para>
     /// </summary>
     public async Task<Reminder?> HandleAsync(
         Guid householdId,
@@ -39,6 +52,8 @@ public sealed class CreateReminder
         TimeOnly? timeOfDay,
         int? travelMinutes,
         ReminderVisibility? visibility,
+        ReminderAudience? audience,
+        IReadOnlyCollection<Guid>? memberIds,
         CancellationToken cancellationToken)
     {
         var household = await _households.FindByIdAsync(householdId, cancellationToken);
@@ -51,9 +66,20 @@ public sealed class CreateReminder
             return null;
         }
 
+        var resolvedAudience = audience ?? ReminderAudience.Everyone;
+        var resolvedMemberIds = memberIds ?? [];
+
+        if (resolvedAudience == ReminderAudience.Selected && resolvedMemberIds.Count > 0
+            && !ReminderAudienceValidation.EveryIdIsAnActiveHouseholdMember(household!, resolvedMemberIds))
+        {
+            return null;
+        }
+
         var reminder = Reminder.Create(
             householdId, memberId, title, location, date, timeOfDay, _timeProvider.GetUtcNow(),
             travelMinutes, visibility ?? ReminderVisibility.Private);
+
+        reminder.SetAudience(resolvedAudience, resolvedMemberIds);
 
         await _reminders.AddAsync(reminder, cancellationToken);
 

@@ -50,6 +50,16 @@ public interface IReminderRepository
     /// leaves the owner (docs/PRODUCT.md §8), so a checked-off time must look identical to any
     /// other time to whoever reads the result of this call; nothing in it says which reminders
     /// were checked off.
+    /// <para>
+    /// Also requires <see cref="Reminder.Audience"/> to actually include
+    /// <paramref name="excludeMemberId"/> as its viewer: <see cref="ReminderAudience.Everyone"/>
+    /// always qualifies, and <see cref="ReminderAudience.Selected"/> qualifies only when
+    /// <paramref name="excludeMemberId"/> appears in <see cref="Reminder.Shares"/> - an empty
+    /// <see cref="Reminder.Shares"/> therefore excludes the reminder from EVERY caller, the
+    /// fail-closed guarantee <see cref="ReminderAudience"/> exists for. Every implementation of
+    /// this method must express that same condition identically - a fake that filters
+    /// differently from the real query proves nothing about what callers actually see.
+    /// </para>
     /// </summary>
     Task<IReadOnlyList<Reminder>> ListVisibleForOthersInRangeAsync(
         Guid householdId,

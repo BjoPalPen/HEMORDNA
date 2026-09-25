@@ -1090,7 +1090,9 @@ public sealed class HemordnaApiClient
 
     /// <summary>Books a new, upcoming reminder for the signed-in member. <paramref name="visibility"/>
     /// is "Private", "BusyOnly" or "Household" - <c>null</c> when the caller did not pick a level,
-    /// which the server then defaults to "Private".</summary>
+    /// which the server then defaults to "Private". <paramref name="audience"/> is "Everyone" or
+    /// "Selected" - <c>null</c> defaults to "Everyone" server-side; <paramref name="memberIds"/>
+    /// lets the reminder be created already shared with specific members, in this same call.</summary>
     public async Task<ReminderResponse?> CreateReminderAsync(
         Guid householdId,
         string title,
@@ -1099,12 +1101,15 @@ public sealed class HemordnaApiClient
         TimeOnly? timeOfDay,
         int? travelMinutes = null,
         string? visibility = null,
+        string? audience = null,
+        IReadOnlyCollection<Guid>? memberIds = null,
         CancellationToken cancellationToken = default)
     {
         var request = await AuthorizedAsync(
             HttpMethod.Post, $"api/households/{householdId}/reminders", cancellationToken);
         request.Content = JsonContent.Create(
-            new CreateReminderRequest(title, location, date, timeOfDay, travelMinutes, visibility));
+            new CreateReminderRequest(
+                title, location, date, timeOfDay, travelMinutes, visibility, audience, memberIds));
 
         var response = await _http.SendAsync(request, cancellationToken);
 
@@ -1159,6 +1164,29 @@ public sealed class HemordnaApiClient
         var request = await AuthorizedAsync(
             HttpMethod.Put, $"api/households/{householdId}/reminders/{reminderId}/visibility", cancellationToken);
         request.Content = JsonContent.Create(new SetReminderVisibilityRequest(visibility));
+
+        var response = await _http.SendAsync(request, cancellationToken);
+
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<ReminderResponse>(cancellationToken)
+            : null;
+    }
+
+    /// <summary>Changes WHO, among the household, can see the reminder - <paramref name="audience"/>
+    /// is "Everyone" or "Selected"; <paramref name="memberIds"/> is only meaningful for "Selected"
+    /// and replaces the whole list atomically, same as the server's own <c>Reminder.SetAudience</c>.
+    /// An empty list there is a valid, fail-closed request: nobody sees the reminder until the
+    /// owner picks someone.</summary>
+    public async Task<ReminderResponse?> SetReminderAudienceAsync(
+        Guid householdId,
+        Guid reminderId,
+        string audience,
+        IReadOnlyCollection<Guid> memberIds,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Put, $"api/households/{householdId}/reminders/{reminderId}/audience", cancellationToken);
+        request.Content = JsonContent.Create(new SetReminderAudienceRequest(audience, memberIds));
 
         var response = await _http.SendAsync(request, cancellationToken);
 
