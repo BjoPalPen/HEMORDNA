@@ -4,47 +4,46 @@ Läge per 2026-09-25 (kväll). Arbetssätt: [../CLAUDE.md](../CLAUDE.md). Äldre
 
 ## Läge
 
-`main` = `4ff2ea0`, deployad. Tre PR i dag: #35, #36 (påminnelser) och #37 (PWA-uppdateringen).
+`main` = `82bad6a`, deployad. Fyra PR i dag: #35, #36, #38 (påminnelser), #37 (PWA-uppdateringen).
 
-- **PWA-uppdateringen var trasig** (PR #37). En installerad PWA kunde ligga kvar på ett gammalt
-  bygge och prata med ett nytt API. `service-worker-assets.js` – fillistan workern läser med
-  `importScripts` – saknade `Cache-Control`, och registreringen hade standardläget
-  `updateViaCache: 'imports'`. Webbläsaren serverade då en GAMMAL fillista, nya workern försökte
-  cacha förra byggets `_framework`-filer, 404 gav tom kropp, SRI föll och workern kasserades som
-  `redundant` – helt tyst. `MapFallbackToFile` hade dessutom egna `StaticFileOptions` UTAN
-  `OnPrepareResponse`. Delad `SetNoCacheForAppShellFiles` på båda ställena nu. **`_framework/*` ska
-  aldrig få `no-cache`** – eget testfall skyddar det.
-- **Synlighet för påminnelser** (PR #35). `ReminderVisibility` i ETT fält: `Private` (default),
-  `BusyOnly` (andra ser tiden, aldrig titeln), `Household` (titel och tid). **Platsen delas aldrig
-  på någon nivå** – DTO:n för andras tider har inget `Location`-fält alls, och `Title` nollas i use
-  casen. **#36:** mottagaren kan lägga till en delad tid som en egen, FRISTÅENDE kopia; flyttar
-  ägaren sin tid flyttas inte kopian. **Steg 3 är känt, inte byggt:** påminnelse för en medlem utan
-  eget konto. Resonemanget: `Beslut: Synlighet för påminnelser` i [ARCHITECTURE.md](ARCHITECTURE.md).
+- **Välj vilka som ser en påminnelse** (PR #38). `Visibility` styr VAD, nya `ReminderAudience` styr VEM:
+  `Everyone`, eller `Selected` + en `ReminderShare` per utvald. Samma nivå för alla utvalda; nivå per person
+  är bortvalt. **Fail-closed hela vägen:** `Audience` är ett eget fält och inte "tom lista betyder alla", så
+  en förlorad rad kan bara smalna av synligheten; `Selected` + tom lista = ingen ser den; klienten skickar
+  inget audience-anrop vid "Bara jag", annars hade det återskapat de delningar `ChangeVisibility(Private)`
+  just rensat. **EF-queryn och `InMemoryReminderRepository` har identiska predikat** – ändra aldrig det ena
+  utan det andra.
+- **PWA-uppdateringen var trasig** (PR #37). `service-worker-assets.js` – fillistan workern läser med
+  `importScripts` – saknade `Cache-Control`, och registreringen hade `updateViaCache: 'imports'`.
+  Webbläsaren gav då en GAMMAL fillista, nya workern hämtade förra byggets `_framework`-filer, 404 fällde
+  SRI och workern kasserades som `redundant`, helt tyst. `MapFallbackToFile` saknade dessutom
+  `OnPrepareResponse`. Delad `SetNoCacheForAppShellFiles` på båda ställena nu. **`_framework/*` ska aldrig
+  få `no-cache`** – eget testfall skyddar det.
+- **Synlighet** (#35): `Private` / `BusyOnly` (andra ser tiden, aldrig titeln) / `Household`. **Platsen delas
+  aldrig på någon nivå** – DTO:n för andras tider har inget `Location`-fält alls. **#36:** mottagaren kan ta
+  en delad tid som en egen, FRISTÅENDE kopia. **Steg 3, ej byggt:** påminnelse för en medlem utan konto.
+  Allt: `Beslut: Synlighet för påminnelser` i [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Köra och deploya
 
-Uppstart: [../README.md](../README.md). API `5199`, klient `5200`, Postgres `5432`. Docker Desktop
-krävs lokalt – annars faller ALLA E2E på "did not become reachable". Server:
-`ssh -i ~/.ssh/hetzner_deploy deploy@62.238.45.45`, checkout `~/hemordna`. Deploy: `git pull
---ff-only origin main`, sedan `docker compose -f docker-compose.prod.yml up -d --build --no-deps
-hemordna-api`; migrationer körs vid uppstart, Postgres heter `hemordna-postgres-1`. **VAPID: serverns
-`.env`.** Rollback: `6f454cc` (#37), `b73d89c` (#36), `d35da53` (#35).
+Uppstart: [../README.md](../README.md). API `5199`, klient `5200`, Postgres `5432`. Docker Desktop krävs lokalt –
+annars faller ALLA E2E på "did not become reachable". Server: `ssh -i ~/.ssh/hetzner_deploy deploy@62.238.45.45`,
+checkout `~/hemordna`. Deploy: `git pull --ff-only origin main`, sedan `docker compose -f docker-compose.prod.yml up
+-d --build --no-deps hemordna-api`; migrationer körs vid uppstart, Postgres heter `hemordna-postgres-1`. **VAPID:
+serverns `.env`.** Rollback: `4ff2ea0` (#38), `6f454cc` (#37), `b73d89c` (#36).
 
 ## Verifierat
 
-Build 0 fel. Domain 276/276, Application 467/467, Client 24/24, Api 7/7. E2E 226/227 på 19 min 18 s
-– enda röda är `SkarmbilderTests`, som passerar isolerat. Produktion: RestartCount 0, health
-Healthy, `scripts/Smoke` PASS. #37 mätt i Chromium mot prod, före → efter: `updateViaCache`
-`imports` → `none`, cache `k4o4KeP5` → `q4SyqAa1`, `no-cache` på alla fyra skalfilerna plus
-`/vecka` och `/okand/123`, men INTE på `_framework/*`.
+Build 0 fel. Domain 290/290, Application 489/489, Client 24/24, Api 7/7. E2E 228/229 på 19 min 38 s ensam på
+maskinen – enda röda är `SkarmbilderTests`, verifierad grön isolerat. Produktion: RestartCount 0, health
+Healthy, `scripts/Smoke` PASS, `Applying migration '…AddReminderAudienceAndShares'` i loggen, och svepets
+SQL läser `r."Audience"`.
 
 ## Öppna frågor
 
-**`CLAUDE.md` §8 räknar upp testprojekten och saknar `tests/Hemordna.Api.Tests`** (nytt i #37,
-`WebApplicationFactory`, kräver ingen databas) – Björns beslut att komplettera, medvetet inte gjort.
-**E2E-flakigheten är belastningsberoende:** samma gren gav 4 röda på 22 min 51 s när sviten delade
-maskin med annat arbete, och 1 rött på 19 min 18 s när den fick köra ensam – kör den ensam före en
-release. **Dev-databasen** hade vuxit till 18 967 hushåll och 78 MB (E2E städar aldrig efter sig);
-tömd 2026-09-24, fixturstädning är värd en egen uppgift, liksom att städa de två gamla worktrees
-som ligger kvar. Kvar sedan tidigare: `Reconnected`-closuren fångar `householdId` (byter någon
-hushåll rejoinas det gamla), och etiketten "Tid i förväg".
+**`CLAUDE.md` §8 saknar `tests/Hemordna.Api.Tests`** (nytt i #37) – Björns beslut, medvetet ogjort.
+**E2E-flakigheten är belastningsberoende**, nu tre mätpunkter: 4 röda när sviten delade maskin, 1 rött
+respektive 1 rött när den fick köra ensam, alla gröna isolerat. **Kör den ensam före release.**
+**Dev-databasen** växer obegränsat (E2E städar aldrig); tömd 2026-09-24. Fixturstädning och de tre
+kvarliggande worktrees är värda egna uppgifter. Kvar sedan tidigare: `Reconnected`-closuren fångar
+`householdId`, och etiketten "Tid i förväg".
