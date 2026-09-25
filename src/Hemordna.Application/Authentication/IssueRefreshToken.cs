@@ -16,8 +16,8 @@ public sealed class IssueRefreshToken
     }
 
     /// <summary><paramref name="lifetime"/> is passed in rather than read from configuration
-    /// here - the caller (the API layer) owns the actual policy value (uppdragets beslut: 60
-    /// days), and this use case stays testable without needing to know where that number comes
+    /// here - the caller (the API layer) owns the actual policy value (60 days, by decision),
+    /// and this use case stays testable without needing to know where that number comes
     /// from.</summary>
     public async Task<IssuedRefreshToken> HandleAsync(Guid userId, TimeSpan lifetime, CancellationToken cancellationToken)
     {

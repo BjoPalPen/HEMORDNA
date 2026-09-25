@@ -22,8 +22,8 @@ public sealed class RotateRefreshToken
     /// <paramref name="rawToken"/> can fail to be usable: unknown, expired, already revoked,
     /// already consumed (reuse), or a losing side of a concurrent rotation of the very same
     /// token. The caller (the API layer) must answer identically - the same 401 - for every
-    /// <c>null</c>, exactly the uppdragets säkerhetskrav: "ogiltig, förbrukad, utgången och
-    /// okänd ... samma svar, utan att avslöja vilket av fallen det var".
+    /// <c>null</c>: an invalid, consumed, expired or unknown token must all get the exact same
+    /// response, revealing nothing about which one it was.
     /// </summary>
     /// <remarks>
     /// Reuse detection: if <paramref name="rawToken"/> was already consumed by an earlier,

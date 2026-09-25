@@ -40,6 +40,6 @@ public interface IRefreshTokenRepository
     Task RevokeChainAsync(Guid chainId, DateTimeOffset now, CancellationToken cancellationToken);
 
     /// <summary>Revokes every refresh token belonging to <paramref name="userId"/>, across every
-    /// chain - used when the user changes their password (uppdragets säkerhetskrav).</summary>
+    /// chain - used when the user changes their password.</summary>
     Task RevokeAllForUserAsync(Guid userId, DateTimeOffset now, CancellationToken cancellationToken);
 }
