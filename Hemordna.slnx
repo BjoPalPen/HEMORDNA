@@ -7,6 +7,7 @@
     <Project Path="src/Hemordna.Infrastructure/Hemordna.Infrastructure.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Hemordna.Api.Tests/Hemordna.Api.Tests.csproj" />
     <Project Path="tests/Hemordna.Application.Tests/Hemordna.Application.Tests.csproj" />
     <Project Path="tests/Hemordna.Client.Tests/Hemordna.Client.Tests.csproj" />
     <Project Path="tests/Hemordna.Domain.Tests/Hemordna.Domain.Tests.csproj" />
