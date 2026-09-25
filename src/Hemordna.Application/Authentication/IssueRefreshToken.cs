@@ -27,6 +27,6 @@ public sealed class IssueRefreshToken
 
         await _refreshTokens.AddAsync(token, cancellationToken);
 
-        return new IssuedRefreshToken(secret, token.ExpiresAt);
+        return new IssuedRefreshToken(userId, secret, token.ExpiresAt);
     }
 }

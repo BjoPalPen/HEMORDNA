@@ -17,12 +17,12 @@ public class RevokeRefreshTokenChainTests
             .HandleAsync(userId, Lifetime, CancellationToken.None);
 
     [Fact]
-    public async Task Revokes_the_callers_own_chain()
+    public async Task Revokes_the_presented_tokens_chain()
     {
         var userId = Guid.NewGuid();
         var issued = await IssueAsync(userId);
 
-        await CreateUseCase().HandleAsync(userId, issued.Token, CancellationToken.None);
+        await CreateUseCase().HandleAsync(issued.Token, CancellationToken.None);
 
         var token = await _refreshTokens.FindByHashAsync(RefreshTokenSecret.Hash(issued.Token), CancellationToken.None);
         Assert.NotNull(token);
@@ -30,25 +30,27 @@ public class RevokeRefreshTokenChainTests
     }
 
     [Fact]
-    public async Task Presenting_another_users_token_is_a_silent_no_op()
+    public async Task Never_touches_another_users_chain()
     {
         var owner = Guid.NewGuid();
-        var impostor = Guid.NewGuid();
+        var otherUser = Guid.NewGuid();
         var issued = await IssueAsync(owner);
+        var otherIssued = await IssueAsync(otherUser);
 
-        // Must not throw, and must not reveal anything by its outcome - see the remarks on
-        // RevokeRefreshTokenChain.HandleAsync.
-        await CreateUseCase().HandleAsync(impostor, issued.Token, CancellationToken.None);
+        await CreateUseCase().HandleAsync(issued.Token, CancellationToken.None);
 
-        var token = await _refreshTokens.FindByHashAsync(RefreshTokenSecret.Hash(issued.Token), CancellationToken.None);
-        Assert.NotNull(token);
-        Assert.True(token.IsActive(Now));
+        var otherToken = await _refreshTokens.FindByHashAsync(
+            RefreshTokenSecret.Hash(otherIssued.Token), CancellationToken.None);
+        Assert.NotNull(otherToken);
+        Assert.True(otherToken.IsActive(Now));
     }
 
     [Fact]
     public async Task An_unknown_token_is_a_silent_no_op()
     {
-        await CreateUseCase().HandleAsync(Guid.NewGuid(), "not-a-real-token", CancellationToken.None);
+        // Must not throw, and the response is identical whether or not the value ever existed -
+        // see the remarks on RevokeRefreshTokenChain.HandleAsync.
+        await CreateUseCase().HandleAsync("not-a-real-token", CancellationToken.None);
 
         Assert.Empty(_refreshTokens.All);
     }

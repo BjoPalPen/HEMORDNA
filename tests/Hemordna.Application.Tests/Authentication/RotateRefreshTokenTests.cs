@@ -1,5 +1,6 @@
 using Hemordna.Application.Authentication;
 using Hemordna.Application.Tests.Households;
+using Hemordna.Domain.Authentication;
 
 namespace Hemordna.Application.Tests.Authentication;
 
@@ -127,7 +128,7 @@ public class RotateRefreshTokenTests
     }
 
     [Fact]
-    public async Task Two_concurrent_rotations_of_the_same_token_only_one_succeeds()
+    public async Task Two_concurrent_rotations_of_the_same_token_never_both_succeed()
     {
         // A Barrier forces both calls to reach the atomic "consume" step at the same instant,
         // regardless of how the thread pool happens to schedule them - without it, two awaited
@@ -147,8 +148,43 @@ public class RotateRefreshTokenTests
         var second = Task.Run(RotateAsync);
         var results = await Task.WhenAll(first, second);
 
-        Assert.Single(results, result => result is not null);
-        Assert.Single(results, result => result is null);
+        // The one guarantee that actually matters for security: two concurrent presentations of
+        // the same token can never BOTH walk away with a working new token - that would mean the
+        // same secret was rotated twice. At most one may succeed. On rare adversarial timing (a
+        // losing side's chain revocation landing exactly between the winning side's own insert
+        // and its subsequent re-check - see RotateRefreshToken's remarks on that re-check) BOTH
+        // may instead fail, which is safe even if not ideal: the caller has to sign in again,
+        // rather than either side having kept a token alive that reuse detection should have
+        // killed. An earlier version of this test asserted exactly one success always, which
+        // this fake occasionally disproved once the re-check existed - see the commit report.
+        Assert.True(
+            results.Count(result => result is not null) <= 1,
+            $"Expected at most one success, got: [{string.Join(", ", results)}]");
+
+        // Whatever the outcome, at most one token to come out of this chain is left active -
+        // never two live tokens minted from racing the same rotation.
+        Assert.True(repository.All.Count(token => token.IsActive(Now.AddDays(1))) <= 1);
+    }
+
+    [Fact]
+    public async Task A_chain_revoked_by_a_racing_caller_between_this_calls_own_insert_and_return_still_loses_its_new_token()
+    {
+        // Deterministic version of the race the Barrier test above only exercises
+        // probabilistically: a concurrent caller could revoke this exact chain in the narrow
+        // window between this rotation's own AddAsync and its return - see the remarks on
+        // RotateRefreshToken.HandleAsync for why the re-check after AddAsync exists at all. This
+        // fake simulates that window deterministically by revoking the chain itself, from inside
+        // AddAsync, immediately after the new token is inserted but before HandleAsync re-checks.
+        var userId = Guid.NewGuid();
+        var repository = new RevokingWhileInsertingRefreshTokenRepository();
+        var original = await new IssueRefreshToken(repository, new FixedTimeProvider(Now))
+            .HandleAsync(userId, Lifetime, CancellationToken.None);
+
+        var result = await new RotateRefreshToken(repository, new FixedTimeProvider(Now.AddDays(1)))
+            .HandleAsync(original.Token, Lifetime, CancellationToken.None);
+
+        Assert.Null(result);
+        Assert.All(repository.All, token => Assert.False(token.IsActive(Now.AddDays(1))));
     }
 
     /// <summary>
@@ -162,6 +198,27 @@ public class RotateRefreshTokenTests
         {
             barrier.SignalAndWait(cancellationToken);
             return await base.TryConsumeAsync(tokenId, now, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Simulates a racing caller's chain revocation landing exactly between this rotation's own
+    /// insert and its subsequent re-check - deterministically, instead of hoping real thread
+    /// scheduling produces that interleaving. See the test above that uses this.
+    /// </summary>
+    private sealed class RevokingWhileInsertingRefreshTokenRepository : InMemoryRefreshTokenRepository
+    {
+        public override async Task AddAsync(RefreshToken token, CancellationToken cancellationToken)
+        {
+            await base.AddAsync(token, cancellationToken);
+
+            // Only once a chain already has a sibling - never for the very first token a chain
+            // starts with (also inserted through this method, by IssueRefreshToken) - simulates a
+            // concurrent loser's RevokeChainAsync landing right after this rotation's own insert.
+            if (All.Count(sibling => sibling.ChainId == token.ChainId) > 1)
+            {
+                await RevokeChainAsync(token.ChainId, token.CreatedAt, cancellationToken);
+            }
         }
     }
 }

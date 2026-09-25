@@ -14,20 +14,23 @@ public sealed class RevokeRefreshTokenChain
     }
 
     /// <summary>
-    /// Revokes the chain <paramref name="rawToken"/> belongs to, provided it actually belongs to
-    /// <paramref name="callerUserId"/>. An unknown token and someone else's token are handled
-    /// identically - silently, doing nothing: a refresh token belongs to exactly one user, and
-    /// presenting someone else's must be treated exactly like presenting an invalid one, with no
-    /// clue in the response about whether it exists. A caller who is already logged out, or who
-    /// sends a garbled value, gets the same successful-looking no-op as one who tries to log out
-    /// with a token that was never theirs.
+    /// Revokes the chain <paramref name="rawToken"/> belongs to. Takes no separate caller
+    /// identity to check it against - by design, not an oversight: possessing the raw value
+    /// already lets its holder rotate it into a fresh access token for that user (see
+    /// <see cref="RotateRefreshToken"/>), so requiring proof of identity beyond the token itself
+    /// here would protect nothing that is not already exposed by the more powerful operation.
+    /// This also means logging out never depends on the caller's access token still being valid
+    /// - an anonymous call with just the refresh token is enough, which matters for the exact
+    /// moment logout is most needed: after being away long enough that the access token expired.
+    /// An unknown token is a silent no-op - nothing in the response reveals whether it ever
+    /// existed.
     /// </summary>
-    public async Task HandleAsync(Guid callerUserId, string rawToken, CancellationToken cancellationToken)
+    public async Task HandleAsync(string rawToken, CancellationToken cancellationToken)
     {
         var hash = RefreshTokenSecret.Hash(rawToken);
         var existing = await _refreshTokens.FindByHashAsync(hash, cancellationToken);
 
-        if (existing is null || existing.UserId != callerUserId)
+        if (existing is null)
         {
             return;
         }

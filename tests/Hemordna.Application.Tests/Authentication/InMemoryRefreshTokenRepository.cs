@@ -19,7 +19,7 @@ internal class InMemoryRefreshTokenRepository : IRefreshTokenRepository
         get { lock (_gate) { return [.. _byId.Values]; } }
     }
 
-    public Task AddAsync(RefreshToken token, CancellationToken cancellationToken)
+    public virtual Task AddAsync(RefreshToken token, CancellationToken cancellationToken)
     {
         lock (_gate)
         {

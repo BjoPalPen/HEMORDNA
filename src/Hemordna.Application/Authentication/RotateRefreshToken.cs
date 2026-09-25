@@ -37,6 +37,18 @@ public sealed class RotateRefreshToken
     /// <see cref="IRefreshTokenRepository.TryConsumeAsync"/> must be a single atomic operation:
     /// it is what decides, for any given token, which one request (if any) gets to be "the one
     /// that rotated it".
+    /// <para>
+    /// The losing side's chain revocation happens strictly after the winning side's
+    /// <see cref="IRefreshTokenRepository.TryConsumeAsync"/> already committed (that is what
+    /// made it the losing side), but the winner has not necessarily inserted its own next token
+    /// yet at that moment - a revoke racing an insert. A revoke that runs first only reaches rows
+    /// that already exist, so a naive implementation could let the winner's brand-new token
+    /// survive a reuse signal that fired around the very rotation that produced it. The re-check
+    /// after <see cref="IRefreshTokenRepository.AddAsync"/> below closes that window: if the
+    /// token this rotation started from is revoked by the time the insert has happened, a
+    /// concurrent caller detected reuse during this exact rotation, and the token just minted is
+    /// revoked too rather than handed back as if nothing happened.
+    /// </para>
     /// </remarks>
     public async Task<IssuedRefreshToken?> HandleAsync(
         string rawToken, TimeSpan lifetime, CancellationToken cancellationToken)
@@ -84,6 +96,18 @@ public sealed class RotateRefreshToken
 
         await _refreshTokens.AddAsync(next, cancellationToken);
 
-        return new IssuedRefreshToken(nextSecret, next.ExpiresAt);
+        // See the remarks on this method: a concurrent loser could have revoked this chain in
+        // the window between our own TryConsumeAsync committing and the AddAsync just above. Re-
+        // reading the token this rotation started from (its TokenHash never changes, so the same
+        // hash still finds it) catches that: if it is revoked now, a racer detected reuse during
+        // this exact rotation, so the token just minted must not survive either.
+        var afterInsert = await _refreshTokens.FindByHashAsync(hash, cancellationToken);
+        if (afterInsert?.RevokedAt is not null)
+        {
+            await _refreshTokens.RevokeChainAsync(existing.ChainId, now, cancellationToken);
+            return null;
+        }
+
+        return new IssuedRefreshToken(next.UserId, nextSecret, next.ExpiresAt);
     }
 }
