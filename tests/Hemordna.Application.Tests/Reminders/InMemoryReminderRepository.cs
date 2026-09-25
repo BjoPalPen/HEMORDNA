@@ -45,6 +45,10 @@ internal sealed class InMemoryReminderRepository : IReminderRepository
             .OrderBy(reminder => reminder.Date)
             .ThenBy(reminder => reminder.TimeOfDay)]);
 
+    // Kept byte-for-byte identical to ReminderRepository.ListVisibleForOthersInRangeAsync's own
+    // Where clause (Hemordna.Infrastructure) - a green test here against a predicate that
+    // filters differently from the real SQL query proves nothing about what the database
+    // actually returns. If you change one, change the other.
     public Task<IReadOnlyList<Reminder>> ListVisibleForOthersInRangeAsync(
         Guid householdId,
         Guid excludeMemberId,
@@ -57,7 +61,9 @@ internal sealed class InMemoryReminderRepository : IReminderRepository
                 && reminder.Visibility != ReminderVisibility.Private
                 && reminder.Status != ReminderStatus.Cancelled
                 && reminder.Date >= fromDate
-                && reminder.Date <= toDate)
+                && reminder.Date <= toDate
+                && (reminder.Audience == ReminderAudience.Everyone
+                    || reminder.Shares.Any(share => share.MemberId == excludeMemberId)))
             .OrderBy(reminder => reminder.Date)
             .ThenBy(reminder => reminder.TimeOfDay)]);
 

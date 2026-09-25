@@ -72,4 +72,23 @@ public class GetOwnRemindersTests
 
         Assert.Empty(result);
     }
+
+    /// <summary>
+    /// ListForMemberInRangeAsync (Min dag/Vecka's "Dina påminnelser") never filters on
+    /// <see cref="ReminderAudience"/> or <see cref="Reminder.Shares"/> - those only ever govern
+    /// what OTHER members see (<see cref="GetHouseholdReminders"/>). An owner always sees their
+    /// own reminder, whatever they chose for everyone else.
+    /// </summary>
+    [Fact]
+    public async Task The_owners_own_view_is_unaffected_by_audience_and_shares()
+    {
+        var reminder = Seed();
+        reminder.ChangeVisibility(ReminderVisibility.Household);
+        reminder.SetAudience(ReminderAudience.Selected, []);
+
+        var result = await CreateUseCase()
+            .HandleAsync(HouseholdId, AnnaId, Friday, Friday, CancellationToken.None);
+
+        Assert.Single(result);
+    }
 }

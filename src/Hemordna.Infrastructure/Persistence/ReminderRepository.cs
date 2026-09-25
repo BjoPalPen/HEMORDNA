@@ -42,6 +42,10 @@ internal sealed class ReminderRepository : IReminderRepository
             .ThenBy(reminder => reminder.TimeOfDay)
             .ToListAsync(cancellationToken);
 
+    // Kept byte-for-byte identical to InMemoryReminderRepository's own Where clause
+    // (Hemordna.Application.Tests.Reminders) - see the comment there. The
+    // "reminder.Shares.Any(...)" arm translates to a correlated EXISTS subquery against
+    // ReminderShares - verified with ToQueryString() against this exact query, not assumed.
     public async Task<IReadOnlyList<Reminder>> ListVisibleForOthersInRangeAsync(
         Guid householdId,
         Guid excludeMemberId,
@@ -55,7 +59,9 @@ internal sealed class ReminderRepository : IReminderRepository
                 && reminder.Visibility != ReminderVisibility.Private
                 && reminder.Status != ReminderStatus.Cancelled
                 && reminder.Date >= fromDate
-                && reminder.Date <= toDate)
+                && reminder.Date <= toDate
+                && (reminder.Audience == ReminderAudience.Everyone
+                    || reminder.Shares.Any(share => share.MemberId == excludeMemberId)))
             .OrderBy(reminder => reminder.Date)
             .ThenBy(reminder => reminder.TimeOfDay)
             .ToListAsync(cancellationToken);

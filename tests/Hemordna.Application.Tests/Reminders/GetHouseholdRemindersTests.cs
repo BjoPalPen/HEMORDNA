@@ -21,7 +21,9 @@ public class GetHouseholdRemindersTests
         DateOnly? date = null,
         TimeOnly? timeOfDay = null,
         string title = "Tandläkare",
-        ReminderVisibility visibility = ReminderVisibility.Household)
+        ReminderVisibility visibility = ReminderVisibility.Household,
+        ReminderAudience? audience = null,
+        IReadOnlyCollection<Guid>? sharedWith = null)
     {
         var reminder = Reminder.Create(
             householdId ?? HouseholdId,
@@ -32,6 +34,12 @@ public class GetHouseholdRemindersTests
             timeOfDay,
             CreatedAt,
             visibility: visibility);
+
+        if (audience is not null)
+        {
+            reminder.SetAudience(audience.Value, sharedWith ?? []);
+        }
+
         _reminders.Seed(reminder);
         return reminder;
     }
@@ -142,5 +150,66 @@ public class GetHouseholdRemindersTests
         var view = Assert.Single(result);
         Assert.Equal(BjornId, view.MemberId);
         Assert.Equal(new TimeOnly(14, 0), view.TimeOfDay);
+    }
+
+    [Fact]
+    public async Task A_selected_member_sees_a_reminder_shared_with_them()
+    {
+        Seed(audience: ReminderAudience.Selected, sharedWith: [AnnaId]);
+
+        var result = await CreateUseCase()
+            .HandleAsync(HouseholdId, AnnaId, Friday, Friday, CancellationToken.None);
+
+        Assert.Single(result);
+    }
+
+    [Fact]
+    public async Task A_member_not_in_the_selected_list_does_not_see_the_reminder()
+    {
+        var ceciliaId = Guid.NewGuid();
+        Seed(audience: ReminderAudience.Selected, sharedWith: [ceciliaId]);
+
+        var result = await CreateUseCase()
+            .HandleAsync(HouseholdId, AnnaId, Friday, Friday, CancellationToken.None);
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task The_everyone_audience_is_visible_to_every_member_unchanged()
+    {
+        Seed(audience: ReminderAudience.Everyone);
+
+        var result = await CreateUseCase()
+            .HandleAsync(HouseholdId, AnnaId, Friday, Friday, CancellationToken.None);
+
+        Assert.Single(result);
+    }
+
+    /// <summary>
+    /// The fail-closed guarantee itself: an empty selected list must never be read as "everyone",
+    /// however the condition ends up being written - see docs/ARCHITECTURE.md, "Beslut:
+    /// Synlighet för påminnelser".
+    /// </summary>
+    [Fact]
+    public async Task Selected_with_an_empty_list_is_visible_to_nobody()
+    {
+        Seed(audience: ReminderAudience.Selected, sharedWith: []);
+
+        var result = await CreateUseCase()
+            .HandleAsync(HouseholdId, AnnaId, Friday, Friday, CancellationToken.None);
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public async Task A_share_in_a_different_household_is_never_returned()
+    {
+        Seed(householdId: Guid.NewGuid(), audience: ReminderAudience.Selected, sharedWith: [AnnaId]);
+
+        var result = await CreateUseCase()
+            .HandleAsync(HouseholdId, AnnaId, Friday, Friday, CancellationToken.None);
+
+        Assert.Empty(result);
     }
 }
