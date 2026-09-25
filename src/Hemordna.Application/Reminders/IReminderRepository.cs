@@ -37,6 +37,28 @@ public interface IReminderRepository
         CancellationToken cancellationToken);
 
     /// <summary>
+    /// Other household members' reminders visible to someone who is not their owner - Vecka's
+    /// "Andras tider" section (<c>GetHouseholdReminders</c>). Filters to
+    /// <see cref="Reminder.Visibility"/> != <see cref="ReminderVisibility.Private"/> and excludes
+    /// <paramref name="excludeMemberId"/>'s own reminders - without that exclusion, the caller's
+    /// own reminders would be duplicated here alongside "Dina påminnelser"
+    /// (<see cref="ListForMemberInRangeAsync"/> already returns those, in full, with
+    /// <see cref="Reminder.Location"/> and everything else this method's caller must never see).
+    /// <see cref="ReminderStatus.Cancelled"/> is excluded, same as
+    /// <see cref="ListForMemberInRangeAsync"/>. A <see cref="ReminderStatus.CheckedOff"/> reminder
+    /// IS included, but that is a filtering fact only - <see cref="Reminder.Status"/> itself never
+    /// leaves the owner (docs/PRODUCT.md §8), so a checked-off time must look identical to any
+    /// other time to whoever reads the result of this call; nothing in it says which reminders
+    /// were checked off.
+    /// </summary>
+    Task<IReadOnlyList<Reminder>> ListVisibleForOthersInRangeAsync(
+        Guid householdId,
+        Guid excludeMemberId,
+        DateOnly fromDate,
+        DateOnly toDate,
+        CancellationToken cancellationToken);
+
+    /// <summary>
     /// Every reminder - any household, any member, any <see cref="ReminderStatus"/>, "all day"
     /// included - whose <see cref="Reminder.Date"/> falls in [<paramref name="fromDate"/>,
     /// <paramref name="toDate"/>]. Used by the reminder push background service

@@ -18,6 +18,8 @@ public class ChangeReminderTests
 
     private ChangeReminderLocation ChangeLocation() => new(_reminders);
 
+    private ChangeReminderVisibility ChangeVisibility() => new(_reminders);
+
     private Reminder Seed(Guid? memberId = null, string? location = "Folktandvården")
     {
         var reminder = Reminder.Create(
@@ -107,5 +109,53 @@ public class ChangeReminderTests
             .HandleAsync(HouseholdId, AnnaId, Guid.NewGuid(), "Ny plats", CancellationToken.None);
 
         Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task Changes_the_visibility_of_the_callers_own_reminder()
+    {
+        var reminder = Seed();
+
+        var result = await ChangeVisibility()
+            .HandleAsync(HouseholdId, AnnaId, reminder.Id, ReminderVisibility.Household, CancellationToken.None);
+
+        Assert.NotNull(result);
+        Assert.Equal(ReminderVisibility.Household, result.Visibility);
+        Assert.Equal(1, _reminders.UpdateCallCount);
+    }
+
+    /// <summary>The single most important rule in this whole feature: a reminder is private to
+    /// its owner, even within the same household. See PRODUCT.md §11 and CLAUDE.md §9.</summary>
+    [Fact]
+    public async Task Another_members_reminder_is_treated_as_not_found_for_visibility()
+    {
+        var reminder = Seed(memberId: BjornId);
+
+        var result = await ChangeVisibility()
+            .HandleAsync(HouseholdId, AnnaId, reminder.Id, ReminderVisibility.Household, CancellationToken.None);
+
+        Assert.Null(result);
+        Assert.Equal(0, _reminders.UpdateCallCount);
+        // Unchanged - proves the attempt never touched the other member's reminder.
+        Assert.Equal(ReminderVisibility.Private, reminder.Visibility);
+    }
+
+    [Fact]
+    public async Task An_unknown_reminder_finds_nothing_for_visibility()
+    {
+        var result = await ChangeVisibility()
+            .HandleAsync(HouseholdId, AnnaId, Guid.NewGuid(), ReminderVisibility.Household, CancellationToken.None);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task A_cancelled_reminder_rejects_a_visibility_change_uncaught()
+    {
+        var reminder = Seed();
+        reminder.Cancel();
+
+        await Assert.ThrowsAsync<DomainException>(() => ChangeVisibility()
+            .HandleAsync(HouseholdId, AnnaId, reminder.Id, ReminderVisibility.Household, CancellationToken.None));
     }
 }

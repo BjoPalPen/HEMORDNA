@@ -4125,6 +4125,64 @@ uppgifter i ett rum på en gång och är inte tänkt för säsongsarbete.
 fanns repareras inte automatiskt - hushållet behöver skapa om den uppgiften för att ge den ett
 riktigt datum.
 
+### Beslut: Synlighet för påminnelser — `IMPLEMENTED`
+
+Björn ville kunna visa resten av hushållet en egen tid utan att göra påminnelser till delat
+husarbete - en påminnelse skulle förbli varje medlems egen sak att sköta (§8), bara synligheten
+skulle bli valfri. Påminnelser (PRODUCT.md §11) hade fram till denna revision ingen egen
+`Beslut:`-post i det här dokumentet trots att de redan var `IMPLEMENTED`, och det gäller
+fortfarande: den här posten dokumenterar bara synlighetstillägget, inte historiken för
+PR #27-#34.
+
+**Tre nivåer i ett fält, inte två flaggor.** `ReminderVisibility` (`Private`/`BusyOnly`/
+`Household`, explicita värden som `ReminderStatus`) i stället för till exempel `IsShared` +
+`ShowTitle`. Två booleans har fyra kombinationer men bara tre är meningsfulla, och den fjärde
+(`IsShared: false, ShowTitle: true`) hade krävt en egen regel för att avgöra vad den ens betyder.
+Ett fält gör "vad får andra se" till en enda, uttömmande fråga med ett giltigt svar per
+påminnelse.
+
+**Eget läsflöde med en egen, smalare DTO - ingen union med den ägarvända vägen.**
+`GetOwnReminders`/`ReminderResponse`/`IReminderRepository.ListForMemberInRangeAsync` är helt
+oförändrade. Andras synliga tider går genom sin egen kedja: en ny repository-metod
+(`ListVisibleForOthersInRangeAsync`), en ny use case (`GetHouseholdReminders`) och en egen
+läsmodell (`HouseholdReminderView`/`HouseholdReminderResponse`) som bär exakt `Id`, `MemberId`,
+`Date`, `TimeOfDay`, `Title` - inget annat. Skälet är att `ReminderResponse` bär `Location` och
+`TravelMinutes`; en union med den (eller en bredare typ med några fält gömda i UI:t) hade gjort
+varje framtida fält på den DTO:n till en potentiell läcka till resten av hushållet den dag någon
+glömde tänka på det. En typ som aldrig fått ett fält kan inte läcka det. `Title` nollas i
+use casen (`GetHouseholdReminders`, inte i endpointen eller klienten) för allt utom `Household`,
+så regeln täcks av ett Application-test i stället för att vila på att varje lager ovanför minns
+att göra det.
+
+**Platsen delas aldrig, på någon nivå.** `Location` lämnar aldrig ägaren oavsett
+`ReminderVisibility` - varken `HouseholdReminderView` eller `HouseholdReminderResponse` har ett
+sådant fält över huvud taget, så det finns strukturellt inget att läcka, inte bara en regel att
+komma ihåg att följa.
+
+**Bara ägaren agerar.** `ChangeReminderVisibility` följer `ChangeReminderTitle` rad för rad: en
+påminnelse som tillhör någon annan behandlas identiskt med "finns inte" (`null`, aldrig kast).
+Ingen annan kan bocka av, ändra, flytta eller avboka en delad tid - en delad tid är information,
+inte en kryssruta för andra (PRODUCT.md §8, "appen får aldrig bli ett 'gick du dit?'-instrument").
+
+**Hushålls punktrutnät (`Hushall.razor`, `DotClass`/`DotTitle`) lämnades medvetet orört.**
+Prickarna kodar hur mycket av dagens ARBETE som blev gjort; en "borta"-markering där hade lästs
+som ogjort arbete och brutit §8, trots att avsikten bara var att visa en tid. Andras tider visas
+i stället på Vecka, som redan är planeringsytan, inte i ett rutnät byggt för att spegla utfört
+hushållsarbete.
+
+**`MemberSheet.razor` utgick.** Vecka är planeringsytan; samma data på ytterligare en yta hade
+varit dubbelt underhåll utan nytt värde, och `MemberSheet` har ingen annan anledning att känna
+till påminnelser.
+
+**Status läcker inte.** Andra ser tid (och på `Household` titel) - aldrig `Status`,
+`TravelMinutes`, `Location` eller `CreatedAt`. En avbockad påminnelse visas för andra som vilken
+tid som helst, utan markering; en `Cancelled` visas inte alls, som innan denna revision.
+
+**Steg 2 och 3 är kända, medvetet inte byggda i denna revision.** Steg 2 ("lägg till i mina
+påminnelser" på en delad tid) och steg 3 (en påminnelse för en medlem utan eget konto) fanns med
+i uppdraget från start som separata, senare steg - inte glömda, inte avslagna, bara inte del av
+detta.
+
 | Fråga | Varför den väntar |
 |---|---|
 | Offline-strategi bortom read-only cache | Utanför MVP; får inte låsas in i förväg |

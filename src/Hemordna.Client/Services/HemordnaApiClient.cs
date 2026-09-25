@@ -1071,7 +1071,26 @@ public sealed class HemordnaApiClient
             $"api/households/{householdId}/reminders?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}",
             cancellationToken) ?? [];
 
-    /// <summary>Books a new, upcoming reminder for the signed-in member.</summary>
+    /// <summary>
+    /// Other household members' visible reminders due within [<paramref name="from"/>,
+    /// <paramref name="to"/>] - Vecka's "Andras tider den här veckan" section. Never the
+    /// signed-in member's own (the server excludes those - see
+    /// Hemordna.Application.Reminders.GetHouseholdReminders) and never a <c>Private</c> one;
+    /// see <see cref="HouseholdReminderResponse"/> for exactly what fields the server allows
+    /// through.
+    /// </summary>
+    public async Task<IReadOnlyList<HouseholdReminderResponse>> GetHouseholdRemindersAsync(
+        Guid householdId,
+        DateOnly from,
+        DateOnly to,
+        CancellationToken cancellationToken = default)
+        => await GetAsync<IReadOnlyList<HouseholdReminderResponse>>(
+            $"api/households/{householdId}/reminders/household?from={from:yyyy-MM-dd}&to={to:yyyy-MM-dd}",
+            cancellationToken) ?? [];
+
+    /// <summary>Books a new, upcoming reminder for the signed-in member. <paramref name="visibility"/>
+    /// is "Private", "BusyOnly" or "Household" - <c>null</c> when the caller did not pick a level,
+    /// which the server then defaults to "Private".</summary>
     public async Task<ReminderResponse?> CreateReminderAsync(
         Guid householdId,
         string title,
@@ -1079,12 +1098,13 @@ public sealed class HemordnaApiClient
         DateOnly date,
         TimeOnly? timeOfDay,
         int? travelMinutes = null,
+        string? visibility = null,
         CancellationToken cancellationToken = default)
     {
         var request = await AuthorizedAsync(
             HttpMethod.Post, $"api/households/{householdId}/reminders", cancellationToken);
         request.Content = JsonContent.Create(
-            new CreateReminderRequest(title, location, date, timeOfDay, travelMinutes));
+            new CreateReminderRequest(title, location, date, timeOfDay, travelMinutes, visibility));
 
         var response = await _http.SendAsync(request, cancellationToken);
 
@@ -1120,6 +1140,25 @@ public sealed class HemordnaApiClient
         var request = await AuthorizedAsync(
             HttpMethod.Put, $"api/households/{householdId}/reminders/{reminderId}/location", cancellationToken);
         request.Content = JsonContent.Create(new ChangeReminderLocationRequest(location));
+
+        var response = await _http.SendAsync(request, cancellationToken);
+
+        return response.IsSuccessStatusCode
+            ? await response.Content.ReadFromJsonAsync<ReminderResponse>(cancellationToken)
+            : null;
+    }
+
+    /// <summary>Changes what the rest of the household can see of the reminder -
+    /// <paramref name="visibility"/> is "Private", "BusyOnly" or "Household".</summary>
+    public async Task<ReminderResponse?> SetReminderVisibilityAsync(
+        Guid householdId,
+        Guid reminderId,
+        string visibility,
+        CancellationToken cancellationToken = default)
+    {
+        var request = await AuthorizedAsync(
+            HttpMethod.Put, $"api/households/{householdId}/reminders/{reminderId}/visibility", cancellationToken);
+        request.Content = JsonContent.Create(new SetReminderVisibilityRequest(visibility));
 
         var response = await _http.SendAsync(request, cancellationToken);
 

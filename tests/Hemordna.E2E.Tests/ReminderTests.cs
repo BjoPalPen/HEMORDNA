@@ -24,10 +24,13 @@ public class ReminderTests
     }
 
     /// <summary>Assumes the page is already on Min dag ("/") - "Ny påminnelse" is one of the
-    /// always-visible chips there, same as "Extra uppgift".</summary>
+    /// always-visible chips there, same as "Extra uppgift". <paramref name="visibilityButtonLabel"/>
+    /// is one of the level-picker's three exact button texts ("Bara jag", "Andra ser att jag har
+    /// en tid", "Andra ser vad det är") - left <c>null</c> to keep the sheet's own default
+    /// ("Bara jag" / Private).</summary>
     private static async Task CreateReminderViaUiAsync(
         IPage page, string title, DateOnly date, string? time = null, string? location = null,
-        int? travelMinutes = null)
+        int? travelMinutes = null, string? visibilityButtonLabel = null)
     {
         await page.GetByRole(AriaRole.Button, new() { Name = "Ny påminnelse" }).ClickAsync();
         var sheet = page.GetByRole(AriaRole.Dialog, new() { Name = "Ny påminnelse" });
@@ -49,6 +52,11 @@ public class ReminderTests
             await sheet.GetByLabel("Plats").FillAsync(location);
         }
 
+        if (visibilityButtonLabel is not null)
+        {
+            await sheet.GetByRole(AriaRole.Button, new() { Name = visibilityButtonLabel, Exact = true }).ClickAsync();
+        }
+
         await sheet.GetByRole(AriaRole.Button, new() { Name = "Spara" }).ClickAsync();
 
         // SaveReminderAsync only closes the sheet once its own server round trip (and the
@@ -56,6 +64,46 @@ public class ReminderTests
         // a caller that immediately does a real page reload afterwards (proving persistence, not
         // just local state) cannot race ahead of the save and abort the in-flight request.
         await Assertions.Expect(sheet).Not.ToBeVisibleAsync();
+    }
+
+    /// <summary>Two account-holding members of the same household - Anna (creator) and Björn
+    /// (joined via invite code), same shape as MemberAccessControlTests' own
+    /// ArrangeTwoAccountHoldersAsync, but keeping the IPage handles too since these tests assert
+    /// on rendered Vecka/Min dag markup, not just HTTP responses.</summary>
+    private async Task<(IPage AnnaPage, IPage BjornPage, HttpClient AnnaHttp, HttpClient BjornHttp, Guid HouseholdId)>
+        ArrangeTwoMembersAsync()
+    {
+        var annaPage = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(annaPage, "Anna-" + Guid.NewGuid().ToString("N")[..6]);
+
+        await annaPage.GotoAsync("/hushall");
+        await annaPage.GetByRole(AriaRole.Button, new() { Name = "Bjud in" }).ClickAsync();
+        var inviteDialog = annaPage.GetByRole(AriaRole.Dialog, new() { Name = "Bjud in" });
+        var code = inviteDialog.GetByLabel("Inbjudningskod");
+        await code.WaitForAsync();
+        var inviteCode = await code.InnerTextAsync();
+        await inviteDialog.GetByRole(AriaRole.Button, new() { Name = "Stäng" }).ClickAsync();
+
+        // Back to Min dag - ReadInviteCodeAsync-style navigation left Anna on /hushall, but
+        // CreateReminderViaUiAsync assumes "Ny påminnelse" is on screen, same as every other
+        // test in this file.
+        await annaPage.GotoAsync("/");
+        await annaPage.GetByRole(AriaRole.Button, new() { Name = "Ny påminnelse" }).WaitForAsync(new() { Timeout = 15_000 });
+
+        var bjornPage = await _app.NewPageAsync();
+        var bjornName = "Björn-" + Guid.NewGuid().ToString("N")[..6];
+        await SignUpHelper.RegisterAsync(bjornPage, bjornName);
+        await bjornPage.GetByText("Har du en inbjudningskod?").ClickAsync();
+        await bjornPage.GetByLabel("Inbjudningskod").FillAsync(inviteCode);
+        await bjornPage.GetByRole(AriaRole.Button, new() { Name = "Gå med i hushållet" }).ClickAsync();
+        await bjornPage.Locator("h1", new() { HasText = bjornName }).WaitForAsync(new() { Timeout = 15_000 });
+
+        var annaHttp = await AuthorizedHttpAsync(annaPage, _app.ApiUrl);
+        var bjornHttp = await AuthorizedHttpAsync(bjornPage, _app.ApiUrl);
+        var me = await (await annaHttp.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
+        var householdId = me.GetProperty("householdId").GetGuid();
+
+        return (annaPage, bjornPage, annaHttp, bjornHttp, householdId);
     }
 
     [Fact]
@@ -275,5 +323,96 @@ public class ReminderTests
         await Assertions.Expect(reminderGroupAfterReload.GetByText("Tandläkare")).ToBeVisibleAsync();
         await Assertions.Expect(page.Locator("li.task-done", new() { HasText = "Tandläkare" })).ToBeVisibleAsync();
         await Assertions.Expect(reminderGroupAfterReload.GetByRole(AriaRole.Button, new() { Name = "Avboka" })).ToHaveCountAsync(0);
+    }
+
+    /// <summary>Synlighet, steg 1 - default (Private) stannar precis lika osynlig för resten av
+    /// hushållet som innan denna feature fanns: varken på Vecka eller via det nya
+    /// household-endpointet.</summary>
+    [Fact]
+    public async Task A_private_reminder_is_invisible_to_another_member_on_vecka_and_via_the_household_endpoint()
+    {
+        var (annaPage, bjornPage, _, bjornHttp, householdId) = await ArrangeTwoMembersAsync();
+        var today = AppDate.Today;
+
+        // No visibilityButtonLabel - keeps the sheet's own default ("Bara jag" / Private).
+        await CreateReminderViaUiAsync(annaPage, "Hemligt läkarbesök", today, "09:00");
+
+        await bjornPage.GotoAsync("/vecka");
+        await Assertions.Expect(bjornPage.GetByText("Hemligt läkarbesök")).Not.ToBeVisibleAsync();
+        await Assertions.Expect(bjornPage.Locator("ul[aria-label=\"Andras tider den här veckan\"]")).ToHaveCountAsync(0);
+
+        var response = await bjornHttp.GetAsync(
+            $"/api/households/{householdId}/reminders/household?from={today:yyyy-MM-dd}&to={today:yyyy-MM-dd}");
+        var list = await response.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(0, list.GetArrayLength());
+    }
+
+    /// <summary>BusyOnly - the other member sees that a time exists, never what it is. The
+    /// assertion on the title is against the whole page, not just the reminder row, so a title
+    /// that leaked anywhere else in the DOM would also be caught.</summary>
+    [Fact]
+    public async Task A_busy_only_reminder_shows_the_time_but_never_the_title_to_another_member()
+    {
+        var (annaPage, bjornPage, _, _, _) = await ArrangeTwoMembersAsync();
+        var today = AppDate.Today;
+
+        await CreateReminderViaUiAsync(
+            annaPage, "Tandläkare", today, "10:00", visibilityButtonLabel: "Andra ser att jag har en tid");
+
+        await bjornPage.GotoAsync("/vecka");
+        var section = bjornPage.Locator("ul[aria-label=\"Andras tider den här veckan\"]");
+        await Assertions.Expect(section).ToContainTextAsync("10:00");
+        await Assertions.Expect(section).ToContainTextAsync("har en tid");
+        await Assertions.Expect(bjornPage.GetByText("Tandläkare")).Not.ToBeVisibleAsync();
+    }
+
+    /// <summary>Household - the other member sees the title and the time, but never the
+    /// location (decision 2: Location never leaves the owner at any level), and the row is bare
+    /// text - no "Bocka av"/"Ändra"/"Avboka" for a time someone else owns (decision 3: only the
+    /// owner ever acts on their own reminder).</summary>
+    [Fact]
+    public async Task A_household_reminder_shows_title_and_time_but_never_the_location_or_action_buttons()
+    {
+        var (annaPage, bjornPage, _, _, _) = await ArrangeTwoMembersAsync();
+        var today = AppDate.Today;
+
+        await CreateReminderViaUiAsync(
+            annaPage, "Föräldramöte", today, "14:00", location: "Skolan",
+            visibilityButtonLabel: "Andra ser vad det är");
+
+        await bjornPage.GotoAsync("/vecka");
+        var section = bjornPage.Locator("ul[aria-label=\"Andras tider den här veckan\"]");
+        await Assertions.Expect(section).ToContainTextAsync("Föräldramöte");
+        await Assertions.Expect(section).ToContainTextAsync("14:00");
+        await Assertions.Expect(bjornPage.GetByText("Skolan")).Not.ToBeVisibleAsync();
+
+        // Bara text - ingen knapp av något slag på Annas rad, för Björn.
+        await Assertions.Expect(section.GetByRole(AriaRole.Button, new() { Name = "Bocka av" })).ToHaveCountAsync(0);
+        await Assertions.Expect(section.GetByRole(AriaRole.Button, new() { Name = "Ändra" })).ToHaveCountAsync(0);
+        await Assertions.Expect(section.GetByRole(AriaRole.Button, new() { Name = "Avboka" })).ToHaveCountAsync(0);
+        await Assertions.Expect(section.Locator("button")).ToHaveCountAsync(0);
+    }
+
+    /// <summary>Sharing a reminder changes nothing about how the OWNER sees it - Min dag keeps its
+    /// usual "Bocka av"/"Ändra"/"Avboka" row, and Vecka's own "Dina påminnelser den här veckan"
+    /// still shows it exactly as before this feature existed.</summary>
+    [Fact]
+    public async Task The_owners_own_rows_on_min_dag_and_vecka_are_unchanged_by_sharing_a_reminder()
+    {
+        var (annaPage, _, _, _, _) = await ArrangeTwoMembersAsync();
+        var today = AppDate.Today;
+
+        await CreateReminderViaUiAsync(
+            annaPage, "Tandläkare", today, "09:00", visibilityButtonLabel: "Andra ser vad det är");
+
+        var reminderGroup = annaPage.Locator("ul[aria-label=\"Påminnelser\"]");
+        await Assertions.Expect(reminderGroup.GetByText("Tandläkare")).ToBeVisibleAsync();
+        await Assertions.Expect(reminderGroup.GetByRole(AriaRole.Button, new() { Name = "Bocka av" })).ToBeVisibleAsync();
+        await Assertions.Expect(reminderGroup.GetByRole(AriaRole.Button, new() { Name = "Ändra" })).ToBeVisibleAsync();
+        await Assertions.Expect(reminderGroup.GetByRole(AriaRole.Button, new() { Name = "Avboka" })).ToBeVisibleAsync();
+
+        await annaPage.GotoAsync("/vecka");
+        var own = annaPage.Locator("ul[aria-label=\"Dina påminnelser den här veckan\"]");
+        await Assertions.Expect(own.GetByText("Tandläkare")).ToBeVisibleAsync();
     }
 }

@@ -689,6 +689,21 @@ else
                     <InputText @bind-Value="_reminderForm.Location" placeholder="Till exempel Vårdcentralen" />
                 </label>
 
+                <div class="field">
+                    <span>Vem ser den här tiden?</span>
+                    <div class="level-picker">
+                        @foreach (var option in ReminderVisibilityOptions)
+                        {
+                            <button type="button"
+                                    class="@(_reminderForm.Visibility == option.Level ? "btn btn-primary" : "btn btn-secondary")"
+                                    @onclick="() => _reminderForm.Visibility = option.Level">
+                                @option.Label
+                            </button>
+                        }
+                    </div>
+                    <span class="muted small">Platsen syns aldrig för andra.</span>
+                </div>
+
                 @if (_reminderMessage is { } reminderMessage)
                 {
                     <div class="notice notice-problem" role="alert">@reminderMessage</div>
@@ -754,7 +769,24 @@ else
         /// OnReminderTimeOfDayChanged - so the field never shows a number the save is about to
         /// throw away; the domain does the same thing for the same reason (Reminder.MoveTo).</summary>
         public int? TravelMinutes { get; set; }
+
+        /// <summary>"Private", "BusyOnly" or "Household" - mirrors
+        /// <see cref="Hemordna.Client.Contracts.ReminderResponse.Visibility"/>. Defaults to
+        /// "Private" for a new reminder, same as the domain's own default.</summary>
+        public string Visibility { get; set; } = "Private";
     }
+
+    /// <summary>The level-picker's three fixed choices, in the exact wording docs/PRODUCT.md §7/§8
+    /// require: each describes what the choice DOES ("andra ser...") rather than who it is for,
+    /// with no hint of a target audience. "Platsen syns aldrig för andra" (rendered next to the
+    /// picker, not per option) is true at every level - Location never leaves the owner regardless
+    /// of Visibility, so it is said once rather than repeated under each button.</summary>
+    private static readonly (string Label, string Level)[] ReminderVisibilityOptions =
+    [
+        ("Bara jag", "Private"),
+        ("Andra ser att jag har en tid", "BusyOnly"),
+        ("Andra ser vad det är", "Household")
+    ];
 
     /// <summary>"Jag ser min morgondag på Idag" - tomorrow's own plan, shown read-only in its
     /// own collapsed section (see the "Imorgon" details below). Loaded alongside _day so it is
@@ -2395,6 +2427,7 @@ else
         _reminderForm.Date = Today;
         _reminderForm.TimeOfDay = null;
         _reminderForm.TravelMinutes = null;
+        _reminderForm.Visibility = "Private";
         _reminderMessage = null;
         _showReminderSheet = true;
     }
@@ -2409,6 +2442,7 @@ else
         _reminderForm.Date = reminder.Date;
         _reminderForm.TimeOfDay = reminder.TimeOfDay;
         _reminderForm.TravelMinutes = reminder.TravelMinutes;
+        _reminderForm.Visibility = reminder.Visibility;
         _reminderMessage = null;
         _showReminderSheet = true;
     }
@@ -2459,8 +2493,11 @@ else
                 var withTravel = moved is null
                     ? null
                     : await Api.SetReminderTravelMinutesAsync(householdId, reminderId, _reminderForm.TravelMinutes);
+                var withVisibility = withTravel is null
+                    ? null
+                    : await Api.SetReminderVisibilityAsync(householdId, reminderId, _reminderForm.Visibility);
 
-                if (withTravel is null)
+                if (withVisibility is null)
                 {
                     _reminderMessage = "Det gick inte att spara. Försök igen.";
                     return;
@@ -2469,7 +2506,8 @@ else
             else
             {
                 var created = await Api.CreateReminderAsync(
-                    householdId, _reminderForm.Title, location, date, _reminderForm.TimeOfDay, _reminderForm.TravelMinutes);
+                    householdId, _reminderForm.Title, location, date, _reminderForm.TimeOfDay,
+                    _reminderForm.TravelMinutes, _reminderForm.Visibility);
 
                 if (created is null)
                 {

@@ -5,10 +5,14 @@ namespace Hemordna.Domain.Reminders;
 
 /// <summary>
 /// A member's own appointment they want to be reminded of - a doctor's visit, a meeting, a
-/// dentist's slot. Private to the member who created it and deliberately not household work:
-/// see docs/PRODUCT.md §11. A reminder never counts toward anyone's time budget, is never
-/// "overdue", never rotates and never earns time credit - which is exactly why this is its own
-/// entity rather than a <see cref="TaskDefinition"/>/<see cref="TaskOccurrence"/> pair.
+/// dentist's slot. Owned by the member who created it, and only they can ever change, check
+/// off, cancel or restore it - nobody else acts on someone else's reminder, whatever
+/// <see cref="Visibility"/> says (docs/PRODUCT.md §8). Visibility only controls what OTHER
+/// members can see, defaults to <see cref="ReminderVisibility.Private"/>, and never extends to
+/// <see cref="Location"/>: see <see cref="ReminderVisibility"/> for exactly what each level
+/// exposes. A reminder never counts toward anyone's time budget, is never "overdue", never
+/// rotates and never earns time credit - which is exactly why this is its own entity rather
+/// than a <see cref="TaskDefinition"/>/<see cref="TaskOccurrence"/> pair.
 /// </summary>
 public sealed class Reminder
 {
@@ -31,7 +35,8 @@ public sealed class Reminder
         DateOnly date,
         TimeOnly? timeOfDay,
         DateTimeOffset createdAt,
-        int? travelMinutes)
+        int? travelMinutes,
+        ReminderVisibility visibility)
     {
         Id = id;
         HouseholdId = householdId;
@@ -43,6 +48,7 @@ public sealed class Reminder
         Status = ReminderStatus.Upcoming;
         CreatedAt = createdAt;
         TravelMinutes = travelMinutes;
+        Visibility = visibility;
     }
 
     public Guid Id { get; private set; }
@@ -76,6 +82,13 @@ public sealed class Reminder
     public DateTimeOffset CreatedAt { get; private set; }
 
     /// <summary>
+    /// What the rest of the household can see of this reminder. Defaults to
+    /// <see cref="ReminderVisibility.Private"/> - see <see cref="ReminderVisibility"/> and this
+    /// class's own remarks.
+    /// </summary>
+    public ReminderVisibility Visibility { get; private set; }
+
+    /// <summary>
     /// Creates a new, upcoming reminder. <paramref name="date"/> is validated against
     /// <paramref name="createdAt"/> the same way <see cref="TaskOccurrence"/> validates a newly
     /// scheduled date - no clock is read here; "today" is whatever the caller says it is.
@@ -88,7 +101,8 @@ public sealed class Reminder
         DateOnly date,
         TimeOnly? timeOfDay,
         DateTimeOffset createdAt,
-        int? travelMinutes = null)
+        int? travelMinutes = null,
+        ReminderVisibility visibility = ReminderVisibility.Private)
     {
         Guard.AgainstEmpty(householdId, nameof(householdId));
         Guard.AgainstEmpty(memberId, nameof(memberId));
@@ -105,7 +119,8 @@ public sealed class Reminder
             date,
             timeOfDay,
             createdAt,
-            ValidateTravelMinutes(travelMinutes, timeOfDay, validatedTitle));
+            ValidateTravelMinutes(travelMinutes, timeOfDay, validatedTitle),
+            visibility);
     }
 
     /// <summary>Changes the title. Only an upcoming reminder can be changed.</summary>
@@ -125,6 +140,18 @@ public sealed class Reminder
         EnsureUpcoming("changed");
 
         Location = ValidateLocation(location);
+    }
+
+    /// <summary>
+    /// Changes what the rest of the household can see of this reminder - see
+    /// <see cref="ReminderVisibility"/>. Only an upcoming reminder can be changed, same as
+    /// <see cref="ChangeTitle"/> and <see cref="ChangeLocation"/>.
+    /// </summary>
+    public void ChangeVisibility(ReminderVisibility visibility)
+    {
+        EnsureUpcoming("changed");
+
+        Visibility = visibility;
     }
 
     /// <summary>

@@ -238,9 +238,11 @@ kalenderapp kan matcha:
 
 Reglerna:
 
-- **Privat.** En påminnelse tillhör den medlem som skapat den och syns inte för hushållet –
-  inte i hushållsvyn, inte i Vecka för andra, aldrig i "Senaste händelser". Titel och plats
-  loggas aldrig någonstans.
+- **Privat som standard.** En påminnelse tillhör den medlem som skapat den. Som standard syns
+  den inte för hushållet alls. Ägaren kan välja att visa att tiden finns, eller vad den är, för
+  resten av hushållet i Vecka – platsen delas aldrig, på någon nivå, och titel och plats loggas
+  fortfarande aldrig någonstans. En delad tid syns aldrig i "Senaste händelser", och bara ägaren
+  kan bocka av, ändra eller avboka den.
 - **Förvarningen är hela poängen.** En notis som kommer fem minuter i förväg hjälper ingen som
   är tidsblind. Därför skickas två notiser: **dags att gå**, räknad bakåt från restiden, och
   en **vid tiden**. Restiden ersätter en generisk förvarning på "en timme före" – hur lång

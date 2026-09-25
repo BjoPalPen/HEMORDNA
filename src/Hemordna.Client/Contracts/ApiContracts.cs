@@ -247,7 +247,10 @@ public sealed record RecurrenceRuleContract(
 /// server resolves the owner from the caller's own token, not from anything this client sends.
 /// <c>Status</c> is "Upcoming", "Cancelled" or "CheckedOff" (checked off - see
 /// Hemordna.Domain.Reminders.ReminderStatus.CheckedOff for the name's reasoning) - see the file
-/// header for why enum-shaped fields travel as plain strings.</summary>
+/// header for why enum-shaped fields travel as plain strings. <c>Visibility</c> is "Private",
+/// "BusyOnly" or "Household" - what the rest of the household is allowed to see of this
+/// reminder; the owner can always see their own choice here, but this field never appears on
+/// <see cref="HouseholdReminderResponse"/>, the type returned to anyone else.</summary>
 public sealed record ReminderResponse(
     Guid Id,
     string Title,
@@ -256,10 +259,18 @@ public sealed record ReminderResponse(
     TimeOnly? TimeOfDay,
     int? TravelMinutes,
     string Status,
-    DateTimeOffset CreatedAt);
+    DateTimeOffset CreatedAt,
+    string Visibility);
 
+/// <summary><c>Visibility</c> is <c>null</c> when the caller did not pick a level - the server
+/// then defaults to "Private".</summary>
 public sealed record CreateReminderRequest(
-    string Title, string? Location, DateOnly Date, TimeOnly? TimeOfDay, int? TravelMinutes);
+    string Title,
+    string? Location,
+    DateOnly Date,
+    TimeOnly? TimeOfDay,
+    int? TravelMinutes,
+    string? Visibility);
 
 public sealed record ChangeReminderTitleRequest(string Title);
 
@@ -270,6 +281,25 @@ public sealed record MoveReminderRequest(DateOnly Date, TimeOnly? TimeOfDay);
 
 /// <summary><c>null</c> clears the travel time - mirrors the API's own contract.</summary>
 public sealed record SetReminderTravelMinutesRequest(int? TravelMinutes);
+
+/// <summary>A required level to change to, "Private"/"BusyOnly"/"Household" - <c>null</c> is
+/// rejected by the server, mirrors the API's own contract.</summary>
+public sealed record SetReminderVisibilityRequest(string? Visibility);
+
+/// <summary>
+/// One other household member's reminder as it is allowed to appear to someone who is not its
+/// owner - Vecka's "Andras tider den här veckan" section. Deliberately excludes <c>Location</c>
+/// (never shared at any visibility level), <c>Status</c> (a checked-off time must look identical
+/// to any other time to someone else) and <c>TravelMinutes</c>/<c>CreatedAt</c> - mirrors the
+/// API's own <c>HouseholdReminderResponse</c> field for field; do not add any of those back here
+/// without first re-reading why they were left out.
+/// </summary>
+public sealed record HouseholdReminderResponse(
+    Guid Id,
+    Guid MemberId,
+    DateOnly Date,
+    TimeOnly? TimeOfDay,
+    string? Title);
 
 public sealed record VapidPublicKeyResponse(string PublicKey);
 

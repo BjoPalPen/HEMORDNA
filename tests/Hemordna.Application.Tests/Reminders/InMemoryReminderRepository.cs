@@ -45,6 +45,22 @@ internal sealed class InMemoryReminderRepository : IReminderRepository
             .OrderBy(reminder => reminder.Date)
             .ThenBy(reminder => reminder.TimeOfDay)]);
 
+    public Task<IReadOnlyList<Reminder>> ListVisibleForOthersInRangeAsync(
+        Guid householdId,
+        Guid excludeMemberId,
+        DateOnly fromDate,
+        DateOnly toDate,
+        CancellationToken cancellationToken)
+        => Task.FromResult<IReadOnlyList<Reminder>>([.. _reminders
+            .Where(reminder => reminder.HouseholdId == householdId
+                && reminder.MemberId != excludeMemberId
+                && reminder.Visibility != ReminderVisibility.Private
+                && reminder.Status != ReminderStatus.Cancelled
+                && reminder.Date >= fromDate
+                && reminder.Date <= toDate)
+            .OrderBy(reminder => reminder.Date)
+            .ThenBy(reminder => reminder.TimeOfDay)]);
+
     public Task<IReadOnlyList<Reminder>> ListInDateRangeAsync(
         DateOnly fromDate, DateOnly toDate, CancellationToken cancellationToken)
         => Task.FromResult<IReadOnlyList<Reminder>>([.. _reminders

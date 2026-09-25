@@ -36,6 +36,7 @@ internal sealed class ReminderConfiguration : IEntityTypeConfiguration<Reminder>
 
         builder.Property(reminder => reminder.Status).IsRequired();
         builder.Property(reminder => reminder.CreatedAt).IsRequired();
+        builder.Property(reminder => reminder.Visibility).IsRequired();
 
         // The query that actually gets asked is "this member's reminders on this date" -
         // household leads so the index stays tenant-scoped (CLAUDE.md §9).
@@ -45,6 +46,13 @@ internal sealed class ReminderConfiguration : IEntityTypeConfiguration<Reminder>
             reminder.MemberId,
             reminder.Date
         });
+
+        // No separate index for the upcoming "other members' visible reminders" query
+        // (HouseholdId, Date, Visibility - see IReminderRepository.ListVisibleForOthersInRangeAsync,
+        // added in a later commit). It is a different filter shape than the index above, but
+        // reminders per household are few - a handful of appointments, not a growing work log
+        // like TaskOccurrence - so a sequential scan already narrowed by HouseholdId is cheap.
+        // Add an index only if this ever shows up as a real cost, not speculatively.
 
         builder.HasOne<HouseholdMember>()
             .WithMany()
