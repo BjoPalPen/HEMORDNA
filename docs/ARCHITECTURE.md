@@ -4230,6 +4230,46 @@ ovan) byggdes i en senare revision av den här posten. Steg 3 (en påminnelse f�
 eget konto) fanns med i uppdraget från start som ett separat, ännu senare steg - inte glömt,
 inte avslaget, bara inte del av detta.
 
+**Steg 4: mottagarval - `ReminderAudience`/`ReminderShare`, ett andra fält vid sidan av
+`Visibility`.** Björn: "jag skall kunna välja vilka i familjen som ser påminnelsen." Fram till
+denna revision betydde `Household`-nivån alltid hela hushållet, utan undantag. Den här postens
+egen tidigare motivering för `Visibility` som ETT fält ("Tre nivåer i ett fält, inte två
+flaggor", ovan) gällde två booleans med bara tre meningsfulla kombinationer av fyra -
+`IsShared: false, ShowTitle: true` hade krävt en egen regel för att avgöra vad den ens betyder.
+Det argumentet gäller inte mottagarvalet: `Visibility` (VAD
+andra får se) och `Audience` (VEM av dem) är två genuint oberoende frågor, inte två halvor av
+samma fråga uttryckta som flaggor. Nästan varje kombination är meningsfull; den enda som inte är
+det (`Private` + `Selected`) tillåts ändå helt enkelt, utan att betyda något extra - `Audience`
+är då bara irrelevant tills nivån höjs igen (se UI-stycket nedan), inte förbjuden i domänen.
+
+**Fail-closed, explicit - inte "tom lista betyder alla".** `ReminderAudience.Everyone`/`Selected`
+är ett eget fält snarare än att låta en tom `ReminderShare`-lista betyda "alla ser den". Implicit
+semantik hade varit fail-OPEN: en förlorad rad (en trasig migrering, en trasig join, en rad som
+av misstag aldrig skrevs) hade tyst BREDDAT synligheten till hela hushållet i stället för att
+smalna av den. Med `Audience` som eget fält kan en förlorad `ReminderShare`-rad bara smalna av
+vem som ser tiden, aldrig bredda det - `Selected` med en tom lista är ett giltigt, avsiktligt
+tillstånd där INGEN ser tiden. Bevisat, inte bara antaget: `A_member_not_in_the_selected_list_
+does_not_see_the_reminder` och `Selected_with_an_empty_list_is_visible_to_nobody`
+(`GetHouseholdRemindersTests`) var genuint röda mot den gamla, ofiltrerade frågan innan
+`Audience`/`Shares`-villkoret lades till `IReminderRepository.ListVisibleForOthersInRangeAsync` -
+inte nya tester skrivna gröna mot redan färdig kod.
+
+**Nivå per person: uttryckligen bortvalt.** `ReminderVisibility` gäller lika för alla `Audience`
+pekar ut - det finns ingen `Dictionary<MemberId, ReminderVisibility>` och ingen krok lämnad för
+en sådan. Björn bad uttryckligen bara om VEM som ser tiden, inte om att var och en skulle kunna
+se olika mycket av den - att bygga det senare hade varit spekulativ bredd utan ett verkligt
+behov (CLAUDE.md §12).
+
+**UI:t får aldrig kunna återuppliva en delning bakom Private.** `Reminder.ChangeVisibility
+(Private)` rensar `Shares` server-side, men `Audience`-fältet självt rörs inte - en påminnelse
+som går Private → Household igen återuppstår därför i `Selected` med tom lista, fail-closed,
+aldrig tyst i `Everyone`. Klientens sparaflöde (`MinDag.razor`, `SaveReminderAsync`) respekterar
+samma ordning: mottagarväljaren är dold när nivån är "Bara jag", och sparaflödet skickar då inget
+`/audience`-anrop alls - annars hade ett kvarvarande "Bara utvalda"-val i formuläret, skickat
+EFTER visibility-anropet i samma spara-kedja, tyst återupplivat precis den delning
+`ChangeVisibility(Private)` just rensat. Ett designbeslut, inte bara en implementationsdetalj:
+samma spärr gäller både vid skapande och vid ändring av en befintlig påminnelse.
+
 | Fråga | Varför den väntar |
 |---|---|
 | Offline-strategi bortom read-only cache | Utanför MVP; får inte låsas in i förväg |

@@ -243,6 +243,10 @@ Reglerna:
   resten av hushållet i Vecka – platsen delas aldrig, på någon nivå, och titel och plats loggas
   fortfarande aldrig någonstans. En delad tid syns aldrig i "Senaste händelser", och bara ägaren
   kan bocka av, ändra eller avboka den.
+- **Vem som ser en delad tid går att välja.** Ägaren väljer mellan alla i hushållet och bara
+  utvalda medlemmar. Väljer man alla i hushållet gäller det dynamiskt – en medlem som går med i
+  hushållet senare ser tiden också, utan att ägaren behöver dela på nytt. Väljer man bara utvalda
+  medlemmar utan att kryssa i någon: ingen ser tiden ännu – ett avsiktligt läge, inte ett fel.
 - **En delad tid kan läggas till hos sig själv.** Ser man någon annans delade tid i Vecka (bara
   när ägaren valt att visa vad den är) kan man lägga till en egen kopia bland sina egna
   påminnelser – titel, datum och klockslag, aldrig platsen. Kopian är fristående: flyttar ägaren
