@@ -62,11 +62,8 @@ public sealed class SetReminderAudience
         {
             var household = await _households.FindByIdAsync(householdId, cancellationToken);
 
-            var everyIdIsAnActiveHouseholdMember = household is not null
-                && memberIds.All(memberId => household.Members
-                    .Any(member => member.Id == memberId && member.IsActive));
-
-            if (!everyIdIsAnActiveHouseholdMember)
+            if (household is null
+                || !ReminderAudienceValidation.EveryIdIsAnActiveHouseholdMember(household, memberIds))
             {
                 return null;
             }
