@@ -307,23 +307,24 @@ var staticFileTypeProvider = new Microsoft.AspNetCore.StaticFiles.FileExtensionC
 staticFileTypeProvider.Mappings[".dat"] = "application/octet-stream";
 staticFileTypeProvider.Mappings[".blat"] = "application/octet-stream";
 staticFileTypeProvider.Mappings[".wasm"] = "application/wasm";
+// index.html, the service worker registration script, its imported asset manifest
+// (service-worker-assets.js) and the web app manifest all keep the same filename across
+// every deploy - unlike everything under _framework/, which is content-hashed and so safe
+// to cache forever. None of them had an explicit Cache-Control before, which meant a
+// browser could apply its own heuristic freshness and reuse a stale copy for a long time
+// (observed: surviving several app restarts) without ever re-checking. That matters most
+// for service-worker-assets.js: service-worker.published.js reads it via importScripts,
+// which is served from this same HTTP cache when the browser checks for a worker update.
+// A stale copy makes the new worker try to cache the PREVIOUS build's fingerprinted
+// _framework files; those 404, the empty body fails the SRI check on cache.addAll, and the
+// new worker is discarded as redundant - a real deploy stays invisible to the user. no-cache
+// forces revalidation (a conditional GET) on every load without disabling caching outright.
+// The same function is applied to the SPA fallback below, since every client-side route
+// (e.g. /vecka) resolves to index.html through it rather than through this middleware.
 app.UseStaticFiles(new StaticFileOptions
 {
     ContentTypeProvider = staticFileTypeProvider,
-    OnPrepareResponse = context =>
-    {
-        // index.html and the service worker script keep the same filename across every
-        // deploy - unlike everything under _framework/, which is content-hashed and so
-        // safe to cache forever. Neither had an explicit Cache-Control before, which meant
-        // a browser could apply its own heuristic freshness and go a long time (observed:
-        // surviving several app restarts) without ever re-checking for a new version, so a
-        // real deploy stayed invisible. no-cache forces revalidation (a conditional GET)
-        // on every load without disabling caching outright.
-        if (context.File.Name is "index.html" or "service-worker.js")
-        {
-            context.Context.Response.Headers.CacheControl = "no-cache";
-        }
-    }
+    OnPrepareResponse = SetNoCacheForAppShellFiles
 });
 
 app.UseRouting();
@@ -352,9 +353,23 @@ app.MapHub<HouseholdHub>("/hubs/household", options => options.CloseOnAuthentica
 
 // SPA fallback for the Blazor client - see the UseStaticFiles comment above. Registered
 // last so it never shadows an API route; only unmatched GET requests fall through to it.
-app.MapFallbackToFile("index.html");
+// Needs the same OnPrepareResponse as UseStaticFiles: without it, every client-side route
+// (/vecka, /hushall, /okand/123, ...) serves index.html with no Cache-Control at all, so it
+// stays stuck in the browser's heuristic cache exactly like the bug this fixes.
+app.MapFallbackToFile("index.html", new StaticFileOptions
+{
+    OnPrepareResponse = SetNoCacheForAppShellFiles
+});
 
 app.Run();
+
+static void SetNoCacheForAppShellFiles(Microsoft.AspNetCore.StaticFiles.StaticFileResponseContext context)
+{
+    if (context.File.Name is "service-worker.js" or "service-worker-assets.js" or "index.html" or "manifest.webmanifest")
+    {
+        context.Context.Response.Headers.CacheControl = "no-cache";
+    }
+}
 
 static Task WriteHealthReportAsync(HttpContext context, HealthReport report)
 {

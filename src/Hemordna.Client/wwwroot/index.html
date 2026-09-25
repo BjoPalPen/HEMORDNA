@@ -63,7 +63,11 @@
     <script src="_framework/blazor.webassembly#[.{fingerprint}].js"></script>
     <script src="js/webauthn.js"></script>
     <script src="js/push.js"></script>
-    <script>navigator.serviceWorker?.register('service-worker.js');</script>
+    <!-- updateViaCache: 'none' - without it the browser is free to serve the imported
+         service-worker-assets.js (the fingerprinted file list the worker reads via
+         importScripts) out of its own HTTP cache when checking for an update, so a new
+         deploy can go unnoticed for as long as that cache entry stays heuristically fresh. -->
+    <script>navigator.serviceWorker?.register('service-worker.js', { updateViaCache: 'none' });</script>
 </body>
 
 </html>
