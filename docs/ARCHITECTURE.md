@@ -4225,10 +4225,22 @@ påminnelse, den skapar en ny hos mottagaren. Assertionen smalnades därför av 
 bevisar i stället att raden inte har någon ANNAN åtgärd än den nya knappen - så avsmalningen är
 dokumenterad som en medveten precisering, inte en tyst försvagning för att få igenom en funktion.
 
-**Steg 3 är känt, medvetet inte byggt.** Steg 2 ("lägg till i mina påminnelser" på en delad tid,
-ovan) byggdes i en senare revision av den här posten. Steg 3 (en påminnelse för en medlem utan
-eget konto) fanns med i uppdraget från start som ett separat, ännu senare steg - inte glömt,
-inte avslaget, bara inte del av detta.
+**Steg 3 är prövat och avslaget - bygg det inte.** Steg 3 (en påminnelse för en medlem utan eget
+konto) fanns med i uppdraget från start som ett senare steg. Björn avgjorde 2026-09-25 att det
+inte behövs, efter att steg 1, 2 och 4 fanns på plats, och det är ett beslut - inte en punkt som
+väntar på sin tur. Två skäl, båda kvar även om någon tar upp frågan igen:
+
+1. **Behovet är redan täckt.** Den vuxna skapar tiden som sin egen ("Emmas tandläkare"), sätter
+   nivån och väljer vilka som ser den. Hen får notisen, vilket är rätt - det är hen som kör.
+2. **Ägarskapet skulle inte hjälpa mottagaren.** `PushSubscription` är per medlem OCH enhet, så
+   en medlem utan konto kan aldrig ta emot en notis. En påminnelse ägd av henne vore osynlig och
+   onotifierad om vi inte samtidigt byggde en ny regel för vem som får se och ändra en kontolös
+   medlems tider - alltså ny behörighetsyta för något som redan går att göra.
+
+Det enda verkliga glappet som identifierades är attribution: på Vecka står "Anna · Emmas
+tandläkare" i stället för att peka ut Emma som den tiden gäller. Ett nullbart "gäller vem"-fält
+skulle räcka för det, utan att röra ägarskap eller notiser - men Björn valde bort även det, som
+en lösning på ett problem ingen haft.
 
 **Steg 4: mottagarval - `ReminderAudience`/`ReminderShare`, ett andra fält vid sidan av
 `Visibility`.** Björn: "jag skall kunna välja vilka i familjen som ser påminnelsen." Fram till

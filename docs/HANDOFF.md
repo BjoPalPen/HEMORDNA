@@ -21,7 +21,8 @@ Läge per 2026-09-25 (kväll). Arbetssätt: [../CLAUDE.md](../CLAUDE.md). Äldre
   få `no-cache`** – eget testfall skyddar det.
 - **Synlighet** (#35): `Private` / `BusyOnly` (andra ser tiden, aldrig titeln) / `Household`. **Platsen delas
   aldrig på någon nivå** – DTO:n för andras tider har inget `Location`-fält alls. **#36:** mottagaren kan ta
-  en delad tid som en egen, FRISTÅENDE kopia. **Steg 3, ej byggt:** påminnelse för en medlem utan konto.
+  en delad tid som en egen, FRISTÅENDE kopia. **Steg 3 (medlem utan konto) är prövat och AVSLAGET** –
+  täckt av #35/#36, och en kontolös medlem kan aldrig få en notis. Bygg det inte.
   Allt: `Beslut: Synlighet för påminnelser` i [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Köra och deploya
