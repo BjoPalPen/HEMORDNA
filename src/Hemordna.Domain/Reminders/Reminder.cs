@@ -7,12 +7,17 @@ namespace Hemordna.Domain.Reminders;
 /// A member's own appointment they want to be reminded of - a doctor's visit, a meeting, a
 /// dentist's slot. Owned by the member who created it, and only they can ever change, check
 /// off, cancel or restore it - nobody else acts on someone else's reminder, whatever
-/// <see cref="Visibility"/> says (docs/PRODUCT.md §8). Visibility only controls what OTHER
-/// members can see, defaults to <see cref="ReminderVisibility.Private"/>, and never extends to
-/// <see cref="Location"/>: see <see cref="ReminderVisibility"/> for exactly what each level
-/// exposes. A reminder never counts toward anyone's time budget, is never "overdue", never
-/// rotates and never earns time credit - which is exactly why this is its own entity rather
-/// than a <see cref="TaskDefinition"/>/<see cref="TaskOccurrence"/> pair.
+/// <see cref="Visibility"/> says (docs/PRODUCT.md §8). WHAT other members can see is
+/// <see cref="Visibility"/>; WHO among them sees it is the separate, independent
+/// <see cref="Audience"/> - both default to the most private choice
+/// (<see cref="ReminderVisibility.Private"/>, <see cref="ReminderAudience.Everyone"/> once
+/// visible) and neither ever extends to <see cref="Location"/>: see
+/// <see cref="ReminderVisibility"/> and <see cref="ReminderAudience"/> for exactly what each
+/// level and each audience exposes. There is deliberately no level per person - the same
+/// <see cref="Visibility"/> applies to everyone <see cref="Audience"/> resolves to. A reminder
+/// never counts toward anyone's time budget, is never "overdue", never rotates and never earns
+/// time credit - which is exactly why this is its own entity rather than a
+/// <see cref="TaskDefinition"/>/<see cref="TaskOccurrence"/> pair.
 /// </summary>
 public sealed class Reminder
 {
@@ -25,6 +30,8 @@ public sealed class Reminder
     /// <summary>A single trip can take at most a full day - same reasoning as
     /// <see cref="TaskDefinition.MaxEstimatedMinutes"/>.</summary>
     public const int MaxTravelMinutes = 24 * 60;
+
+    private readonly List<ReminderShare> _shares = [];
 
     private Reminder(
         Guid id,
@@ -49,6 +56,7 @@ public sealed class Reminder
         CreatedAt = createdAt;
         TravelMinutes = travelMinutes;
         Visibility = visibility;
+        Audience = ReminderAudience.Everyone;
     }
 
     public Guid Id { get; private set; }
@@ -87,6 +95,22 @@ public sealed class Reminder
     /// class's own remarks.
     /// </summary>
     public ReminderVisibility Visibility { get; private set; }
+
+    /// <summary>
+    /// WHO sees this reminder's time when <see cref="Visibility"/> is not
+    /// <see cref="ReminderVisibility.Private"/> - a genuinely independent question from
+    /// <see cref="Visibility"/>'s WHAT, see <see cref="ReminderAudience"/>. Defaults to
+    /// <see cref="ReminderAudience.Everyone"/>, changed only via <see cref="SetAudience"/>.
+    /// </summary>
+    public ReminderAudience Audience { get; private set; }
+
+    /// <summary>
+    /// The members explicitly chosen to see this reminder when <see cref="Audience"/> is
+    /// <see cref="ReminderAudience.Selected"/> - always empty for
+    /// <see cref="ReminderAudience.Everyone"/> and for <see cref="ReminderVisibility.Private"/>,
+    /// see <see cref="SetAudience"/> and <see cref="ChangeVisibility"/>.
+    /// </summary>
+    public IReadOnlyCollection<ReminderShare> Shares => _shares.AsReadOnly();
 
     /// <summary>
     /// Creates a new, upcoming reminder. <paramref name="date"/> is validated against
@@ -145,13 +169,72 @@ public sealed class Reminder
     /// <summary>
     /// Changes what the rest of the household can see of this reminder - see
     /// <see cref="ReminderVisibility"/>. Only an upcoming reminder can be changed, same as
-    /// <see cref="ChangeTitle"/> and <see cref="ChangeLocation"/>.
+    /// <see cref="ChangeTitle"/> and <see cref="ChangeLocation"/>. Switching to
+    /// <see cref="ReminderVisibility.Private"/> also clears <see cref="Shares"/>: a private
+    /// reminder has nobody to check a share list against, and leaving stale rows behind would
+    /// let a later switch back to a visible level resurrect a share nobody re-chose.
+    /// <see cref="Audience"/> itself is left as it was, so what reappears is
+    /// <see cref="ReminderAudience.Selected"/> with an empty list - fail-closed, not
+    /// <see cref="ReminderAudience.Everyone"/> - if that is what was set before going private.
     /// </summary>
     public void ChangeVisibility(ReminderVisibility visibility)
     {
         EnsureUpcoming("changed");
 
         Visibility = visibility;
+
+        if (visibility == ReminderVisibility.Private)
+        {
+            _shares.Clear();
+        }
+    }
+
+    /// <summary>
+    /// Sets WHO can see this reminder's time when <see cref="Visibility"/> is not
+    /// <see cref="ReminderVisibility.Private"/> - see <see cref="ReminderAudience"/>. Replaces
+    /// <see cref="Shares"/> atomically: every existing share is discarded first, then, only for
+    /// <paramref name="audience"/> equal to <see cref="ReminderAudience.Selected"/>, replaced by
+    /// exactly <paramref name="memberIds"/>, deduplicated. For
+    /// <see cref="ReminderAudience.Everyone"/> the list is always left empty, whatever
+    /// <paramref name="memberIds"/> contains - a share row would mean nothing while everyone
+    /// already sees the time. An empty <paramref name="memberIds"/> together with
+    /// <see cref="ReminderAudience.Selected"/> is a valid, deliberate state: nobody sees the
+    /// time until the owner picks someone - never read as "everyone" (docs/ARCHITECTURE.md,
+    /// "Beslut: Synlighet för påminnelser").
+    /// <para>
+    /// The owner can never appear in <paramref name="memberIds"/> - a share is for someone ELSE
+    /// to see the owner's own time - and this is checked before anything is replaced, so a
+    /// rejected call leaves the previous <see cref="Shares"/> untouched rather than partially
+    /// applied.
+    /// </para>
+    /// <para>
+    /// Household membership of each id is the caller's responsibility, not this method's: the
+    /// domain has no household roster to validate against here, only the reminder's own owner.
+    /// </para>
+    /// Only an upcoming reminder can be changed, same as <see cref="ChangeTitle"/>.
+    /// </summary>
+    public void SetAudience(ReminderAudience audience, IEnumerable<Guid> memberIds)
+    {
+        ArgumentNullException.ThrowIfNull(memberIds);
+        EnsureUpcoming("changed");
+
+        var distinctMemberIds = audience == ReminderAudience.Selected
+            ? memberIds.Distinct().ToList()
+            : [];
+
+        foreach (var memberId in distinctMemberIds)
+        {
+            Guard.AgainstEmpty(memberId, nameof(memberIds));
+
+            if (memberId == MemberId)
+            {
+                throw new DomainException("A reminder's owner cannot be in its own audience.");
+            }
+        }
+
+        Audience = audience;
+        _shares.Clear();
+        _shares.AddRange(distinctMemberIds.Select(memberId => ReminderShare.Create(Id, memberId)));
     }
 
     /// <summary>

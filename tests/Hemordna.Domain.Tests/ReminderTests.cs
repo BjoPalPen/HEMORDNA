@@ -602,4 +602,159 @@ public class ReminderTests
 
         Assert.Throws<DomainException>(() => reminder.ChangeVisibility(ReminderVisibility.Household));
     }
+
+    [Fact]
+    public void A_new_reminder_has_the_everyone_audience_and_no_shares()
+    {
+        var reminder = CreateReminder();
+
+        Assert.Equal(ReminderAudience.Everyone, reminder.Audience);
+        Assert.Empty(reminder.Shares);
+    }
+
+    [Fact]
+    public void SetAudience_to_selected_records_the_given_members()
+    {
+        var reminder = CreateReminder(visibility: ReminderVisibility.Household);
+        var memberA = Guid.NewGuid();
+        var memberB = Guid.NewGuid();
+
+        reminder.SetAudience(ReminderAudience.Selected, [memberA, memberB]);
+
+        Assert.Equal(ReminderAudience.Selected, reminder.Audience);
+        Assert.Equal(
+            new[] { memberA, memberB }.Order(),
+            reminder.Shares.Select(share => share.MemberId).Order());
+    }
+
+    [Fact]
+    public void SetAudience_to_selected_with_an_empty_list_is_valid_and_nobody_sees_it()
+    {
+        var reminder = CreateReminder(visibility: ReminderVisibility.Household);
+
+        reminder.SetAudience(ReminderAudience.Selected, []);
+
+        Assert.Equal(ReminderAudience.Selected, reminder.Audience);
+        Assert.Empty(reminder.Shares);
+    }
+
+    [Fact]
+    public void SetAudience_replaces_the_share_list_atomically_rather_than_appending()
+    {
+        var reminder = CreateReminder(visibility: ReminderVisibility.Household);
+        var memberA = Guid.NewGuid();
+        var memberB = Guid.NewGuid();
+        reminder.SetAudience(ReminderAudience.Selected, [memberA]);
+
+        reminder.SetAudience(ReminderAudience.Selected, [memberB]);
+
+        Assert.Equal([memberB], reminder.Shares.Select(share => share.MemberId));
+    }
+
+    [Fact]
+    public void SetAudience_to_everyone_clears_any_existing_shares()
+    {
+        var reminder = CreateReminder(visibility: ReminderVisibility.Household);
+        reminder.SetAudience(ReminderAudience.Selected, [Guid.NewGuid()]);
+
+        reminder.SetAudience(ReminderAudience.Everyone, []);
+
+        Assert.Equal(ReminderAudience.Everyone, reminder.Audience);
+        Assert.Empty(reminder.Shares);
+    }
+
+    [Fact]
+    public void SetAudience_to_everyone_ignores_and_clears_member_ids_passed_alongside_it()
+    {
+        var reminder = CreateReminder(visibility: ReminderVisibility.Household);
+
+        reminder.SetAudience(ReminderAudience.Everyone, [Guid.NewGuid(), Guid.NewGuid()]);
+
+        Assert.Empty(reminder.Shares);
+    }
+
+    [Fact]
+    public void ChangeVisibility_to_private_clears_any_existing_shares()
+    {
+        var reminder = CreateReminder(visibility: ReminderVisibility.Household);
+        reminder.SetAudience(ReminderAudience.Selected, [Guid.NewGuid()]);
+
+        reminder.ChangeVisibility(ReminderVisibility.Private);
+
+        Assert.Empty(reminder.Shares);
+    }
+
+    [Fact]
+    public void The_owner_can_never_be_in_their_own_audience()
+    {
+        var ownerId = Guid.NewGuid();
+        var reminder = CreateReminder(memberId: ownerId, visibility: ReminderVisibility.Household);
+
+        Assert.Throws<DomainException>(
+            () => reminder.SetAudience(ReminderAudience.Selected, [ownerId]));
+    }
+
+    [Fact]
+    public void The_owner_cannot_be_smuggled_in_alongside_another_member()
+    {
+        var ownerId = Guid.NewGuid();
+        var reminder = CreateReminder(memberId: ownerId, visibility: ReminderVisibility.Household);
+
+        Assert.Throws<DomainException>(
+            () => reminder.SetAudience(ReminderAudience.Selected, [Guid.NewGuid(), ownerId]));
+    }
+
+    [Fact]
+    public void A_failed_SetAudience_call_does_not_change_the_existing_shares()
+    {
+        var ownerId = Guid.NewGuid();
+        var reminder = CreateReminder(memberId: ownerId, visibility: ReminderVisibility.Household);
+        var memberA = Guid.NewGuid();
+        reminder.SetAudience(ReminderAudience.Selected, [memberA]);
+
+        Assert.Throws<DomainException>(
+            () => reminder.SetAudience(ReminderAudience.Selected, [ownerId]));
+
+        Assert.Equal([memberA], reminder.Shares.Select(share => share.MemberId));
+    }
+
+    [Fact]
+    public void An_empty_member_id_in_the_audience_is_rejected()
+    {
+        var reminder = CreateReminder(visibility: ReminderVisibility.Household);
+
+        Assert.Throws<ArgumentException>(
+            () => reminder.SetAudience(ReminderAudience.Selected, [Guid.Empty]));
+    }
+
+    [Fact]
+    public void SetAudience_deduplicates_repeated_member_ids()
+    {
+        var reminder = CreateReminder(visibility: ReminderVisibility.Household);
+        var memberA = Guid.NewGuid();
+
+        reminder.SetAudience(ReminderAudience.Selected, [memberA, memberA]);
+
+        Assert.Equal([memberA], reminder.Shares.Select(share => share.MemberId));
+    }
+
+    [Fact]
+    public void A_cancelled_reminder_cannot_have_its_audience_changed()
+    {
+        var reminder = CreateReminder();
+        reminder.Cancel();
+
+        Assert.Throws<DomainException>(
+            () => reminder.SetAudience(ReminderAudience.Everyone, []));
+    }
+
+    [Fact]
+    public void A_checked_off_reminder_cannot_have_its_audience_changed()
+    {
+        var reminder = CreateReminder();
+        reminder.CheckOff();
+
+        Assert.Throws<DomainException>(
+            () => reminder.SetAudience(ReminderAudience.Everyone, []));
+    }
 }
