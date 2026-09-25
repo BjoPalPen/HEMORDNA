@@ -1461,6 +1461,21 @@ en villkorad GET, förbjuder inte cachning helt). En redan cachad webbläsare be
 en sista manuell cache-rensning/ominstallation för att komma loss - fixen gör bara att alla
 framtida driftsättningar upptäcks pålitligt.
 
+**Rättelse 2026-09-25: den fixen var ofullständig.** Två hål fanns kvar, båda uppmätta i
+produktion. (1) `service-worker-assets.js` stod inte i filnamnslistan - och det är just den filen
+buggen handlar om: `service-worker.published.js` läser den med `importScripts`, och en registrering
+utan alternativ får standardläget `updateViaCache: 'imports'`, vilket låter webbläsaren servera
+den ur sin egen HTTP-cache när den letar efter en uppdatering. En gammal fillista får den nya
+workern att försöka cacha förra byggets fingeravtryckta `_framework`-filer; de ger 404, den tomma
+kroppen fäller SRI-kontrollen i `cache.addAll`, och den nya workern kasseras som `redundant` - helt
+tyst för användaren. (2) `MapFallbackToFile` hade egna `StaticFileOptions` utan `OnPrepareResponse`,
+så varje klientroute (`/vecka`, `/hushall`, ...) serverade `index.html` helt utan `Cache-Control`.
+Rättat med en delad `SetNoCacheForAppShellFiles` på båda ställena, listan utökad med
+`service-worker-assets.js` och `manifest.webmanifest`, och `updateViaCache: 'none'` i
+registreringen. `tests/Hemordna.Api.Tests` låser alla sju fallen - inklusive att `_framework/*`
+INTE får `no-cache`, och fallbacken som eget fall, eftersom de fem övriga passerar även med hålet
+kvar.
+
 ### Uppföljning: rumsgruppering hölls inte ihop per våning på Idag — `IMPLEMENTED`
 
 Produktfeedback: "Beslut: Rumsgruppering på Min dag" (steg 1) grupperar redan uppgifter per
