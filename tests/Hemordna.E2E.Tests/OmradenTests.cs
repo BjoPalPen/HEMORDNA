@@ -39,7 +39,7 @@ public class OmradenTests
     /// details (which weekday a task lands on) that the UI itself never displays.</summary>
     private async Task<JsonElement> FetchTasksAsync(IPage page)
     {
-        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        var token = await AccessTokenHelper.GetAsync(page, _app.ApiUrl);
         using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
         http.DefaultRequestHeaders.Authorization = new("Bearer", token);
 
@@ -438,7 +438,7 @@ public class OmradenTests
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Lasse");
 
-        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        var token = await AccessTokenHelper.GetAsync(page, _app.ApiUrl);
         using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
         http.DefaultRequestHeaders.Authorization = new("Bearer", token);
 
@@ -537,7 +537,7 @@ public class OmradenTests
             .GetProperty("id").GetGuid();
         var collisionDay = WeekdayOf(beforeTasks, "Torka av handfatet")!;
 
-        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        var token = await AccessTokenHelper.GetAsync(page, _app.ApiUrl);
         using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
         http.DefaultRequestHeaders.Authorization = new("Bearer", token);
         var me = await (await http.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();
@@ -576,7 +576,7 @@ public class OmradenTests
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Björn");
 
-        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        var token = await AccessTokenHelper.GetAsync(page, _app.ApiUrl);
         using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
         http.DefaultRequestHeaders.Authorization = new("Bearer", token);
 

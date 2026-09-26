@@ -14,7 +14,7 @@ public class ExtraTaskTests
 
     private static async Task<HttpClient> AuthorizedHttpAsync(IPage page, string apiUrl)
     {
-        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        var token = await AccessTokenHelper.GetAsync(page, apiUrl);
         var http = new HttpClient { BaseAddress = new Uri(apiUrl) };
         http.DefaultRequestHeaders.Authorization = new("Bearer", token);
         return http;
@@ -135,7 +135,7 @@ public class ExtraTaskTests
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Nils");
 
-        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        var token = await AccessTokenHelper.GetAsync(page, _app.ApiUrl);
         using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
         http.DefaultRequestHeaders.Authorization = new("Bearer", token);
 
@@ -195,7 +195,7 @@ public class ExtraTaskTests
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Otto");
 
-        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        var token = await AccessTokenHelper.GetAsync(page, _app.ApiUrl);
         using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
         http.DefaultRequestHeaders.Authorization = new("Bearer", token);
 
@@ -284,7 +284,7 @@ public class ExtraTaskTests
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Ingrid");
 
-        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        var token = await AccessTokenHelper.GetAsync(page, _app.ApiUrl);
         using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
         http.DefaultRequestHeaders.Authorization = new("Bearer", token);
 

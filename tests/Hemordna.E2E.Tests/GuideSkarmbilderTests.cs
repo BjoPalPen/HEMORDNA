@@ -101,7 +101,7 @@ public class GuideSkarmbilderTests
 
         // A brand new household starts its creator at zero minutes a day, so "Idag" would stay
         // empty however many rooms are seeded below - see PlaneringTests.
-        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        var token = await AccessTokenHelper.GetAsync(page, _app.ApiUrl);
         using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
         http.DefaultRequestHeaders.Authorization = new("Bearer", token);
         var me = await (await http.GetAsync("/api/me")).Content.ReadFromJsonAsync<JsonElement>();

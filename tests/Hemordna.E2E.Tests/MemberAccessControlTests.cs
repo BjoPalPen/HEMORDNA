@@ -20,7 +20,7 @@ public class MemberAccessControlTests
 
     private static async Task<HttpClient> AuthorizedHttpAsync(IPage page, string apiUrl)
     {
-        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        var token = await AccessTokenHelper.GetAsync(page, apiUrl);
         var http = new HttpClient { BaseAddress = new Uri(apiUrl) };
         http.DefaultRequestHeaders.Authorization = new("Bearer", token);
         return http;

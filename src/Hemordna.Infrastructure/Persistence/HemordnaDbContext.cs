@@ -1,4 +1,5 @@
 using Hemordna.Domain.Areas;
+using Hemordna.Domain.Authentication;
 using Hemordna.Domain.Households;
 using Hemordna.Domain.Push;
 using Hemordna.Domain.Reminders;
@@ -46,6 +47,8 @@ public sealed class HemordnaDbContext : IdentityDbContext<HemordnaUser, Identity
     public DbSet<MemberPreference> MemberPreferences => Set<MemberPreference>();
 
     public DbSet<PasskeyCredential> PasskeyCredentials => Set<PasskeyCredential>();
+
+    public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
 
     public DbSet<Reminder> Reminders => Set<Reminder>();
 

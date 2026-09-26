@@ -138,7 +138,7 @@ public class MinDagTests
         var page = await _app.NewPageAsync();
         await SignUpAsync(page, "Wilma");
 
-        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        var token = await AccessTokenHelper.GetAsync(page, _app.ApiUrl);
         using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
         http.DefaultRequestHeaders.Authorization = new("Bearer", token);
 
@@ -200,7 +200,7 @@ public class MinDagTests
         var page = await _app.NewPageAsync();
         await SignUpAsync(page, "Elin");
 
-        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        var token = await AccessTokenHelper.GetAsync(page, _app.ApiUrl);
         using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
         http.DefaultRequestHeaders.Authorization = new("Bearer", token);
 
@@ -265,7 +265,7 @@ public class MinDagTests
         await page.SetViewportSizeAsync(390, 500);
         await SignUpAsync(page, "Iris");
 
-        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        var token = await AccessTokenHelper.GetAsync(page, _app.ApiUrl);
         using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
         http.DefaultRequestHeaders.Authorization = new("Bearer", token);
 

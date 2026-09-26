@@ -4,7 +4,17 @@ namespace Hemordna.Client.Contracts;
 /// The shapes the API returns. Kept as a small client-side copy rather than sharing the API
 /// project: the client depends on the HTTP contract, not on the server's assemblies.
 /// </summary>
-public sealed record AccessTokenResponse(string Token, DateTimeOffset ExpiresAt);
+/// <summary>
+/// <see cref="RefreshToken"/> and <see cref="RefreshTokenExpiresAt"/> are only present on
+/// register, login, passkey login and <c>/api/auth/refresh</c> - see the API's own
+/// <c>AccessTokenResponse</c> remarks for why they are nullable additions rather than a
+/// separate response shape.
+/// </summary>
+public sealed record AccessTokenResponse(
+    string Token,
+    DateTimeOffset ExpiresAt,
+    string? RefreshToken = null,
+    DateTimeOffset? RefreshTokenExpiresAt = null);
 
 public sealed record PasskeyResponse(string Id, string DeviceLabel, DateTimeOffset CreatedAt);
 

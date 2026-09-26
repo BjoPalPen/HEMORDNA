@@ -4291,3 +4291,139 @@ samma spärr gäller både vid skapande och vid ändring av en befintlig påminn
 
 Tidigare på denna lista, nu lösta: vem som genererar `TaskOccurrence` och hur roterande ansvar
 räknas ut - se §3 och §5.
+
+---
+
+### Beslut: Refresh-token med rotation — `IMPLEMENTED`
+
+Problemet var uppmätt, inte antaget: `JwtOptions.TokenLifetimeMinutes` stod på 60 utan att vara
+överskrivet någonstans, med `AccessTokenResponse.Token` liggande i `localStorage` - användaren
+loggades ut ungefär varje timme och fick skriva lösenord igen.
+
+**Varför inte bara en längre JWT.** En utfärdad JWT går inte att återkalla förrän den löper ut av
+sig själv - varken utloggning eller ett lösenordsbyte biter på en redan utfärdad token (bortsett
+från Identitys `security_stamp`-kontroll, som redan fanns och skyddar lösenordsbyte/återställning
+för access-token specifikt). En längre livstid hade bara flyttat problemet: ju längre token,
+desto längre fönster för en läckt token att vara användbar, med ingen väg att stänga det fönstret
+i efterhand. Lösningen är i stället att korta access-token radikalt (30 minuter) och lägga
+förnyelse på en SEPARAT mekanism som faktiskt går att återkalla: en refresh-token med rotation.
+
+**Rotation och återanvändningsdetektering.** Varje `POST /api/auth/refresh` konsumerar den
+presenterade token och utfärdar en ny i samma kedja (`RefreshToken.ChainId`, satt vid första
+utfärdandet, ärvt vid varje rotation - `Hemordna.Domain.Authentication.RefreshToken.IssueNew`/
+`IssueNext`). Presenteras en token som redan är förbrukad ELLER redan återkallad - vare sig det är
+en stulen kopia som spelas upp, eller (se nedan) en förlorande sida i en kapplöpning om samma
+token - återkallas HELA kedjan
+(`Hemordna.Application.Authentication.RotateRefreshToken.HandleAsync`), inklusive varje token
+kedjan redan hunnit producera. Det är den egenskapen som gör en stulen refresh-token värdelös i
+praktiken: den fungerar exakt en gång innan ägaren (den legitima klienten, som fortsätter rotera
+normalt) upptäcker att dess egen nästa förnyelse presenterar en redan förbrukad token och drar med
+sig hela kedjan i fallet. En ren utgång (aldrig förbrukad, aldrig återkallad, bara för gammal) är
+INTE en stöldsignal och återkallar ingenting - att behandla den som stöld hade nollat kedjan för
+varje användare som bara varit borta en månad.
+
+**Endast en hash lagras.** `RefreshToken.TokenHash` är en SHA-256-digest, hex-kodad till exakt 64
+tecken (`RefreshTokenSecret.Hash`) - klartextvärdet existerar bara i minnet under det enda anrop
+som utfärdar eller roterar det, och finns strukturellt ingenstans att läcka från en databasdump.
+`RefreshToken` har ingen sättare som ens skulle kunna ta emot ett klartextvärde.
+
+**Atomicitet: `ExecuteUpdate`, inte en transaktion eller ett unikt index.**
+`RefreshTokenRepository.TryConsumeAsync` är en enda villkorad sats,
+`UPDATE ... WHERE "ConsumedAt" IS NULL AND "RevokedAt" IS NULL`, verifierad ordagrant mot den
+riktiga dev-databasen genom att slå på EF:s command-loggning. PostgreSQL garanterar att den
+enskilda satsen är atomär, så när två anrop kapplöper om samma token kan högst ett av dem matcha
+den fortfarande-inte-förbrukade raden.
+
+**`AsNoTracking()` i `RefreshTokenRepository.FindByHashAsync` är ett korrekthetskrav, inte en
+läsoptimering** - den enda punkten i hela uppdraget som klarade sig genom samtliga enhetstester
+och först föll mot en riktig databas. `RotateRefreshToken` läser om starttoken efter sin egen
+`AddAsync`, specifikt för att upptäcka en kedjeåterkallning som hann ske mittemellan (se nästa
+stycke). Alla mutationer i detta repository går via `ExecuteUpdate`, som skriver rakt mot
+databasen och aldrig rör EF:s change tracker. Utan `AsNoTracking()` returnerar en andra fråga
+inom samma request det redan spårade objektet ur EF:s identity map - inte en färsk rad - så
+omläsningen visar för alltid det ursprungliga, aldrig återkallade tillståndet, oavsett vad som
+faktiskt hänt i databasen. Detta höll för varenda in-memory-fejk i `Hemordna.Application.Tests`
+och avslöjades först av `Hemordna.E2E.Tests.RefreshTokenTests` mot den riktiga databasen - vilket
+är skälet till att det E2E-testet aldrig ska tas bort, oavsett hur stabilt kontraktet ser ut mot
+fejken.
+
+**En kapplöpning mellan en förlorares återkallning och en vinnares insert.** Två samtidiga
+`/refresh`-anrop med samma token löser `TryConsumeAsync` korrekt (högst en vinner), men den
+förlorande sidans kedjeåterkallning kan hinna före den vinnande sidans egen `AddAsync` av nästa
+token - en återkallning som kapplöper en insert. En återkallning som kör FÖRST når bara rader som
+redan finns, så en naiv implementation hade kunnat låta vinnarens nymintade token överleva ett
+återanvändningslarm som utlöstes av precis den rotationen. Löst med en omläsning av starttoken
+efter insert (se `AsNoTracking()` ovan): visar den sig återkallad vid det laget har en
+kapplöpande anropare upptäckt återanvändning under exakt den här rotationen, och den nyss
+myntade token återkallas också i stället för att lämnas tillbaka som om inget hänt. Bevisat
+deterministiskt (`RotateRefreshTokenTests.A_chain_revoked_by_a_racing_caller_...`, en test-egen
+repository-underklass som simulerar exakt den interfolieringen) snarare än att förlita sig på att
+riktig trådschemaläggning råkar träffa fönstret.
+
+**Single-flight-spärren i klienten är ett eget designbeslut, inte bara en implementationsdetalj.**
+Utan den blir fyra samtidiga API-anrop som alla upptäcker en saknad access-token fyra samtidiga
+`/api/auth/refresh`-anrop med SAMMA refresh-token - och med rotation är det exakt den situationen
+återanvändningsdetekteringen ovan tolkar som stöld: tre av de fyra hade presenterat en redan
+förbrukad token och utlöst en kedjeåterkallning, vilket loggar ut användaren på riktigt. En
+funktion byggd för att hålla folk inloggade längre hade då gjort saken värre än innan ändringen -
+folk hade loggats ut OFTARE, inte mer sällan. Löst med en enda cachad `Task`
+(`HemordnaApiClient._refreshTask ??= DoRefreshAccessTokenAsync(...)`, samma mönster som
+`HemordnaSession._loading`): alla samtidiga anropare väntar in samma pågående förnyelse i stället
+för att kapplöpa om att starta var sin. Bevisat, inte antaget:
+`HemordnaApiClientRefreshTests` räknar faktiska anrop mot en riktig `HttpMessageHandler`-dubbel -
+spärren avstängd gav 3 respektive 7 anrop i stället för 1 i de två testfallen, på plats gav den 1.
+
+**Ingen flimrande inloggningssida vid appstart.** Access-token finns per definition inte i minnet
+direkt efter en omladdning. `HemordnaApiClient.EnsureAccessTokenAsync` försöker förnya tyst FÖRE
+det första anropet går ut om ingen token finns cachad - en optimering som sparar en garanterat
+misslyckad tur-och-retur, inte det som egentligen skyddar mot flimret. Det som faktiskt skyddar är
+att `SendAsync`s enda-omförsök-vid-401 ligger INNANFÖR samma avvaktade anrop
+`HemordnaSession.LoadAsync` väntar in: `IsLoaded` sätts aldrig till "signerad ut" förrän hela
+anropet, förnyelseförsök inräknat, har landat. Verifierat genom att stänga av båda mekanismerna i
+tur och ordning och se `Reloading_the_page_after_signing_in_keeps_the_user_signed_in` bli rött i
+varje enskilt fall, sedan grönt igen med endera på plats.
+
+**SignalR undersöktes, antogs inte fungera - och gjorde det inte helt.**
+`HouseholdRealtimeClient`s `AccessTokenProvider` läste tidigare bara den cachade token utan att
+säkerställa att den fortfarande var giltig. Servern stänger anslutningen exakt när access-token
+går ut (`CloseOnAuthenticationExpiration` i `Program.cs`), så en återanslutning hade presenterat
+samma nyss utgångna token om och om igen tills något orelaterat REST-anrop råkade förnya den.
+Fixat: samma `EnsureAccessTokenAsync` anropas nu vid varje (åter)anslutning, inklusive SignalRs
+egna automatiska återanslutningsförsök - inte bara vid den första.
+
+**Refresh-token i `localStorage`, access-token enbart i minnet - HttpOnly-cookie medvetet
+uppskjuten.** En HttpOnly-cookie vore säkrare mot XSS och är möjlig i produktion, där API och
+klient delar origin. Dev och E2E kör på skilda portar (5199/5200), vilket hade krävt
+`SameSite=None`-hantering och riskerat sviten - uppskjutet som ett medvetet härdningssteg, inte
+avfärdat. Refresh-token ligger under en egen nyckel, `hemordna.refresh` (inte den gamla
+`hemordna.token`, som hade varit förvirrande att återanvända för något med helt andra
+egenskaper).
+
+**Livslängder, av beslut.** Access-token: 30 minuter - kort eftersom en läckt access-token inte
+går att återkalla innan den löper ut, och tyst förnyelse gör att den exakta längden aldrig märks
+av den som använder appen. Refresh-token: 60 dagar, förnyad vid varje rotation - en användare som
+öppnar appen någon gång i månaden loggas därför aldrig ut av sig själv.
+
+**Lösenordsbyte kontra lösenordsåterställning - avsiktligt olika, inte en inkonsekvens.**
+`ChangePasswordAsync` återkallar alla kedjor för användaren men utfärdar omedelbart en ny till
+just den anropande enheten: den som byter lösenord har i samma anrop redan bevisat både det gamla
+och det nya lösenordet, så att logga ut den enheten också hade skyddat ingenting - bara andra,
+redan inloggade enheter tappar sin session. `ResetPasswordAsync` gör INTE detta: det flödet nås
+via en mejlad länk utan någon session alls, och används just när någon misstänker att en annan
+enhet är den som komprometterats - där är poängen att allt dör, ingen enhet undantagen. Samma
+säkerhetsåtgärd (återkalla allt), men olika svar beroende på om det finns en session att skilja
+ut och behålla. Bevisat med tre E2E-test (`RefreshTokenTests`): anroparens nya kedja fungerar
+efter ett lösenordsbyte, en annan enhets kedja gör det inte, och det befintliga testet som
+avslöjade avsaknaden av den första egenskapen
+(`InstallningarTests.Changing_the_password_lets_the_user_sign_in_with_the_new_one_but_not_the_old_one`)
+går grönt igen helt oförändrat.
+
+**Engångsutloggning vid den här driftsättningen - väntat, inte ett fel.** Access-token slutar
+läsas från `localStorage` samma dag den här ändringen går i drift, och ingen befintlig användare
+har ännu en refresh-token (den infrastrukturen fanns inte tidigare). Nästa gång appen laddas har
+den varken en giltig access-token i minnet eller något att förnya ifrån, och alla befintliga
+sessioner loggas därför ut precis en gång. `TokenStore.RemoveLegacyAccessTokenAsync` städar
+samtidigt bort den gamla `hemordna.token`-nyckeln ur `localStorage` ovillkorligen vid varje
+appstart - annars hade den legat kvar som en fortfarande giltig, men aldrig mer lästa,
+bärar-token tills den självdog av ålder, precis den sortens skräp en säkerhetsändring inte ska
+lämna efter sig.

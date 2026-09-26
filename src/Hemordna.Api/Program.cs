@@ -6,6 +6,7 @@ using Hemordna.Api.Authentication;
 using Hemordna.Api.Endpoints;
 using Hemordna.Api.Realtime;
 using Hemordna.Api.Services;
+using Hemordna.Application.Authentication;
 using Hemordna.Application.Households;
 using Hemordna.Application.Planning;
 using Hemordna.Application.Push;
@@ -70,6 +71,11 @@ builder.Services.AddRateLimiter(options =>
 
 // TimeProvider rather than a static clock, so use cases stay testable.
 builder.Services.AddSingleton(TimeProvider.System);
+
+builder.Services.AddScoped<IssueRefreshToken>();
+builder.Services.AddScoped<RotateRefreshToken>();
+builder.Services.AddScoped<RevokeRefreshTokenChain>();
+builder.Services.AddScoped<RevokeAllRefreshTokensForUser>();
 
 builder.Services.AddScoped<CreateHousehold>();
 builder.Services.AddScoped<JoinHousehold>();

@@ -21,7 +21,7 @@ public class PeekScheduleTests
         await HushallHelper.AddMemberWithoutAccountAsync(page, "Sven", "Vuxen, jobbar heltid");
         await Assertions.Expect(page.GetByRole(AriaRole.Button, new() { Name = "Sven" })).ToBeVisibleAsync();
 
-        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        var token = await AccessTokenHelper.GetAsync(page, _app.ApiUrl);
         using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
         http.DefaultRequestHeaders.Authorization = new("Bearer", token);
 
@@ -71,7 +71,7 @@ public class PeekScheduleTests
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Nils");
 
-        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        var token = await AccessTokenHelper.GetAsync(page, _app.ApiUrl);
         using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
         http.DefaultRequestHeaders.Authorization = new("Bearer", token);
 
@@ -114,7 +114,7 @@ public class PeekScheduleTests
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Otto");
 
-        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        var token = await AccessTokenHelper.GetAsync(page, _app.ApiUrl);
         using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
         http.DefaultRequestHeaders.Authorization = new("Bearer", token);
 
@@ -167,7 +167,7 @@ public class PeekScheduleTests
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Ines");
 
-        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        var token = await AccessTokenHelper.GetAsync(page, _app.ApiUrl);
         using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
         http.DefaultRequestHeaders.Authorization = new("Bearer", token);
 

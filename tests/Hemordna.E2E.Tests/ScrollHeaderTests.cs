@@ -27,7 +27,7 @@ public class ScrollHeaderTests
 
         // The collapsed row only renders once Idag actually has something to summarise - an
         // empty "Ledigt idag" day never shows it (see hasDayCounts in MinDag.razor).
-        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        var token = await AccessTokenHelper.GetAsync(page, _app.ApiUrl);
         using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
         http.DefaultRequestHeaders.Authorization = new("Bearer", token);
 

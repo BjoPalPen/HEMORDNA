@@ -1,3 +1,4 @@
+using Hemordna.Application.Authentication;
 using Hemordna.Application.Households;
 using Hemordna.Application.Planning;
 using Hemordna.Application.Push;
@@ -41,6 +42,7 @@ public static class DependencyInjection
 
         services.AddDbContext<HemordnaDbContext>(options => options.UseNpgsql(connectionString));
 
+        services.AddScoped<IRefreshTokenRepository, RefreshTokenRepository>();
         services.AddScoped<IHouseholdRepository, HouseholdRepository>();
         services.AddScoped<IHouseholdMembershipQuery, HouseholdMembershipQuery>();
         services.AddScoped<IMemberAvailabilityRepository, MemberAvailabilityRepository>();

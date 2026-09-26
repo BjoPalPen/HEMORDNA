@@ -3,9 +3,11 @@ using Fido2NetLib;
 using Fido2NetLib.Objects;
 using Hemordna.Api.Authentication;
 using Hemordna.Api.Contracts;
+using Hemordna.Application.Authentication;
 using Hemordna.Infrastructure.Identity;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Options;
 
 namespace Hemordna.Api.Endpoints;
 
@@ -271,6 +273,8 @@ internal static class PasskeyEndpoints
         IPasskeyCredentialStore store,
         IFido2 fido2,
         JwtTokenIssuer tokens,
+        IssueRefreshToken issueRefreshToken,
+        IOptions<JwtOptions> jwtOptions,
         IMemoryCache cache,
         CancellationToken cancellationToken)
     {
@@ -320,8 +324,9 @@ internal static class PasskeyEndpoints
 
             await store.UpdateSignCountAsync(result.CredentialId, result.SignCount, cancellationToken);
 
-            var token = tokens.Issue(user);
-            return Results.Ok(new AccessTokenResponse(token.Token, token.ExpiresAt));
+            var response = await AuthEndpoints.IssueAccessTokenResponseAsync(
+                user, tokens, issueRefreshToken, jwtOptions, cancellationToken);
+            return Results.Ok(response);
         }
         catch (Fido2VerificationException)
         {

@@ -21,7 +21,7 @@ public class CalmMotivationTests
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, displayName);
 
-        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        var token = await AccessTokenHelper.GetAsync(page, _app.ApiUrl);
         using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
         http.DefaultRequestHeaders.Authorization = new("Bearer", token);
 
@@ -129,7 +129,7 @@ public class CalmMotivationTests
         var page = await _app.NewPageAsync();
         await SignUpHelper.SignUpAsync(page, "Frida");
 
-        var token = await page.EvaluateAsync<string>("() => localStorage.getItem('hemordna.token')");
+        var token = await AccessTokenHelper.GetAsync(page, _app.ApiUrl);
         using var http = new HttpClient { BaseAddress = new Uri(_app.ApiUrl) };
         http.DefaultRequestHeaders.Authorization = new("Bearer", token);
 
