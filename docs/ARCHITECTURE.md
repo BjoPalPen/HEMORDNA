@@ -4282,6 +4282,32 @@ EFTER visibility-anropet i samma spara-kedja, tyst återupplivat precis den deln
 `ChangeVisibility(Private)` just rensat. Ett designbeslut, inte bara en implementationsdetalj:
 samma spärr gäller både vid skapande och vid ändring av en befintlig påminnelse.
 
+### Beslut: QR-kod till appen i inbjudningsvyn — `IMPLEMENTED`
+
+Björn ville kunna länka till appen med en QR-kod. Den ligger i "Bjud in"-vyn på Hushåll, där
+behovet uppstår: någon ska in i hushållet och behöver först hitta till appen.
+
+**Koden pekar på appen, inte på inbjudningskoden.** Den som scannar slipper få adressen
+bokstaverad för sig, men anger fortfarande koden själv när kontot skapas. Att lägga koden i
+QR:en hade krävt att registreringen läser en query-parameter, vilket den inte gör
+(`LoggaIn.razor` har bara `@page "/logga-in"`) - det är en egen funktion, inte en QR-detalj, och
+den byggs den dag någon faktiskt tycker att inknappningen är i vägen.
+
+**Statisk SVG i `wwwroot/brand/qr-app.svg`, inte genererad i klienten.** Adressen ändras aldrig,
+så ett QR-bibliotek i klienten hade betalat en runtime-kostnad och ett beroende för att varje
+gång rita om exakt samma bild. Filen genererades en gång med Pythons `qrcode` (felkorrigering H,
+tål veck och smuts på en utskrift) och verifierades genom att avkodas tillbaka till
+`https://app.hemordna.se`.
+
+**Bilden bär sin egen vita bakgrund.** En genomskinlig QR-kod med mörka moduler går inte att
+scanna mot det mörka temat, och koden ska fungera likadant var den än visas eller skrivs ut.
+Ramen i `.invite-qr` finns för att den vita ytan annars blir en hård kant mitt i vyn.
+
+`HushallTests.The_invite_sheet_shows_a_qr_code_to_the_app` låser både att bilden finns och att
+sökvägen svarar 200 - en trasig sökväg renderar som en tom ruta utan att något annat går sönder,
+och hade annars bara märkts av den som stod med telefonen framme.
+
+
 | Fråga | Varför den väntar |
 |---|---|
 | Offline-strategi bortom read-only cache | Utanför MVP; får inte låsas in i förväg |

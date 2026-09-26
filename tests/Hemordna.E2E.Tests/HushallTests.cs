@@ -11,6 +11,29 @@ public class HushallTests
 
     public HushallTests(HemordnaAppFixture app) => _app = app;
 
+    /// <summary>Inbjudningsvyn visar en QR-kod till appen (docs/ARCHITECTURE.md, "Beslut:
+    /// QR-kod till appen i inbjudningsvyn"). Testet låser att den finns OCH att den pekar på den
+    /// statiska filen - en trasig sökväg ger en osynlig bild utan att något annat går sönder,
+    /// vilket annars bara hade märkts av den som stod med telefonen framme.</summary>
+    [Fact]
+    public async Task The_invite_sheet_shows_a_qr_code_to_the_app()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Elin", "Familjen Lind");
+
+        await page.GotoAsync("/hushall");
+        await page.GetByRole(AriaRole.Button, new() { Name = "Bjud in" }).ClickAsync();
+
+        var dialog = page.GetByRole(AriaRole.Dialog, new() { Name = "Bjud in" });
+        var qr = dialog.GetByRole(AriaRole.Img, new() { Name = "QR-kod som leder till app.hemordna.se" });
+        await Assertions.Expect(qr).ToBeVisibleAsync();
+        await Assertions.Expect(qr).ToHaveAttributeAsync("src", "brand/qr-app.svg");
+
+        // Bilden ska faktiskt gå att hämta - en 404 renderar som en tom ruta utan att fela.
+        var response = await page.APIRequest.GetAsync(_app.ClientUrl + "/brand/qr-app.svg");
+        Assert.Equal(200, response.Status);
+    }
+
     [Fact]
     public async Task Shows_the_household_name_and_the_creator_as_a_member()
     {
