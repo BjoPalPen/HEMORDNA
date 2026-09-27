@@ -4306,6 +4306,58 @@ Ramen i `.invite-qr` finns för att den vita ytan annars blir en hård kant mitt
 `HushallTests.The_invite_sheet_shows_a_qr_code_to_the_app` låser både att bilden finns och att
 sökvägen svarar 200 - en trasig sökväg renderar som en tom ruta utan att något annat går sönder,
 och hade annars bara märkts av den som stod med telefonen framme.
+### Beslut: "Turas om" i stället för "roterar" — `IMPLEMENTED`
+
+En testperson reagerade på "Roterar mellan alla" som provocerande. Ordet byttes till **"Turas om"**
+på samtliga sju ställen i gränssnittet, plus hjälpsidan och PRODUCT.md.
+
+Skälet: "rotera" är ett skiftschema-ord - rotationsschema, roterande arbetstid - och det gör
+hemmet till en arbetsplats. Det skaver särskilt i den här appen, vars uttalade hållning är att
+den beskriver vad hushållet kommit överens om och INTE föreskriver en fördelning
+(PRODUCT.md §2). Formuleringen ligger dessutom nära att låta som att *personer* roteras, som
+utbytbara enheter, snarare än att uppgiften går runt. "Turas om" är vad familjer faktiskt säger,
+och det är något man gör tillsammans - inte något som appliceras på en.
+
+**Koden behåller `Rotation*`** (`RotationPicker`, `TaskAssignment`s rotationsläge): CLAUDE.md §16
+säger engelska i kod och svenska i användarnära text, och "rotation" är korrekt och etablerat som
+teknisk term. Det är alltså inte en inkonsekvens att koden och gränssnittet säger olika saker
+här - det är regeln.
+
+**Sätt inte tillbaka "roterar" i UI-text.** Ordet valdes bort efter användarreaktion, inte av
+stilskäl.
+
+
+### Beslut: Ingen vem-fråga i ensamhushåll — `IMPLEMENTED`
+
+En testperson som bor ensam reagerade på "Roterar mellan alla" som provocerande. Den första
+åtgärden blev ett ordbyte till "Turas om" (posten ovan) - men det var fel problem. För någon som
+bor ensam är "Turas om" **värre**: det är varmare och mer uttalat socialt.
+
+**Frågan finns inte, inte bara ordet.** Med en enda aktiv medlem står valet under "Vem gör det?"
+mellan rotationsalternativet och ens eget namn - två alternativ som betyder exakt samma sak. Det
+är inte ett tondövt ordval utan ett val utan innehåll, och PRODUCT.md §2 listar singelhushåll
+först bland målgrupperna.
+
+Därför döljs följande helt när `Members.Count == 1` (aktiva medlemmar):
+
+- "Vem gör det"-raden i `TaskOptionsSheet`
+- menyvalet "Sätt utförare för hela rummet" i `RoomSheet`
+- "turas om"-chippet på uppgiftsraden
+- "Balansera om vem som gör vad" på Hushåll - att balansera om förutsätter någon att balansera mot
+
+**Det lagrade värdet rörs inte.** Björn ställde den avgörande frågan: man bygger ofta upp rummen
+ensam och bjuder in familjen efteråt. En ny uppgift skapas redan med `HasRotatingResponsibility:
+true` och ingen utsedd person (`RoomSheet`s add-flöde), så allt som byggs upp i ensamhet ligger
+redan som "turas om" i databasen. Frågan döljs alltså för att den saknar mening - uppgiften låses
+INTE till den som råkar vara ensam - och dagen någon fler går med börjar `RotationPicker` fördela
+av sig själv, utan att någon behöver gå igenom uppgifterna i efterhand.
+
+Hade vi i stället tvångstilldelat den ensamma medlemmen hade varje uppgift som skapats före
+inbjudan blivit permanent fastlåst på en person, och familjen fått börja med att rätta dem en och
+en. Det är skillnaden mellan att dölja en fråga och att svara på den åt användaren.
+
+`EnsamhushallTests` låser alla tre ytorna. Testerna verifierades genom att villkoret tillfälligt
+togs bort - då blev de röda, som avsett.
 
 
 | Fråga | Varför den väntar |

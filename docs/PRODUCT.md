@@ -47,7 +47,7 @@ Hushållet bestämmer tillsammans:
 - vad som behöver göras
 - hur ofta
 - vem som ansvarar
-- om ansvaret roterar
+- om man turas om
 - när uppgiften helst ska göras
 
 Varje individ ser sedan bara:
@@ -190,7 +190,7 @@ behöver inte vara ett rum.
 
 ### Tasks
 En uppgift kan ha: namn, beskrivning, område, uppskattad tid, normal ansvarig, prioritet,
-recurrence, önskad veckodag, om den får skjutas upp, om ansvaret roterar, om den kräver
+recurrence, önskad veckodag, om den får skjutas upp, om man turas om, om den kräver
 flera personer.
 
 ### Recurrence
