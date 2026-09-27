@@ -233,6 +233,13 @@ public class GuideSkarmbilderTests
         await ShootAsync(page, "pausa-hushallet");
         await pauseSheet.GetByRole(AriaRole.Button, new() { Name = "Stäng" }).ClickAsync();
 
+        // "Balansera om" finns bara i ett hushåll med fler än en medlem - att fördela om mellan
+        // medlemmar förutsätter någon att fördela mot (docs/ARCHITECTURE.md "Beslut: Ingen
+        // vem-fråga i ensamhushåll"). Guiden dokumenterar funktionen, så skärmbilden måste tas i
+        // ett hushåll där den existerar. En kontolös medlem räcker och kräver ingen andra
+        // webbläsarsession.
+        await HushallHelper.AddMemberWithoutAccountAsync(page, "Emma", "Barn eller ungdom");
+
         await page.GetByRole(AriaRole.Button, new() { Name = "Balansera om vem som gör vad" }).ClickAsync();
         var rebalanceSheet = page.GetByRole(AriaRole.Dialog, new() { Name = "Balansera om vem som gör vad" });
         await rebalanceSheet.WaitForAsync();
