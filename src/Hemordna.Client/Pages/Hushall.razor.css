@@ -292,3 +292,12 @@
     font-weight: 600;
     letter-spacing: 0.15em;
 }
+
+/* Egen radie och ram runt QR-koden så den inte ser ut att sväva mot sheetets bakgrund. Bilden
+   bär sin egen vita yta (den måste, för att gå att scanna i mörkt tema), och utan en ram blir
+   den vita fyrkanten en hård kant mitt i vyn. */
+.invite-qr {
+    display: block;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--gustav-soft);
+}
