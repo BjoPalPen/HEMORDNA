@@ -88,13 +88,13 @@
             <p class="muted small">
                 Sätter samma utförare på alla @VisibleTasks.Count uppgifter i @Label på en gång -
                 detta skriver över varje uppgifts egen tilldelning, även de som sedan tidigare
-                har en annan person eller är enskilt satta till roterande.
+                har en annan person eller är enskilt satta till att turas om.
             </p>
 
             <label class="field">
                 <span>Utförare för hela @Label</span>
                 <select @bind="_ownerMemberId">
-                    <option value="">Roterar</option>
+                    <option value="">Turas om</option>
                     @foreach (var member in Members)
                     {
                         <option value="@member.Id">@member.DisplayName</option>
@@ -217,7 +217,7 @@
                                         @RecurrenceLabel(task) · @task.EstimatedMinutes min
                                         @if (task.HasRotatingResponsibility)
                                         {
-                                            <span class="chip">roterar</span>
+                                            <span class="chip">turas om</span>
                                         }
                                         else if (MemberNameFor(task.DefaultResponsibleMemberId) is { } ownerName)
                                         {

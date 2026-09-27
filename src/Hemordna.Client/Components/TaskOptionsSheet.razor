@@ -49,7 +49,7 @@
             <label class="field">
                 <span>Vem gör det?</span>
                 <select @bind="_assignmentMemberId">
-                    <option value="">Roterar mellan alla</option>
+                    <option value="">Turas om</option>
                     @foreach (var member in Members)
                     {
                         <option value="@member.Id">@member.DisplayName</option>
@@ -322,7 +322,7 @@
             ?? "Ingen särskild dag";
 
     private string AssignmentSummary => Task.HasRotatingResponsibility
-        ? "Roterar mellan alla"
+        ? "Turas om"
         : Members.FirstOrDefault(m => m.Id == Task.DefaultResponsibleMemberId)?.DisplayName ?? "Okänd";
 
     private string RoomSummary => Areas.FirstOrDefault(a => a.Id == Task.AreaId)?.Name ?? "Övrigt";

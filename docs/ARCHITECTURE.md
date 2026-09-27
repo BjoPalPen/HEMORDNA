@@ -4282,6 +4282,27 @@ EFTER visibility-anropet i samma spara-kedja, tyst återupplivat precis den deln
 `ChangeVisibility(Private)` just rensat. Ett designbeslut, inte bara en implementationsdetalj:
 samma spärr gäller både vid skapande och vid ändring av en befintlig påminnelse.
 
+### Beslut: "Turas om" i stället för "roterar" — `IMPLEMENTED`
+
+En testperson reagerade på "Roterar mellan alla" som provocerande. Ordet byttes till **"Turas om"**
+på samtliga sju ställen i gränssnittet, plus hjälpsidan och PRODUCT.md.
+
+Skälet: "rotera" är ett skiftschema-ord - rotationsschema, roterande arbetstid - och det gör
+hemmet till en arbetsplats. Det skaver särskilt i den här appen, vars uttalade hållning är att
+den beskriver vad hushållet kommit överens om och INTE föreskriver en fördelning
+(PRODUCT.md §2). Formuleringen ligger dessutom nära att låta som att *personer* roteras, som
+utbytbara enheter, snarare än att uppgiften går runt. "Turas om" är vad familjer faktiskt säger,
+och det är något man gör tillsammans - inte något som appliceras på en.
+
+**Koden behåller `Rotation*`** (`RotationPicker`, `TaskAssignment`s rotationsläge): CLAUDE.md §16
+säger engelska i kod och svenska i användarnära text, och "rotation" är korrekt och etablerat som
+teknisk term. Det är alltså inte en inkonsekvens att koden och gränssnittet säger olika saker
+här - det är regeln.
+
+**Sätt inte tillbaka "roterar" i UI-text.** Ordet valdes bort efter användarreaktion, inte av
+stilskäl.
+
+
 | Fråga | Varför den väntar |
 |---|---|
 | Offline-strategi bortom read-only cache | Utanför MVP; får inte låsas in i förväg |

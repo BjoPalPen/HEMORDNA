@@ -287,7 +287,7 @@ public class OmradenTests
         var room = Sheet(page, "Sovrum");
         var bedRow = room.GetByRole(AriaRole.Button, new() { Name = "Bädda sängen" });
         await Assertions.Expect(bedRow).ToContainTextAsync("Vera");
-        await Assertions.Expect(bedRow).Not.ToContainTextAsync("roterar");
+        await Assertions.Expect(bedRow).Not.ToContainTextAsync("turas om");
     }
 
     [Fact]
@@ -623,7 +623,7 @@ public class OmradenTests
         var room = Sheet(page, "Kök");
         var stoveRow = room.GetByRole(AriaRole.Button, new() { Name = "Rengör spisen" });
         await Assertions.Expect(stoveRow).ToContainTextAsync("Filip");
-        await Assertions.Expect(stoveRow).Not.ToContainTextAsync("roterar");
+        await Assertions.Expect(stoveRow).Not.ToContainTextAsync("turas om");
     }
 
     /// <summary>The after-creation counterpart: RoomSheet's own "Rummets meny" can now set one
@@ -650,7 +650,7 @@ public class OmradenTests
         await OpenRoomAsync(page, "Hall");
         var room = Sheet(page, "Hall");
         var shoesRow = room.GetByRole(AriaRole.Button, new() { Name = "Ställ i ordning skorna" });
-        await Assertions.Expect(shoesRow).ToContainTextAsync("roterar");
+        await Assertions.Expect(shoesRow).ToContainTextAsync("turas om");
 
         await room.GetByRole(AriaRole.Button, new() { Name = "Rummets meny" }).ClickAsync();
         await room.GetByRole(AriaRole.Button, new() { Name = "Sätt utförare för hela rummet" }).ClickAsync();
@@ -662,7 +662,7 @@ public class OmradenTests
         // to see every row reflect the new owner, not just the one open when the menu was used.
         await room.GetByRole(AriaRole.Button, new() { Name = "Till uppgifterna" }).ClickAsync();
         await Assertions.Expect(shoesRow).ToContainTextAsync("Wilma");
-        await Assertions.Expect(shoesRow).Not.ToContainTextAsync("roterar");
+        await Assertions.Expect(shoesRow).Not.ToContainTextAsync("turas om");
         await Assertions.Expect(room.GetByRole(AriaRole.Button, new() { Name = "Dammsug eller sopa golvet" }))
             .ToContainTextAsync("Wilma");
         await Assertions.Expect(room.GetByRole(AriaRole.Button, new() { Name = "Släng gammal post och reklam" }))
