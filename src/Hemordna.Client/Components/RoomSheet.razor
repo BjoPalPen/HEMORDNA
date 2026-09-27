@@ -165,11 +165,16 @@
                                     Ändra frekvens för hela rummet
                                 </button>
                             </li>
-                            <li class="list-item list-item-flush">
-                                <button type="button" class="task-options-row" @onclick="() => { OpenOwnerView(); _showMenu = false; }">
-                                    Sätt utförare för hela rummet
-                                </button>
-                            </li>
+                            @* Samma skäl som "Vem gör det"-raden i TaskOptionsSheet: med en
+                               enda medlem finns ingen utförare att välja mellan. *@
+                            @if (Members.Count > 1)
+                            {
+                                <li class="list-item list-item-flush">
+                                    <button type="button" class="task-options-row" @onclick="() => { OpenOwnerView(); _showMenu = false; }">
+                                        Sätt utförare för hela rummet
+                                    </button>
+                                </li>
+                            }
                             <li class="list-item list-item-flush">
                                 <button type="button" class="task-options-row" @onclick="() => { _renameName = Label; _roomView = RoomView.Rename; _showMenu = false; }">
                                     Byt namn
@@ -215,9 +220,14 @@
                                     @task.Name
                                     <span class="muted small room-task-meta">
                                         @RecurrenceLabel(task) · @task.EstimatedMinutes min
+                                        @* Chippet säger vem uppgiften tillhör. I ett ensamhushåll
+                                           är svaret alltid "du", så det bär ingen information. *@
                                         @if (task.HasRotatingResponsibility)
                                         {
-                                            <span class="chip">turas om</span>
+                                            @if (Members.Count > 1)
+                                            {
+                                                <span class="chip">turas om</span>
+                                            }
                                         }
                                         else if (MemberNameFor(task.DefaultResponsibleMemberId) is { } ownerName)
                                         {

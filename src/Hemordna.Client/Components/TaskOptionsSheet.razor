@@ -195,13 +195,21 @@
                             </button>
                         </li>
                     }
-                    <li class="list-item list-item-flush">
-                        <button type="button" class="task-options-row" @onclick="() => _view = View.Assignment">
-                            <span>Vem gör det</span>
-                            <span class="task-options-value muted small">@AssignmentSummary</span>
-                            <Icon Name="chevron-right" Size="18" />
-                        </button>
-                    </li>
+                    @* Ett ensamhushåll har ingen "vem"-fråga att svara på: valet står mellan
+                       "Turas om" och ens eget namn, som betyder exakt samma sak. Raden döljs
+                       därför helt - se docs/ARCHITECTURE.md "Beslut: Ingen vem-fråga i
+                       ensamhushåll". Det lagrade värdet lämnas orört, så uppgiften börjar
+                       fördelas av sig själv den dag någon fler går med. *@
+                    @if (Members.Count > 1)
+                    {
+                        <li class="list-item list-item-flush">
+                            <button type="button" class="task-options-row" @onclick="() => _view = View.Assignment">
+                                <span>Vem gör det</span>
+                                <span class="task-options-value muted small">@AssignmentSummary</span>
+                                <Icon Name="chevron-right" Size="18" />
+                            </button>
+                        </li>
+                    }
                     <li class="list-item list-item-flush">
                         <button type="button" class="task-options-row" @onclick="() => _view = View.Time">
                             <span>Tid</span>

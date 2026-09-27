@@ -4303,6 +4303,39 @@ här - det är regeln.
 stilskäl.
 
 
+### Beslut: Ingen vem-fråga i ensamhushåll — `IMPLEMENTED`
+
+En testperson som bor ensam reagerade på "Roterar mellan alla" som provocerande. Den första
+åtgärden blev ett ordbyte till "Turas om" (posten ovan) - men det var fel problem. För någon som
+bor ensam är "Turas om" **värre**: det är varmare och mer uttalat socialt.
+
+**Frågan finns inte, inte bara ordet.** Med en enda aktiv medlem står valet under "Vem gör det?"
+mellan rotationsalternativet och ens eget namn - två alternativ som betyder exakt samma sak. Det
+är inte ett tondövt ordval utan ett val utan innehåll, och PRODUCT.md §2 listar singelhushåll
+först bland målgrupperna.
+
+Därför döljs följande helt när `Members.Count == 1` (aktiva medlemmar):
+
+- "Vem gör det"-raden i `TaskOptionsSheet`
+- menyvalet "Sätt utförare för hela rummet" i `RoomSheet`
+- "turas om"-chippet på uppgiftsraden
+- "Balansera om vem som gör vad" på Hushåll - att balansera om förutsätter någon att balansera mot
+
+**Det lagrade värdet rörs inte.** Björn ställde den avgörande frågan: man bygger ofta upp rummen
+ensam och bjuder in familjen efteråt. En ny uppgift skapas redan med `HasRotatingResponsibility:
+true` och ingen utsedd person (`RoomSheet`s add-flöde), så allt som byggs upp i ensamhet ligger
+redan som "turas om" i databasen. Frågan döljs alltså för att den saknar mening - uppgiften låses
+INTE till den som råkar vara ensam - och dagen någon fler går med börjar `RotationPicker` fördela
+av sig själv, utan att någon behöver gå igenom uppgifterna i efterhand.
+
+Hade vi i stället tvångstilldelat den ensamma medlemmen hade varje uppgift som skapats före
+inbjudan blivit permanent fastlåst på en person, och familjen fått börja med att rätta dem en och
+en. Det är skillnaden mellan att dölja en fråga och att svara på den åt användaren.
+
+`EnsamhushallTests` låser alla tre ytorna. Testerna verifierades genom att villkoret tillfälligt
+togs bort - då blev de röda, som avsett.
+
+
 | Fråga | Varför den väntar |
 |---|---|
 | Offline-strategi bortom read-only cache | Utanför MVP; får inte låsas in i förväg |

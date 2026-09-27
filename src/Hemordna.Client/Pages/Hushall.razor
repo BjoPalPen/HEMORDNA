@@ -180,12 +180,18 @@ else
                     <Icon Name="chevron-right" Size="18" />
                 </button>
             </li>
-            <li class="list-item list-item-flush">
-                <button type="button" class="list-row" @onclick="() => _showRebalanceSheet = true">
-                    <span>Balansera om vem som gör vad</span>
-                    <Icon Name="chevron-right" Size="18" />
-                </button>
-            </li>
+            @* Att balansera om mellan medlemmar förutsätter att det finns fler än en. Döljs
+               därför i ensamhushåll - se docs/ARCHITECTURE.md "Beslut: Ingen vem-fråga i
+               ensamhushåll". *@
+            @if (ActiveMembers.Count > 1)
+            {
+                <li class="list-item list-item-flush">
+                    <button type="button" class="list-row" @onclick="() => _showRebalanceSheet = true">
+                        <span>Balansera om vem som gör vad</span>
+                        <Icon Name="chevron-right" Size="18" />
+                    </button>
+                </li>
+            }
         }
         <li class="list-item list-item-flush">
             <a href="installningar" class="list-row">
