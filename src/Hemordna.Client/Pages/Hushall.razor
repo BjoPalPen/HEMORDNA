@@ -236,6 +236,15 @@ else
     </p>
     <p class="invite-code" aria-label="Inbjudningskod">@_household?.InviteCode</p>
 
+    @* QR-koden pekar på appen, inte på koden ovanför - den som scannar hamnar rätt i stället för
+       att få adressen bokstaverad för sig, men anger fortfarande koden själv när kontot skapas.
+       Statisk fil i stället för att genereras i klienten: adressen ändras aldrig, så det behövs
+       varken ett bibliotek eller ett bygge för att rita om den. Bilden bär sin egen vita bakgrund
+       (se filen) - en genomskinlig QR-kod går inte att scanna mot det mörka temat. *@
+    <img class="invite-qr" src="brand/qr-app.svg" width="160" height="160"
+         alt="QR-kod som leder till app.hemordna.se" />
+    <p class="muted small">Eller låt dem scanna den här för att komma till appen.</p>
+
     @if (_inviteMessage is { } inviteMessage)
     {
         <div class="notice" role="status">@inviteMessage</div>
