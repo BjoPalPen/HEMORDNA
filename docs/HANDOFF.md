@@ -41,8 +41,9 @@ röda är kända `SkarmbilderTests` och ett påminnelsetest vars körning passer
 ## Öppna frågor
 
 **Alla användare loggades ut EN gång vid #39:s driftsättning** – väntat, ingen hade en refresh-token än.
-Återkommer det är det ett fel. **E2E-flakigheten är belastningsberoende** (fyra mätpunkter): kör sviten ensam
-före release, och se om `GuideRenderTests` återkommer – den sågs röd en gång under en delad körning.
+Återkommer det är det ett fel. **E2E-flakigheten såg belastningsberoende ut** (fyra mätpunkter) – men alla
+fyra mättes medan en kvarglömd bakgrundsprocess och åtta webbläsare från 2026-09-25 låg och tog resurser.
+Städat 2026-09-30; mät om på ren maskin innan slutsatsen upprepas. Kör sviten ensam före release.
 **Dev-databasen** växer obegränsat (E2E städar aldrig); tömd 2026-09-24. Fixturstädning och den kvarliggande
 låsta worktreen är värda egna uppgifter. Kvar sedan tidigare: `Reconnected`-closuren fångar `householdId`, och
 etiketten "Tid i förväg" (medvetet orörd). **Uppskjutet härdningssteg:** refresh-token i HttpOnly-cookie i
