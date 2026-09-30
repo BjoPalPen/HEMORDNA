@@ -42,4 +42,11 @@ public interface IRefreshTokenRepository
     /// <summary>Revokes every refresh token belonging to <paramref name="userId"/>, across every
     /// chain - used when the user changes their password.</summary>
     Task RevokeAllForUserAsync(Guid userId, DateTimeOffset now, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Deletes every token that expired before <paramref name="cutoff"/>, whatever its state,
+    /// and returns how many were removed. See <see cref="PurgeExpiredRefreshTokens"/> for why
+    /// expiry - and nothing else - is the safe thing to delete on.
+    /// </summary>
+    Task<int> DeleteExpiredBeforeAsync(DateTimeOffset cutoff, CancellationToken cancellationToken);
 }

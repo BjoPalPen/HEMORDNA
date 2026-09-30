@@ -74,6 +74,7 @@ builder.Services.AddSingleton(TimeProvider.System);
 
 builder.Services.AddScoped<IssueRefreshToken>();
 builder.Services.AddScoped<RotateRefreshToken>();
+builder.Services.AddScoped<PurgeExpiredRefreshTokens>();
 builder.Services.AddScoped<RevokeRefreshTokenChain>();
 builder.Services.AddScoped<RevokeAllRefreshTokensForUser>();
 
@@ -146,6 +147,7 @@ builder.Services.AddScoped<SendTestPushNotification>();
 builder.Services.AddScoped<SendDueReminderNotifications>();
 builder.Services.AddHostedService<ReminderPushBackgroundService>();
 builder.Services.AddHostedService<ReminderCleanupBackgroundService>();
+builder.Services.AddHostedService<RefreshTokenCleanupBackgroundService>();
 
 // SignalR pushes changes to a household's other connected clients - see docs/ARCHITECTURE.md §5.
 builder.Services.AddSignalR();
