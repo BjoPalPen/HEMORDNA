@@ -693,6 +693,89 @@ public class ReminderTests
         await AssertAnnasOwnViewIsUnchangedAsync(annaPage);
     }
 
+    /// <summary>docs/PRODUCT.md §11 - "Förvarningen är hela poängen" - so the sheet that creates
+    /// a reminder is where the app has to say, once and calmly, that no notification will
+    /// actually arrive on this device. Forces permission to "default" (Notification.permission,
+    /// which push.js's own getPermission() reads verbatim) rather than relying on whatever this
+    /// particular browser happens to start with: OBSERVED in this environment, headless
+    /// Chromium's real, un-mocked default is "denied", not "default" - see
+    /// Opening_the_reminder_sheet_shows_that_notifications_are_blocked below for that actual
+    /// state. Leaves the service worker/subscription untouched - there genuinely is no
+    /// subscription here, so IsSubscribedAsync's real JS interop naturally returns false without
+    /// needing a fake registration. Asserts the line is plain text (no notice-problem class) -
+    /// PRODUCT.md §8's "no blame" rule turns into "this isn't a warning box" at the CSS
+    /// level.</summary>
+    [Fact]
+    public async Task Opening_the_reminder_sheet_shows_that_notifications_are_not_on_for_this_device()
+    {
+        var page = await _app.NewPageAsync();
+        await page.AddInitScriptAsync(
+            "Object.defineProperty(Notification, 'permission', { value: 'default', configurable: true });");
+
+        await SignUpHelper.SignUpAsync(page, "Hedda-" + Guid.NewGuid().ToString("N")[..6]);
+
+        await page.GetByRole(AriaRole.Button, new() { Name = "Ny påminnelse" }).ClickAsync();
+        var sheet = page.GetByRole(AriaRole.Dialog, new() { Name = "Ny påminnelse" });
+
+        await Assertions.Expect(sheet.GetByText("Du får ingen notis på den här enheten.")).ToBeVisibleAsync();
+        await Assertions.Expect(sheet.Locator(".notice-problem")).ToHaveCountAsync(0);
+
+        var settingsLink = sheet.GetByRole(AriaRole.Link, new() { Name = "Slå på notiser" });
+        await Assertions.Expect(settingsLink).ToBeVisibleAsync();
+        await settingsLink.ClickAsync();
+        await Assertions.Expect(page).ToHaveURLAsync(new Regex("/installningar$"));
+    }
+
+    /// <summary>The real, un-mocked state of this test's own browser - OBSERVED by running the
+    /// sheet with no init script at all: headless Chromium reports Notification.permission as
+    /// "denied" from the start (no test ever requests it), so this is the state every OTHER test
+    /// in this file that opens "Ny påminnelse" is actually exercising, whether it asserts on it
+    /// or not. Locked down here as its own test so that fact is documented rather than silently
+    /// relied upon.</summary>
+    [Fact]
+    public async Task Opening_the_reminder_sheet_shows_that_notifications_are_blocked_by_default_in_this_browser()
+    {
+        var page = await _app.NewPageAsync();
+        await SignUpHelper.SignUpAsync(page, "Freja-" + Guid.NewGuid().ToString("N")[..6]);
+
+        await page.GetByRole(AriaRole.Button, new() { Name = "Ny påminnelse" }).ClickAsync();
+        var sheet = page.GetByRole(AriaRole.Dialog, new() { Name = "Ny påminnelse" });
+
+        await Assertions.Expect(sheet.GetByText("Notiser är blockerade för Hemordna i webbläsaren.")).ToBeVisibleAsync();
+        await Assertions.Expect(sheet.Locator(".notice-problem")).ToHaveCountAsync(0);
+        await Assertions.Expect(sheet.GetByRole(AriaRole.Link, new() { Name = "Slå på notiser" })).ToHaveCountAsync(0);
+    }
+
+    /// <summary>Complement to the two tests above - once the device is genuinely subscribed, the
+    /// sheet must fall silent (this feature's own rule: the line only exists because it is true).
+    /// Fakes exactly what push.js's isSupported/getPermission/getSubscription read from
+    /// (Notification.permission and navigator.serviceWorker's registration/pushManager), the
+    /// same AddInitScriptAsync approach SkarmbilderTests uses for speechSynthesis - not
+    /// window.hemordnaPush itself, since push.js overwrites that object on every page load
+    /// after this init script runs.</summary>
+    [Fact]
+    public async Task Opening_the_reminder_sheet_shows_no_notification_notice_once_this_device_is_subscribed()
+    {
+        var page = await _app.NewPageAsync();
+        await page.AddInitScriptAsync(@"
+            Object.defineProperty(Notification, 'permission', { value: 'granted', configurable: true });
+            const fakeSubscription = { endpoint: 'https://fake.example/endpoint' };
+            const fakeRegistration = { pushManager: { getSubscription: async () => fakeSubscription } };
+            if (navigator.serviceWorker) {
+                navigator.serviceWorker.getRegistration = async () => fakeRegistration;
+            }
+        ");
+
+        await SignUpHelper.SignUpAsync(page, "Iris-" + Guid.NewGuid().ToString("N")[..6]);
+
+        await page.GetByRole(AriaRole.Button, new() { Name = "Ny påminnelse" }).ClickAsync();
+        var sheet = page.GetByRole(AriaRole.Dialog, new() { Name = "Ny påminnelse" });
+        await sheet.GetByLabel("Titel").WaitForAsync();
+
+        await Assertions.Expect(sheet.GetByText("Du får ingen notis på den här enheten.")).ToHaveCountAsync(0);
+        await Assertions.Expect(sheet.GetByRole(AriaRole.Link, new() { Name = "Slå på notiser" })).ToHaveCountAsync(0);
+    }
+
     /// <summary>
     /// Locks the audience picker's own highlighting to the actual selection - "Alla i hushållet"
     /// and "Bara utvalda" use the same active/inactive button styling as the level-picker above

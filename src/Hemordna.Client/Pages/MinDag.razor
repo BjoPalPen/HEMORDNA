@@ -6,6 +6,7 @@
 @inject NavigationManager Navigation
 @inject TimeProvider TimeProvider
 @inject HouseholdRealtimeClient Realtime
+@inject PushNotificationService Push
 @inject IJSRuntime JS
 
 <PageTitle>Idag – Hemordna</PageTitle>
@@ -164,7 +165,7 @@ else
                                     @onclick="() => CheckOffReminderRowAsync(reminder)">
                                 Bocka av
                             </button>
-                            <button type="button" class="btn btn-link" @onclick="() => OpenEditReminderSheet(reminder)">
+                            <button type="button" class="btn btn-link" @onclick="() => OpenEditReminderSheetAsync(reminder)">
                                 Ändra
                             </button>
                             <button type="button" class="btn btn-link" disabled="@(_reminderCancelBusy == reminder.Id)"
@@ -488,7 +489,7 @@ else
             <button type="button" class="chip-action" @onclick="OpenExtraTaskSheetAsync">
                 Extra uppgift
             </button>
-            <button type="button" class="chip-action" @onclick="OpenNewReminderSheet">
+            <button type="button" class="chip-action" @onclick="OpenNewReminderSheetAsync">
                 Ny påminnelse
             </button>
             <button type="button" class="chip-action" @onclick="() => OpenDayOffSheet(Today)">
@@ -738,6 +739,23 @@ else
                     </div>
                 }
 
+                @if (_reminderPushIosSafariTab)
+                {
+                    <span class="muted small">
+                        Lägg till Hemordna på hemskärmen för att kunna få notiser.
+                    </span>
+                }
+                else if (_reminderPushSupported && _reminderPushPermission == "denied")
+                {
+                    <span class="muted small">Notiser är blockerade för Hemordna i webbläsaren.</span>
+                }
+                else if (_reminderPushSupported && !_reminderPushSubscribed)
+                {
+                    <span class="muted small">
+                        Du får ingen notis på den här enheten. <a href="installningar">Slå på notiser</a>
+                    </span>
+                }
+
                 @if (_reminderMessage is { } reminderMessage)
                 {
                     <div class="notice notice-problem" role="alert">@reminderMessage</div>
@@ -767,6 +785,18 @@ else
     private string? _reminderMessage;
     private Guid? _reminderCancelBusy;
     private Guid? _reminderCheckOffBusy;
+
+    /// <summary>Whether a notification will actually reach this device for the reminder being
+    /// created or changed - read once when the sheet opens (LoadReminderPushStatusAsync), not on
+    /// every render, per this feature's own design. Mirrors Installningar.razor's own four cases
+    /// (_pushIosSafariTab/_pushSupported/_pushPermission/_pushSubscribed) exactly, so the sheet's
+    /// notice and the settings page never disagree about what state the device is in. Unlike
+    /// Installningar.razor, "not supported" has no field of its own here - the sheet has nothing
+    /// to say in that case (docs/PRODUCT.md §8: a fact nobody can act on is not worth stating).</summary>
+    private bool _reminderPushIosSafariTab;
+    private bool _reminderPushSupported;
+    private string _reminderPushPermission = "default";
+    private bool _reminderPushSubscribed;
 
     /// <summary>"Ångra" after cancelling OR checking off a reminder - same 8s offer as
     /// completing a task (see _undo/ShowUndo). A reminder's own Reminder.Restore() has no time
@@ -2481,7 +2511,7 @@ else
 
     /// <summary>Opens "Ny påminnelse" with an empty form, today's own date pre-filled - the
     /// common case is booking something for today or a day close to it.</summary>
-    private void OpenNewReminderSheet()
+    private async Task OpenNewReminderSheetAsync()
     {
         _reminderForm.Id = null;
         _reminderForm.Title = string.Empty;
@@ -2494,11 +2524,12 @@ else
         _reminderForm.SelectedMemberIds.Clear();
         _reminderMessage = null;
         _showReminderSheet = true;
+        await LoadReminderPushStatusAsync();
     }
 
     /// <summary>Opens the same sheet pre-filled with an existing reminder's own fields - see
     /// SaveReminderAsync for how the form decides between creating and changing one.</summary>
-    private void OpenEditReminderSheet(ReminderResponse reminder)
+    private async Task OpenEditReminderSheetAsync(ReminderResponse reminder)
     {
         _reminderForm.Id = reminder.Id;
         _reminderForm.Title = reminder.Title;
@@ -2511,6 +2542,30 @@ else
         _reminderForm.SelectedMemberIds = [.. reminder.SharedWithMemberIds];
         _reminderMessage = null;
         _showReminderSheet = true;
+        await LoadReminderPushStatusAsync();
+    }
+
+    /// <summary>Reads whether this device will actually get a notification - see the
+    /// production measurement behind this feature (one subscription for ten active members) and
+    /// docs/PRODUCT.md §11 ("Förvarningen är hela poängen"). Read once per sheet open, not on
+    /// every render - the sheet only reads status, it never offers to subscribe from here (this
+    /// feature's own rule - no permission prompt in the middle of another flow), so there is no
+    /// GetPushVapidPublicKeyAsync household round trip to guard here the way Installningar.razor's
+    /// own OnInitializedAsync does. No try/catch needed either: every PushNotificationService
+    /// probe already swallows its own failures and returns a safe default (see its own remarks),
+    /// so none of the four calls below can throw into this method.</summary>
+    private async Task LoadReminderPushStatusAsync()
+    {
+        _reminderPushIosSafariTab = await Push.IsIosSafariTabAsync();
+        _reminderPushSupported = await Push.IsSupportedAsync();
+        _reminderPushPermission = "default";
+        _reminderPushSubscribed = false;
+
+        if (_reminderPushSupported && !_reminderPushIosSafariTab)
+        {
+            _reminderPushPermission = await Push.GetPermissionAsync();
+            _reminderPushSubscribed = await Push.IsSubscribedAsync();
+        }
     }
 
     /// <summary>Checks or unchecks one candidate in the "Bara utvalda" list - purely local form

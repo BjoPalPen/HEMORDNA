@@ -4523,3 +4523,65 @@ samtidigt bort den gamla `hemordna.token`-nyckeln ur `localStorage` ovillkorlige
 appstart - annars hade den legat kvar som en fortfarande giltig, men aldrig mer lästa,
 bärar-token tills den självdog av ålder, precis den sortens skräp en säkerhetsändring inte ska
 lämna efter sig.
+
+---
+
+### Beslut: Notisstatus i påminnelseflödet — `IMPLEMENTED`
+
+Uppmätt, inte antaget: i produktion 2026-09-30 hade hushållet tio aktiva medlemmar och en enda
+push-prenumeration. Notiser är hela poängen med en påminnelse ("Förvarningen är hela poängen",
+PRODUCT.md §11), men ingenting i påminnelseflödet nämnde notiser alls - `Installningar.razor`
+hanterade redan alla fyra tillstånd genomtänkt (rad ~241-296), men nås bara via en listrad under
+Hushåll, långt från flödet där avsaknaden faktiskt spelar roll.
+
+**Raden sitter i påminnelse-sheetet, inte som en banner på Min dag.** En banner är sant hela
+tiden appen är öppen, oavsett vad användaren just då håller på med - det är precis den sortens
+ständigt närvarande påminnelse PRODUCT.md §8 utesluter, för det tjatar om ett tillstånd som inte
+är fel, bara ett faktum. Sheetet "Ny påminnelse"/"Ändra påminnelse" är den enda platsen i appen
+där en notis faktiskt förväntas av användaren i just det ögonblicket - man sätter ett klockslag
+och en restid för att bli sagd till "dags att gå". Där, och bara där, är det relevant att säga om
+den förväntan kommer att infrias. Utanför det ögonblicket är samma fakta bara brus.
+
+**"Stöds inte" visar ingenting alls - till skillnad från de tre andra fallen.** iOS-fliken och den
+blockerade behörigheten har båda en väg framåt (lägg till på hemskärmen, ändra webbläsarens
+inställningar), och "ej påslaget" har sin länk till Inställningar. Att enheten eller webbläsaren
+inte stödjer notiser har ingen sådan väg - det finns inget användaren kan göra åt det just nu, och
+en rad som bara konstaterar en brist utan en utväg är precis det PRODUCT.md §8 utesluter: den
+skulle läsas som ett klagomål, inte som information. `MinDag.razor`s `_reminderPushSupported` har
+därför inget eget villkor i markupen alls - frånvaron av en gren är beslutet, inte en lucka.
+
+**Läses en gång per öppning, aldrig vid varje rendering.** `OpenNewReminderSheetAsync` och
+`OpenEditReminderSheetAsync` anropar `LoadReminderPushStatusAsync` en enda gång när sheetet öppnas
+(samma mönster som `OpenExtraTaskSheetAsync` redan använde för att ladda kandidatuppgifter) -
+inte en beräknad egenskap som läses om vid varje tangenttryckning i formuläret. Sheetet erbjuder
+heller aldrig att slå på notiser själv; länken går till Inställningar, som redan äger det flödet
+(webbläsarens behörighetsprompt måste komma som en direkt följd av ett tryck där, inte mitt i ett
+annat formulär - se `PushNotificationService.SubscribeAsync`s egna remarks).
+
+**Raden får ALDRIG bli en återkommande påminnelse om att slå på notiser - detta är beslutat i
+förväg, inte något som återstår att avgöra.** Den som en dag vill "hjälpa användaren mer" kommer
+att föreslå en banner på Min dag, en prompt vid inloggning, eller ett märke på navigeringen så
+länge notiser är avstängda. Svaret på det är nej, av samma skäl som raden sitter just här och
+ingen annanstans: en användare som medvetet valt bort notiser - eller vars enhet av tekniska skäl
+aldrig kan ha dem (iOS-fliken) - ska inte tillrättavisas om det valet vid varje ny påminnelse,
+varje inloggning eller varje besök på Min dag. Appen konstaterar fakta där de är relevanta och
+tiger sedan. Ett datumbaserat "visa igen om X dagar" eller en räknare för hur många gånger raden
+visats vore samma fel i finare kläder - poängen är inte att raden ska synas sällan, den ska synas
+EXAKT NÄR DEN ÄR SANN och aldrig upprepas för sin egen skull.
+
+**Testmiljöns verkliga standard skiljer sig från antagandet, och det är dokumenterat, inte
+kringgått.** Uppdraget antog att en obehandlad testwebbläsare skulle rapportera
+`Notification.permission` som `"default"`. OBSERVED i verkligheten: headless Chromium i den här
+E2E-miljön rapporterar `"denied"` redan från start, utan att något test någonsin begär
+behörigheten - verifierat deterministiskt över upprepade körningar. Ett test
+(`ReminderTests.Opening_the_reminder_sheet_shows_that_notifications_are_blocked_by_default_in_this_browser`)
+låser fast den verkliga standarden utan någon mock alls. Testet för "ej påslaget"-grenen
+(`Opening_the_reminder_sheet_shows_that_notifications_are_not_on_for_this_device`) tvingar däremot
+`Notification.permission` till `"default"` via `page.AddInitScriptAsync` (samma teknik
+`SkarmbilderTests` använder för att stänga av `speechSynthesis.speak`) - inte för att dölja det
+verkliga beteendet, utan för att nå en gren som den verkliga webbläsaren annars aldrig exponerar.
+Ett tredje test mockar på samma sätt åt andra hållet (`permission: "granted"` plus en fejkad
+service worker-prenumeration) för att bevisa att raden tystnar när enheten faktiskt är
+prenumererad. Nästa person som ser en `Object.defineProperty(Notification, ...)`-rad i ett test
+ska läsa den som "det här är den enda vägen in i en gren en riktig webbläsare inte ger oss gratis" -
+inte som ett tecken på att något annat döljs.
