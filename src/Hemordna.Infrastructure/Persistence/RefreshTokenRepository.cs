@@ -66,4 +66,13 @@ internal sealed class RefreshTokenRepository : IRefreshTokenRepository
         => _dbContext.RefreshTokens
             .Where(token => token.UserId == userId && token.RevokedAt == null)
             .ExecuteUpdateAsync(setters => setters.SetProperty(token => token.RevokedAt, now), cancellationToken);
+
+    // No index for this one, and none is needed: it runs once a day from a background service,
+    // never on a user-facing path, and the table only ever holds what has not yet expired plus
+    // one day's worth of rows beyond that. The same reasoning ReminderRepository.DeleteOlderThanAsync
+    // already spells out for its own sweep.
+    public Task<int> DeleteExpiredBeforeAsync(DateTimeOffset cutoff, CancellationToken cancellationToken)
+        => _dbContext.RefreshTokens
+            .Where(token => token.ExpiresAt < cutoff)
+            .ExecuteDeleteAsync(cancellationToken);
 }

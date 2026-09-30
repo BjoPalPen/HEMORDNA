@@ -76,4 +76,21 @@ internal class InMemoryRefreshTokenRepository : IRefreshTokenRepository
 
         return Task.CompletedTask;
     }
+
+    public Task<int> DeleteExpiredBeforeAsync(DateTimeOffset cutoff, CancellationToken cancellationToken)
+    {
+        lock (_gate)
+        {
+            // Samma villkor som EF-implementationen: strikt mindre än cutoff, oavsett om token
+            // är förbrukad eller återkallad - se RefreshTokenRepository.DeleteExpiredBeforeAsync.
+            var expired = _byId.Values.Where(token => token.ExpiresAt < cutoff).Select(token => token.Id).ToList();
+
+            foreach (var id in expired)
+            {
+                _byId.Remove(id);
+            }
+
+            return Task.FromResult(expired.Count);
+        }
+    }
 }

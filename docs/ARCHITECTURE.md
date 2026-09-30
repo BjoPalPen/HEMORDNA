@@ -4282,6 +4282,24 @@ EFTER visibility-anropet i samma spara-kedja, tyst återupplivat precis den deln
 `ChangeVisibility(Private)` just rensat. Ett designbeslut, inte bara en implementationsdetalj:
 samma spärr gäller både vid skapande och vid ändring av en befintlig påminnelse.
 
+**Gallring: bara utgångna rader, aldrig förbrukade.** Rotation skriver en ny rad varje gång en
+token växlas in, så tabellen växer så länge appen används (uppmätt i produktion 2026-09-30: 53
+rader på tre dagar för en familj). `PurgeExpiredRefreshTokens` körs dagligen av
+`RefreshTokenCleanupBackgroundService`, samma form som påminnelsernas gallring.
+
+Villkoret är `ExpiresAt < now` och ingenting annat. **En förbrukad token som ännu inte gått ut är
+återanvändningsdetekteringens minne** - att presentera den igen är precis så `RotateRefreshToken`
+upptäcker ett återspelat stöldförsök och återkallar hela kedjan. Raderas den för tidigt blir
+återspelningen en *okänd* token i stället: avvisad, men utan att kedjan återkallas, alltså en tyst
+försvagning av den enda egenskap rotationen finns till för. Att radera *utgångna* rader kostar
+däremot ingenting, eftersom utfallen redan är identiska - en utgången token avvisas utan att
+återkalla kedjan, och det gör en okänd också. Efter utgång finns inget beteende kvar att bevara,
+bara en rad.
+
+`PurgeExpiredRefreshTokensTests.A_consumed_token_that_has_not_expired_is_kept` är testet som
+skyddar detta. Verifierat genom att införa just den förenkling någon skulle kunna skriva ("städa
+även förbrukade"): då faller det testet ensamt, medan de andra fem förblir gröna.
+
 ### Beslut: QR-kod till appen i inbjudningsvyn — `IMPLEMENTED`
 
 Björn ville kunna länka till appen med en QR-kod. Den ligger i "Bjud in"-vyn på Hushåll, där
