@@ -58,6 +58,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     needs: test
+    # Bara på main. Tjugo minuter på varje PR är en kostnad som i praktiken leder till att
+    # man slutar vänta in den - och en svit man inte väntar in är ingen spärr. Priset är
+    # att ett E2E-fel upptäcks efter merge i stället för före; deployen stoppas ändå, så
+    # produktionen skyddas, men felet landar på main och ska rättas framåt.
+    if: github.event_name != 'pull_request'
 
     # Fixturen startar API:t med ASPNETCORE_ENVIRONMENT=Development, som läser
     # appsettings.Development.json - alltså localhost:5432 med de här uppgifterna.
@@ -114,6 +119,9 @@ jobs:
     timeout-minutes: 20
     needs: [test, e2e]
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    # Miljön 'production' har Björn som obligatorisk godkännare. Jobbet står alltså och
+    # väntar på ett tryck innan det rör servern - samma ordning som gällt hela hösten, nu
+    # med en knapp i stället för ett meddelande.
     environment: production
 
     steps:
