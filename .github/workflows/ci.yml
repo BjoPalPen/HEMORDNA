@@ -95,6 +95,18 @@ jobs:
       - name: Bygg
         run: dotnet build Hemordna.slnx --no-restore --configuration Release
 
+      # Tjänstecontainern startar tom. I produktion kör API:t migreringarna vid uppstart
+      # (RunMigrationsOnStartup), men i utvecklingsläge - som E2E-fixturen använder - gör den
+      # inte det; lokalt har utvecklaren redan kört dem för hand. Utan det här steget faller
+      # sviten på "relation \"AspNetUsers\" does not exist".
+      - name: Applicera migreringar
+        run: |
+          dotnet tool install --global dotnet-ef --version 10.* || dotnet tool update --global dotnet-ef --version 10.*
+          export PATH="$PATH:$HOME/.dotnet/tools"
+          dotnet ef database update --project src/Hemordna.Infrastructure --startup-project src/Hemordna.Api --no-build --configuration Release
+        env:
+          ASPNETCORE_ENVIRONMENT: Development
+
       - name: Installera Chromium för Playwright
         run: pwsh tests/Hemordna.E2E.Tests/bin/Release/net10.0/playwright.ps1 install chromium --with-deps
 
