@@ -48,16 +48,31 @@ gpg --decrypt hemordna-<tidpunkt>.sql.gz.gpg | gunzip | psql -U hemordna -d <må
 Återställ alltid till en **tom** databas, aldrig rakt ovanpå en befintlig – dumpen innehåller
 `CREATE`-satser och inget `DROP`.
 
-## Vad det här skyddar mot, och inte
+## Förhållandet till Hetzners egen backup
 
-| | |
-|---|---|
-| Felaktig radering, trasig migrering, korrupt tabell | **Skyddat** |
-| Läckt backupfil | **Skyddat** – den är krypterad för en nyckel servern inte har |
-| Förlorad disk eller förlorad server | **INTE skyddat** |
+Servern backas också upp av Hetzner. De två överlappar mindre än man tror, och ersätter inte
+varandra:
 
-Backuperna ligger på samma maskin som databasen. Det är halva jobbet. Den andra halvan är en
-kopia någon annanstans – och tills den finns överlever ingen backup att maskinen försvinner.
+| | Hetzners serverbackup | `backup-db.sh` |
+|---|---|---|
+| Förlorad disk eller hel server | **Skyddat** | Nej – ligger på samma maskin |
+| Felaktig radering, trasig migrering | Återställer *hela* maskinen | **Kirurgiskt** – en databas, en tidpunkt |
+| Konsistens | Ögonblicksbild av en körande databas, återställs via WAL | **Transaktionskonsistent dump** |
+| Läsbar för leverantören | Ja | **Nej** – krypterad för en nyckel servern inte har |
+
+Skillnaden som spelar mest roll i praktiken är den andra raden. Går en migrering fel på
+morgonen är en serveråterställning ett slägga: allt annat som hänt sedan ögonblicksbilden
+försvinner också. En dump går att läsa in i en tom databas, jämföra mot, och plocka ur – utan
+att röra det som körs.
+
+Den tredje raden är den som sällan nämns: en ögonblicksbild av en körande databas är
+krasch-konsistent, inte transaktionskonsistent. Postgres klarar normalt det via WAL, men
+"brukar gå bra" är en svagare garanti än en dump som per definition är tagen i ett konsistent
+läge.
+
+Kvar att besluta: om dumparna också ska kopieras utanför maskinen. Med Hetzners serverbackup
+på plats är det inte längre akut – det handlar om att kunna återställa en enskild databas även
+om hela Hetzner-kontot vore otillgängligt.
 
 ## Verifiering
 
