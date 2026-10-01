@@ -1,0 +1,167 @@
+name: CI och deploy
+
+# Allt i en kedja, med avsikt: deployjobbet kan inte köra förrän testerna är gröna, och det
+# går inte att råka deploya förbi dem. Sattes upp 2026-10-01; innan dess kördes alla tester
+# manuellt på Björns maskin, där de dessutom visade sig känsliga för vad annat som kördes
+# samtidigt (docs/HANDOFF.md).
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+# En deploy i taget. Två samtidiga skulle bygga om samma container mitt i varandra.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  DOTNET_VERSION: "10.0.x"
+  DOTNET_NOLOGO: "true"
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "true"
+
+jobs:
+  test:
+    name: Bygg och snabba tester
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Återställ
+        run: dotnet restore Hemordna.slnx
+
+      - name: Bygg
+        run: dotnet build Hemordna.slnx --no-restore --configuration Release
+
+      # Fyra projekt var för sig i stället för hela lösningen: faller något vill man se
+      # VILKET lager som gick sönder direkt i joblistan, utan att läsa loggen.
+      - name: Domain
+        run: dotnet test tests/Hemordna.Domain.Tests --no-build --configuration Release
+
+      - name: Application
+        run: dotnet test tests/Hemordna.Application.Tests --no-build --configuration Release
+
+      - name: Client
+        run: dotnet test tests/Hemordna.Client.Tests --no-build --configuration Release
+
+      - name: Api
+        run: dotnet test tests/Hemordna.Api.Tests --no-build --configuration Release
+
+  e2e:
+    name: E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: test
+
+    # Fixturen startar API:t med ASPNETCORE_ENVIRONMENT=Development, som läser
+    # appsettings.Development.json - alltså localhost:5432 med de här uppgifterna.
+    # Värdena är utvecklingsvärden ur repot, inga hemligheter.
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: hemordna
+          POSTGRES_USER: hemordna
+          POSTGRES_PASSWORD: hemordna_dev
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hemordna -d hemordna"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Återställ
+        run: dotnet restore Hemordna.slnx
+
+      - name: Bygg
+        run: dotnet build Hemordna.slnx --no-restore --configuration Release
+
+      - name: Installera Chromium för Playwright
+        run: pwsh tests/Hemordna.E2E.Tests/bin/Release/net10.0/playwright.ps1 install chromium --with-deps
+
+      # En egen, ren maskin per körning är faktiskt en bättre miljö än utvecklardatorn:
+      # flakigheten som dokumenterats i HANDOFF visade sig till stor del vara kvarglömda
+      # processer och webbläsare som låg kvar mellan körningar.
+      - name: E2E-svit
+        run: dotnet test tests/Hemordna.E2E.Tests --no-build --configuration Release --logger "trx;LogFileName=e2e.trx"
+
+      - name: Spara testresultat
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-resultat
+          path: "**/TestResults/*.trx"
+          if-no-files-found: ignore
+          retention-days: 14
+
+  deploy:
+    name: Deploy till produktion
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [test, e2e]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Förbered SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          # Värdnyckeln är pinnad i repot, inte hämtad vid körning: en keyscan litar på
+          # vad som än svarar första gången, vilket är precis det man vill undvika när
+          # nyckeln i nästa steg ger åtkomst till produktion.
+          cp .github/known_hosts ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      # Ett enda anrop, och det är inte en förenkling utan själva skyddet: CI-nyckeln är i
+      # serverns authorized_keys låst med command="..." till scripts/deploy/deploy-prod.sh.
+      # Vad som än skickas här körs aldrig - servern kör sitt skript. En läckt CI-nyckel kan
+      # alltså driftsätta, men inte öppna ett skal, läsa filer eller röra något annat.
+      - name: Driftsätt
+        run: ssh -i ~/.ssh/deploy_key deploy@62.238.45.45 'deploy'
+
+      # Hälsokontrollen avgör om deployen räknas som lyckad. Utan det här steget hade en
+      # container som startar och genast dör sett ut som en grön deploy.
+      - name: Hälsokontroll
+        run: |
+          for i in $(seq 1 30); do
+            body=$(curl -fsS https://app.hemordna.se/health || true)
+            case "$body" in
+              *'"status":"Healthy"'*) echo "$body"; exit 0 ;;
+            esac
+            sleep 4
+          done
+          echo "Hälsokontrollen blev aldrig Healthy." >&2
+          curl -sS https://app.hemordna.se/health >&2 || true
+          exit 1
+
+      - name: Installera Chromium för röktestet
+        run: |
+          dotnet build scripts/Smoke --configuration Release
+          pwsh scripts/Smoke/bin/Release/net10.0/playwright.ps1 install chromium --with-deps
+
+      - name: Röktest mot produktion
+        run: dotnet run --project scripts/Smoke --configuration Release --no-build -- https://app.hemordna.se
