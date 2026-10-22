@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/StoreSpike.Cli/StoreSpike.Cli.csproj" />
+    <Project Path="src/StoreSpike.Core/StoreSpike.Core.csproj" />
+    <Project Path="src/StoreSpike.Infrastructure/StoreSpike.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/StoreSpike.Tests/StoreSpike.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,25 @@
+{
+  "note": "PÅHITTAD mock-katalog för STORE-SPIKE-01. Namn, koder och priser är uppfunna och är inte hämtade från Willys. Formatet är spikens eget, inte Willys svarsformat.",
+  "products": [
+    { "code": "MOCK-001", "name": "Nötfärs 12%", "manufacturer": "Mockgården", "displayVolume": "500 g", "salesUnit": "Piece", "price": 59.90, "comparePrice": 119.80, "comparePriceUnit": "kr/kg", "available": true },
+    { "code": "MOCK-002", "name": "Nötfärs 5%", "manufacturer": "Mockgården", "displayVolume": "500 g", "salesUnit": "Piece", "price": 69.90, "comparePrice": 139.80, "comparePriceUnit": "kr/kg", "available": true },
+    { "code": "MOCK-003", "name": "Blandfärs Nöt och Fläsk", "manufacturer": "Mockgården", "displayVolume": "500 g", "salesUnit": "Piece", "price": 49.90, "comparePrice": 99.80, "comparePriceUnit": "kr/kg", "available": true },
+    { "code": "MOCK-004", "name": "Kycklingfilé", "manufacturer": "Mockfågel", "displayVolume": "900 g", "salesUnit": "Piece", "price": 109.00, "comparePrice": 121.11, "comparePriceUnit": "kr/kg", "available": true },
+    { "code": "MOCK-005", "name": "Kycklingfilé Panerad", "manufacturer": "Mockfågel", "displayVolume": "400 g", "salesUnit": "Piece", "price": 59.90, "comparePrice": 149.75, "comparePriceUnit": "kr/kg", "available": true },
+    { "code": "MOCK-006", "name": "Kycklingfiléburgare", "manufacturer": "Mockfågel", "displayVolume": "4-p", "salesUnit": "Piece", "price": 49.90, "comparePrice": 124.75, "comparePriceUnit": "kr/kg", "available": true },
+    { "code": "MOCK-007", "name": "Mellanmjölk 1,5%", "manufacturer": "Mockmejeriet", "displayVolume": "1,5 l", "salesUnit": "Piece", "price": 19.90, "comparePrice": 13.27, "comparePriceUnit": "kr/l", "available": true },
+    { "code": "MOCK-008", "name": "Standardmjölk 3%", "manufacturer": "Mockmejeriet", "displayVolume": "1,5 l", "salesUnit": "Piece", "price": 21.90, "comparePrice": 14.60, "comparePriceUnit": "kr/l", "available": true },
+    { "code": "MOCK-009", "name": "Lättmjölk 0,5%", "manufacturer": "Mockmejeriet", "displayVolume": "1,5 l", "salesUnit": "Piece", "price": 18.90, "comparePrice": 12.60, "comparePriceUnit": "kr/l", "available": true },
+    { "code": "MOCK-010", "name": "Mjölkchoklad", "manufacturer": "Mockkonfekt", "displayVolume": "200 g", "salesUnit": "Piece", "price": 29.90, "comparePrice": 149.50, "comparePriceUnit": "kr/kg", "available": true },
+    { "code": "MOCK-011", "name": "Bryggkaffe Mellanrost", "manufacturer": "Mockrosteriet", "displayVolume": "450 g", "salesUnit": "Piece", "price": 64.90, "comparePrice": 144.22, "comparePriceUnit": "kr/kg", "available": true },
+    { "code": "MOCK-012", "name": "Kaffefilter 1x4", "manufacturer": "Mockpapper", "displayVolume": "100-p", "salesUnit": "Piece", "price": 24.90, "comparePrice": 0.25, "comparePriceUnit": "kr/st", "available": true },
+    { "code": "MOCK-013", "name": "Makaroner", "manufacturer": "Mockpasta", "displayVolume": "1 kg", "salesUnit": "Piece", "price": 17.90, "comparePrice": 17.90, "comparePriceUnit": "kr/kg", "available": true },
+    { "code": "MOCK-014", "name": "Snabbmakaroner", "manufacturer": "Mockpasta", "displayVolume": "1 kg", "salesUnit": "Piece", "price": 16.90, "comparePrice": 16.90, "comparePriceUnit": "kr/kg", "available": true },
+    { "code": "MOCK-015", "name": "Potatis Fast", "manufacturer": null, "displayVolume": "2 kg", "salesUnit": "Piece", "price": 29.90, "comparePrice": 14.95, "comparePriceUnit": "kr/kg", "available": true },
+    { "code": "MOCK-016", "name": "Potatis Mjölig", "manufacturer": null, "displayVolume": "2 kg", "salesUnit": "Piece", "price": 29.90, "comparePrice": 14.95, "comparePriceUnit": "kr/kg", "available": true },
+    { "code": "MOCK-017", "name": "Sötpotatis", "manufacturer": null, "displayVolume": "ca 500 g", "salesUnit": "Kilogram", "price": 34.90, "comparePrice": 34.90, "comparePriceUnit": "kr/kg", "available": true },
+    { "code": "MOCK-018", "name": "Ägg Frigående 12-p M", "manufacturer": "Mockhönseriet", "displayVolume": "12-p", "salesUnit": "Piece", "price": 39.90, "comparePrice": 3.33, "comparePriceUnit": "kr/st", "available": true },
+    { "code": "MOCK-019", "name": "Ägg Frigående 12-p L", "manufacturer": "Mockhönseriet", "displayVolume": "12-p", "salesUnit": "Piece", "price": 44.90, "comparePrice": 3.74, "comparePriceUnit": "kr/st", "available": true },
+    { "code": "MOCK-020", "name": "Ägg Ekologiska 6-p L", "manufacturer": "Mockhönseriet", "displayVolume": "6-p", "salesUnit": "Piece", "price": 32.90, "comparePrice": 5.48, "comparePriceUnit": "kr/st", "available": false }
+  ]
+}
