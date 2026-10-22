@@ -869,6 +869,14 @@ färre destinationer än någon annan:
 Inställningar och "Mer" är inte längre flikar – `/mer` omdirigerar till `/hushall`, och
 Inställningar samt Logga ut nås som listrader längst ned på Hushåll (se `Hushall.razor`).
 
+**Femte fliken Handla – bara när hushållet slagit på funktionen** (PRODUCT.md §12). Den sitter
+sist, efter Hushåll, med route `/handla`. Ett behov ("det är slut på mjölk") uppstår vilken dag
+som helst, inte bara den dag Handla ligger på Idag – därför en flik och inte bara raden på Idag.
+Undantaget från "samma fyra flikar" gäller per hushåll, aldrig per enhet: alla i hushållet ser
+samma flikar på alla enheter. Är funktionen avstängd finns fliken inte alls, och `/handla`
+omdirigerar till Idag. Pillen ska rymma fem namn i 320 px bredd utan att någon etikett döljs
+(samma krav som ovan) – verifieras med skärmbild innan fliken släpps.
+
 | Yta | Mönster |
 |---|---|
 | Dator (≥ 900 px) | Smal vänster rail (~72 px, ikon + etikett, inget 260 px-sidofält). Innehåll centrerat, max 640 px |

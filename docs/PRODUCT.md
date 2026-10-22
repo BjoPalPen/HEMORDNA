@@ -209,9 +209,16 @@ En occurrence ska kunna: slutföras, skjutas upp, hoppas över, omfördelas, mar
 
 Byggs inte nu, och läggs inte till "för framtiden":
 
-betalningar, avancerad auth, AI, shoppinglista, gamification, streaks, avancerad statistik,
-dokumenthantering, social funktion, GPS, full offline conflict resolution, avancerat
-adminsystem.
+betalningar, avancerad auth, AI för planering eller köpförslag, gamification, streaks,
+avancerad statistik, dokumenthantering, social funktion, GPS, full offline conflict
+resolution, avancerat adminsystem.
+
+Handla – hushållets gemensamma inköpslista, kopplad till en vanlig uppgift – ingår sedan
+[DATUM VID ANTAGANDE] som en frivillig hushållsfunktion; se §12. Det som fortsatt inte byggs
+runt den: butiksintegration, beställning, betalning, priser, erbjudanden, kvittoavläsning,
+streckkoder, produktdatabas, recept, veckomeny, flera listor och historikvyer. Avgränsad
+fotoavläsning av en papperslista är det enda undantaget från "ingen AI", och gäller först när
+dess egen leverantörs- och integritetsgranskning är klar (§12).
 
 Poäng och streaks är dessutom aktivt oönskade i MVP – de drar mot den skuldbeläggning som
 §8 utesluter.
@@ -263,3 +270,42 @@ Reglerna:
   Hemordna sparar aldrig ett läkarbesök eller en annan privat tid längre än nödvändigt.
 - **Återkommande tider ingår inte.** De drar mot mötesserier och undantag, och
   recurrence-motorn får inte byggas ut i förväg (§9).
+
+---
+
+## 12. Handla
+
+Handla är en del av hushållets planering, inte en fristående shoppingapp. Problemet är sällan
+listan – det är att handlandet aldrig blir av. Det som saknas samlas därför i en gemensam lista,
+och själva handlandet är en **vanlig uppgift** med ansvar, tidsbudget, förekomster och
+turordning enligt samma regler som allt annat. Listan är uppgiftens innehåll.
+
+Fullständig specifikation: HEMORDNA-HANDLA v1.0 (2026-10-21). Den genomförs i fyra steg
+(HANDLA-01–04); det här avsnittet beskriver produkten, inte byggordningen.
+
+Reglerna:
+
+- **Frivilligt och avstängt som standard.** En medlem som får ändra hushållet slår på Handla.
+  Avstängning döljer funktionen och pausar uppgiften, men raderar aldrig listan – slås den på
+  igen finns allt kvar, och uppgiften fortsätter framåt utan att ta igen missade veckor.
+- **Handla är en uppgift.** Vid första aktiveringen skapas uppgiften Handla – en gång i
+  veckan, 30 minuter, och man turas om. Finns redan en uppgift som heter "Handla mat" eller
+  "Handla" erbjuds hushållet att använda den i stället, oförändrad. Allt går sedan att ändra
+  som för vilken uppgift som helst. Ett spontant inköp är en extra förekomst av samma uppgift,
+  aldrig en andra Handla-uppgift. Tiden ändras aldrig automatiskt efter antalet varor.
+- **En gemensam lista per hushåll.** Alla medlemmar kan lägga till, ändra och ta bort varor.
+  Antal, enhet och anteckning är frivilliga och gissas aldrig. Vem som lagt till en vara visas
+  inte i delade vyer. Listan kan delas som text.
+- **Dubbletter stoppas lugnt.** "Mjölk" är redan på listan om det står "Mjölk" eller
+  "Mjölk (laktosfri)" där; "Mjölk (laktosfri)" är däremot en egen vara om bara "Mjölk" står
+  där. Antal slås aldrig ihop.
+- **Fasta kategorier i hushållets ordning.** Frukt och grönt, Bröd, Mejeri, Kött och fisk,
+  Skafferi, Frys, Dryck, Hushåll, Hygien, Övrigt. Hemordna föreslår kategori från en svensk
+  ordlista; en medlems rättelse minns hushållet till nästa gång.
+- **Samma ord som resten av appen.** §7 och §8 gäller fullt ut: inga skuldskapande meddelanden,
+  ingen färgkodning av det som ligger kvar, fel och nätstatus uttrycks neutralt.
+
+Senare steg, beskrivna i specifikationen och byggda först efter egna beslut: korg och gemensam
+inköpsrunda med ångerbart avslut (HANDLA-02), fotoavläsning av papperslistan med säker Ångra
+och månadstak (HANDLA-03 – släpps inte innan leverantörens behandling av bilderna är
+granskad), samt korgmarkering utan nät (HANDLA-04 – beskrivs inte som tillgänglig innan dess).
