@@ -1,0 +1,23 @@
+# https://www.willys.se/robots.txt – hämtad 2026-10-20 (en manuell GET via WebFetch, ordagrant innehåll)
+
+# For all robots
+User-agent: *
+
+# Block access to specific groups of pages
+Disallow: /kassa/
+Disallow: /varukorg
+Disallow: /mitt-konto/
+Disallow: /mina-kop/
+Disallow: /mina-listor/
+Disallow: /delad-lista/
+Disallow: /minavanligastevaror
+Disallow: /o/
+Disallow: /sok
+
+Crawl-delay: 10                 # 10 seconds between page requests
+Visit-time: 0400-0845           # only visit between 04:00 and 08:45 UTC
+
+# Allow search crawlers to discover the sitemap
+Sitemap: https://www.willys.se/sitemap.xml
+
+# Anmärkning (spiken): sitemap.xml svarade 404 vid hämtning 2026-10-20.
