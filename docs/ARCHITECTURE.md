@@ -4585,3 +4585,65 @@ service worker-prenumeration) för att bevisa att raden tystnar när enheten fak
 prenumererad. Nästa person som ser en `Object.defineProperty(Notification, ...)`-rad i ett test
 ska läsa den som "det här är den enda vägen in i en gren en riktig webbläsare inte ger oss gratis" -
 inte som ett tecken på att något annat döljs.
+
+### Beslut: Handla, steg 1 (HANDLA-01) — `PROPOSED`
+
+Produktbeslutet står i PRODUCT.md §12; specifikationen är HEMORDNA-HANDLA v1.0 (2026-10-21).
+Det här avsnittet tar bara upp de arkitekturval HANDLA-01 kräver. Beslut D1–D12 och D14 i
+specifikationen (runda, korg, foto, offlinekö) skrivs in när respektive steg planeras – inte i
+förväg. Statusen blir `IMPLEMENTED` först när koden finns och är verifierad.
+
+**Inställningar per hushåll i en egen tabell, inte på `Household`.** `HouseholdShoppingSettings`
+(nyckel `HouseholdId`) bär på/av, vilken `TaskDefinition` som är Handla och kategoriordningen.
+Ingen rad betyder avstängt, så nya hushåll behöver ingen backfill. Ingen generell
+"feature flag"-mekanism byggs: det finns en funktion att slå på, och fotoimportens eget val
+läggs till i HANDLA-03 när det finns något att slå på. (Del C i "Ångra och stabil lista" -
+"aldrig på `Household`" - gäller presentation och liknande personliga val; det här är
+hushållsgemensam konfiguration, samma sort som `PausedUntil`, och ägs av den som
+`CanManageHousehold`.)
+
+**Handla-uppgiften pekas ut av inställningarna, inte av en kolumn på `TaskDefinition`.**
+`TaskDefinition` har ingen "kind" och får ingen: Handla är en helt vanlig uppgift som
+hushållet kan ändra fritt. `HouseholdShoppingSettings.TaskDefinitionId` (`ON DELETE SET NULL`)
+är den enda kopplingen. Aktivering är idempotent: finns en kopplad definition återanvänds den,
+och finns en aktiv uppgift som heter exakt "Handla mat" eller "Handla" erbjuds hushållet att
+koppla den i stället för att få två inköpsuppgifter. En ny Handla-uppgift skapas veckovis, 30
+minuter, med turordning (`HasRotatingResponsibility`) - "utan vald ansvarig" i specifikationen
+kan inte betyda utan ansvarig alls, eftersom `PlanCandidateQuery` bara visar förekomster som är
+tilldelade någon, och en otilldelad Handla hade då inte synts på någons Idag.
+
+**Extra Handla via `ScheduleTaskOccurrence`, inte `CreateExtraTask`.** `CreateExtraTask`
+skapar en ny engångsdefinition, vilket specifikationens "ingen andra Handla-definition"
+förbjuder. En extra förekomst av den befintliga definitionen (`addedAsExtra: true`) är precis
+vad som behövs och finns redan.
+
+**Återaktivering tar inte igen missade veckor.** Avstängning avaktiverar definitionen (befintlig
+`DeactivateTaskDefinition`, som hoppar över utestående förekomster utan att radera dem).
+`TaskDefinition.Reactivate(DateOnly)` sparar `ReactivatedOn`, och `EnsureOccurrencesGenerated`
+genererar aldrig en slot före `max(skapad, återaktiverad)` - samma golv som redan hindrar en ny
+uppgift från att ta igen slots från före sin egen skapelse. Utan golvet hade en uppgift som
+varit avstängd i tre månader öppnat med tretton "sedan tidigare". `Reactivate()` hade ingen
+anropare före detta.
+
+**Dubblettregeln serialiseras i databasen - första explicita transaktionen och första
+advisory lock i kodbasen.** Regeln är asymmetrisk (en ny vara utan anteckning är dubblett mot
+samma namn oavsett befintlig anteckning, en ny vara med anteckning bara mot exakt samma
+anteckning), så ett unikt index räcker inte ensamt. `ShoppingRepository` gör kontroll och
+insättning i samma transaktion efter `pg_advisory_xact_lock` på en nyckel härledd ur
+`(HouseholdId, NormalizedName)` (PostgreSQL 17). Ett unikt index på
+`(HouseholdId, NormalizedName, NormalizedNote)` är andra skyddet; en `23505` från det översätts
+till utfallet "finns redan", aldrig till ett serverfel. Mönstret hålls inom shopping-repositoryt
+och är inte en ny allmän Unit of Work. Samtidigheten verifieras mot riktig Postgres i
+`Hemordna.E2E.Tests` - samma skäl som `RefreshTokenTests`: in-memory-fejkar kan inte visa den.
+
+**Versionsfält för redigering.** En redigering skickar med den version klienten såg; stämmer
+den inte svarar API:t 409 och klienten hämtar om. Versionen mappas på PostgreSQL:s `xmin` om
+Npgsql EF 10 stöder det som avsett - det verifieras mot paketet innan det används, annars blir
+det en explicit versionskolumn.
+
+**Realtid: ett andra grovt event, och omhämtning efter återanslutning.** `IHouseholdNotifier`
+får `NotifyShoppingChangedAsync`, skickat som `"ShoppingChanged"` till samma hushållsgrupp - lika
+grovt och utan payload som `"OccurrencesChanged"`. `HouseholdRealtimeClient` får ett
+`Reconnected`-event som Handla och Idag hämtar om på; före detta gick en återansluten klient bara
+med i gruppen igen och missade det som hänt under avbrottet. Ingen ny anslutningsindikator i
+HANDLA-01.

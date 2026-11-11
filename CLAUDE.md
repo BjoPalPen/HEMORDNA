@@ -207,9 +207,16 @@ Undvik `updates`, `changes`, `fix stuff`, `wip`.
 
 ## 12. Scope control
 
-Bygg inte nu, och lägg inte till "för framtiden": betalningar, avancerad auth, AI,
-shoppinglista, gamification, streaks, avancerad statistik, dokumenthantering, social
-funktion, GPS, full offline conflict resolution, avancerat adminsystem.
+Bygg inte nu, och lägg inte till "för framtiden": betalningar, avancerad auth, AI för
+planering eller köpförslag, gamification, streaks, avancerad statistik, dokumenthantering,
+social funktion, GPS, full offline conflict resolution, avancerat adminsystem.
+
+Handla ingår (PRODUCT.md §12), och byggs i den ordning HEMORDNA-HANDLA v1.0 anger
+(HANDLA-01–04, varje steg med egen godkänd plan). Runt den byggs inte: butiksintegration,
+beställning, priser, erbjudanden, kvitton, streckkoder, produktdatabas, recept, veckomeny,
+flera listor, historikvyer. Avgränsad fotoavläsning av en papperslista (HANDLA-03) är det enda
+tillåtna AI-inslaget, och släpps inte i produktion innan leverantörsgranskningen är klar.
+Befintliga arkitekturprinciper gäller oförändrat.
 
 Påminnelser om egna tider ingår (PRODUCT.md §11). Kalenderapparaten runt dem gör det inte:
 månadsrutnät, inbjudningar och deltagare, delning utåt, bilagor, mötesserier med undantag,
